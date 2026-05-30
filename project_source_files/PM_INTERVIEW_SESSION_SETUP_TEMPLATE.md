@@ -130,6 +130,8 @@ These fields are emitted in the boot prompt under a `Session context:` block usi
 
 Today these are entered in the optional **Session setup** box in the AHK launch window (one `Label: value` per line, e.g. `Emphasis: fintech`). A structured dropdown version is planned (see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`).
 
+Note on enforcement: `Avoid mentioning` and `Answer mode` are **prompt-level behaviors** — the assistant follows them via instructions in the boot prompt and Project files. The bridge logs the metadata into the session log, but it does **not** apply a deterministic runtime redaction filter (`Avoid mentioning`) or a hard runtime length cap (`Answer mode`). Treat them as strong guidance, not guarantees.
+
 ## Resume/JD edge cases
 
 - **Missing resume** — fall back to the canonical PM profile and story bank; do not invent role-specific detail.

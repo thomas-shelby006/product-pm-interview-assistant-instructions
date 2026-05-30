@@ -164,22 +164,13 @@ Session reset rule:
 The Resume and JD apply only to this current AHK session.
 Do not assume this context in future sessions unless provided again.
 
-Resume and Job Description follow below.
+Session context follows below.
 Do not respond to this setup prompt itself.
-
-RESUME:
-{{RESUME}}
-
-JOB DESCRIPTION:
-{{JOB_DESCRIPTION}}
 ```
 
-## AHK replacement variables
+## How session context is appended
 
-- Replace `{{RESUME}}` with the Resume box text.
-- Replace `{{JOB_DESCRIPTION}}` with the Job Description box text.
-- Keep values only in memory while AHK is running.
-- Do not save Resume/JD to disk.
+`BuildBootPrompt()` appends the live session context after the boot text — it does **not** substitute placeholders. Order: an optional `Session context:` metadata block (from the Session setup box), then `Resume:`, then `Job Description:`. The Resume/JD are inserted exactly once, kept only in AHK process memory, and never saved to disk.
 
 
 ## Boot prompt design principle — compact safety shell

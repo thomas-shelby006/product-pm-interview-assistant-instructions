@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         ChatGPT PM Interview Bridge (2-Window)
-// @version      1.3.7
+// @version      1.3.8
 // @match        https://chat.openai.com/*
 // @match        https://chatgpt.com/*
 // @updateURL    http://127.0.0.1:8123/tm_scripts/bridge.user.js
@@ -1245,7 +1245,16 @@
                         skipAnswerCapture: isSetupPrompt(text),
                         regeneration: isRegenerationPrompt(text)
                     });
-                    resetDot();
+                    if (isSetupPrompt(text)) {
+                        // Positive readiness confirmation: boot/context reached Win2.
+                        // Metadata only (company/role/round/emphasis/avoid/mode); never Resume/JD text.
+                        const armedMeta = extractSessionMetadata(text);
+                        appendSessionEvent('win2', 'session_armed', 'Boot/context received and submitted to Win2', armedMeta);
+                        setDot('ARMED', '#00e5a033', '#00e5a0');
+                        setTimeout(resetDot, 4000);
+                    } else {
+                        resetDot();
+                    }
                     setTimeout(() => { submitting = false; }, 300);
                 }, 30);
             }
