@@ -116,19 +116,32 @@ Use local time.
 
 ```json
 {
-  "schema_version": "1.1",
-  "session_id": "pm-session-YYYYMMDD-HHmmss",
-  "exported_at": "2026-05-17T21:30:00+05:30",
+  "schema_version": "1.2",
   "runtime_metadata": {},
-  "session_metadata": {},
   "answer_length_policy": {},
-  "session_context_summary": {},
+  "session": {
+    "session_id": "pm_session_YYYY-MM-DD_HH-mm",
+    "started_at": "",
+    "ended_at": "",
+    "mode": "",
+    "target_role": "",
+    "company": "",
+    "interview_round": "",
+    "emphasis": "",
+    "avoid": "",
+    "prompt_version": "",
+    "project_files_version": "",
+    "resume_id": "",
+    "jd_id": "",
+    "notes": ""
+  },
   "events": [],
   "qa_pairs": [],
-  "summary": {},
-  "warnings": []
+  "summary": {}
 }
 ```
+
+This matches the actual bridge output (v1.2). Session metadata is nested under `session` (not a top-level `session_metadata`). The current bridge does not emit top-level `session_context_summary` or `warnings`; the sections below describe those as optional/aspirational fields a future export mode could add. `summary` includes `session_armed_fired` and a `session_metadata` snapshot (see "Runtime alignment" below).
 
 ## `runtime_metadata`
 
@@ -515,7 +528,8 @@ If Markdown export is implemented, use this format.
 - Simple conceptual:
 - Comparison / tradeoff:
 - Standard PM answer:
-- Product sense / strategy / estimation setup:
+- Product sense / strategy setup:
+- Estimation / market sizing:
 - Behavioral story:
 - Full/deeper walkthrough:
 

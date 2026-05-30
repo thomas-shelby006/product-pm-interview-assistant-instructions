@@ -14,7 +14,8 @@ It is designed for a ChatGPT Plus workflow using:
 ## What this repo contains
 
 - Project custom instructions to paste into the ChatGPT Project.
-- Project source files to upload into the ChatGPT Project.
+- A condensed upload bundle (`project_upload_bundle/`, 5 files) — the recommended set to upload into the ChatGPT Project.
+- Detailed source files (`project_source_files/`) the bundle was condensed from, kept for reference/editing.
 - Runtime files for the AHK + Tampermonkey two-window setup.
 - One system context file for AI review.
 
@@ -29,12 +30,14 @@ It is designed for a ChatGPT Plus workflow using:
 ## Main files
 
 - `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md` — paste this into the ChatGPT Project custom instructions.
+- `project_upload_bundle/` — **recommended ChatGPT Project upload set**: after pasting the custom instructions, upload the 5 files `00`–`04` here. See `project_upload_bundle/PROJECT_UPLOAD_BUNDLE_MANIFEST.md` for exact setup (1 pasted field + 5 uploaded files).
+- `project_source_files/` — reference/source the bundle was condensed from; keep for editing. Upload the bundle instead of these to avoid duplication.
 - `AI_SYSTEM_CONTEXT.md` — full system context for an AI reviewer.
 - `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md` — design-of-record for the system as a live interview copilot: context layers, precedence rules, session setup, fast follow-up protocol, and the runtime spec for the AHK/bridge follow-up phases.
-- `project_source_files/` — upload these Markdown files into the ChatGPT Project.
 - `runtime/Final_2_Window_Fixed.ahk` — main local AutoHotkey runtime.
 - `runtime/tm_scripts/bridge.user.js` — active ChatGPT bridge userscript.
 - `runtime/tm_scripts/virtual-scroll.user.js` — active virtual-scroll userscript.
+- `drafts/` — working notes for story capture and claim review (story-bank completion workflow, claim-safety checklist, unfinished story templates). **Not** uploaded to the ChatGPT Project and **not** loaded by the runtime; used to prepare real, confirmed content before it is promoted into the Project source files.
 
 ## First test rule
 

@@ -177,6 +177,8 @@ Do not respond to this setup prompt itself.
 
 The boot prompt is the automation source of truth and must stay a **self-contained safety shell**: if Win2 is not correctly inside the Project, or the Project files are stale or retrieved imperfectly, the live assistant must still behave safely. So the goal is to **deduplicate and reference canonical behavior, not to gut the guardrails**. Remove drift and accidental duplication; keep a compact, safe core.
 
+Canonical detailed behavior now lives in the ChatGPT Project upload bundle (`project_upload_bundle/00`–`04`). The boot prompt is the compact safety shell; it must stay consistent with the bundle and must not contradict it. When behavior changes, update the bundle first, then reconcile this boot prompt and the embedded AHK copy.
+
 Must always remain in the boot prompt (do not remove when deduplicating):
 - PM identity and first-person answer behavior.
 - Truth floor: no invented metrics, ownership, revenue, team size, A/B tests, customer names, compliance, or ML ownership.

@@ -125,7 +125,8 @@ Length targets:
 - Simple conceptual PM answer: 55–75 words
 - Comparison/tradeoff: 75–100 words
 - Standard metrics/execution/prioritization: 90–130 words
-- Product sense/strategy/estimation setup: 130–180 words
+- Product sense/strategy setup: 130–180 words
+- Estimation/market sizing: 130–160 words (deeper only if asked)
 - Behavioral story: 120–150 words
 - Full deeper walkthrough: 150–180 words hard cap unless explicitly requested
 

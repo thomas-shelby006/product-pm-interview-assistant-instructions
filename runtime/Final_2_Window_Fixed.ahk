@@ -6,7 +6,7 @@
 ;  Win1 = Sender (Voice/Transcription)
 ;  Win2 = Receiver (Answer / ChatGPT)
 ;
-;  ALT+R         = Resume/JD GUI + launch/relaunch Win1/Win2 (PWA Mode)
+;  ALT+R         = Resume/JD + optional Session-setup GUI; launch/relaunch Win1/Win2 (PWA Mode)
 ;  ALT+ESC       = Resend PM boot prompt + current Resume/JD directly to Win2
 ;  ALT+DELETE    = Exit/terminate AHK session, no Resume/JD saved
 ;  ALT+TAB       = Hide/unhide current assistant windows (save/restore mode/layout)
