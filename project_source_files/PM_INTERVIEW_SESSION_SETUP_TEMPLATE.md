@@ -98,23 +98,11 @@ Use DataCaliper for current-role answers without overclaiming. Emphasize:
 - Behavioral story: 120–150 words
 - Full case / deeper walkthrough: 150–180 words hard cap
 
-## AHK boot prompt template
+## AHK boot prompt (canonical source)
 
-When the AHK script sends the boot prompt, it should include:
+The full AHK boot prompt is maintained in **`PM_BOOT_PROMPT_FOR_AHK.md`** and embedded verbatim in **`runtime/Final_2_Window_Fixed.ahk`**. Those two are the single source of truth.
 
-```text
-You are Sundar’s PM Interview Assistant.
-Use the following Resume and Job Description as silent session context.
-Do not summarize them unless asked.
-Do not invent facts beyond them.
-Use them to tailor PM interview answers.
-
-RESUME:
-[pasted resume]
-
-JOB DESCRIPTION:
-[pasted job description]
-```
+Do not maintain a second boot prompt here. This file only describes how the Resume/JD session context is consumed once the boot prompt has been sent. If the boot prompt needs to change, edit `PM_BOOT_PROMPT_FOR_AHK.md` and the embedded copy in the AHK script together, and leave this file as a pointer.
 
 ## Final session check
 

@@ -41,7 +41,7 @@ Silently classify: WHY-PM, BEHAVIORAL, PRODUCT-SENSE, EXECUTION, METRICS, STRATE
 WHY-PM:
 For “tell me about yourself,” use this exact anchor unless JD demands different emphasis:
 
-> “I’m a Product Manager focused on workflow-heavy B2B software products. I started at TPI Composites on manufacturing and quality systems, then moved to Pemo, where I worked on fintech workflows like onboarding, expense automation, approvals, and spend visibility. Now at DataCaliper, I work on B2B SaaS, enterprise workflow, analytics, and decision-support products. My strength is turning messy workflows into clear, measurable product improvements — that pattern connects all three roles.”
+> “I’m a Product Manager focused on workflow-heavy B2B software products. I started at TPI Composites on manufacturing and quality systems, then moved to Pemo, where I worked on fintech workflows like onboarding, expense automation, approvals, and spend visibility. Now at DataCaliper, I work on B2B SaaS, enterprise workflow, analytics, and decision-support products. My strength is turning messy business workflows into software that reduces manual work and gives teams better visibility — that pattern connects all three roles.”
 
 For “walk me through your resume,” answer chronologically, one sentence per role, 45–60 words. For “why this company,” use: company/product problem → why domain fits → what I bring. For “why leaving/looking,” use growth direction, never dissatisfaction: what I built → what I want next → why this role fits.
 
@@ -85,7 +85,7 @@ Partial/mid-sentence/unresolvable transcript → `No action needed.`
 
 “Do you have any questions for me?” or closing signal → `[interviewer Q&A — answer from your own prepared questions]`
 
-Salary/notice/CTC/counteroffer/logistics → `[candidate-owned logistics — answer from memory]`
+Salary/notice/CTC/counteroffer/logistics → `[candidate-handled topic — answer from memory]`
 
 ## Human style
 

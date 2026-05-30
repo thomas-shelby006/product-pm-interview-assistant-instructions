@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         ChatGPT PM Interview Bridge (2-Window)
-// @version      1.3.5
+// @version      1.3.6
 // @match        https://chat.openai.com/*
 // @match        https://chatgpt.com/*
 // @updateURL    http://127.0.0.1:8123/tm_scripts/bridge.user.js
@@ -702,7 +702,14 @@
     // ── Text Injection ─────────────────────────────────────
     function injectText(text, submit = false) {
         const el = document.querySelector('div[contenteditable="true"][role="textbox"]');
-        if (!el) return;
+        if (!el) {
+            appendSessionEvent('bridge', 'error', 'Injection failed: ChatGPT textbox not found', {
+                filter: 'inject_failed_no_textbox'
+            });
+            setDot('INJECT FAIL', '#ff444433', '#ff4444');
+            setTimeout(resetDot, 2500);
+            return false;
+        }
         el.focus();
         el.textContent = text;
         el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
@@ -714,6 +721,7 @@
                 }));
             }, 50);
         }
+        return true;
     }
 
     function isGenerating() {
@@ -742,8 +750,8 @@
         const words = raw.split(/\s+/).filter(Boolean);
         if (/[.!?]$/.test(raw)) return false;
         if (/[-–—]$/.test(raw)) return true;
-        if (/(and|or|but|because|about|with|without|for|to|the|a|an|like|that|this|would|could|should|how you would|what you would)$/i.test(raw)) return true;
-        if (words.length < 8 && !/^(why|what|how|when|where|who|which|can|could|would|should|tell|describe|explain|walk|give|do|did|are|is|was|were|improve|design|measure|prioriti[sz]e)/i.test(raw)) {
+        if (/\b(and|or|but|because|about|with|without|for|to|the|a|an|like|that|this|would|could|should|how you would|what you would)$/i.test(raw)) return true;
+        if (words.length < 8 && !/^(why|what|how|when|where|who|which|can|could|would|should|tell|describe|explain|walk|give|do|did|are|is|was|were|improve|design|measure|prioriti[sz]e)\b/i.test(raw)) {
             return true;
         }
         return false;
@@ -993,13 +1001,22 @@
 
             maybeUpdateSessionContextFromText(textToSend);
 
-            safeLocalStorageSet('vb_payload', JSON.stringify({
+            const payloadWritten = safeLocalStorageSet('vb_payload', JSON.stringify({
                 id: payloadId,
                 text: textToSend,
                 related_event_id: forwardedEventId
             }), 'vb_payload');
-            setDot('SENT', '#00e5a055', '#00e5a0');
-            setTimeout(resetDot, 600);
+            if (payloadWritten) {
+                setDot('SENT', '#00e5a055', '#00e5a0');
+                setTimeout(resetDot, 600);
+            } else {
+                appendSessionEvent('bridge', 'error', 'Failed to write vb_payload to localStorage', {
+                    filter: 'forward_payload_write_failed',
+                    payload_id: payloadId
+                }, metadata.rawEventId || '');
+                setDot('SEND FAIL', '#ff444433', '#ff4444');
+                setTimeout(resetDot, 2500);
+            }
         }
 
         function bufferTranscript(textToBuffer, rawEventId = '') {
@@ -1220,7 +1237,14 @@
                 if (!payload?.id || payload.id === lastId) return;
                 lastId = payload.id;
                 processPayload(payload.text, payload);
-            } catch (_) {}
+            } catch (err) {
+                appendSessionEvent('win2', 'error', 'Failed to parse incoming vb_payload', {
+                    filter: 'payload_parse_failed',
+                    error: String(err && err.message ? err.message : err)
+                });
+                setDot('PAYLOAD ERR', '#ff444433', '#ff4444');
+                setTimeout(resetDot, 2500);
+            }
         });
 
         scheduleReceiverCodeWrapAudit();
