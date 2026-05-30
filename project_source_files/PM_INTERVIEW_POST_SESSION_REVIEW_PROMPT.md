@@ -25,7 +25,8 @@ Use 127–130 WPM baseline:
 - conceptual: 55–75 words
 - comparison/tradeoff: 75–100 words
 - standard PM: 90–130 words
-- product sense/strategy/estimation: 130–180 words
+- product sense/strategy: 130–180 words
+- estimation: 130–160 words (deeper only if asked)
 - behavioral: 120–150 words
 - full/deeper: 150–180 hard cap
 

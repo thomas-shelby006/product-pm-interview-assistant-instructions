@@ -9,9 +9,20 @@
 - `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md` — compact custom instructions for the ChatGPT Project.
 - `FILE_MAP.md` — this file.
 
-## `project_source_files/`
+## `project_upload_bundle/` — recommended ChatGPT Project upload set
 
-Detailed source files for the ChatGPT Project. Upload these files into the PM Interview Helper Project. They contain routing, delivery, story bank, metrics, truth constraints, session setup, export schema, mock playbook, and test prompts.
+The condensed, internally consistent set to upload into the PM Interview Helper Project: **1 pasted field + 5 uploaded files**. See `project_upload_bundle/PROJECT_UPLOAD_BUNDLE_MANIFEST.md` for exact setup.
+
+- `PROJECT_UPLOAD_BUNDLE_MANIFEST.md` — what to paste, what to upload, what NOT to upload.
+- `00_PROJECT_CORE_INSTRUCTIONS.md` — behavior contract, live-answer rules, truth floor, special tokens, length policy, source precedence.
+- `01_CANDIDATE_PROFILE_AND_STORY_BANK.md` — confirmed profile, company contexts, confirmed story bank, prepared answers, banned claims.
+- `02_ROUTER_METRICS_DELIVERY.md` — route classifier + answer shapes, metrics trees, spoken delivery.
+- `03_SESSION_RUNTIME_AND_CONTEXT.md` — Resume/JD/session metadata, context precedence, fast follow-up, noisy transcript, export/review behavior.
+- `04_TESTS_REVIEW_AND_MOCK_LOOP.md` — regression tests, post-session review prompt, mock loop, action tags.
+
+## `project_source_files/` — reference/source (not the preferred upload set)
+
+Detailed source files the upload bundle was condensed from. Keep for history and editing. **Upload the bundle instead of these** to avoid duplication. They contain routing, delivery, story bank, metrics, truth constraints, session setup, export schema, mock playbook, and test prompts.
 
 ## `runtime/`
 

@@ -54,7 +54,8 @@ Use 127–130 WPM as the safe baseline.
 | Comparison / tradeoff | 75–100 words |
 | Implementation / how-would-you | 110–150 words |
 | Standard execution / metrics / prioritization | 90–130 words |
-| Product sense / strategy / estimation setup | 130–180 words |
+| Product sense / strategy | 130–180 words |
+| Estimation / market sizing | 130–160 words (deeper only if asked) |
 | Behavioral story | 120–150 words |
 | Deep PM walkthrough / full case (only if asked for depth) | 150–180 words hard cap |
 
