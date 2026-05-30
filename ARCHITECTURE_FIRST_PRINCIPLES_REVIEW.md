@@ -177,9 +177,10 @@ What is deferred [spec only]: the polished structured **dropdown** fields and th
 
 **Phases**
 - **Phase 0 (done):** repo cleanup + reliability/consistency fixes.
-- **Phase 1 (this PR):** layer model, precedence rules, session-setup model, fast-follow-up protocol, Resume/JD/metadata handling, failure mitigations (Project source files) + the safe bridge parser extension + an optional freeform Session-setup box in the AHK GUI that emits the metadata block. Mock-testable in ChatGPT.
-- **Phase 2 (tested AHK follow-up):** polished dropdown GUI fields (see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`).
-- **Phase 3 (tested bridge follow-up):** interrupt/supersede + visible session-state indicators (`NO RESUME`, version, mode) (see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`).
+- **Phase 1 (merged):** layer model, precedence rules, session-setup model, fast-follow-up protocol, Resume/JD/metadata handling, failure mitigations (Project source files) + the safe bridge parser extension + an optional freeform Session-setup box in the AHK GUI that emits the metadata block + the embedded safety-shell block + ARMED readiness signal + dead-placeholder removal. Mock-testable in ChatGPT; AHK pending a Windows smoke test.
+- **Batch A (this PR — bridge/docs only, no AHK changes):** bridge v1.3.9 — Resume/JD redaction from the session log/export (privacy), enriched `ARMED` (`NO RESUME` / `NO JD` / answer-mode), brief startup role+version indicator, export summary (`session_armed_fired` + metadata), setup prompt excluded from Q&A pairs; export-schema runtime-alignment note; new proudest-achievement + strongest-skill capture templates in `drafts/`. **No AHK edits in this batch on purpose** — the Phase-1 AHK launcher is awaiting Sundar's Windows smoke test, and changing the AHK now would invalidate that test and risk an untested launcher bug.
+- **Phase 2 (tested AHK follow-up):** polished dropdown GUI fields + validation hints (see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`) — only after the Phase-1 AHK smoke test passes.
+- **Phase 3 (tested bridge follow-up):** DOM interrupt/supersede (see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`). The non-DOM visible session-state indicators (`NO RESUME`, version, mode) already shipped in Batch A.
 - Each phase ends with the three mocks from the Opening & Mock Playbook.
 
 **What not to change**
