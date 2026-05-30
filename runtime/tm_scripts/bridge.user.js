@@ -82,6 +82,7 @@
     let pmBuffer = [];
     let pendingPmContext = '';
     let flushPmBuffer = () => {};
+    let sessionArmed = false;
 
 
     // ── PM session logging/export ─────────────────────────────
@@ -1000,10 +1001,12 @@
     }
 
     // Brief startup indicator: confirm window role + bridge version, then auto-hide.
+    // ARMED is the priority signal: never show over it, and never let this reset clear it.
     if (role) {
         setTimeout(() => {
+            if (sessionArmed) return;
             setDot((role === 'sender' ? 'WIN1' : 'WIN2') + ' v' + SCRIPT_VERSION, '#00e5a033', '#00e5a0');
-            setTimeout(resetDot, 3500);
+            setTimeout(() => { if (!sessionArmed) resetDot(); }, 3500);
         }, 1500);
     }
 
@@ -1275,6 +1278,8 @@
                     });
                     if (isSetupPrompt(text)) {
                         // Positive readiness confirmation: boot/context reached Win2.
+                        // ARMED is the priority signal — mark it so the startup dot cannot obscure it.
+                        sessionArmed = true;
                         // Metadata + presence flags only; never Resume/JD text.
                         const armedMeta = extractSessionMetadata(text);
                         armedMeta.resume_missing = /\[Resume not provided/i.test(text);
