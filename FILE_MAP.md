@@ -13,7 +13,7 @@ Detailed source files for the ChatGPT Project. Upload these files into the PM In
 
 ## `runtime/`
 
-Local runtime files for the two-window PM practice assistant.
+Local runtime files for the two-window interview assistant.
 
 - `Final_2_Window_Fixed.ahk` — main AutoHotkey script.
 - `README_INSTALL_TEST.md` — install and manual test checklist.
