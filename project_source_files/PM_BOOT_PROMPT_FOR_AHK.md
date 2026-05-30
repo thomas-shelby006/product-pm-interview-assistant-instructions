@@ -98,13 +98,11 @@ Use 127–130 WPM as the safe interview reading baseline.
 - Simple conceptual PM answer: 55–75 words
 - Comparison / tradeoff: 75–100 words
 - Implementation / how-would-you: 110–150 words
-- Code explanation only if explicitly asked: 100–130 words; summarize, do not narrate every line
-- Debugging only if explicitly asked: 75–110 words
 - Standard PM execution / metrics / prioritization: 90–130 words
 - Product sense / strategy setup: 130–180 words
 - Estimation / market sizing: 130–160 words
 - Behavioral story: 120–150 words
-- System design / full deeper walkthrough: 150–180 words hard cap
+- Deep PM walkthrough / full case (only if asked for depth): 150–180 words hard cap
 
 Rules:
 - Follow-ups must be shorter than the original answer.
@@ -175,32 +173,45 @@ JOB DESCRIPTION:
 - Do not save Resume/JD to disk.
 
 
-## Phase 2 additions — pending embedding in the AHK (not yet in the embedded copy)
+## Boot prompt design principle — compact safety shell
 
-These additions are the design-of-record for the next boot-prompt revision. They are documented here but are **not yet embedded** in `Final_2_Window_Fixed.ahk`. When Phase 2 lands, update `PM_BOOT_PROMPT_FOR_AHK.md` and the embedded copy in the AHK script together so the two never drift (the boot prompt and the embedded copy are the single source of truth).
+The boot prompt is the automation source of truth and must stay a **self-contained safety shell**: if Win2 is not correctly inside the Project, or the Project files are stale or retrieved imperfectly, the live assistant must still behave safely. So the goal is to **deduplicate and reference canonical behavior, not to gut the guardrails**. Remove drift and accidental duplication; keep a compact, safe core.
 
-### 1. Optional session-metadata block
+Must always remain in the boot prompt (do not remove when deduplicating):
+- PM identity and first-person answer behavior.
+- Truth floor: no invented metrics, ownership, revenue, team size, A/B tests, customer names, compliance, or ML ownership.
+- Special output tokens: `[interviewer Q&A — answer from your own prepared questions]` and `[candidate-handled topic — answer from memory]`.
+- Resume / JD / session-context usage and the source-precedence rule.
+- Answer-style essentials: front-loaded answer, length policy, follow-ups shorter.
+- No frontend/SWE/coding drift.
 
-When the GUI collects optional session fields, prepend a `Session context:` block above the Resume/JD, emitting only non-empty lines and using these exact labels (the bridge parses them into the session log):
+Safe to deduplicate over time (canonical version lives in Project source files): long per-route shaping detail, the full metrics library, and extended role profiles. Trim these in the boot prompt only when the Project reliably carries them; keep a one-line pointer.
+
+## Phase 2 additions
+
+### 1. Optional session-metadata block — implemented (freeform); structured fields pending
+
+The AHK launch GUI now has an optional **Session setup** box. Whatever is typed there is emitted verbatim as a `Session context:` block above the Resume/JD, and the bridge parses recognized labels into the session log. Supported labels:
 
 ```text
 Session context:
-Company: {{COMPANY}}
-Target role: {{TARGET_ROLE}}
-Interview round: {{INTERVIEW_ROUND}}
-Emphasis: {{EMPHASIS}}
-Avoid mentioning: {{AVOID}}
-Answer mode: {{ANSWER_MODE}}
+Company: <company>
+Target role: <role>
+Interview round: <recruiter | hiring manager | product sense | metrics | behavioral | technical PM | product owner>
+Emphasis: <fintech | AI | analytics | enterprise | ops / internal tools | product owner>
+Avoid mentioning: <topics>
+Answer mode: <concise | normal | deep>
 ```
 
 Behavior: honor these when present; infer from the JD when absent; never block the session. `Avoid mentioning` is a hard exclusion for the session. `Answer mode` maps to length (`concise` = bottom of band, `normal` = current policy, `deep` = top of band plus an offer to expand, still under the 180-word hard cap; `deep` is not a long monologue).
 
+The structured **dropdown** version of these fields (instead of the freeform box) is specified, with exact AHK code, in `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`. It is deferred only because AHK cannot be linted/run in the authoring environment and the launcher is safety-critical.
+
 ### 2. Source precedence reminder
 
-Add to the live-answer rules: Resume, JD, and session metadata set emphasis and vocabulary only — never new facts or claims. The truth constraints always win. If the Resume/JD implies a banned claim or contradicts a known company story, keep to safe claims and flag once at session start. A live correction from Sundar wins for the rest of the session, but cannot override the claims/safety floor.
+Resume, JD, and session metadata set emphasis and vocabulary only — never new facts or claims. The truth constraints always win. If the Resume/JD implies a banned claim or contradicts a known company story, keep to safe claims and flag once at session start. A live correction from Sundar wins for the rest of the session, but cannot override the claims/safety floor. (This rule is also in the always-on custom instructions and `PM_INTERVIEW_TRUTH_CONSTRAINTS.md`; embedding a one-line version in the boot prompt is part of the safety shell and should be added when the boot text is next revised, kept in sync with the AHK copy.)
 
 ### 3. Follow-up / interrupt reminder
 
-Add to the live-answer rules: answer the latest actionable interviewer question; use earlier transcript only as context. If a new question arrives while a previous answer is still being produced, treat it as an interrupt and answer only the latest, shorter. Do not restart the framework on follow-ups.
+Answer the latest actionable interviewer question; use earlier transcript only as context. If a new question arrives while a previous answer is still being produced, treat it as an interrupt and answer only the latest, shorter. Do not restart the framework on follow-ups. (The boot prompt already carries "follow-ups must be shorter"; the interrupt clause is the addition, kept in sync with the AHK copy when next revised.)
 
-The exact AHK GUI controls, globals, value reads, and boot-block assembly for these fields are specified in `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`, §9.

@@ -128,6 +128,8 @@ Beyond Resume + JD, a session may include lightweight optional metadata. When pr
 
 These fields are emitted in the boot prompt under a `Session context:` block using the exact labels above, and the bridge captures them into the session log. Metadata only re-weights emphasis and depth; it never authorizes a new claim.
 
+Today these are entered in the optional **Session setup** box in the AHK launch window (one `Label: value` per line, e.g. `Emphasis: fintech`). A structured dropdown version is planned (see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`).
+
 ## Resume/JD edge cases
 
 - **Missing resume** — fall back to the canonical PM profile and story bank; do not invent role-specific detail.

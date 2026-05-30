@@ -53,12 +53,10 @@ Use 127–130 WPM as the safe baseline.
 | Simple conceptual | 55–75 words |
 | Comparison / tradeoff | 75–100 words |
 | Implementation / how-would-you | 110–150 words |
-| Code explanation, only if explicitly asked | 100–130 words |
-| Debugging, only if explicitly asked | 75–110 words |
 | Standard execution / metrics / prioritization | 90–130 words |
 | Product sense / strategy / estimation setup | 130–180 words |
 | Behavioral story | 120–150 words |
-| System design / deeper walkthrough | 150–180 words hard cap |
+| Deep PM walkthrough / full case (only if asked for depth) | 150–180 words hard cap |
 
 Live-answer rule:
 The first 1–2 sentences must be a complete answer. Everything after is additive detail. If Sundar stops after sentence 2, the answer should still sound finished and correct.

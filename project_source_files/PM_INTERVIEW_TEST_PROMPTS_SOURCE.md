@@ -1067,3 +1067,56 @@ Pass: Frames as growth direction and role fit, not dissatisfaction. No criticism
 ## Seniority calibration
 Prompt: How would you prioritize this roadmap as a Director-level PM?
 Pass: Mentions scale, org implication, or leadership pushback; does not add a generic risk sentence.
+
+
+# Phase 1 architecture regression tests
+
+These check context layering, precedence, session metadata, and fast follow-up behavior. Run after re-uploading the source files.
+
+## Missing resume
+Setup: launch with the Resume box empty.
+Prompt: Tell me about yourself.
+Pass: Answers from the canonical PM profile and story bank; does not invent role-specific detail; does not stall or complain about the missing resume.
+
+## Missing JD
+Setup: launch with the Job Description box empty.
+Prompt: Why do you want this role?
+Pass: Gives a sound, domain-neutral PM answer; does not fabricate a company or product area it was not given.
+
+## JD says fintech, resume is generic
+Setup: JD is a fintech PM role; resume is a generic PM resume.
+Prompt: Tell me about a product you improved.
+Pass: Leads with the Pemo fintech story (emphasis follows the JD/emphasis), uses fintech vocabulary, and does not claim experience not supported by the story bank.
+
+## Resume/JD conflict with truth constraints
+Setup: resume text implies "owned the ML fraud model" or a specific revenue metric.
+Prompt: Tell me about your biggest impact.
+Pass: Keeps to safe, confirmed claims; does not repeat the banned claim; may note the limit once. Truth constraints win over the resume.
+
+## Live correction from Sundar
+Setup: mid-session, Sundar types: "Correction: I did not own pricing."
+Prompt (next): What did you own on that product?
+Pass: Honors the correction for the rest of the session; does not reassert the corrected claim; still stays within truth constraints.
+
+## Follow-up should not restart framework
+Prompt 1: How would you improve onboarding activation?
+Prompt 2 (follow-up): Why that metric and not retention?
+Pass: The follow-up is shorter than the first answer, answers only what was asked (direct answer + one supporting point), and does not restate the full framework.
+
+## Interviewer interrupts while previous answer is generating
+Setup: a new actionable question arrives before the previous answer finishes.
+Pass: The latest question is answered; the stale answer is not continued; the new answer is concise. (Live stop-and-supersede is the runtime Phase; the answer behavior must still prioritize the latest question.)
+
+## Two questions in one transcript
+Prompt: What metric would you track, and how would you validate a drop in it?
+Pass: Treats it as one two-part question and answers both briefly, or answers the latest as primary with the other as context; does not ignore the actionable part or produce two long separate answers.
+
+## Answer mode concise vs normal vs deep
+Setup: run the same question with `Answer mode: concise`, then `normal`, then `deep`.
+Prompt: How would you prioritize this roadmap?
+Pass: `concise` is at the bottom of the length band; `normal` matches the standard policy; `deep` is at the top of the band and may offer to expand, but never exceeds the 180-word hard cap. `deep` is not a long monologue.
+
+## Avoid mentioning a specific topic
+Setup: `Avoid mentioning: current employer name`.
+Prompt: Walk me through your most recent role.
+Pass: Answers without naming the excluded topic; treats the exclusion as hard for the session.

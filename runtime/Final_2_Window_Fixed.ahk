@@ -130,13 +130,11 @@ global PM_BOOT_PROMPT_TEXT := ""
     . "- Simple conceptual PM answer: 55–75 words`n"
     . "- Comparison / tradeoff: 75–100 words`n"
     . "- Implementation / how-would-you: 110–150 words`n"
-    . "- Code explanation only if explicitly asked: 100–130 words; summarize, do not narrate every line`n"
-    . "- Debugging only if explicitly asked: 75–110 words`n"
     . "- Standard PM execution / metrics / prioritization: 90–130 words`n"
     . "- Product sense / strategy: 130–180 words`n"
     . "- Estimation / market sizing: 130–160 words`n"
     . "- Behavioral story: 120–150 words; keep it real and concise`n"
-    . "- System design / full deeper walkthrough: 150–180 words hard cap`n"
+    . "- Deep PM walkthrough / full case (only if asked for depth): 150–180 words hard cap`n"
     . "`n"
     . "Rules:`n"
     . "- Follow-ups must be shorter than the original answer.`n"
@@ -218,18 +216,24 @@ global promptWin2Reset := ""
 global promptScreenshot := "[CONTEXT SYNC] For PM interview context, briefly identify what is visible and how it affects the latest product, TPM, execution, metrics, or strategy answer. Do not switch into coding interview mode."
 
 BuildBootPrompt() {
-    global PM_BOOT_PROMPT_TEXT, g_sessionResume, g_sessionJD
+    global PM_BOOT_PROMPT_TEXT, g_sessionResume, g_sessionJD, g_sessionMeta
 
     resume := Trim(g_sessionResume)
     jd := Trim(g_sessionJD)
+    meta := Trim(g_sessionMeta)
 
     if (resume = "")
         resume := "[Resume not provided in launch window.]"
     if (jd = "")
         jd := "[Job description not provided in launch window.]"
 
+    metaBlock := ""
+    if (meta != "")
+        metaBlock := "Session context:`n" . meta . "`n`n"
+
     return PM_BOOT_PROMPT_TEXT
         . "`n`n---`n`nSESSION CONTEXT`n`n"
+        . metaBlock
         . "Resume:`n" . resume . "`n`n"
         . "Job Description:`n" . jd . "`n"
 }
@@ -284,8 +288,10 @@ global g_hiddenActive        := 0
 global g_launchGui           := 0
 global g_resumeEdit          := 0
 global g_jdEdit              := 0
+global g_metaEdit            := 0
 global g_sessionResume       := ""
 global g_sessionJD           := ""
+global g_sessionMeta         := ""
 global g_interviewActive     := false
 global LOG_DIR               := A_ScriptDir "\runtime_logs"
 global LOG_FILE              := LOG_DIR "\session_debug.log"
@@ -302,7 +308,7 @@ global LOG_FILE              := LOG_DIR "\session_debug.log"
 }
 
 ShowSessionLaunchGui() {
-    global g_launchGui, g_resumeEdit, g_jdEdit, g_sessionResume, g_sessionJD
+    global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit, g_sessionResume, g_sessionJD, g_sessionMeta
 
     try {
         if IsObject(g_launchGui) {
@@ -315,29 +321,34 @@ ShowSessionLaunchGui() {
     g_launchGui.SetFont("s10", "Segoe UI")
 
     g_launchGui.Add("Text", "xm ym", "Resume")
-    g_resumeEdit := g_launchGui.Add("Edit", "xm w760 h230 -Wrap", g_sessionResume)
+    g_resumeEdit := g_launchGui.Add("Edit", "xm w760 h190 -Wrap", g_sessionResume)
 
     g_launchGui.Add("Text", "xm y+12", "Job Description")
-    g_jdEdit := g_launchGui.Add("Edit", "xm w760 h230 -Wrap", g_sessionJD)
+    g_jdEdit := g_launchGui.Add("Edit", "xm w760 h190 -Wrap", g_sessionJD)
+
+    g_launchGui.Add("Text", "xm y+12 w760", "Session setup (optional) — one item per line, e.g.  Company: Acme   Target role: Product Manager   Interview round: product sense   Emphasis: fintech   Avoid mentioning: pricing   Answer mode: concise")
+    g_metaEdit := g_launchGui.Add("Edit", "xm w760 h90 -Wrap", g_sessionMeta)
 
     startBtn := g_launchGui.Add("Button", "xm y+14 w140 h32 Default", "Start / Launch")
     cancelBtn := g_launchGui.Add("Button", "x+10 yp w90 h32", "Cancel")
 
-    g_launchGui.Add("Text", "xm y+10 w760", "Only Resume and Job Description are collected here. Answer length, style, truth rules, and PM routing are predefined in the boot prompt and Project files.")
+    g_launchGui.Add("Text", "xm y+10 w760", "Resume, Job Description, and optional Session setup are collected here. Answer length, style, truth rules, and PM routing are predefined in the boot prompt and Project files.")
 
     startBtn.OnEvent("Click", StartLaunchFromGui)
     cancelBtn.OnEvent("Click", CloseSessionLaunchGui)
     g_launchGui.OnEvent("Close", CloseSessionLaunchGui)
-    g_launchGui.Show("w800 h585")
+    g_launchGui.Show("w800 h680")
 }
 
 StartLaunchFromGui(*) {
-    global g_launchGui, g_resumeEdit, g_jdEdit, g_sessionResume, g_sessionJD
+    global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit, g_sessionResume, g_sessionJD, g_sessionMeta
 
     if IsObject(g_resumeEdit)
         g_sessionResume := g_resumeEdit.Value
     if IsObject(g_jdEdit)
         g_sessionJD := g_jdEdit.Value
+    if IsObject(g_metaEdit)
+        g_sessionMeta := g_metaEdit.Value
 
     if (StrLen(Trim(g_sessionResume)) < 100 || StrLen(Trim(g_sessionJD)) < 100) {
         continueChoice := MsgBox("Resume or JD looks too short. Continue anyway?", "PM Interview Assistant", "YesNo Icon!")
@@ -350,7 +361,7 @@ StartLaunchFromGui(*) {
 }
 
 CloseSessionLaunchGui(*) {
-    global g_launchGui, g_resumeEdit, g_jdEdit
+    global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit
     try {
         if IsObject(g_launchGui)
             g_launchGui.Destroy()
@@ -358,6 +369,7 @@ CloseSessionLaunchGui(*) {
     g_launchGui := 0
     g_resumeEdit := 0
     g_jdEdit := 0
+    g_metaEdit := 0
 }
 
 AutoStartup() {

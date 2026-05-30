@@ -23,7 +23,7 @@ Layer 4  SPOKEN CONTRACT      Front-loaded, first sentence = complete answer, le
             ↓ POST-SESSION LEARNING LOOP (Alt+E export → review prompt → source-file edits)
 ```
 
-The highest-leverage change is conceptual: **the AHK boot prompt must stop duplicating the Project's behavior.** The Project (Layer 1) holds *behavior*; the boot prompt (Layer 2) should hold *session data + a short operating reminder that points back at the Project*. Duplication is the root cause of every drift bug found so far.
+The highest-leverage change is conceptual: **the AHK boot prompt must stop duplicating the Project's behavior.** The Project (Layer 1) holds *behavior*; the boot prompt (Layer 2) should be a **compact safety shell** — session data plus the core guardrails — that references the Project rather than re-stating all of it. The aim is to **deduplicate drift, not gut the guardrails**: the boot prompt must keep the session safe even if Win2 is outside the Project or the Project files are stale. Duplication (not the existence of guardrails) is the root cause of every drift bug found so far.
 
 Three confirmed product decisions:
 - **Do not bake one full resume as the only truth.** Bake the canonical PM profile + story bank; paste the role-specific resume per session.
@@ -54,7 +54,7 @@ Structural problems:
 
 **Layer 1 — Permanent brain (Project).** Stable, versioned, loaded every turn. Holds the canonical PM profile, story bank, metrics library, answer router, delivery guide, role profiles, opening anchor, and the spoken-answer contract. This is the only place full behavior lives.
 
-**Layer 2 — Session context (boot, per interview).** Role-specific Resume + JD + optional metadata (company / role / round / emphasis / avoid / answer-mode). Re-weights emphasis and vocabulary. **Never introduces a new fact or a new claim.** Should be thin: data + a 3–5 line operating reminder, not a second copy of Layer 1.
+**Layer 2 — Session context (boot, per interview).** Role-specific Resume + JD + optional metadata (company / role / round / emphasis / avoid / answer-mode). Re-weights emphasis and vocabulary. **Never introduces a new fact or a new claim.** Should be a **compact safety shell**: session data + core guardrails (identity, truth floor, special outputs, answer style, precedence) so the session stays safe even if Project retrieval is imperfect — deduplicate drift, do not gut the guardrails.
 
 **Layer 3 — Live transcript state (bridge, ephemeral).** Classify each chunk; keep a tiny rolling tail (last question + 1-line gist of last answer). Latest-actionable-question-wins.
 
@@ -83,7 +83,7 @@ Job Description                    [large text box]   ← primary
 
 **"Deep" ≠ long.** In a spoken interview, deep = "top of the existing length band + explicitly offer to expand," still under the 180-word hard cap. `concise` = bottom of band / hard short caps; `normal` = current policy.
 
-These fields flow into the boot prompt **and** the bridge's existing session-log slots. The bridge already parses `Target role:`, `Company:`, `Interview round:`, `Mode:`; this pass extends it to also parse `Emphasis:` and `Avoid mentioning:` **[implemented]**. The GUI controls that produce them are **[spec only]** (see §9) because the launcher is safety-critical and AHK cannot be tested in this environment.
+These fields flow into the boot prompt **and** the bridge's existing session-log slots. The bridge already parses `Target role:`, `Company:`, `Interview round:`, `Mode:`; this pass extends it to also parse `Emphasis:`, `Avoid mentioning:`, and `Answer mode:` **[implemented]**. An optional freeform **Session setup** box in the AHK GUI now emits these as a `Session context:` block **[implemented]**. The polished **dropdown** version of the fields is specified in `AHK_PHASE_2_IMPLEMENTATION_PLAN.md` **[spec only]**, deferred because the launcher is safety-critical and AHK cannot be linted/run in this environment.
 
 ---
 
@@ -140,7 +140,7 @@ Project source files + custom instructions ──▶ loaded into every Win2 turn
 ```
 
 Loss / duplication points and the fix:
-- **Duplication (boot vs Project):** thin the boot prompt; Project owns behavior. *(Direction set here; boot-source updated; full thinning is a runtime follow-up.)*
+- **Duplication (boot vs Project):** deduplicate drift between the boot prompt and Project while keeping a compact safety shell in the boot prompt; the Project owns full behavior. *(SWE/coding-row drift removed from the boot prompt + router this pass; deeper dedup is a runtime follow-up.)*
 - **Single delivery path (boot → Win1 → Win2):** keep the `Alt+Esc` direct-to-Win2 fallback; both clipboard paths now fail loudly.
 - **Answer capture is best-effort:** affects export/review only, not live answers. Acceptable.
 - **Metadata double-writer risk:** keep ONE writer — GUI → boot text → bridge parse. Do not also let the assistant invent metadata.
@@ -167,91 +167,19 @@ Loss / duplication points and the fix:
 
 ---
 
-## 9. Runtime implementation spec (for the tested AHK follow-up) — [spec only]
+## 9. Runtime implementation spec
 
-This is deliberately **not** applied in this pass because the launcher is safety-critical and AHK cannot be linted/run here. Apply and mock-test on a Windows machine.
+What shipped in this pass [implemented]: the bridge session-metadata parser (`Emphasis`, `Avoid mentioning`, `Answer mode`) and an optional freeform **Session setup** box in the AHK GUI that emits a `Session context:` block. This delivers end-to-end metadata flow.
 
-### 9.1 New GUI globals (near the other `global g_session*` declarations)
-```ahk
-global g_sessionCompany   := ""
-global g_sessionRole      := ""
-global g_sessionRound     := ""
-global g_sessionEmphasis  := ""
-global g_sessionAvoid     := ""
-global g_sessionMode      := "normal"
-global g_companyEdit := 0, g_roleEdit := 0, g_roundDdl := 0
-global g_emphasisDdl := 0, g_avoidEdit := 0, g_modeDdl := 0
-```
-
-### 9.2 GUI controls (inside `ShowSessionLaunchGui`, after the JD Edit, before the buttons)
-```ahk
-g_launchGui.Add("Text", "xm y+12", "Optional session setup (leave blank to infer from JD)")
-
-g_launchGui.Add("Text", "xm y+8 w110", "Target company")
-g_companyEdit := g_launchGui.Add("Edit", "x+6 yp-3 w280", g_sessionCompany)
-g_launchGui.Add("Text", "x+14 yp+3 w90", "Target role")
-g_roleEdit := g_launchGui.Add("Edit", "x+6 yp-3 w250", g_sessionRole)
-
-g_launchGui.Add("Text", "xm y+10 w110", "Interview round")
-g_roundDdl := g_launchGui.Add("DropDownList", "x+6 yp-3 w200",
-    ["(infer)","recruiter","hiring manager","product sense","metrics","behavioral","technical PM","product owner"])
-g_roundDdl.Choose(1)
-g_launchGui.Add("Text", "x+14 yp+3 w70", "Emphasis")
-g_emphasisDdl := g_launchGui.Add("DropDownList", "x+6 yp-3 w200",
-    ["(infer)","fintech","AI","analytics","enterprise","ops / internal tools","product owner"])
-g_emphasisDdl.Choose(1)
-
-g_launchGui.Add("Text", "xm y+10 w110", "Avoid mentioning")
-g_avoidEdit := g_launchGui.Add("Edit", "x+6 yp-3 w280", g_sessionAvoid)
-g_launchGui.Add("Text", "x+14 yp+3 w90", "Answer mode")
-g_modeDdl := g_launchGui.Add("DropDownList", "x+6 yp-3 w160", ["concise","normal","deep"])
-g_modeDdl.Choose(2)
-```
-Then change the final `g_launchGui.Show("w800 h585")` to a taller window, e.g. `Show("w800 h760")`, and verify the buttons remain visible.
-
-### 9.3 Read values (inside `StartLaunchFromGui`, alongside the existing reads)
-```ahk
-if IsObject(g_companyEdit)  := g_companyEdit  ? g_companyEdit.Value : ""   ; (read into g_sessionCompany)
-; explicit form:
-g_sessionCompany  := IsObject(g_companyEdit)  ? g_companyEdit.Value  : ""
-g_sessionRole     := IsObject(g_roleEdit)     ? g_roleEdit.Value     : ""
-g_sessionRound    := (IsObject(g_roundDdl)    && g_roundDdl.Text != "(infer)")    ? g_roundDdl.Text    : ""
-g_sessionEmphasis := (IsObject(g_emphasisDdl) && g_emphasisDdl.Text != "(infer)") ? g_emphasisDdl.Text : ""
-g_sessionAvoid    := IsObject(g_avoidEdit)    ? g_avoidEdit.Value    : ""
-g_sessionMode     := IsObject(g_modeDdl)      ? g_modeDdl.Text       : "normal"
-```
-
-### 9.4 Session-metadata block in the boot prompt (in `BuildSessionContextBlock` / where Resume/JD are assembled)
-Emit only non-empty fields, using the exact labels the bridge parses:
-```ahk
-meta := ""
-if (Trim(g_sessionCompany)  != "") || (Trim(g_sessionRole) != "") || (Trim(g_sessionRound) != "")
-    || (Trim(g_sessionEmphasis) != "") || (Trim(g_sessionAvoid) != "") || (Trim(g_sessionMode) != "") {
-    meta := "Session context:`n"
-    if (Trim(g_sessionCompany)  != "")  meta .= "Company: "          . g_sessionCompany  . "`n"
-    if (Trim(g_sessionRole)     != "")  meta .= "Target role: "      . g_sessionRole     . "`n"
-    if (Trim(g_sessionRound)    != "")  meta .= "Interview round: "  . g_sessionRound    . "`n"
-    if (Trim(g_sessionEmphasis) != "")  meta .= "Emphasis: "         . g_sessionEmphasis . "`n"
-    if (Trim(g_sessionAvoid)    != "")  meta .= "Avoid mentioning: " . g_sessionAvoid    . "`n"
-    if (Trim(g_sessionMode)     != "")  meta .= "Answer mode: "      . g_sessionMode     . "`n"
-    meta .= "`n"
-}
-; prepend `meta` to the existing Resume/JD context block
-```
-The bridge already converts a block beginning with `Session context:` into session-log metadata, and this pass extends it to also capture `Emphasis:` and `Avoid mentioning:`.
-
-### 9.5 Interrupt / supersede (bridge, later runtime phase)
-On a new actionable `vb_payload` while `isGenerating()` is true: click the ChatGPT stop control (or send `Escape`), wait for generation to end, then inject the new question with the follow-up wrapper. Guard with a short debounce so rapid partial transcripts do not thrash. Mock-test interrupts explicitly before relying on it.
-
----
+What is deferred [spec only]: the polished structured **dropdown** fields and the bridge **interrupt/supersede** behavior. The exact, ready-to-apply code for both lives in **`AHK_PHASE_2_IMPLEMENTATION_PLAN.md`** (kept in one place to avoid drift). Deferred only because AHK cannot be linted/run in the authoring environment and the launcher is safety-critical, so it must be smoke-tested on a Windows machine.
 
 ## 10. Implementation phases & what not to change
 
 **Phases**
 - **Phase 0 (done):** repo cleanup + reliability/consistency fixes.
-- **Phase 1 (this PR):** layer model, precedence rules, session-setup model, fast-follow-up protocol, Resume/JD/metadata handling, failure mitigations — all in the Project source files + a small safe bridge parser extension. Fully mock-testable in ChatGPT.
-- **Phase 2 (tested AHK follow-up):** GUI fields + boot session-metadata block (§9.1–9.4).
-- **Phase 3 (tested bridge follow-up):** interrupt/supersede (§9.5) + visible session-state indicators (`NO RESUME`, version, mode).
+- **Phase 1 (this PR):** layer model, precedence rules, session-setup model, fast-follow-up protocol, Resume/JD/metadata handling, failure mitigations (Project source files) + the safe bridge parser extension + an optional freeform Session-setup box in the AHK GUI that emits the metadata block. Mock-testable in ChatGPT.
+- **Phase 2 (tested AHK follow-up):** polished dropdown GUI fields (see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`).
+- **Phase 3 (tested bridge follow-up):** interrupt/supersede + visible session-state indicators (`NO RESUME`, version, mode) (see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`).
 - Each phase ends with the three mocks from the Opening & Mock Playbook.
 
 **What not to change**
