@@ -17,6 +17,11 @@
 >   questions to answer, safe vs banned claims, target length, how to convert to a live answer).
 > - `CLAIM_SAFETY_CHECKLIST.md` — classify every claim (safe / resume-only / confirm-only / banned)
 >   before promoting a story into the uploaded story bank.
+>
+> STATUS: Polished, claim-safe versions of all 11 behavioral/judgment stories now live in
+> `project_upload_bundle/01_CANDIDATE_PROFILE_AND_STORY_BANK.md` (the canonical set). These
+> drafts remain as backup/working material for refining specifics. If Sundar revises a story,
+> update `01` (canonical) and keep it claim-safe.
 
 ## Failure Story 1 — Over-discovery delayed a decision
 

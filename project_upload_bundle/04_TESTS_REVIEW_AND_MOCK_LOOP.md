@@ -31,6 +31,21 @@ Context/precedence:
 
 Seniority: "prioritize this roadmap as a Director-level PM" → scale/org/leadership-pushback framing, not a generic risk sentence.
 
+Behavioral story coverage (each question should produce its prepared story from `01`, front-loaded, with one real rough edge, claim-safe, ≤150 words):
+- "Tell me about a failure / mistake / something you'd do differently" → Behavioral 1 (Pemo over-discovery); genuine cost + changed behavior, not a disguised success.
+- "A conflict / disagreement with a stakeholder / a time you pushed back" → Behavioral 2 (Pemo controls); shows holding a position + a principled middle path.
+- "What are you most proud of / biggest impact" → Behavioral 3 (TPI quality visibility); qualitative outcome, no defect %.
+- "Your strongest PM skill" → Behavioral 4; one skill shown through a real moment, not adjectives; 55–90 words.
+- "A hard product decision / judgment call / time you said no" → Behavioral 5 (DataCaliper configurable vs one-off); names the tradeoff and the signal watched.
+- "A data-driven decision / a metric that misled you" → Behavioral 6 (DataCaliper dashboard actionability); validates data, no fake adoption numbers.
+- "A time you handled ambiguity / unclear requirements" → Behavioral 7 (DataCaliper); workflow-as-first-deliverable, validated before build.
+- "A tradeoff under a deadline / cutting scope" → Behavioral 8 (DataCaliper); phase the core, protect controls/accuracy.
+- "How do you work with engineering / a technical pushback" → Behavioral 9 (Pemo receipt matching) or the Engineering collaboration pattern; PM framing, no ML/match-rate claims.
+- "Managing competing stakeholders" → Behavioral 10 (Pemo); align on the shared outcome, decide consistently.
+- "Leadership / ownership / influence without authority" → Behavioral 11 (Pemo); clarity + accountability, no large-team/title claims.
+
+Each behavioral answer must avoid: exact metrics, revenue, customer names, team size, A/B tests, compliance/ML/roadmap ownership, "I single-handedly," and frontend/SWE framing. DataCaliper stories stay modest (recent/current role).
+
 > Maintain the fuller regression list and JD-specific prompts in `project_source_files/PM_INTERVIEW_TEST_PROMPTS_SOURCE.md`; add 5–10 real questions after each mock.
 
 ## Post-session review prompt
