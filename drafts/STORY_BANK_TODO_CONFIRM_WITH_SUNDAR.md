@@ -37,3 +37,29 @@ Why this works:
 - Sundar holds a position before resolving it.
 - The tradeoff is principled, and it reuses safe framing already in the Pemo/TPI/DataCaliper tradeoff stories.
 - No fake metrics or ownership.
+
+
+## Proudest Achievement — capture template
+
+Use for "what are you most proud of," "biggest impact," "most successful product/project." Fill with a real TPI / Pemo / DataCaliper situation. No invented metrics, ownership, or revenue.
+
+Fill in:
+- Situation / product area: [what you were working on and why it mattered]
+- Your specific contribution (PM lens): [what you decided/drove — not the team's, yours]
+- The hard part: [the constraint or ambiguity that made it non-trivial]
+- Outcome (claim-safe): [a real, verifiable result — qualitative if you don't have a hard metric; do NOT fabricate a number]
+- Why you're proud (one line): [judgment, user impact, or a call you'd defend]
+
+Target 120–150 words spoken. Front-load: the first sentence should state the achievement and your role in it.
+
+## Strongest PM Skill — capture template
+
+Use for "what's your strongest PM skill," "what do you bring," "what makes you effective." One skill, shown through a real moment, not a list of adjectives.
+
+Fill in:
+- The skill (one phrase): [e.g., turning messy workflows into shippable scope; data-validation-before-hypothesis; stakeholder alignment under constraints]
+- Why it's your strength (one line): [grounded in your TPI/Pemo/DataCaliper work, not generic]
+- One concrete proof moment: [a short real example where this skill changed an outcome]
+- How it shows up day-to-day: [one habit or behavior an interviewer could verify]
+
+Target 55–90 words spoken. Avoid generic "I'm a great communicator"; anchor to a real moment. No invented specifics.

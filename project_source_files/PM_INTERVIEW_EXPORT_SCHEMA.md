@@ -681,3 +681,16 @@ Post-session review may infer these optional labels from Q&A pairs:
 - target_positioning_fit: strong | partial | weak | unknown
 
 These are optional. Do not make export fragile if they cannot be captured automatically.
+
+
+
+## Runtime alignment (implemented in bridge v1.3.9)
+
+The bridge now enforces the privacy rule above instead of only documenting it:
+
+- `appendSessionEvent()` redacts setup/boot prompts before they are written to the session log: it keeps the boot rules and the `Session context:` metadata, but replaces everything from `Resume:` onward with `[Resume and Job Description redacted from session log]`. This means the JSON and Markdown exports never contain raw Resume/JD text, even though the full prompt is still injected into Win2 live.
+- The boot/setup prompt is excluded from `qa_pairs` (it is not a real interviewer question).
+- A `session_armed` event records that Win2 received the boot/context, with metadata only (company, target role, interview round, emphasis, avoid, answer mode) plus `resume_missing` / `jd_missing` flags — never Resume/JD content.
+- `summary` now includes `session_armed_fired` (boolean) and a `session_metadata` snapshot, so the review file shows whether the session was correctly armed and with what emphasis/round/mode.
+
+`Avoid mentioning` and `Answer mode` remain prompt-level behaviors (model-followed, logged), not deterministic runtime redaction or length enforcement.

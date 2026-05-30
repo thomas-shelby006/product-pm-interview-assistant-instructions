@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         ChatGPT PM Interview Bridge (2-Window)
-// @version      1.3.8
+// @version      1.3.9
 // @match        https://chat.openai.com/*
 // @match        https://chatgpt.com/*
 // @updateURL    http://127.0.0.1:8123/tm_scripts/bridge.user.js
@@ -30,6 +30,7 @@
     const SILENCE_WARNING_REPEAT_MS = 60000;
     const PROMPT_VERSION = 'pm_boot_prompt_resume_jd_gui_v1';
     const PROJECT_FILES_VERSION = 'pm_interview_sources_resume_jd_gui_v1';
+    const SCRIPT_VERSION = '1.3.9';
     const WPM_BASELINE = 127;
     const DEFAULT_WORD_TARGET = 'question-type-specific; 180 hard cap; behavioral 120-150';
     const CAREER_POSITIONING = 'PM/product positioning based only on provided Resume/JD; no fake second employer or unsupported company history';
@@ -196,7 +197,7 @@
             ts: new Date().toISOString(),
             source,
             type,
-            text: text || '',
+            text: redactSetupPromptForLog(text) || '',
             related_event_id: relatedEventId || '',
             metadata: metadata || {}
         };
@@ -246,6 +247,15 @@
 
     function isSetupPrompt(text) {
         return /Sundar’s PM Interview Assistant|Sundar's PM Interview Assistant/i.test(text || '');
+    }
+
+    // Privacy: never persist raw Resume/JD text into the session log/export.
+    // Keeps the boot rules + Session context metadata; drops everything from "Resume:" on.
+    // Note: only the LOGGED text is redacted — the full prompt is still injected into Win2.
+    function redactSetupPromptForLog(text) {
+        const t = text || '';
+        if (!isSetupPrompt(t)) return t;
+        return t.replace(/\n?Resume:\s*\n[\s\S]*$/i, '\n[Resume and Job Description redacted from session log]');
     }
 
     function isRegenerationPrompt(text) {
@@ -460,6 +470,7 @@
         const qaPairs = [];
         for (const event of events) {
             if (event.type !== 'received_question') continue;
+            if (event.metadata?.setup_prompt || isSetupPrompt(event.text)) continue;
             const answer = answersByRelated.get(event.event_id) || null;
             const routeGuess = event.metadata?.route_guess || guessRoute(event.text || '');
             const companyGuess = event.metadata?.company_anchor_guess || guessCompanyAnchor(event.text || '');
@@ -505,6 +516,15 @@
             average_word_count: answerWordCounts.length ? Math.round(answerWordCounts.reduce((a, b) => a + b, 0) / answerWordCounts.length) : 0,
             too_long_count: (log.qa_pairs || []).filter(q => q.length_flag === 'too_long' || q.length_flag === 'slightly_long').length,
             route_guesses: routeGuesses,
+            session_armed_fired: log.events.some(e => e.type === 'session_armed'),
+            session_metadata: {
+                company: log.session.company || '',
+                target_role: log.session.target_role || '',
+                interview_round: log.session.interview_round || '',
+                emphasis: log.session.emphasis || '',
+                avoid: log.session.avoid || '',
+                answer_mode: log.session.mode || ''
+            },
             answer_capture: 'best_effort'
         };
         writeSessionLog(log);
@@ -979,6 +999,14 @@
         startReceiver();
     }
 
+    // Brief startup indicator: confirm window role + bridge version, then auto-hide.
+    if (role) {
+        setTimeout(() => {
+            setDot((role === 'sender' ? 'WIN1' : 'WIN2') + ' v' + SCRIPT_VERSION, '#00e5a033', '#00e5a0');
+            setTimeout(resetDot, 3500);
+        }, 1500);
+    }
+
     // ══════════════════════════════════════════════════════════
     //  WIN1 — SENDER
     //  Polls for new PM interviewer transcription text and forwards
@@ -1247,11 +1275,19 @@
                     });
                     if (isSetupPrompt(text)) {
                         // Positive readiness confirmation: boot/context reached Win2.
-                        // Metadata only (company/role/round/emphasis/avoid/mode); never Resume/JD text.
+                        // Metadata + presence flags only; never Resume/JD text.
                         const armedMeta = extractSessionMetadata(text);
+                        armedMeta.resume_missing = /\[Resume not provided/i.test(text);
+                        armedMeta.jd_missing = /\[Job description not provided/i.test(text);
                         appendSessionEvent('win2', 'session_armed', 'Boot/context received and submitted to Win2', armedMeta);
-                        setDot('ARMED', '#00e5a033', '#00e5a0');
-                        setTimeout(resetDot, 4000);
+                        const flags = [];
+                        if (armedMeta.resume_missing) flags.push('NO RESUME');
+                        if (armedMeta.jd_missing) flags.push('NO JD');
+                        if (armedMeta.mode) flags.push(armedMeta.mode);
+                        const warn = armedMeta.resume_missing || armedMeta.jd_missing;
+                        const label = 'ARMED' + (flags.length ? ' · ' + flags.join(' · ') : '');
+                        setDot(label, warn ? '#ffb02033' : '#00e5a033', warn ? '#ffb020' : '#00e5a0');
+                        setTimeout(resetDot, warn ? 6000 : 4000);
                     } else {
                         resetDot();
                     }
