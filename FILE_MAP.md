@@ -28,6 +28,8 @@ Local runtime files for the two-window interview assistant.
 Working drafts that are **not** uploaded to the ChatGPT Project and are **not** loaded by the runtime. Used for unfinished content that must be reviewed before it can be used live.
 
 - `STORY_BANK_TODO_CONFIRM_WITH_SUNDAR.md` — unfinished failure/conflict story scaffolds with placeholders. Confirm against real experience and fill in, then move the finished version into `project_source_files/PM_INTERVIEW_STORY_BANK_TEMPLATE.md`. Do not upload this file.
+- `STORY_BANK_COMPLETION_WORKFLOW.md` — guide for capturing real stories across 11 interview story types (what's tested, questions to answer, safe vs banned claims, target length, how to convert to a live answer). Not uploaded.
+- `CLAIM_SAFETY_CHECKLIST.md` — classifies claims as safe / resume-only / confirm-only / banned; run story sentences through it before promoting them into the uploaded story bank. Not uploaded.
 
 ## Keep out of this repo
 

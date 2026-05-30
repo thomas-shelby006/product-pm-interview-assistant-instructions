@@ -35,6 +35,7 @@ It is designed for a ChatGPT Plus workflow using:
 - `runtime/Final_2_Window_Fixed.ahk` — main local AutoHotkey runtime.
 - `runtime/tm_scripts/bridge.user.js` — active ChatGPT bridge userscript.
 - `runtime/tm_scripts/virtual-scroll.user.js` — active virtual-scroll userscript.
+- `drafts/` — working notes for story capture and claim review (story-bank completion workflow, claim-safety checklist, unfinished story templates). **Not** uploaded to the ChatGPT Project and **not** loaded by the runtime; used to prepare real, confirmed content before it is promoted into the Project source files.
 
 ## First test rule
 

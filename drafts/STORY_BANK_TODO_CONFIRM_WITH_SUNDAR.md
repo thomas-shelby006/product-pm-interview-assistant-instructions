@@ -11,6 +11,12 @@
 > the matching story-selection-table rows there. Keep them claim-safe: no invented
 > metrics, team sizes, revenue, or ownership. Both target 120–150 words for live
 > delivery.
+>
+> Companion files (also drafts, not uploaded):
+> - `STORY_BANK_COMPLETION_WORKFLOW.md` — guide for all 11 story types (what's tested,
+>   questions to answer, safe vs banned claims, target length, how to convert to a live answer).
+> - `CLAIM_SAFETY_CHECKLIST.md` — classify every claim (safe / resume-only / confirm-only / banned)
+>   before promoting a story into the uploaded story bank.
 
 ## Failure Story 1 — Over-discovery delayed a decision
 

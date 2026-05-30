@@ -47,6 +47,35 @@ Flag any live answer above 180 words.
 12. Source-file improvement recommendations
 13. Practice plan
 
+## Actionable triage
+
+For every weak answer or issue found, assign exactly one action tag so Sundar knows precisely what to do. Do not be academic — output a short table.
+
+Action tags:
+- **KEEP** — answer was good; note why so it can be reused.
+- **REVISE** — wording/length/first-sentence fix; give the rewritten version.
+- **ADD STORY** — a real story is missing; name the story type to capture (see the story-bank completion workflow) — do not invent it.
+- **ADD TEST** — add a new prompt to `PM_INTERVIEW_TEST_PROMPTS_SOURCE.md`; give the exact prompt + pass criteria.
+- **UPDATE ROUTER** — routing/length guidance was wrong; name the route and the fix.
+- **UPDATE TRUTH CONSTRAINT** — an unsafe claim slipped through; name the claim to ban/soften.
+- **NO ACTION** — minor; not worth changing.
+
+For each flagged item, output: `question (short) | problem | action tag | exact change`.
+
+Specifically scan for and triage:
+- answers over the length cap, or too long for the route
+- generic answers (no specific user role/context)
+- unsafe/overclaimed claims (route to UPDATE TRUTH CONSTRAINT)
+- wrong story/company anchor for the question
+- follow-ups that restarted the framework instead of staying short
+- missed JD alignment (vocabulary/domain/seniority)
+- weak first sentence (not a complete standalone answer)
+- any drift into SWE/frontend framing
+- new test prompts worth adding
+- story-bank gaps to fill (which story type)
+
+End with a short "Top 3 actions before next mock" list, ordered by impact.
+
 ## Truth-risk review
 
 Flag fake metrics, ownership overclaim, roadmap/revenue/customer/A-B/user-research/team-size/compliance/AI model claims, DataCaliper overclaim, TPI strategy overclaim, Pemo platform overclaim, frontend/SWE drift.
