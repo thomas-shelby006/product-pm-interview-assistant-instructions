@@ -173,3 +173,34 @@ JOB DESCRIPTION:
 - Replace `{{JOB_DESCRIPTION}}` with the Job Description box text.
 - Keep values only in memory while AHK is running.
 - Do not save Resume/JD to disk.
+
+
+## Phase 2 additions — pending embedding in the AHK (not yet in the embedded copy)
+
+These additions are the design-of-record for the next boot-prompt revision. They are documented here but are **not yet embedded** in `Final_2_Window_Fixed.ahk`. When Phase 2 lands, update `PM_BOOT_PROMPT_FOR_AHK.md` and the embedded copy in the AHK script together so the two never drift (the boot prompt and the embedded copy are the single source of truth).
+
+### 1. Optional session-metadata block
+
+When the GUI collects optional session fields, prepend a `Session context:` block above the Resume/JD, emitting only non-empty lines and using these exact labels (the bridge parses them into the session log):
+
+```text
+Session context:
+Company: {{COMPANY}}
+Target role: {{TARGET_ROLE}}
+Interview round: {{INTERVIEW_ROUND}}
+Emphasis: {{EMPHASIS}}
+Avoid mentioning: {{AVOID}}
+Answer mode: {{ANSWER_MODE}}
+```
+
+Behavior: honor these when present; infer from the JD when absent; never block the session. `Avoid mentioning` is a hard exclusion for the session. `Answer mode` maps to length (`concise` = bottom of band, `normal` = current policy, `deep` = top of band plus an offer to expand, still under the 180-word hard cap; `deep` is not a long monologue).
+
+### 2. Source precedence reminder
+
+Add to the live-answer rules: Resume, JD, and session metadata set emphasis and vocabulary only — never new facts or claims. The truth constraints always win. If the Resume/JD implies a banned claim or contradicts a known company story, keep to safe claims and flag once at session start. A live correction from Sundar wins for the rest of the session, but cannot override the claims/safety floor.
+
+### 3. Follow-up / interrupt reminder
+
+Add to the live-answer rules: answer the latest actionable interviewer question; use earlier transcript only as context. If a new question arrives while a previous answer is still being produced, treat it as an interrupt and answer only the latest, shorter. Do not restart the framework on follow-ups.
+
+The exact AHK GUI controls, globals, value reads, and boot-block assembly for these fields are specified in `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`, §9.

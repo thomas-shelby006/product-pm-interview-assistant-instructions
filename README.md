@@ -30,6 +30,7 @@ It is designed for a ChatGPT Plus workflow using:
 
 - `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md` — paste this into the ChatGPT Project custom instructions.
 - `AI_SYSTEM_CONTEXT.md` — full system context for an AI reviewer.
+- `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md` — design-of-record for the system as a live interview copilot: context layers, precedence rules, session setup, fast follow-up protocol, and the runtime spec for the AHK/bridge follow-up phases.
 - `project_source_files/` — upload these Markdown files into the ChatGPT Project.
 - `runtime/Final_2_Window_Fixed.ahk` — main local AutoHotkey runtime.
 - `runtime/tm_scripts/bridge.user.js` — active ChatGPT bridge userscript.

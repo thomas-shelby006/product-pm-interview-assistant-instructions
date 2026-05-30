@@ -2,6 +2,17 @@
 
 Purpose: define how Resume/JD session context is consumed.
 
+## Context layers
+
+The system has four layers (see `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`):
+
+1. **Permanent brain** — Project custom instructions + uploaded source files (canonical PM profile, story bank, metrics, router, delivery rules). Stable across sessions.
+2. **Session context** — per-interview Resume + JD + optional metadata. Re-weights emphasis; never adds new facts or claims.
+3. **Live transcript state** — the latest actionable question plus a short prior-context tail.
+4. **Spoken-answer contract** — front-loaded, length-capped, follow-ups shorter.
+
+Do not bake a single resume into the Project as the only truth. Bake the canonical profile and story bank; paste the role-specific resume per session. Precedence between sources is defined in `PM_INTERVIEW_TRUTH_CONSTRAINTS.md` (Context precedence rules).
+
 ## Actual AHK flow
 
 1. User double-clicks `Final_2_Window_Fixed.ahk`.
@@ -103,6 +114,27 @@ Use DataCaliper for current-role answers without overclaiming. Emphasize:
 The full AHK boot prompt is maintained in **`PM_BOOT_PROMPT_FOR_AHK.md`** and embedded verbatim in **`runtime/Final_2_Window_Fixed.ahk`**. Those two are the single source of truth.
 
 Do not maintain a second boot prompt here. This file only describes how the Resume/JD session context is consumed once the boot prompt has been sent. If the boot prompt needs to change, edit `PM_BOOT_PROMPT_FOR_AHK.md` and the embedded copy in the AHK script together, and leave this file as a pointer.
+
+## Optional session metadata
+
+Beyond Resume + JD, a session may include lightweight optional metadata. When present, honor it; when absent, infer from the JD and never block the session.
+
+- **Company** — target company name.
+- **Target role** — e.g., Product Manager, Technical PM, Product Owner.
+- **Interview round** — recruiter / hiring manager / product sense / metrics / behavioral / technical PM / product owner. Calibrate depth and tone to the round.
+- **Emphasis** — fintech / AI / analytics / enterprise / ops-internal-tools / product owner. Biases which company story leads.
+- **Avoid mentioning** — topics to keep out of answers this session. Treat as a hard exclusion.
+- **Answer mode** — concise / normal / deep. `concise` = bottom of the length band; `normal` = current policy; `deep` = top of the band plus an offer to expand, still under the 180-word hard cap. `deep` never means a long monologue.
+
+These fields are emitted in the boot prompt under a `Session context:` block using the exact labels above, and the bridge captures them into the session log. Metadata only re-weights emphasis and depth; it never authorizes a new claim.
+
+## Resume/JD edge cases
+
+- **Missing resume** — fall back to the canonical PM profile and story bank; do not invent role-specific detail.
+- **Too short / thin resume** — use it for emphasis only; lean on the canonical story bank for substance.
+- **Too long / noisy JD** — extract company, domain, user, top skills, and metrics vocabulary; ignore boilerplate. Treat the JD as framing, never as work history.
+- **Resume/JD mismatch** — let the emphasis field (or JD domain) pick the lead company story; note the mismatch once if it matters, then proceed without asking live.
+- **Conflicting claim in resume/JD** — keep to safe, confirmed claims per the truth constraints; flag once at session start.
 
 ## Final session check
 

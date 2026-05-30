@@ -67,6 +67,17 @@ Installed/used components from the current workflow:
 
 The repo should not add new windows, mic switching, extension fallbacks, or extra browser extensions unless a serious live-use issue requires it.
 
+## Context layering and precedence
+
+The system is organized as four layers plus a safety floor (full design in `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`):
+
+1. **Permanent brain** — Project custom instructions + uploaded source files (canonical PM profile, story bank, metrics, router, delivery rules). Stable.
+2. **Session context** — per-interview Resume + JD + optional metadata (company, target role, interview round, emphasis, avoid, answer mode). Re-weights emphasis only.
+3. **Live transcript state** — latest actionable question + short prior-context tail; latest-actionable-question-wins.
+4. **Spoken-answer contract** — front-loaded, length-capped, follow-ups shorter.
+
+Precedence when sources disagree: truth constraints win on claims/safety; the Project story bank is canonical on facts; Resume/JD/emphasis only re-weight emphasis and framing; the JD never becomes claimed work history; a live correction wins for the session but not over the safety floor. Do not bake a single resume into the Project as the only truth — bake the canonical profile/story bank and paste the role-specific resume per session.
+
 ## Current shortcut model
 
 - `Alt+R`: Resume/JD GUI + launch/relaunch Win1/Win2

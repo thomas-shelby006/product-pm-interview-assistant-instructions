@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         ChatGPT PM Interview Bridge (2-Window)
-// @version      1.3.6
+// @version      1.3.7
 // @match        https://chat.openai.com/*
 // @match        https://chatgpt.com/*
 // @updateURL    http://127.0.0.1:8123/tm_scripts/bridge.user.js
@@ -144,6 +144,8 @@
                 target_role: storedContext.target_role || '',
                 company: storedContext.company || '',
                 interview_round: storedContext.interview_round || '',
+                emphasis: storedContext.emphasis || '',
+                avoid: storedContext.avoid || '',
                 prompt_version: PROMPT_VERSION,
                 project_files_version: PROJECT_FILES_VERSION,
                 wpm_baseline: WPM_BASELINE,
@@ -227,7 +229,9 @@
             ['target_role', /^\s*Target role:\s*(.+)$/gim],
             ['company', /^\s*Company:\s*(.+)$/gim],
             ['interview_round', /^\s*Interview round:\s*(.+)$/gim],
-            ['mode', /^\s*Mode:\s*(.+)$/gim],
+            ['mode', /^\s*(?:Answer mode|Mode):\s*(.+)$/gim],
+            ['emphasis', /^\s*Emphasis:\s*(.+)$/gim],
+            ['avoid', /^\s*Avoid mentioning:\s*(.+)$/gim],
             ['resume_id', /^\s*Resume ID:\s*(.+)$/gim],
             ['jd_id', /^\s*(?:JD ID|Job description ID):\s*(.+)$/gim]
         ];
