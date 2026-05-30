@@ -21,7 +21,7 @@ Unified arc:
 
 Use this for the first “tell me about yourself” answer in recruiter screens and hiring-manager rounds. This should be practiced and spoken from memory. The assistant may show it, but Sundar should not depend on reading it word-for-word.
 
-### Default 60-word version
+### Default opening (~75 words)
 
 > “I’m a Product Manager focused on workflow-heavy B2B software products. I started at TPI Composites on manufacturing and quality systems, then moved to Pemo, where I worked on fintech workflows like onboarding, expense automation, approvals, and spend visibility. Now at DataCaliper, I work on B2B SaaS, enterprise workflow, analytics, and decision-support products. My strength is turning messy business workflows into software that reduces manual work and gives teams better visibility — that pattern connects all three roles.”
 

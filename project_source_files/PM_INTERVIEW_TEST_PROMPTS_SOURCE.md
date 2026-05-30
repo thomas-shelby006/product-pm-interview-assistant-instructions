@@ -106,7 +106,7 @@ Tell me about yourself.
 ```
 
 Expected:
-- 90–130 words, unless asked for a longer version.
+- 70–95 words, matching the prepared opening anchor; longer only if explicitly asked.
 - Uses unified PM story.
 - Mentions TPI, Pemo, and DataCaliper briefly.
 - Positions Sundar toward workflow-heavy B2B products.
@@ -977,7 +977,7 @@ Expected:
 - one specific user problem
 - one improvement
 - no generic praise
-- 60–100 words
+- 55–75 words
 
 ### Weakness
 
@@ -1000,7 +1000,7 @@ Live answer:
 Do you have any questions for me?
 ```
 Expected:
-- output only `[interviewer Q&A — prepare your own questions]`
+- output only `[interviewer Q&A — answer from your own prepared questions]`
 - no invented questions unless explicitly asked
 
 ### Two-question-in-one

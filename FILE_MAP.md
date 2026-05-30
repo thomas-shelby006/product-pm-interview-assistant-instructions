@@ -21,6 +21,12 @@ Local runtime files for the two-window interview assistant.
 - `tm_scripts/virtual-scroll.user.js` — active virtual-scroll userscript.
 - `tm_update_support/start_tm_update_server.ps1` — optional local update server for Tampermonkey scripts.
 
+## `drafts/`
+
+Working drafts that are **not** uploaded to the ChatGPT Project and are **not** loaded by the runtime. Used for unfinished content that must be reviewed before it can be used live.
+
+- `STORY_BANK_TODO_CONFIRM_WITH_SUNDAR.md` — unfinished failure/conflict story scaffolds with placeholders. Confirm against real experience and fill in, then move the finished version into `project_source_files/PM_INTERVIEW_STORY_BANK_TEMPLATE.md`. Do not upload this file.
+
 ## Keep out of this repo
 
 - Old review notes.
