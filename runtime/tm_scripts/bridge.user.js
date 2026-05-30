@@ -875,12 +875,28 @@
             e.preventDefault();
             if (role !== 'sender') return;
             navigator.clipboard.readText().then(text => {
-                if (!text) return;
+                if (!text) {
+                    appendSessionEvent('win1', 'error', 'Boot/context clipboard was empty', {
+                        filter: 'clipboard_empty_boot',
+                        hotkey: 'Ctrl+Shift+F5'
+                    });
+                    setDot('BOOT FAIL', '#ff444433', '#ff4444');
+                    setTimeout(resetDot, 2500);
+                    return;
+                }
                 maybeUpdateSessionContextFromText(text);
                 appendSessionEvent('win1', 'context_loaded', 'PM boot/context sent to Win1', { hotkey: 'Ctrl+Shift+F5' });
                 injectText(text, true);
                 setDot('BOOT', '#00e5a033', '#00e5a0');
                 setTimeout(resetDot, 1500);
+            }).catch(err => {
+                appendSessionEvent('win1', 'error', 'Clipboard read failed during boot/context send', {
+                    filter: 'clipboard_read_failed_boot',
+                    hotkey: 'Ctrl+Shift+F5',
+                    error: String(err && err.message ? err.message : err)
+                });
+                setDot('BOOT FAIL', '#ff444433', '#ff4444');
+                setTimeout(resetDot, 2500);
             });
         }
 
@@ -889,12 +905,28 @@
             e.preventDefault();
             if (role !== 'receiver') return;
             navigator.clipboard.readText().then(text => {
-                if (!text) return;
+                if (!text) {
+                    appendSessionEvent('win2', 'error', 'Boot/context resend clipboard was empty', {
+                        filter: 'clipboard_empty_resend',
+                        hotkey: 'Ctrl+Shift+F7'
+                    });
+                    setDot('BOOT FAIL', '#ff444433', '#ff4444');
+                    setTimeout(resetDot, 2500);
+                    return;
+                }
                 maybeUpdateSessionContextFromText(text);
                 appendSessionEvent('win2', 'context_loaded', 'PM boot/context sent directly to Win2', { hotkey: 'Ctrl+Shift+F7' });
                 injectText(text, true);
                 setDot('BOOT', '#00e5a033', '#00e5a0');
                 setTimeout(resetDot, 1500);
+            }).catch(err => {
+                appendSessionEvent('win2', 'error', 'Clipboard read failed during boot/context resend', {
+                    filter: 'clipboard_read_failed_resend',
+                    hotkey: 'Ctrl+Shift+F7',
+                    error: String(err && err.message ? err.message : err)
+                });
+                setDot('BOOT FAIL', '#ff444433', '#ff4444');
+                setTimeout(resetDot, 2500);
             });
         }
 

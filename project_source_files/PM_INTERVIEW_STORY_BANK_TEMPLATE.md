@@ -151,8 +151,6 @@ Use for enterprise SaaS, technical tradeoffs, scope control, platform thinking, 
 | Tell me about dashboards/analytics | DataCaliper Story 2 or TPI Story 2 |
 | Tell me about ambiguity | DataCaliper Story 1 or TPI Story 1 |
 | Tell me about a tradeoff | Pemo Story 3, TPI Story 3, DataCaliper Story 3 |
-| Tell me about a time you failed | Failure Story 1 |
-| Tell me about a conflict where you held your position | Conflict Story 1 |
 | Tell me about current role | DataCaliper Story 1 |
 | How do you build for business users? | Pemo Story 2 or DataCaliper Story 1 |
 | How do you handle risk/control? | Pemo Story 3 |
@@ -279,34 +277,3 @@ Signals:
 - scope tradeoffs
 - phased rollout
 - engineering partnership
-
-
-# Behavioral stories — failure and conflict
-
-> NOTE: These two are scaffolds, not finished claims. Behavioral rounds reward concrete, owned stories, so before using them, Sundar must confirm each one matches a real situation and replace every `[bracketed]` placeholder with real detail. Keep them claim-safe: no invented metrics, team sizes, revenue, or ownership. Both target 120–150 words for live delivery.
-
-## Failure Story 1 — Over-discovery delayed a decision
-
-Use for "tell me about a time you failed," "a decision you got wrong," or "a time you'd do something differently." This is the honest, non-disguised-success version of the prepared weakness.
-
-Draft (confirm and fill in):
-
-> "At [TPI / Pemo / DataCaliper — the real one], I was working on [the workflow or feature]. The requirements were ambiguous, so I kept gathering context — more user conversations, more edge cases, more alignment — because I wanted the problem model right before committing. The cost was that I held the decision open too long, and we lost time we could have spent testing a first version. What eventually moved it was [what forced the decision]. The real lesson was that discovery has diminishing returns: past a point, the fastest way to cut ambiguity is to ship a small, reversible version and learn from real usage. Now I set an explicit decision point up front — what we must know, what can stay an assumption, and when we commit — so discovery serves the decision instead of delaying it."
-
-Why this works:
-- A real cost is named (lost time), not a hidden win.
-- The learning is concrete and behavioral, and it matches the prepared weakness answer.
-- No fake metrics or ownership.
-
-## Conflict Story 1 — Held a position with a stakeholder
-
-Use for "tell me about a conflict," "a time you disagreed with a stakeholder/manager," or "a time you had to push back." The delivery guide requires that Sundar is seen holding a position, not just aligning everyone.
-
-Draft (confirm and fill in):
-
-> "At [Pemo / TPI / DataCaliper — the real one], [a stakeholder role — e.g., a senior stakeholder, a client, sales] pushed to [ship faster / loosen a control / add a one-off customization]. I disagreed, because of [the user signal, workflow risk, or maintainability concern]. Rather than just smoothing it over, I held the position and made the risk specific: [e.g., finance teams would stop trusting the data / the control sat at the wrong point in the workflow / every one-off makes the product harder to support and scale]. We didn't agree at first. I proposed a principled middle path — [keep the essential control or reusable logic, phase or configure the rest] — and we went with that. What I took away is that disagreeing well means naming the risk concretely and offering a real tradeoff, not just having a stronger opinion."
-
-Why this works:
-- Sundar holds a position before resolving it.
-- The tradeoff is principled, and it reuses safe framing already in the Pemo/TPI/DataCaliper tradeoff stories.
-- No fake metrics or ownership.
