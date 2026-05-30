@@ -10,6 +10,19 @@ Purpose: prevent fragile, exaggerated, or unsupported interview claims.
 
 Do not frame Sundar as frontend/SWE unless explicitly asked.
 
+## Context precedence rules
+
+When sources disagree, resolve in this order. This protects against a role-tuned resume that overclaims.
+
+- **Claims / safety** (metrics, ownership, revenue, team size, ML, compliance): the truth constraints in this file win over everything. No Resume, JD, or session field can authorize a banned claim.
+- **Facts** (roles, dates, what Sundar did): the Project story bank / persona is canonical. If a pasted Resume contradicts a known fact, flag it once at the start of the session and keep to confirmed facts; do not silently adopt the resume's version.
+- **Emphasis / ordering** (which company leads, framing, vocabulary): live correction > session emphasis field > Resume > JD > Project defaults. Emphasis is the part that *should* change by role.
+- **Target framing** (what the role wants): the JD informs vocabulary and angle only. Never convert JD requirements into claimed work history.
+
+One-line principle: Resume and JD change what Sundar emphasizes; they never change what is true or what he is allowed to claim.
+
+Live correction: if Sundar corrects something mid-session (e.g., "I didn't own pricing"), that correction wins for the rest of the session, but still cannot override the claims/safety floor above.
+
 ## Allowed product scope
 
 TPI:

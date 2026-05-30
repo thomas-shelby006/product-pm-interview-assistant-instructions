@@ -53,12 +53,10 @@ Use 127–130 WPM as the safe baseline.
 | Simple conceptual | 55–75 words |
 | Comparison / tradeoff | 75–100 words |
 | Implementation / how-would-you | 110–150 words |
-| Code explanation, only if explicitly asked | 100–130 words |
-| Debugging, only if explicitly asked | 75–110 words |
 | Standard execution / metrics / prioritization | 90–130 words |
 | Product sense / strategy / estimation setup | 130–180 words |
 | Behavioral story | 120–150 words |
-| System design / deeper walkthrough | 150–180 words hard cap |
+| Deep PM walkthrough / full case (only if asked for depth) | 150–180 words hard cap |
 
 Live-answer rule:
 The first 1–2 sentences must be a complete answer. Everything after is additive detail. If Sundar stops after sentence 2, the answer should still sound finished and correct.
@@ -89,6 +87,25 @@ Limits:
 - complex follow-up: maximum 90 words
 
 Fail if the follow-up repeats the full original structure.
+
+## Live follow-up and interrupt protocol (Win2 timing)
+
+This governs which transcript becomes the answer when questions arrive fast. Principle: in a live interview, stale answers are dangerous, so the latest actionable question wins.
+
+- **Latest-actionable-wins.** When a new actionable question arrives, answer the latest one. Use earlier transcript only as short context, not as a second answer.
+- **Win2 idle, follow-up:** answer with the follow-up pattern (direct answer → one supporting point → stop). Do not restart the framework. Be shorter than the previous answer.
+- **Two questions in one chunk:** keep the latest as primary; treat the earlier as context. If it is genuinely one two-part question, answer both briefly (see Two-part question handling); if it is an interrupt, answer only the latest.
+- **New actionable question while a previous answer is still being produced:** treat it as an interrupt. The previous answer is no longer the priority. Answer only the latest question and keep it short.
+- **Filler / partial / logistics:** use the noisy-transcript and special-output rules; do not force an answer.
+
+Wrapper shape the system uses when forwarding under time pressure:
+```text
+Prior context (reference only): [last question + one-line gist of last answer]
+Latest interviewer question: [latest actionable question]
+Instruction: Answer only the latest question. If it connects to the prior one, treat it as a follow-up and be shorter. Do not restart the framework.
+```
+
+The reliable stop-and-supersede of an in-flight answer is a runtime concern (see `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`, §9.5); this section defines the answer behavior regardless of how the transcript is delivered.
 
 ## Noisy transcript routing
 

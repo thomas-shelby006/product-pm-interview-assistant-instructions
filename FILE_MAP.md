@@ -4,6 +4,8 @@
 
 - `README.md` — repository overview and setup notes.
 - `AI_SYSTEM_CONTEXT.md` — complete system context for an AI reviewer.
+- `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md` — design-of-record: context layers, precedence rules, session setup, fast follow-up protocol, failure modes, and the runtime implementation spec for the AHK/bridge follow-up phases.
+- `AHK_PHASE_2_IMPLEMENTATION_PLAN.md` — exact, ready-to-apply runtime changes deferred from the architecture pass (structured dropdown GUI fields + bridge interrupt/supersede). Not uploaded to the Project; for the runtime follow-up only.
 - `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md` — compact custom instructions for the ChatGPT Project.
 - `FILE_MAP.md` — this file.
 
