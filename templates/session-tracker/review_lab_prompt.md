@@ -1,10 +1,14 @@
-Review this PM interview session using exactly two files:
+Review this PM interview session using exactly two raw files:
 
 - `win1_sender.md`
 - `win2_receiver.md`
 
-Treat `win1_sender.md` as the source of truth for interviewer transcript capture, blocked/ignored events, and forwarding behavior.
+Treat `win1_sender.md` as the source of truth for interviewer transcript capture, blocked/ignored events, manual Win1 input, and forwarding behavior.
 Treat `win2_receiver.md` as the source of truth for received questions, assistant answers, manual Win2 prompts, answer quality, length, and truth safety.
+
+Do not ask Sundar to manually inspect the raw files. You are the reviewer. Compare both files and produce a decision-ready review.
+
+## Review output
 
 Return:
 
@@ -35,7 +39,9 @@ Return:
 15. Top 3 actions before next session
 16. Recurring-pattern candidates
 
-Use action tags:
+## Action tags
+
+Use action tags for each issue:
 
 - KEEP
 - REVISE
@@ -45,3 +51,21 @@ Use action tags:
 - UPDATE_TRUTH_CONSTRAINT
 - UPDATE_BLOCK_FILTER
 - NO_ACTION
+
+Use this table:
+
+```text
+question_or_event | problem | action_tag | exact_change
+```
+
+## Pattern discipline
+
+Do not recommend changing the main PM Interview Helper system after one weak answer unless it is severe or truth-risky.
+
+Classify each update candidate as:
+
+- session-only coaching
+- repeated-pattern candidate
+- urgent system fix
+
+Only repeated patterns and urgent truth-safety fixes should later move into the instruction repo.
