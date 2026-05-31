@@ -3,6 +3,8 @@
 
 ; Companion helper. Does not replace Final_2_Window_Fixed.ahk.
 ; Alt+Shift+E opens the end-session panel.
+; After a successful push, it can send the main runtime's Alt+Delete exit hotkey
+; so Alt+Tab returns to normal without using Task Manager.
 
 RepoRoot := A_ScriptDir "\.."
 PushScript := RepoRoot "\runtime\scripts\push-session-to-tracker.ps1"
@@ -42,13 +44,15 @@ ShowEndSessionGui() {
     win2 := g.AddEdit("x150 y262 w420")
     g.AddButton("x580 y260 w80", "Browse").OnEvent("Click", (*) => BrowseFile(win2))
 
-    g.AddButton("x16 y310 w150", "Export Both Windows").OnEvent("Click", (*) => ExportBothWindows())
-    g.AddButton("x180 y310 w150", "Push Session").OnEvent("Click", (*) => PushSession(sessionType, company, role, round, mode, win1, win2, tracker))
-    g.AddButton("x344 y310 w170", "Copy Review Prompt").OnEvent("Click", (*) => CopyReviewPrompt(sessionType, company, role, round, mode))
-    g.AddButton("x528 y310 w90", "Close").OnEvent("Click", (*) => g.Destroy())
+    closeMain := g.AddCheckBox("x16 y304 w640 Checked", "After successful push, close the main PM Interview AHK runtime (restores normal Alt+Tab)")
 
-    g.AddText("x16 y350 w650", "Export first, then select the downloaded Win1/Win2 markdown files, then push. Old disabled scripts are not deleted by this helper.")
-    g.Show("w690 h390")
+    g.AddButton("x16 y338 w150", "Export Both Windows").OnEvent("Click", (*) => ExportBothWindows())
+    g.AddButton("x180 y338 w150", "Push Session").OnEvent("Click", (*) => PushSession(sessionType, company, role, round, mode, win1, win2, tracker, closeMain))
+    g.AddButton("x344 y338 w170", "Copy Review Prompt").OnEvent("Click", (*) => CopyReviewPrompt(sessionType, company, role, round, mode))
+    g.AddButton("x528 y338 w90", "Close").OnEvent("Click", (*) => g.Destroy())
+
+    g.AddText("x16 y378 w650", "Export first, then select the downloaded Win1/Win2 markdown files, then push. Old disabled scripts are not deleted by this helper.")
+    g.Show("w690 h420")
 }
 
 BrowseFolder(ctrl) {
@@ -76,7 +80,7 @@ ExportBothWindows() {
     MsgBox("Export hotkey sent to Win1/Win2 if found. Check Downloads for the markdown files.")
 }
 
-PushSession(sessionType, company, role, round, mode, win1, win2, tracker) {
+PushSession(sessionType, company, role, round, mode, win1, win2, tracker, closeMain) {
     global PushScript
     if !FileExist(PushScript) {
         MsgBox("Push script not found:`n" PushScript)
@@ -95,8 +99,25 @@ PushSession(sessionType, company, role, round, mode, win1, win2, tracker) {
         . ' -Win1File "' win1.Value '"'
         . ' -Win2File "' win2.Value '"'
         . ' -TrackerRepoPath "' tracker.Value '"'
-    RunWait(cmd, , "Hide")
-    MsgBox("Push script finished. Check PowerShell/Git output if the session is not visible in the tracker repo.")
+    exitCode := RunWait(cmd, , "Hide")
+    if (exitCode = 0) {
+        if (closeMain.Value) {
+            CloseMainRuntime()
+            MsgBox("Session push finished. Main PM Interview AHK runtime close signal sent, so normal Alt+Tab should be restored.")
+        } else {
+            MsgBox("Session push finished. Main PM Interview AHK runtime was left running.")
+        }
+    } else {
+        MsgBox("Push script exited with code " exitCode ". Main PM Interview AHK runtime was NOT closed. Check PowerShell/Git output.")
+    }
+}
+
+CloseMainRuntime() {
+    ; The main runtime owns Alt+Delete as its safe exit hotkey.
+    ; Sending the hotkey is safer than killing AutoHotkey processes by name,
+    ; because this companion helper is also an AutoHotkey process.
+    Sleep(300)
+    Send("!{Delete}")
 }
 
 CopyReviewPrompt(sessionType, company, role, round, mode) {
