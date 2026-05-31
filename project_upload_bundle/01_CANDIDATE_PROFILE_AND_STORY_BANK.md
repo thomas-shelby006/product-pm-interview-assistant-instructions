@@ -68,7 +68,7 @@ Use: enterprise SaaS, technical tradeoffs, scope control, platform thinking, ERP
 | Question | Story |
 |---|---|
 | Tell me about yourself | Fixed opening anchor |
-| Why fintech? | Pemo 1 or Pemo 3 |
+| Why fintech? | Prepared Why fintech answer; Pemo 1 or Pemo 3 if an example is needed |
 | Why Technical PM? | DataCaliper 1 or 3 |
 | Why AI PM? | DataCaliper 2 first; Pemo 2 for workflow automation (no ML claims) |
 | Product you improved | Pemo 1, Pemo 2, TPI 1 |
@@ -94,6 +94,9 @@ Use: enterprise SaaS, technical tradeoffs, scope control, platform thinking, ERP
 Anchor rule: Pemo = fintech/activation/expense/approvals/finance workflows. DataCaliper = enterprise SaaS/analytics/AI-ready/dashboards/ERP-adjacent/Technical PM. TPI = operations/manufacturing/quality/internal tools/operational analytics. Pick one company; never force all three into one answer; never invent a new story.
 
 ## Prepared recruiter-risk answers
+
+**Why fintech? (60–90 words):**
+> "At Pemo, I saw how small fintech workflow decisions can directly affect whether an SME activates and trusts the product. The work was not just payments; it was SME onboarding, expense automation, approvals, spend visibility, and finance-admin workflows. I like fintech because it forces strong PM judgment: reduce friction so users move faster, but preserve trust, control, and visibility. That mix of user behavior, workflow design, and measurable business impact is what attracts me to fintech."
 
 **Why are you leaving / looking (≈45s):**
 > "I'm not leaving out of dissatisfaction. I'm being selective about the direction I want to grow as a PM — AI-ready B2B SaaS, fintech workflow automation, analytics, and enterprise workflow products. DataCaliper gives me useful enterprise and client-workflow exposure, but I'm looking for a role where I can go deeper on product ownership, customer problems, and measurable outcomes in that target domain."
