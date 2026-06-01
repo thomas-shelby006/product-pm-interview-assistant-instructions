@@ -1,21 +1,32 @@
 diff --git a/runtime/Final_2_Window_Fixed.ahk b/runtime/Final_2_Window_Fixed.ahk
 --- a/runtime/Final_2_Window_Fixed.ahk
 +++ b/runtime/Final_2_Window_Fixed.ahk
-@@
--global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge Beta\Application\msedge.exe"
-+global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge Beta\Application\msedge.exe"
+@@ -25,6 +25,13 @@
+ ; ============================================================
+ 
+ global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge Beta\Application\msedge.exe"
 +
 +; Default ChatGPT Project targets.
 +; PM_HELPER_PROJECT_URL is used by Alt+R for the live two-window PM helper runtime.
 +; REVIEW_LAB_PROJECT_URL is intentionally blank until the PM Interview Review Lab Project is created.
 +global PM_HELPER_PROJECT_URL := "https://chatgpt.com/g/g-p-6a07471553dc8191a30e48a421c843aa-pm-interview-helper/project"
 +global REVIEW_LAB_PROJECT_URL := ""
-@@
--AutoStartup() {
+ 
+ ; ── Mute button client coords inside Win1 ────────────────
+ ; Measured at Win1 size 535x706. These coords are tied to that exact size.
+@@ -379,7 +386,7 @@ CloseSessionLaunchGui(*) {
+ }
+ 
+ AutoStartup() {
 -    global g_hWin1, g_hWin2, BrowserExe, g_interviewActive
-+AutoStartup() {
 +    global g_hWin1, g_hWin2, BrowserExe, PM_HELPER_PROJECT_URL, g_interviewActive
-@@
+     global g_mode, g_pos2Win, g_posWin1, g_posWin2
+     global g_layoutEnteredAt, g_currentLayout, g_lastStableLayout
+ 
+@@ -407,8 +414,12 @@ AutoStartup() {
+         . " --disable-renderer-backgrounding"
+         . " --disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling"
+ 
 -    Run BrowserExe ' --app="https://chatgpt.com/?vb_role=sender"' . flags
 -    Run BrowserExe ' --app="https://chatgpt.com/?vb_role=receiver"' . flags
 +    senderUrl := UrlWithRole(PM_HELPER_PROJECT_URL, "sender")
@@ -23,12 +34,18 @@ diff --git a/runtime/Final_2_Window_Fixed.ahk b/runtime/Final_2_Window_Fixed.ahk
 +
 +    Run BrowserExe ' --app="' senderUrl '"' . flags
 +    Run BrowserExe ' --app="' receiverUrl '"' . flags
-@@
+ 
+     if !WinWait("VB_SENDER", , 15) {
+         LogEvent("Launch failed: Win1/VB_SENDER not detected")
+@@ -444,6 +455,11 @@ AutoStartup() {
+     WinActivate "ahk_id " g_hWin2
  }
-+
+ 
 +UrlWithRole(baseUrl, role) {
 +    sep := InStr(baseUrl, "?") ? "&" : "?"
 +    return baseUrl . sep . "vb_role=" . role
 +}
- 
++
  EnsureAlwaysOnTop(hwnd) {
+     if !IsAlive(hwnd)
+         return
