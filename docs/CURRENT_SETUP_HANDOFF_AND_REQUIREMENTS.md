@@ -29,6 +29,7 @@ Completed remotely:
 - Runtime/source files for Edge Beta are in the instruction repo.
 - Session tracker MVP files are in the instruction repo.
 - Review Lab instructions and prompt are refined.
+- ChatGPT `PM Interview Review Lab` Project is created/configured.
 - Handoff and requirements ledger exists.
 - GitHub issue #7 tracks the remaining local-only setup and smoke test.
 
@@ -37,7 +38,6 @@ Not completed remotely:
 - Creating the new private GitHub repo `pm-interview-session-tracker` because the connector has no create-repository action.
 - Local Edge Beta account/project access fix.
 - Tampermonkey/AHK/PowerShell smoke testing.
-- Creating the ChatGPT `PM Interview Review Lab` Project in the UI.
 
 ## 3. Repositories
 
@@ -285,6 +285,16 @@ Separate ChatGPT Project:
 
 `PM Interview Review Lab`
 
+Project URL:
+
+`https://chatgpt.com/g/g-p-6a1df19f33448191b9fc968f8c9f1378/project`
+
+Status:
+
+- Created/configured in ChatGPT.
+- Instructions pasted from `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md`.
+- Project source uploaded: `templates/session-tracker/review_lab_prompt.md`.
+
 Instructions:
 
 - `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md`
@@ -373,9 +383,10 @@ Do not update the main PM Interview Helper from one weak answer unless severe/tr
    - If Alt+Delete is not received by main AHK, future fix: add a named IPC/flag file or window-message-based close.
 
 7. Review Lab setup
-   - Create `PM Interview Review Lab` Project.
-   - Use `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md` as instructions.
-   - Use `templates/session-tracker/review_lab_prompt.md` as prompt.
+   - Status: created/configured.
+   - Project URL: `https://chatgpt.com/g/g-p-6a1df19f33448191b9fc968f8c9f1378/project`.
+   - Uses `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md` as instructions.
+   - Uploaded `templates/session-tracker/review_lab_prompt.md` as the prompt template source.
 
 ## 12. What not to do yet
 
@@ -397,7 +408,7 @@ Do not update the main PM Interview Helper from one weak answer unless severe/tr
 6. Run one fake practice smoke session.
 7. Confirm session files land in tracker repo.
 8. Confirm main runtime closes after successful push.
-9. Create/use Review Lab to analyze the smoke session.
+9. Use Review Lab to analyze the smoke session.
 10. Use the system for 2-3 practice/mock sessions before changing the main PM Interview Helper again.
 
 ## 14. New-chat bootstrap prompt

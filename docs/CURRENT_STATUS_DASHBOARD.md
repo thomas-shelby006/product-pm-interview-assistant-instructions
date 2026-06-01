@@ -16,7 +16,7 @@ This is the fast-status file for continuing the PM Interview Helper setup withou
 | Virtual scroll | Installed in Edge Beta | Active virtual-scroll should be v2.8.1-pwa. |
 | Session tracker exporter | Installed in Edge Beta | Companion script v0.1.0. |
 | Session tracker repo | Created and initialized | `thomas-shelby006/pm-interview-session-tracker`, private. |
-| Review Lab Project | Source ready, UI setup pending | Create Project in ChatGPT UI using `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md`. |
+| Review Lab Project | Created/configured in ChatGPT | Uses `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md`; uploaded `templates/session-tracker/review_lab_prompt.md`. URL: `https://chatgpt.com/g/g-p-6a1df19f33448191b9fc968f8c9f1378/project`. |
 
 ## Key repos
 
@@ -44,8 +44,7 @@ Use these first in a new thread:
 
 ## Immediate non-testing tasks
 
-1. Create the `PM Interview Review Lab` ChatGPT Project in the UI.
-2. Fix Edge Beta ChatGPT account/project access.
+1. Fix Edge Beta ChatGPT account/project access.
 
 ## Testing tasks later
 
@@ -67,6 +66,5 @@ Use these first in a new thread:
 
 Priority order:
 
-1. Set up Review Lab Project.
-2. Fix Edge Beta Project access.
-3. Then run smoke tests.
+1. Fix Edge Beta Project access.
+2. Then run smoke tests.
