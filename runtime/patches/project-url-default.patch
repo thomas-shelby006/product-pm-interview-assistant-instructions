@@ -1,0 +1,34 @@
+diff --git a/runtime/Final_2_Window_Fixed.ahk b/runtime/Final_2_Window_Fixed.ahk
+--- a/runtime/Final_2_Window_Fixed.ahk
++++ b/runtime/Final_2_Window_Fixed.ahk
+@@
+-global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge Beta\Application\msedge.exe"
++global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge Beta\Application\msedge.exe"
++
++; Default ChatGPT Project targets.
++; PM_HELPER_PROJECT_URL is used by Alt+R for the live two-window PM helper runtime.
++; REVIEW_LAB_PROJECT_URL is intentionally blank until the PM Interview Review Lab Project is created.
++global PM_HELPER_PROJECT_URL := "https://chatgpt.com/g/g-p-6a07471553dc8191a30e48a421c843aa-pm-interview-helper/project"
++global REVIEW_LAB_PROJECT_URL := ""
+@@
+-AutoStartup() {
+-    global g_hWin1, g_hWin2, BrowserExe, g_interviewActive
++AutoStartup() {
++    global g_hWin1, g_hWin2, BrowserExe, PM_HELPER_PROJECT_URL, g_interviewActive
+@@
+-    Run BrowserExe ' --app="https://chatgpt.com/?vb_role=sender"' . flags
+-    Run BrowserExe ' --app="https://chatgpt.com/?vb_role=receiver"' . flags
++    senderUrl := UrlWithRole(PM_HELPER_PROJECT_URL, "sender")
++    receiverUrl := UrlWithRole(PM_HELPER_PROJECT_URL, "receiver")
++
++    Run BrowserExe ' --app="' senderUrl '"' . flags
++    Run BrowserExe ' --app="' receiverUrl '"' . flags
+@@
+ }
++
++UrlWithRole(baseUrl, role) {
++    sep := InStr(baseUrl, "?") ? "&" : "?"
++    return baseUrl . sep . "vb_role=" . role
++}
+ 
+ EnsureAlwaysOnTop(hwnd) {
