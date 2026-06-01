@@ -11,7 +11,7 @@ This is the fast-status file for continuing the PM Interview Helper setup withou
 | PM Interview Helper Project | Configured in Vivaldi | Uses final custom instructions + 5 upload bundle files. |
 | Edge Beta runtime | Source ready, local account access pending | Edge Beta must be signed into the account/workspace that can access the PM Interview Helper Project. |
 | Main AHK runtime | Working source exists | `runtime/Final_2_Window_Fixed.ahk` is the active launcher. |
-| Project URL default | Patch prepared, not applied | See `runtime/patches/project-url-default.patch`. |
+| Project URL default | Applied | Commit `8023f36`; Alt+R now opens the PM Interview Helper Project URL with `vb_role=sender/receiver`. |
 | Tampermonkey bridge | Installed in Edge Beta | Active bridge should be v1.3.9. |
 | Virtual scroll | Installed in Edge Beta | Active virtual-scroll should be v2.8.1-pwa. |
 | Session tracker exporter | Installed in Edge Beta | Companion script v0.1.0. |
@@ -44,10 +44,8 @@ Use these first in a new thread:
 
 ## Immediate non-testing tasks
 
-1. Apply the PM Helper Project URL patch locally:
-   - `runtime/patches/project-url-default.patch`
-2. Create the `PM Interview Review Lab` ChatGPT Project in the UI.
-3. Fix Edge Beta ChatGPT account/project access.
+1. Create the `PM Interview Review Lab` ChatGPT Project in the UI.
+2. Fix Edge Beta ChatGPT account/project access.
 
 ## Testing tasks later
 
@@ -69,7 +67,6 @@ Use these first in a new thread:
 
 Priority order:
 
-1. Apply Project URL default patch.
-2. Set up Review Lab Project.
-3. Fix Edge Beta Project access.
-4. Then run smoke tests.
+1. Set up Review Lab Project.
+2. Fix Edge Beta Project access.
+3. Then run smoke tests.
