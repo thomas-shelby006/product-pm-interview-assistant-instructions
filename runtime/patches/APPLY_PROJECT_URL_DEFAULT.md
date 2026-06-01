@@ -1,10 +1,10 @@
-# Apply PM Helper Project URL Default Patch
+# Apply PM Helper Project URL Default
 
-This patch is intentionally stored separately instead of overwriting the full AHK file through GitHub UI/API.
+Use the PowerShell patcher script, not `git apply`.
 
-Patch file:
+The hand-written `.patch` file is kept only as reference. It failed twice in local apply due to fragile hunk formatting against the long AHK file. The supported apply path is now:
 
-`runtime/patches/project-url-default.patch`
+`runtime/patches/apply-project-url-default.ps1`
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Project URL:
 
 `https://chatgpt.com/g/g-p-6a07471553dc8191a30e48a421c843aa-pm-interview-helper/project`
 
-## What the patch does
+## What the script does
 
 1. Adds:
 
@@ -32,7 +32,7 @@ global REVIEW_LAB_PROJECT_URL := ""
 <PM_HELPER_PROJECT_URL>?vb_role=receiver
 ```
 
-or uses `&vb_role=` if the URL already contains query parameters.
+or uses `&vb_role=` if the URL later contains query parameters.
 
 4. Adds helper:
 
@@ -45,27 +45,32 @@ UrlWithRole(baseUrl, role)
 From repo root:
 
 ```powershell
-git apply --check runtime\patches\project-url-default.patch
-git apply runtime\patches\project-url-default.patch
-```
-
-Then inspect:
-
-```powershell
+powershell.exe -ExecutionPolicy Bypass -File "runtime\patches\apply-project-url-default.ps1"
 git diff -- runtime\Final_2_Window_Fixed.ahk
 ```
 
 Commit:
 
 ```powershell
-git add runtime\Final_2_Window_Fixed.ahk runtime\patches\project-url-default.patch runtime\patches\APPLY_PROJECT_URL_DEFAULT.md
+git add runtime\Final_2_Window_Fixed.ahk runtime\patches\apply-project-url-default.ps1 runtime\patches\APPLY_PROJECT_URL_DEFAULT.md
 git commit -m "feat: open PM Helper Project URL by default"
 git push origin main
 ```
 
+## Do not use
+
+Do not use this anymore:
+
+```powershell
+git apply --check runtime\patches\project-url-default.patch
+git apply runtime\patches\project-url-default.patch
+```
+
+The `.patch` file is reference only.
+
 ## Local verification later
 
-After Edge Beta is logged into the correct ChatGPT account/workspace:
+Only after Sundar asks for testing:
 
 1. Run `runtime/Final_2_Window_Fixed.ahk`.
 2. Press `Alt+R`.
