@@ -1,10 +1,10 @@
 # Current Setup Handoff and Requirements Ledger
 
-Last updated: 2026-06-01
+Last updated: 2026-06-02
 
 This file is the durable handoff for the PM Interview Helper system and its session-tracker improvements. Use it when starting a new ChatGPT/Kiro/Codex thread.
 
-Tracking issue for remaining local-only work:
+Tracking issue for remaining local testing/work:
 
 - https://github.com/thomas-shelby006/product-pm-interview-assistant-instructions/issues/7
 
@@ -20,24 +20,24 @@ Build and operate a PM interview assistant that can:
 
 ## 2. Current state summary
 
-Remote-side instruction repo work is complete for the current MVP. Remaining work requires Sundar's local machine, browser, or a GitHub repo-creation action that is not available through the current connector.
+Remote/source setup for the current MVP is complete. The remaining work is local account access and smoke testing.
 
-Completed remotely:
+Completed:
 
-- Project bundle and custom instructions are finalized.
-- Vivaldi Project setup has already been completed by Codex.
-- Runtime/source files for Edge Beta are in the instruction repo.
+- `PM Interview Helper` Project is configured in Vivaldi with custom instructions and the 5-file upload bundle.
+- Edge Beta runtime source files are in the instruction repo.
+- Main AHK runtime now has the PM Interview Helper Project URL default applied.
 - Session tracker MVP files are in the instruction repo.
+- Private tracker repo exists and is initialized: `thomas-shelby006/pm-interview-session-tracker`.
+- ChatGPT `PM Interview Review Lab` Project is recorded as created/configured.
 - Review Lab instructions and prompt are refined.
-- ChatGPT `PM Interview Review Lab` Project is created/configured.
-- Handoff and requirements ledger exists.
-- GitHub issue #7 tracks the remaining local-only setup and smoke test.
+- Handoff, dashboard, setup docs, and issue #7 exist.
 
-Not completed remotely:
+Still needs local confirmation/testing:
 
-- Creating the new private GitHub repo `pm-interview-session-tracker` because the connector has no create-repository action.
-- Local Edge Beta account/project access fix.
-- Tampermonkey/AHK/PowerShell smoke testing.
+- Edge Beta must be signed into the ChatGPT account/workspace that can access `PM Interview Helper`.
+- Fake practice smoke test must verify Win1/Win2 export, tracker push, and main-AHK close behavior.
+- Review Lab should be used on the fake session.
 
 ## 3. Repositories
 
@@ -60,9 +60,7 @@ Rule:
 
 ### Session tracker repo
 
-Required private repo:
-
-`pm-interview-session-tracker`
+`thomas-shelby006/pm-interview-session-tracker`
 
 Suggested local path:
 
@@ -81,8 +79,10 @@ Rule:
 
 Current status:
 
-- Repo does not exist yet under `thomas-shelby006/pm-interview-session-tracker` as of this update.
-- Sundar must create it manually in GitHub, private, then clone locally.
+- Repo exists.
+- Repo is private.
+- Initial structure is pushed.
+- Local path reported by Codex: `C:\Users\Sundar\Documents\pm-interview-session-tracker`.
 
 ## 4. Apps and environments involved
 
@@ -158,11 +158,12 @@ Do not upload:
 Main runtime flow:
 
 1. Start `runtime/Final_2_Window_Fixed.ahk`.
-2. Use Alt+R to launch the two-window session.
+2. Use Alt+R to launch the Resume/JD/session-setup GUI.
 3. Win1 opens as sender/transcription side.
 4. Win2 opens as receiver/answer side.
-5. Bridge sends the actionable interviewer question from Win1 to Win2.
-6. Win2 answers through the ChatGPT Project context if Edge Beta is signed into the correct account/workspace.
+5. Both windows now use the PM Interview Helper Project URL plus `vb_role=sender` / `vb_role=receiver`.
+6. Bridge sends the actionable interviewer question from Win1 to Win2.
+7. Win2 answers through the ChatGPT Project context if Edge Beta is signed into the correct account/workspace.
 
 Important existing behavior:
 
@@ -170,7 +171,21 @@ Important existing behavior:
 - Main AHK safe exit hotkey is Alt+Delete.
 - Normal Alt+Tab is restored only after main AHK exits.
 
-## 7. Session tracker MVP
+## 7. Project URL default
+
+Status: applied.
+
+Commit reported by Codex:
+
+`8023f36cf74de25e05a8c443c46f47f72eb58661`
+
+Source behavior:
+
+- `PM_HELPER_PROJECT_URL` points to `https://chatgpt.com/g/g-p-6a07471553dc8191a30e48a421c843aa-pm-interview-helper/project`.
+- `REVIEW_LAB_PROJECT_URL` remains blank.
+- `AutoStartup()` opens Win1/Win2 through `UrlWithRole(PM_HELPER_PROJECT_URL, "sender/receiver")`.
+
+## 8. Session tracker MVP
 
 Accepted MVP:
 
@@ -202,7 +217,7 @@ Session ID format:
 
 Practice and real sessions have separate number sequences.
 
-## 8. Session tracker files in instruction repo
+## 9. Session tracker files in instruction repo
 
 ### Exporter userscript
 
@@ -275,33 +290,24 @@ Purpose:
 Accepted close-runtime requirement:
 
 - Once session export/push is complete, main AHK should close itself so normal Alt+Tab behavior is restored.
-- Implemented in companion helper as an enabled-by-default checkbox:
-  - `After successful push, close the main PM Interview AHK runtime`
+- Implemented in companion helper as an enabled-by-default checkbox.
 - It sends the main runtime's Alt+Delete safe exit hotkey rather than killing AutoHotkey processes.
 
-## 9. Review Lab
+## 10. Review Lab
 
 Separate ChatGPT Project:
 
 `PM Interview Review Lab`
 
-Project URL:
+Project URL recorded:
 
 `https://chatgpt.com/g/g-p-6a1df19f33448191b9fc968f8c9f1378/project`
 
-Status:
+Status recorded:
 
 - Created/configured in ChatGPT.
 - Instructions pasted from `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md`.
 - Project source uploaded: `templates/session-tracker/review_lab_prompt.md`.
-
-Instructions:
-
-- `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md`
-
-Prompt template:
-
-- `templates/session-tracker/review_lab_prompt.md`
 
 Review Lab reads exactly:
 
@@ -329,66 +335,58 @@ It should classify update candidates as:
 
 Do not update the main PM Interview Helper from one weak answer unless severe/truth-risky.
 
-## 10. Requirements ledger
+## 11. Requirements ledger
 
 | ID | Requirement / idea | Status | Accepted solution | Tradeoff |
 |---|---|---|---|---|
 | R1 | Optimize ChatGPT Project for Plus file limits | Done | 5-file `project_upload_bundle/00-04` + compact custom instructions | Less granular source files, but easier Project setup |
 | R2 | Use Vivaldi for Project setup | Done | Project configured in Vivaldi with 5 files | Edge Beta still needs correct account for Project access |
-| R3 | Use Edge Beta for live runtime | Done / needs final Project account fix | AHK points to Edge Beta; Tampermonkey scripts installed | Edge Beta must use Plus account/workspace to see Project |
+| R3 | Use Edge Beta for live runtime | Done / needs Project access confirmation | AHK points to Edge Beta; Tampermonkey scripts installed | Edge Beta must use Plus account/workspace to see Project |
 | R4 | Archive old runtime before replacing scripts | Done | Archive under repo `archive/` and old Tampermonkey scripts disabled | More repo history, but safer rollback |
 | R5 | Improve `Why fintech?` answer | Done | Prepared Pemo-first answer added to story bank and Project | More specific but still truth-safe |
 | R6 | Track interview sessions | Implemented MVP / needs local smoke test | Separate private tracker repo with two Markdown files per session | Minimal files, no combined Q&A yet |
-| R7 | Keep practice and real sessions separate | Accepted / implemented in tracker design | top-level `practice/` and `real/` folders | Separate numbering, slightly more structure |
-| R8 | ChatGPT should review sessions, not Sundar | Accepted / Review Lab designed | Separate Review Lab Project reads two files | Requires Project/repo access or file upload |
-| R9 | Store blocked words/events | Accepted | Store blocked/ignored events inside the relevant Win1/Win2 file | No separate blocked tracker, simpler MVP |
-| R10 | Avoid overcomplex multi-file export | Accepted | Exactly `win1_sender.md` and `win2_receiver.md` per session | Less machine-queryable than JSON, but better for ChatGPT review |
-| R11 | Push sessions to GitHub after interview | Accepted / implemented locally | PowerShell script pushes/auto-merges tracker repo branch | Requires local Git auth and clean tracker repo |
-| R12 | Do not put GitHub tokens in browser scripts | Accepted | Browser exports only; local script pushes | Slightly less automatic, much safer |
+| R7 | Keep practice and real sessions separate | Done | top-level `practice/` and `real/` folders | Separate numbering, slightly more structure |
+| R8 | ChatGPT should review sessions, not Sundar | Done | Separate Review Lab Project reads two files | Requires session files/repo path per review |
+| R9 | Store blocked words/events | Done | Store blocked/ignored events inside the relevant Win1/Win2 file | No separate blocked tracker, simpler MVP |
+| R10 | Avoid overcomplex multi-file export | Done | Exactly `win1_sender.md` and `win2_receiver.md` per session | Less machine-queryable than JSON, but better for ChatGPT review |
+| R11 | Push sessions to GitHub after interview | Implemented / needs smoke test | PowerShell script pushes/auto-merges tracker repo branch | Requires local Git auth and clean tracker repo |
+| R12 | Do not put GitHub tokens in browser scripts | Done | Browser exports only; local script pushes | Slightly less automatic, much safer |
 | R13 | Open analysis/review flow after session | Partially implemented | Companion AHK copies Review Lab prompt | Fully automatic file upload not implemented |
-| R14 | Close first/main AHK after session completion | Done / needs local test | Companion sends Alt+Delete after successful push | Depends on main runtime accepting Alt+Delete while focused |
+| R14 | Close first/main AHK after session completion | Implemented / needs smoke test | Companion sends Alt+Delete after successful push | Depends on main runtime accepting Alt+Delete while focused |
 | R15 | Handoff file for new chats | Done | This file | Must be kept updated after durable changes |
-| R16 | Track local-only remaining setup in GitHub | Done | Issue #7 | Keeps remaining work visible while local machine access is unavailable |
+| R16 | Track local-only remaining setup in GitHub | Done | Issue #7 | Keeps remaining work visible |
+| R17 | Open PM Helper Project URL by default in AHK | Done | `PM_HELPER_PROJECT_URL` + `UrlWithRole()` | Needs local launch confirmation later |
 
-## 11. Active issues / needs testing
+## 12. Active issues / needs testing
 
 1. Edge Beta Project access
    - Edge Beta previously did not show `PM Interview Helper` because it used a different/non-Plus account.
    - Fix: sign into the same ChatGPT account/workspace or recreate Project in Edge Beta account.
 
-2. Create private tracker repo
-   - Required repo: `pm-interview-session-tracker`.
-   - Current connector cannot create repositories.
-   - Create it manually as private, then clone to `C:\Users\Sundar\Documents\pm-interview-session-tracker`.
-
-3. Session exporter local test
-   - Need to install/enable `session-tracker-export.user.js` in Edge Beta Tampermonkey.
+2. Session exporter local test
+   - `session-tracker-export.user.js` is installed/enabled per Codex setup report.
    - Test Ctrl+Shift+F9 in Win1 and Win2.
    - Confirm files download and contain meaningful events/visible messages.
 
-4. Companion AHK local test
+3. Companion AHK local test
    - Run `runtime/Session_Tracker_End_Session.ahk`.
    - Press Alt+Shift+E.
    - Test Export Both Windows.
    - Test selecting files and pushing to tracker repo.
 
-5. Push script local test
-   - Create/clone private tracker repo.
-   - Run init script.
-   - Commit/push initial tracker structure.
+4. Push script local test
    - Push fake practice smoke session.
+   - Confirm the session lands in the private tracker repo.
 
-6. Close-main-runtime behavior
+5. Close-main-runtime behavior
    - After a successful fake push, confirm the main runtime exits and normal Alt+Tab returns.
    - If Alt+Delete is not received by main AHK, future fix: add a named IPC/flag file or window-message-based close.
 
-7. Review Lab setup
-   - Status: created/configured.
-   - Project URL: `https://chatgpt.com/g/g-p-6a1df19f33448191b9fc968f8c9f1378/project`.
-   - Uses `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md` as instructions.
-   - Uploaded `templates/session-tracker/review_lab_prompt.md` as the prompt template source.
+6. Review Lab flow
+   - Use Review Lab to analyze the fake session.
+   - Confirm the review format is useful before relying on it for real sessions.
 
-## 12. What not to do yet
+## 13. What not to do yet
 
 - Do not add JSON export unless Markdown becomes limiting.
 - Do not add raw HTML fallback unless DOM/log capture misses important content.
@@ -396,25 +394,21 @@ Do not update the main PM Interview Helper from one weak answer unless severe/tr
 - Do not auto-update PM Interview Helper from Review Lab.
 - Do not merge tracker sessions into the instruction repo.
 - Do not delete old disabled Tampermonkey scripts until the new setup has passed real use.
-- Do not change `Final_2_Window_Fixed.ahk` unless the companion AHK approach fails.
+- Do not change `Final_2_Window_Fixed.ahk` again unless the Project URL launch or companion AHK approach fails.
 
-## 13. Recommended next steps
+## 14. Recommended next steps
 
-1. Fix Edge Beta ChatGPT account/project access.
-2. Create private `pm-interview-session-tracker` repo.
-3. Clone it locally.
-4. Run tracker init script and push initial structure.
-5. Install `session-tracker-export.user.js` in Edge Beta Tampermonkey.
-6. Run one fake practice smoke session.
-7. Confirm session files land in tracker repo.
-8. Confirm main runtime closes after successful push.
-9. Use Review Lab to analyze the smoke session.
-10. Use the system for 2-3 practice/mock sessions before changing the main PM Interview Helper again.
+1. Fix/confirm Edge Beta ChatGPT account/project access.
+2. Run one fake practice smoke session.
+3. Confirm session files land in tracker repo.
+4. Confirm main runtime closes after successful push.
+5. Use Review Lab to analyze the smoke session.
+6. Use the system for 2-3 practice/mock sessions before changing the main PM Interview Helper again.
 
-## 14. New-chat bootstrap prompt
+## 15. New-chat bootstrap prompt
 
 Use this in a new chat:
 
 ```text
-We are continuing the PM Interview Helper system from the repo `thomas-shelby006/product-pm-interview-assistant-instructions`. First read `docs/CURRENT_SETUP_HANDOFF_AND_REQUIREMENTS.md` and issue #7. Treat them as the source of truth for current setup, accepted decisions, active files, active issues, tradeoffs, and next steps. Do not restart from scratch. Help me continue from the next active issue.
+We are continuing the PM Interview Helper system from the repo `thomas-shelby006/product-pm-interview-assistant-instructions`. First read `docs/CURRENT_STATUS_DASHBOARD.md`, `docs/CURRENT_SETUP_HANDOFF_AND_REQUIREMENTS.md`, and issue #7. Treat them as the source of truth for current setup, accepted decisions, active files, active issues, tradeoffs, and next steps. Do not restart from scratch. Help me continue from the next active issue.
 ```
