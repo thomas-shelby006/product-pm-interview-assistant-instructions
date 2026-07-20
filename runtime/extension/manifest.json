@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "PM Interview Dual-Provider Bridge",
+  "version": "0.1.0",
+  "description": "Routes live interview transcript text between ChatGPT and Claude tabs selected by the local AutoHotkey launcher.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [{
+    "matches": [
+      "https://chatgpt.com/*",
+      "https://chat.openai.com/*",
+      "https://claude.ai/*"
+    ],
+    "js": ["content/main.js"],
+    "run_at": "document_idle",
+    "world": "ISOLATED"
+  }],
+  "web_accessible_resources": [{
+    "resources": [
+      "content/entry.js",
+      "content/runtime.js",
+      "content/status-overlay.js",
+      "content/adapters/*.js",
+      "shared/*.js"
+    ],
+    "matches": [
+      "https://chatgpt.com/*",
+      "https://chat.openai.com/*",
+      "https://claude.ai/*"
+    ]
+  }]
+}

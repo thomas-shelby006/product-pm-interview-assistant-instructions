@@ -1,0 +1,9 @@
+{
+  "name": "pm-interview-dual-provider-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test runtime/extension/tests/*.test.js",
+    "validate": "node runtime/extension/scripts/validate-extension.mjs"
+  }
+}
