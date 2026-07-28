@@ -169,3 +169,27 @@ test('provider observer defaults to a 500ms watchdog and coalesces mutation burs
   assert.equal(changes, 2);
   observer.disconnect();
 });
+
+test('provider observer refreshes replaced targets immediately', () => {
+  let currentTarget = { id: 'first' };
+  const observed = [];
+  class Observer {
+    observe(target) { observed.push(target.id); }
+    disconnect() {}
+  }
+  const observer = createProviderObserver({
+    adapter: {
+      getObservationTargets: () => [currentTarget],
+      isVoiceActive: () => false
+    },
+    document: { visibilityState: 'visible' },
+    onChange: () => {},
+    MutationObserverCtor: Observer,
+    setIntervalFn: () => 1,
+    clearIntervalFn: () => {}
+  });
+  currentTarget = { id: 'second' };
+  observer.refresh();
+  assert.deepEqual(observed, ['first', 'second']);
+  observer.disconnect();
+});

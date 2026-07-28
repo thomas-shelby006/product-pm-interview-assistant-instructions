@@ -7,6 +7,25 @@ function yieldToProvider() {
     globalThis.queueMicrotask(resolve);
   });
 }
+export async function submitComposerWhenReady({
+  adapter,
+  text,
+  yieldFn = yieldToProvider,
+  maxChecks = 2,
+  isCurrent = () => true
+}) {
+  const normalized = String(text ?? '').trim();
+  if (!normalized || !isCurrent() || !adapter.setComposerText(normalized)) return false;
+  for (let check = 0; check <= maxChecks; check += 1) {
+    if (!isCurrent()) return false;
+    const composerReady = adapter.composerContains?.(normalized) ?? true;
+    const submitReady = adapter.canSubmit?.() ?? true;
+    if (composerReady && submitReady && adapter.submit()) return true;
+    if (check < maxChecks) await yieldFn();
+  }
+  return false;
+}
+
 export function createReceiverController({
   adapter,
   sleep,
@@ -14,11 +33,29 @@ export function createReceiverController({
   stopTimeoutMs = 2500,
   stopPollMs = 75,
   yieldFn = yieldToProvider,
-  maxSubmitChecks = 2
+  maxSubmitChecks = 2,
+  maxPreviewTurns = 64,
+  maxPreviewStreams = 8
 }) {
   let latestDeliveryId = '';
-  let lastPreviewSeq = 0;
+  const lastPreviewSeqByStream = new Map();
   const previewRevisions = new Map();
+
+  const boundedSet = (map, key, value, maxSize) => {
+    if (map.has(key)) map.delete(key);
+    map.set(key, value);
+    while (map.size > maxSize) map.delete(map.keys().next().value);
+  };
+
+  const previewKey = (streamId, turnKey) => String(streamId) + '\u0000' + String(turnKey);
+  const clearCommittedPreview = envelope => {
+    const metadata = envelope?.metadata || {};
+    const streamId = String(metadata.previewStreamId || 'legacy').trim() || 'legacy';
+    for (const identity of [metadata.turnKey, metadata.messageId]) {
+      const turnKey = String(identity || '').trim();
+      if (turnKey) previewRevisions.delete(previewKey(streamId, turnKey));
+    }
+  };
 
   async function waitForIdle(deliveryId) {
     const attempts = Math.max(1, Math.ceil(stopTimeoutMs / stopPollMs));
@@ -37,13 +74,18 @@ export function createReceiverController({
       const phase = String(preview?.phase || 'interim');
       const revision = Number(preview?.revision || 0);
       const seq = Number(preview?.seq || 0);
+      const streamId = String(preview?.streamId || 'legacy').trim() || 'legacy';
+      const key = previewKey(streamId, turnKey);
       if (!turnKey || !Number.isSafeInteger(revision) || revision < 1) return false;
       if (phase !== 'clear' && !text) return false;
+      const lastPreviewSeq = lastPreviewSeqByStream.get(streamId) || 0;
       if (Number.isSafeInteger(seq) && seq > 0 && seq <= lastPreviewSeq) return false;
-      if (revision <= (previewRevisions.get(turnKey) || 0)) return false;
+      if (revision <= (previewRevisions.get(key) || 0)) return false;
       if (!adapter.setComposerText(text)) return false;
-      previewRevisions.set(turnKey, revision);
-      if (Number.isSafeInteger(seq) && seq > 0) lastPreviewSeq = seq;
+      boundedSet(previewRevisions, key, revision, maxPreviewTurns);
+      if (Number.isSafeInteger(seq) && seq > 0) {
+        boundedSet(lastPreviewSeqByStream, streamId, seq, maxPreviewStreams);
+      }
       return true;
     },
     async deliver(envelope) {
@@ -65,22 +107,20 @@ export function createReceiverController({
       }
 
       if (deliveryId !== latestDeliveryId) return false;
-      if (!adapter.setComposerText(text)) {
-        onStatus('NO COMPOSER');
+      const submitted = await submitComposerWhenReady({
+        adapter,
+        text,
+        yieldFn,
+        maxChecks: maxSubmitChecks,
+        isCurrent: () => deliveryId === latestDeliveryId
+      });
+      if (!submitted) {
+        onStatus(adapter.findComposer?.() ? 'SUBMIT FAIL' : 'NO COMPOSER');
         return false;
       }
-      for (let check = 0; check <= maxSubmitChecks; check += 1) {
-        if (deliveryId !== latestDeliveryId) return false;
-        const composerReady = adapter.composerContains?.(text) ?? true;
-        const submitReady = adapter.canSubmit?.() ?? true;
-        if (composerReady && submitReady && adapter.submit()) {
-          onStatus('SENT');
-          return true;
-        }
-        if (check < maxSubmitChecks) await yieldFn();
-      }
-      onStatus('SUBMIT FAIL');
-      return false;
+      clearCommittedPreview(envelope);
+      onStatus('SENT');
+      return true;
     },
     supersede(envelope) {
       latestDeliveryId = envelope?.id || `${Date.now()}`;

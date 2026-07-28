@@ -7,16 +7,19 @@ export function makePreview({
   turnKey,
   revision,
   seq = 0,
+  streamId,
   phase = 'interim',
   now = Date.now()
 }) {
   const normalizedText = String(text ?? '').trim();
   const normalizedTurnKey = String(turnKey ?? '').trim();
   const normalizedPhase = String(phase ?? '').trim() || 'interim';
+  const normalizedStreamId = String(streamId ?? '').trim();
+  const hasStreamId = streamId !== undefined;
   const permitsEmptyText = normalizedPhase === 'clear';
   if (!sessionId || !PROVIDERS.has(sourceProvider) || (!normalizedText && !permitsEmptyText) ||
       !normalizedTurnKey || !Number.isSafeInteger(revision) || revision < 1 ||
-      !Number.isSafeInteger(seq) || seq < 0) {
+      !Number.isSafeInteger(seq) || seq < 0 || (hasStreamId && !normalizedStreamId)) {
     throw new TypeError('Invalid PMIA preview input');
   }
   return {
@@ -27,6 +30,7 @@ export function makePreview({
     revision,
     phase: normalizedPhase,
     ...(seq > 0 ? { seq } : {}),
+    ...(normalizedStreamId ? { streamId: normalizedStreamId } : {}),
     createdAt: now
   };
 }
@@ -37,6 +41,7 @@ export function isPreview(value) {
     (value.text.trim() || value.phase === 'clear') &&
     typeof value.turnKey === 'string' && value.turnKey.trim() &&
     Number.isSafeInteger(value.revision) && value.revision > 0 &&
+    (value.streamId === undefined || (typeof value.streamId === 'string' && value.streamId.trim())) &&
     (value.seq === undefined || (Number.isSafeInteger(value.seq) && value.seq > 0)));
 }
 

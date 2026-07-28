@@ -129,3 +129,17 @@ test('preview contract carries an optional independent global sequence', () => {
     turnKey: 'u1', revision: 2, seq: -1
   }), /Invalid PMIA preview/);
 });
+
+test('preview contract carries a page-lifetime stream identity', () => {
+  const preview = previewModule.makePreview({
+    sessionId: 's1', sourceProvider: 'chatgpt', text: 'partial',
+    turnKey: 'u1', revision: 2, seq: 1,
+    streamId: 'page-a', now: 30
+  });
+  assert.equal(preview.streamId, 'page-a');
+  assert.equal(previewModule.isPreview(preview), true);
+  assert.throws(() => previewModule.makePreview({
+    sessionId: 's1', sourceProvider: 'chatgpt', text: 'partial',
+    turnKey: 'u1', revision: 2, streamId: '   '
+  }), /Invalid PMIA preview/);
+});

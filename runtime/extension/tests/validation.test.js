@@ -180,3 +180,14 @@ test('receiver submits before starting durable received-text telemetry', async (
   assert.ok(logIndex > deliverIndex, 'received-text logging must start after submission');
   assert.match(receive, /deliveryElapsedMs/);
 });
+
+test('entry runtime uses readiness submission and event-driven recovery without fixed hotkey delays', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  assert.match(entry, /createRuntimeRecovery/);
+  assert.match(entry, /submitComposerWhenReady/);
+  assert.doesNotMatch(entry, /await sleep\(60\)/);
+  const copyHandler = entry.slice(entry.indexOf("document.addEventListener('copy'"), entry.indexOf('function download'));
+  assert.doesNotMatch(copyHandler, /setTimeout/);
+});

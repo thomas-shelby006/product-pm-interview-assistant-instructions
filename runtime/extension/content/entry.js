@@ -4,10 +4,10 @@ import { createChatGptAdapter } from './adapters/chatgpt.js';
 import { createClaudeAdapter } from './adapters/claude.js';
 import {
   createReceiverController,
+  submitComposerWhenReady,
   runtimeTitle,
   defendTitle,
-  redactSensitiveSessionText,
-  sleep
+  redactSensitiveSessionText
 } from './runtime.js';
 import { createStatusOverlay } from './status-overlay.js';
 import { createClaudeSignalBridge } from './signals/claude-isolated.js';
@@ -16,6 +16,7 @@ import { createProviderObserver } from './observation/provider-observer.js';
 import { createProviderSender } from './senders/provider-sender.js';
 import { createAnswerTracker, createWakeSignal } from './answer-tracker.js';
 import { createLatestPreviewScheduler } from './preview-scheduler.js';
+import { createRuntimeRecovery } from './runtime-recovery.js';
 import { SequenceGate, nextSequence } from '../shared/sequence.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 
@@ -75,11 +76,14 @@ async function startRuntime(runtimeConfig) {
   let senderObserver = null;
   let receiverObserver = null;
   let senderController = null;
+  let runtimeRecovery = null;
   const answerWake = createWakeSignal();
   const senderSequenceKey = `pmia_sender_seq_${runtimeConfig.sessionId}`;
   const receiverSequenceKey = `pmia_receiver_seq_${runtimeConfig.sessionId}`;
   let senderSequence = Number(sessionStorage.getItem(senderSequenceKey) || 0);
   let previewSequence = 0;
+  const previewStreamId = globalThis.crypto?.randomUUID?.()
+    || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const receiverSequenceGate = new SequenceGate(
     Number(sessionStorage.getItem(receiverSequenceKey) || 0)
   );
@@ -143,7 +147,8 @@ async function startRuntime(runtimeConfig) {
         turnKey: String(candidate?.turnKey || ''),
         revision: Number(candidate?.revision || 0),
         phase: String(candidate?.phase || 'interim'),
-        seq: nextPreviewSequence
+        seq: nextPreviewSequence,
+        streamId: previewStreamId
       });
     } catch {
       return false;
@@ -173,7 +178,7 @@ async function startRuntime(runtimeConfig) {
         text: normalized,
         kind,
         seq: nextSenderSequence,
-        metadata
+        metadata: { ...metadata, previewStreamId }
       });
     } catch {
       return false;
@@ -220,6 +225,7 @@ async function startRuntime(runtimeConfig) {
         return forwardText(final.text, 'question', {
           source: 'dom_turn',
           messageId: final.id,
+          turnKey: final.id,
           boundary: final.boundary
         });
       }
@@ -398,12 +404,26 @@ async function startRuntime(runtimeConfig) {
     });
 
     document.addEventListener('copy', () => {
-      setTimeout(() => {
-        const selected = window.getSelection()?.toString()?.trim();
-        if (selected) forwardText(selected, 'question', { source: 'manual_copy' });
-      }, 30);
+      const selected = window.getSelection()?.toString()?.trim();
+      if (!selected) return;
+      senderController?.markExternalFinal({ text: selected });
+      forwardText(selected, 'question', { source: 'manual_copy' });
     });
   }
+
+  runtimeRecovery = createRuntimeRecovery({
+    window,
+    document,
+    async recover() {
+      if (!registrationActive) return false;
+      const registered = await register();
+      senderObserver?.refresh();
+      receiverObserver?.refresh();
+      senderController?.observe();
+      answerWake.pulse();
+      return registered;
+    }
+  });
 
   function download(name, text, type) {
     const url = URL.createObjectURL(new Blob([text], { type }));
@@ -467,11 +487,12 @@ async function startRuntime(runtimeConfig) {
       if (!text) return;
       senderController?.markExternalFinal({ text });
       await forwardText(text, 'boot', { source: 'ahk_boot' });
-      if (adapter.setComposerText(text)) {
-        await sleep(60);
-        adapter.submit();
-      }
-      overlay.setStatus('BOOT SENT', 'ok', 1800);
+      const submitted = await submitComposerWhenReady({ adapter, text });
+      overlay.setStatus(
+        submitted ? 'BOOT SENT' : 'BOOT SUBMIT FAIL',
+        submitted ? 'ok' : 'error',
+        1800
+      );
       return;
     }
 
@@ -535,6 +556,7 @@ async function startRuntime(runtimeConfig) {
 
   window.addEventListener('pagehide', () => {
     clearInterval(registerTimer);
+    runtimeRecovery?.disconnect();
     if (senderObserver) senderObserver.disconnect();
     if (receiverObserver) receiverObserver.disconnect();
     senderController?.disconnect();

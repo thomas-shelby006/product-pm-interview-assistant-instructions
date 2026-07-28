@@ -76,6 +76,10 @@ export function createProviderObserver({
 
   return {
     flush: emit,
+    refresh() {
+      bindTargets();
+      emit();
+    },
     disconnect() {
       disposed = true;
       observer?.disconnect();

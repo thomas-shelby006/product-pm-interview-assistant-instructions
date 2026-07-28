@@ -209,3 +209,71 @@ test('receiver performs one bounded readiness yield before submitting', async ()
   assert.equal(submissions, 1);
   assert.equal(yields, 1);
 });
+
+test('receiver accepts sequence restart from a new preview stream', () => {
+  const calls = [];
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      stopGenerating: () => false,
+      setComposerText: text => { calls.push(text); return true; },
+      submit: () => true
+    },
+    sleep: async () => {},
+    onStatus: () => {}
+  });
+  assert.equal(controller.preview({
+    streamId: 'page-a', turnKey: 'u1', text: 'old page', revision: 1, seq: 8
+  }), true);
+  assert.equal(controller.preview({
+    streamId: 'page-a', turnKey: 'u1', text: 'stale old page', revision: 2, seq: 7
+  }), false);
+  assert.equal(controller.preview({
+    streamId: 'page-b', turnKey: 'u1', text: 'new page', revision: 1, seq: 1
+  }), true);
+  assert.deepEqual(calls, ['old page', 'new page']);
+});
+
+test('receiver bounds provisional turn state and evicts the oldest turn', () => {
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      stopGenerating: () => false,
+      setComposerText: () => true,
+      submit: () => true
+    },
+    sleep: async () => {},
+    maxPreviewTurns: 2,
+    onStatus: () => {}
+  });
+  assert.equal(controller.preview({ streamId: 'p', turnKey: 'u1', text: 'one', revision: 1, seq: 1 }), true);
+  assert.equal(controller.preview({ streamId: 'p', turnKey: 'u2', text: 'two', revision: 1, seq: 2 }), true);
+  assert.equal(controller.preview({ streamId: 'p', turnKey: 'u3', text: 'three', revision: 1, seq: 3 }), true);
+  assert.equal(controller.preview({ streamId: 'p', turnKey: 'u1', text: 'one again', revision: 1, seq: 4 }), true);
+});
+
+test('successful final clears the exact provisional turn identity', async () => {
+  let current = '';
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      stopGenerating: () => false,
+      setComposerText: text => { current = text; return true; },
+      composerContains: text => current === text,
+      canSubmit: () => true,
+      submit: () => true
+    },
+    sleep: async () => {},
+    onStatus: () => {}
+  });
+  assert.equal(controller.preview({
+    streamId: 'page-a', turnKey: 'u1', text: 'partial', revision: 7, seq: 1
+  }), true);
+  assert.equal(await controller.deliver({
+    id: 'f1', text: 'final question',
+    metadata: { previewStreamId: 'page-a', turnKey: 'u1' }
+  }), true);
+  assert.equal(controller.preview({
+    streamId: 'page-a', turnKey: 'u1', text: 'fresh reuse', revision: 1, seq: 2
+  }), true);
+});
