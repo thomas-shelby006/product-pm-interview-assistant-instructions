@@ -152,3 +152,16 @@ test('background keeps preview delivery outside durable serialization and storag
   assert.match(fastPath, /deliverPreview/);
   assert.doesNotMatch(fastPath, /saveRegistry|appendLog|queueLatest|acceptSequence/);
 });
+
+test('preview ordering is page-lifetime memory and never writes browser storage', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  assert.match(entry, /createLatestPreviewScheduler/);
+  assert.doesNotMatch(entry, /previewSequenceKey/);
+  const previewFunction = entry.slice(
+    entry.indexOf('async function forwardPreview'),
+    entry.indexOf('async function forwardText')
+  );
+  assert.doesNotMatch(previewFunction, /sessionStorage\.setItem/);
+});

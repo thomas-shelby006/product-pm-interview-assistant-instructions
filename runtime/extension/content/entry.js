@@ -15,6 +15,7 @@ import { createClaudeSignalHandler } from './signals/claude-runtime.js';
 import { createProviderObserver } from './observation/provider-observer.js';
 import { createProviderSender } from './senders/provider-sender.js';
 import { createAnswerTracker, createWakeSignal } from './answer-tracker.js';
+import { createLatestPreviewScheduler } from './preview-scheduler.js';
 import { SequenceGate, nextSequence } from '../shared/sequence.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 
@@ -76,9 +77,8 @@ async function startRuntime(runtimeConfig) {
   const answerWake = createWakeSignal();
   const senderSequenceKey = `pmia_sender_seq_${runtimeConfig.sessionId}`;
   const receiverSequenceKey = `pmia_receiver_seq_${runtimeConfig.sessionId}`;
-  const previewSequenceKey = `pmia_preview_seq_${runtimeConfig.sessionId}`;
   let senderSequence = Number(sessionStorage.getItem(senderSequenceKey) || 0);
-  let previewSequence = Number(sessionStorage.getItem(previewSequenceKey) || 0);
+  let previewSequence = 0;
   const receiverSequenceGate = new SequenceGate(
     Number(sessionStorage.getItem(receiverSequenceKey) || 0)
   );
@@ -148,7 +148,6 @@ async function startRuntime(runtimeConfig) {
       return false;
     }
     previewSequence = nextPreviewSequence;
-    sessionStorage.setItem(previewSequenceKey, String(previewSequence));
     try {
       const response = await chrome.runtime.sendMessage({ type: 'PMIA_PREVIEW', preview });
       return Boolean(response?.ok);
@@ -156,6 +155,8 @@ async function startRuntime(runtimeConfig) {
       return false;
     }
   }
+
+  const previewScheduler = createLatestPreviewScheduler({ send: forwardPreview });
 
   async function forwardText(text, kind = 'question', metadata = {}) {
     const normalized = String(text || '').trim();
@@ -205,7 +206,7 @@ async function startRuntime(runtimeConfig) {
       adapter,
       onPreview(preview) {
         if (runtimeConfig.provider === 'claude' && adapter.isVoiceActive?.()) return false;
-        return forwardPreview(preview);
+        return previewScheduler.push(preview);
       },
       onFinal(final) {
         return forwardText(final.text, 'question', {
@@ -221,7 +222,7 @@ async function startRuntime(runtimeConfig) {
     providerSignalBridge = createClaudeSignalBridge(window);
     const handleClaudeSignal = createClaudeSignalHandler({
       role: runtimeConfig.role,
-      forwardPreview,
+      forwardPreview: preview => previewScheduler.push(preview),
       async forwardText(text, kind, metadata = {}) {
         if (runtimeConfig.role === 'sender' && metadata.source === 'voice_final') {
           senderController?.markExternalFinal({ id: metadata.messageId, text });
@@ -520,10 +521,10 @@ async function startRuntime(runtimeConfig) {
     if (senderObserver) senderObserver.disconnect();
     if (receiverObserver) receiverObserver.disconnect();
     senderController?.disconnect();
+    previewScheduler.disconnect();
     answerWake.disconnect();
     unsubscribeProviderSignals?.();
     if (providerSignalBridge) providerSignalBridge.disconnect();
     restoreTitle.disconnect?.();
   }, { once: true });
 }
-
