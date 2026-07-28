@@ -324,25 +324,30 @@ async function startRuntime(runtimeConfig) {
     const token = answerCaptureToken;
     const beforeText = adapter.getLatestAssistantText();
     const hintVersionAtStart = assistantFinalHintVersion;
-    await logEvent('received_text', {
-      envelopeId: envelope.id,
-      kind: envelope.kind,
-      sourceProvider: envelope.sourceProvider,
-      text: envelope.text
-    });
+    const deliveryStartedAt = Date.now();
     const submitted = await receiver.deliver(envelope);
     if (!submitted) return false;
+    const deliveryElapsedMs = Date.now() - deliveryStartedAt;
     receiverSequenceGate.accept(envelope.seq);
     sessionStorage.setItem(
       receiverSequenceKey,
       String(receiverSequenceGate.lastAcceptedSeq)
     );
+    const receivedLog = logEvent('received_text', {
+      envelopeId: envelope.id,
+      kind: envelope.kind,
+      sourceProvider: envelope.sourceProvider,
+      text: envelope.text,
+      deliveryElapsedMs
+    });
     scrollToLatest();
     if (envelope.kind === 'boot') {
       overlay.setStatus('ARMED', 'ok', 3500);
+      await receivedLog;
       await logEvent('session_armed', { envelopeId: envelope.id });
     } else {
       captureAnswer(envelope, beforeText, token, hintVersionAtStart);
+      await receivedLog;
     }
     return true;
   }

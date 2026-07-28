@@ -165,3 +165,18 @@ test('preview ordering is page-lifetime memory and never writes browser storage'
   );
   assert.doesNotMatch(previewFunction, /sessionStorage\.setItem/);
 });
+
+test('receiver submits before starting durable received-text telemetry', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const receive = entry.slice(
+    entry.indexOf('async function receiveEnvelope'),
+    entry.indexOf('chrome.runtime.onMessage.addListener')
+  );
+  const deliverIndex = receive.indexOf('await receiver.deliver(envelope)');
+  const logIndex = receive.indexOf("logEvent('received_text'");
+  assert.ok(deliverIndex >= 0, 'receiver delivery must exist');
+  assert.ok(logIndex > deliverIndex, 'received-text logging must start after submission');
+  assert.match(receive, /deliveryElapsedMs/);
+});
