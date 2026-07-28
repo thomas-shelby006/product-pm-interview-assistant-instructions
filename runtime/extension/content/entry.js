@@ -19,6 +19,7 @@ import { createLatestPreviewScheduler } from './preview-scheduler.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
 import { SequenceGate, nextSequence } from '../shared/sequence.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
+import { describeRuntimeStatus } from '../shared/session-status.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -541,6 +542,21 @@ async function startRuntime(runtimeConfig) {
       return;
     }
 
+    if (key === 'F11') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const response = await message({
+        type: 'PMIA_GET_STATUS',
+        sessionId: runtimeConfig.sessionId
+      });
+      if (!response?.ok) {
+        overlay.setStatus('PREFLIGHT FAIL', 'error', 2200);
+        return;
+      }
+      const status = describeRuntimeStatus(response.status);
+      overlay.setStatus(status.text, status.tone, 2400);
+      return;
+    }
     if (key === 'F12' && runtimeConfig.role === 'sender') {
       event.preventDefault();
       const candidate = adapter.getSenderCandidateInfo();

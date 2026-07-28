@@ -3,6 +3,7 @@ import { isEnvelope } from './shared/protocol.js';
 import { deliverPreview } from './shared/preview.js';
 import { classifyDelivery } from './shared/delivery.js';
 import { roleLogKey, appendBoundedLog } from './shared/session-log.js';
+import { buildSessionStatus } from './shared/session-status.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -235,6 +236,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
+    if (message?.type === 'PMIA_GET_STATUS') {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+        sendResponse({ ok: false, error: 'session_not_owned' });
+        return;
+      }
+      sendResponse({
+        ok: true,
+        status: buildSessionStatus(
+          registry.getSession(message.sessionId),
+          Date.now(),
+          STALE_AFTER_MS
+        )
+      });
+      return;
+    }
     if (message?.type === 'PMIA_DEBUG_SESSIONS') {
       sendResponse({ ok: true, sessions: registry.snapshot() });
       return;

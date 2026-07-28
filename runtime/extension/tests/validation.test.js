@@ -191,3 +191,13 @@ test('entry runtime uses readiness submission and event-driven recovery without 
   const copyHandler = entry.slice(entry.indexOf("document.addEventListener('copy'"), entry.indexOf('function download'));
   assert.doesNotMatch(copyHandler, /setTimeout/);
 });
+test('runtime exposes an authorized F11 preflight status check', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  assert.match(entry, /key === 'F11'/);
+  assert.match(entry, /PMIA_GET_STATUS/);
+  assert.match(background, /PMIA_GET_STATUS/);
+  assert.match(background, /authorizeSessionMessage/);
+});
