@@ -256,3 +256,36 @@ test('Claude adapter returns ordered typed conversation messages', () => {
     { id: 'claude-a-1', role: 'assistant', text: 'Claude answer' }
   ]);
 });
+test('provider adapters expose composer readiness without submitting', () => {
+  for (const factory of [chatgptModule.createChatGptAdapter, claudeModule.createClaudeAdapter]) {
+    const isChatGpt = factory === chatgptModule.createChatGptAdapter;
+    const composerSelector = isChatGpt
+      ? 'textarea[name="prompt-textarea"]'
+      : 'div[contenteditable="true"].ProseMirror';
+    const sendSelector = isChatGpt
+      ? 'button[aria-label="Send prompt"]'
+      : 'button[aria-label="Send message"]';
+    const composer = fakeElement({ tagName: isChatGpt ? 'TEXTAREA' : 'DIV' });
+    const send = fakeElement({ tagName: 'BUTTON', disabled: false });
+    const adapter = factory(fakeDocument({
+      [composerSelector]: composer,
+      [sendSelector]: send
+    }));
+
+    assert.equal(adapter.setComposerText('complete question'), true);
+    assert.equal(adapter.composerContains('complete question'), true);
+    assert.equal(adapter.canSubmit(), true);
+    assert.equal(send.clicked, false);
+  }
+});
+
+test('provider readiness reports a disabled send control', () => {
+  const composer = fakeElement({ tagName: 'TEXTAREA', value: 'question' });
+  const send = fakeElement({ tagName: 'BUTTON', disabled: true });
+  const adapter = chatgptModule.createChatGptAdapter(fakeDocument({
+    'textarea[name="prompt-textarea"]': composer,
+    'button[aria-label="Send prompt"]': send
+  }));
+  assert.equal(adapter.composerContains('question'), true);
+  assert.equal(adapter.canSubmit(), false);
+});

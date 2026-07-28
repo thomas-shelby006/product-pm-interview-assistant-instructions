@@ -1,9 +1,20 @@
+function yieldToProvider() {
+  return new Promise(resolve => {
+    if (typeof globalThis.requestAnimationFrame === 'function') {
+      globalThis.requestAnimationFrame(() => resolve());
+      return;
+    }
+    globalThis.queueMicrotask(resolve);
+  });
+}
 export function createReceiverController({
   adapter,
   sleep,
   onStatus = () => {},
   stopTimeoutMs = 2500,
-  stopPollMs = 75
+  stopPollMs = 75,
+  yieldFn = yieldToProvider,
+  maxSubmitChecks = 2
 }) {
   let latestDeliveryId = '';
   let lastPreviewSeq = 0;
@@ -58,11 +69,18 @@ export function createReceiverController({
         onStatus('NO COMPOSER');
         return false;
       }
-      await sleep(60);
-      if (deliveryId !== latestDeliveryId) return false;
-      const submitted = adapter.submit();
-      onStatus(submitted ? 'SENT' : 'SUBMIT FAIL');
-      return submitted;
+      for (let check = 0; check <= maxSubmitChecks; check += 1) {
+        if (deliveryId !== latestDeliveryId) return false;
+        const composerReady = adapter.composerContains?.(text) ?? true;
+        const submitReady = adapter.canSubmit?.() ?? true;
+        if (composerReady && submitReady && adapter.submit()) {
+          onStatus('SENT');
+          return true;
+        }
+        if (check < maxSubmitChecks) await yieldFn();
+      }
+      onStatus('SUBMIT FAIL');
+      return false;
     },
     supersede(envelope) {
       latestDeliveryId = envelope?.id || `${Date.now()}`;

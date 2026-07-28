@@ -161,3 +161,51 @@ test('receiver final replaces provisional text and submits exactly once', async 
     'submit'
   ]);
 });
+
+test('receiver submits immediately when provider composer is ready', async () => {
+  let current = '';
+  let yields = 0;
+  let submissions = 0;
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      stopGenerating: () => false,
+      setComposerText(text) { current = text; return true; },
+      composerContains: text => current === text,
+      canSubmit: () => true,
+      submit() { submissions += 1; return true; }
+    },
+    sleep: async () => {},
+    yieldFn: async () => { yields += 1; },
+    onStatus: () => {}
+  });
+
+  assert.equal(await controller.deliver({ id: 'ready', text: 'ready question' }), true);
+  assert.equal(submissions, 1);
+  assert.equal(yields, 0);
+});
+
+test('receiver performs one bounded readiness yield before submitting', async () => {
+  let current = '';
+  let ready = false;
+  let yields = 0;
+  let submissions = 0;
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      stopGenerating: () => false,
+      setComposerText(text) { current = text; return true; },
+      composerContains: text => current === text,
+      canSubmit: () => ready,
+      submit() { submissions += 1; return true; }
+    },
+    sleep: async () => {},
+    yieldFn: async () => { yields += 1; ready = true; },
+    maxSubmitChecks: 2,
+    onStatus: () => {}
+  });
+
+  assert.equal(await controller.deliver({ id: 'delayed', text: 'delayed question' }), true);
+  assert.equal(submissions, 1);
+  assert.equal(yields, 1);
+});

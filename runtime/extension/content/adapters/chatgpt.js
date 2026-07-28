@@ -2,6 +2,7 @@ import {
   firstMatch,
   latestText,
   setEditableText,
+  composerText,
   firstNonEmptyCandidate,
   clickFirst,
   submitWithEnter,
@@ -50,6 +51,7 @@ const MESSAGE_SELECTOR = '[data-message-author-role="user"],[data-message-author
 
 export function createChatGptAdapter(doc = document) {
   const findComposer = () => firstMatch(doc, COMPOSER_SELECTORS);
+  const findSendButton = () => firstMatch(doc, SEND_SELECTORS);
   const getComposerCandidate = () => firstNonEmptyCandidate(doc, COMPOSER_SELECTORS);
   const getLatestUserText = () => latestText(doc, USER_SELECTORS);
   const getConversationMessages = createConversationMessageReader(doc, { selector: MESSAGE_SELECTOR });
@@ -58,6 +60,13 @@ export function createChatGptAdapter(doc = document) {
     provider: 'chatgpt',
     findComposer,
     setComposerText(text) { return setEditableText(findComposer(), text); },
+    composerContains(text) {
+      return composerText(findComposer()) === String(text ?? '').trim();
+    },
+    canSubmit() {
+      const button = findSendButton();
+      return Boolean(findComposer() && (!button || !button.disabled));
+    },
     submit() {
       if (clickFirst(doc, SEND_SELECTORS)) return true;
       return submitWithEnter(findComposer());
