@@ -1,5 +1,10 @@
 import {
-  firstMatch, latestText, setEditableText, composerText, clickFirst, submitWithEnter
+  firstMatch,
+  latestText,
+  setEditableText,
+  firstNonEmptyCandidate,
+  clickFirst,
+  submitWithEnter
 } from './shared.js';
 
 const COMPOSER_SELECTORS = [
@@ -16,21 +21,36 @@ const SEND_SELECTORS = [
 const STOP_SELECTORS = [
   'button[aria-label="Stop streaming"]',
   'button[aria-label="Stop generating"]',
+  'button[aria-label="Stop answering"]',
   'button[data-testid="stop-button"]'
 ];
 const VOICE_SELECTORS = [
-  'button[aria-label="Start dictation"]',
+  'button[aria-label="Start Voice"]',
   'button[aria-label="Start voice mode"]',
+  'button[aria-label="Start dictation"]',
   'button[aria-label*="voice mode" i]'
 ];
 const MUTE_SELECTORS = [
+  'button[aria-label="Turn off microphone"]',
+  'button[aria-label="Turn on microphone"]',
   'button[aria-label="Mute microphone"]',
   'button[aria-label="Unmute microphone"]',
   'button[aria-label*="mute" i]'
 ];
+const ACTIVE_VOICE_SELECTORS = [
+  'button[aria-label="End Voice"]',
+  'button[aria-label="End voice mode"]',
+  ...MUTE_SELECTORS
+];
+const OBSERVATION_ROOT_SELECTORS = ['main', '[role="main"]'];
+const USER_SELECTORS = ['[data-message-author-role="user"]'];
+const ASSISTANT_SELECTORS = ['[data-message-author-role="assistant"]'];
 
 export function createChatGptAdapter(doc = document) {
   const findComposer = () => firstMatch(doc, COMPOSER_SELECTORS);
+  const getComposerCandidate = () => firstNonEmptyCandidate(doc, COMPOSER_SELECTORS);
+  const getLatestUserText = () => latestText(doc, USER_SELECTORS);
+
   return {
     provider: 'chatgpt',
     findComposer,
@@ -41,16 +61,20 @@ export function createChatGptAdapter(doc = document) {
     },
     isGenerating() { return Boolean(firstMatch(doc, STOP_SELECTORS)); },
     stopGenerating() { return clickFirst(doc, STOP_SELECTORS); },
-    getLatestUserText() {
-      return latestText(doc, ['[data-message-author-role="user"]']);
+    getLatestUserText,
+    getLatestAssistantText() { return latestText(doc, ASSISTANT_SELECTORS); },
+    getSenderCandidateInfo() {
+      const composer = getComposerCandidate();
+      if (composer) return { text: composer.text, source: 'composer' };
+      const userText = getLatestUserText();
+      return userText ? { text: userText, source: 'user_message' } : { text: '', source: 'none' };
     },
-    getLatestAssistantText() {
-      return latestText(doc, ['[data-message-author-role="assistant"]']);
-    },
-    getSenderCandidate() {
-      return this.getLatestUserText() || composerText(findComposer());
-    },
+    getSenderCandidate() { return this.getSenderCandidateInfo().text; },
     findVoiceButton() { return firstMatch(doc, VOICE_SELECTORS); },
-    toggleMute() { return clickFirst(doc, MUTE_SELECTORS); }
+    toggleMute() { return clickFirst(doc, MUTE_SELECTORS); },
+    getObservationTargets() {
+      return [findComposer(), firstMatch(doc, OBSERVATION_ROOT_SELECTORS)].filter(Boolean);
+    },
+    isVoiceActive() { return Boolean(firstMatch(doc, ACTIVE_VOICE_SELECTORS)); }
   };
 }

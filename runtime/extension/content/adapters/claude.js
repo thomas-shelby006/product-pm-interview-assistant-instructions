@@ -1,5 +1,10 @@
 import {
-  firstMatch, latestText, setEditableText, composerText, clickFirst, submitWithEnter
+  firstMatch,
+  latestText,
+  setEditableText,
+  firstNonEmptyCandidate,
+  clickFirst,
+  submitWithEnter
 } from './shared.js';
 
 const COMPOSER_SELECTORS = [
@@ -21,6 +26,8 @@ const STOP_SELECTORS = [
 ];
 const VOICE_SELECTORS = [
   'button[aria-label="Use voice mode"]',
+  'button[aria-label="Start voice mode"]',
+  'button[aria-label="Start voice"]',
   'button[aria-label*="voice mode" i]',
   'button[aria-label*="microphone" i]'
 ];
@@ -29,20 +36,37 @@ const MUTE_SELECTORS = [
   'button[aria-label="Unmute microphone"]',
   'button[aria-label*="mute" i]'
 ];
+const ACTIVE_VOICE_SELECTORS = [
+  'button[aria-label="End voice mode"]',
+  'button[aria-label="End voice"]',
+  ...MUTE_SELECTORS
+];
+const OBSERVATION_ROOT_SELECTORS = ['main', '[role="main"]'];
 const USER_SELECTORS = [
   '[data-testid="user-message"]',
   '[data-testid*="user-message"]',
-  '[data-author="user"]'
+  '[data-author="user"]',
+  '[data-message-author-role="user"]'
 ];
 const ASSISTANT_SELECTORS = [
-  '[data-is-streaming="false"]',
   '[data-testid="assistant-message"]',
   '[data-testid*="assistant-message"]',
+  '[data-author="assistant"]',
+  '[data-message-author-role="assistant"]',
   '.font-claude-message'
+];
+const STREAMING_SELECTORS = [
+  '[data-testid="assistant-message"][data-is-streaming="true"]',
+  '[data-testid*="assistant-message"][data-is-streaming="true"]',
+  '[data-author="assistant"][data-is-streaming="true"]',
+  '.font-claude-message[data-is-streaming="true"]'
 ];
 
 export function createClaudeAdapter(doc = document) {
   const findComposer = () => firstMatch(doc, COMPOSER_SELECTORS);
+  const getComposerCandidate = () => firstNonEmptyCandidate(doc, COMPOSER_SELECTORS);
+  const getLatestUserText = () => latestText(doc, USER_SELECTORS);
+
   return {
     provider: 'claude',
     findComposer,
@@ -52,15 +76,23 @@ export function createClaudeAdapter(doc = document) {
       return submitWithEnter(findComposer());
     },
     isGenerating() {
-      return Boolean(firstMatch(doc, STOP_SELECTORS) || doc.querySelector('[data-is-streaming="true"]'));
+      return Boolean(firstMatch(doc, STOP_SELECTORS) || firstMatch(doc, STREAMING_SELECTORS));
     },
     stopGenerating() { return clickFirst(doc, STOP_SELECTORS); },
-    getLatestUserText() { return latestText(doc, USER_SELECTORS); },
+    getLatestUserText,
     getLatestAssistantText() { return latestText(doc, ASSISTANT_SELECTORS); },
-    getSenderCandidate() {
-      return this.getLatestUserText() || composerText(findComposer());
+    getSenderCandidateInfo() {
+      const composer = getComposerCandidate();
+      if (composer) return { text: composer.text, source: 'composer' };
+      const userText = getLatestUserText();
+      return userText ? { text: userText, source: 'user_message' } : { text: '', source: 'none' };
     },
+    getSenderCandidate() { return this.getSenderCandidateInfo().text; },
     findVoiceButton() { return firstMatch(doc, VOICE_SELECTORS); },
-    toggleMute() { return clickFirst(doc, MUTE_SELECTORS); }
+    toggleMute() { return clickFirst(doc, MUTE_SELECTORS); },
+    getObservationTargets() {
+      return [findComposer(), firstMatch(doc, OBSERVATION_ROOT_SELECTORS)].filter(Boolean);
+    },
+    isVoiceActive() { return Boolean(firstMatch(doc, ACTIVE_VOICE_SELECTORS)); }
   };
 }

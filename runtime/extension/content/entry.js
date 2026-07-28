@@ -1,8 +1,9 @@
-﻿import { parseRuntimeConfig, makeEnvelope } from '../shared/protocol.js';
+import { parseRuntimeConfig, makeEnvelope } from '../shared/protocol.js';
 import { createChatGptAdapter } from './adapters/chatgpt.js';
 import { createClaudeAdapter } from './adapters/claude.js';
 import {
   StableTranscriptForwarder,
+  primeHistoricalCandidate,
   createReceiverController,
   runtimeTitle,
   defendTitle,
@@ -10,9 +11,13 @@ import {
   sleep
 } from './runtime.js';
 import { createStatusOverlay } from './status-overlay.js';
+import { createClaudeSignalBridge } from './signals/claude-isolated.js';
+import { createClaudeSignalHandler } from './signals/claude-runtime.js';
+import { createProviderObserver } from './observation/provider-observer.js';
+import { SequenceGate, nextSequence } from '../shared/sequence.js';
+import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
-const POLL_MS = 180;
 const ANSWER_TIMEOUT_MS = 90000;
 
 function actualProvider(hostname) {
@@ -60,15 +65,32 @@ async function startRuntime(runtimeConfig) {
   let paused = false;
   let scrollLocked = false;
   let answerCaptureToken = 0;
-  const forwarder = new StableTranscriptForwarder({ stableMs: 900 });
+  let registrationActive = true;
+  let assistantFinalHintVersion = 0;
+  let providerSignalBridge = null;
+  let unsubscribeProviderSignals = null;
+  let senderObserver = null;
+  let senderFlushTimer = null;
+  const senderSequenceKey = `pmia_sender_seq_${runtimeConfig.sessionId}`;
+  const receiverSequenceKey = `pmia_receiver_seq_${runtimeConfig.sessionId}`;
+  let senderSequence = Number(sessionStorage.getItem(senderSequenceKey) || 0);
+  const receiverSequenceGate = new SequenceGate(
+    Number(sessionStorage.getItem(receiverSequenceKey) || 0)
+  );
+  const forwarder = new StableTranscriptForwarder({
+    stableMs: 900,
+    sourceStableMs: { composer: 1400, user_message: 300 }
+  });
 
   const message = async payload => {
     try {
       return await chrome.runtime.sendMessage(payload);
     } catch (error) {
-      overlay.setStatus('EXTENSION OFFLINE', 'error', 2500);
+      const detail = String(error?.message || error);
+      const invalidated = /extension context invalidated/i.test(detail);
+      overlay.setStatus(invalidated ? 'RELOAD TAB' : 'EXTENSION OFFLINE', 'error', 3500);
       console.warn('[PMIA] message failed', error);
-      return { ok: false, error: String(error?.message || error) };
+      return { ok: false, error: detail, terminal: invalidated };
     }
   };
 
@@ -87,39 +109,100 @@ async function startRuntime(runtimeConfig) {
       type: 'PMIA_REGISTER',
       registration: runtimeConfig
     });
-    if (response?.ok) overlay.setStatus('READY', 'ok');
-    else overlay.setStatus('REGISTER FAIL', 'error', 3000);
-    return response?.ok;
+    if (response?.ok) {
+      if (!paused) overlay.setStatus('READY', 'ok');
+      return true;
+    }
+    if (response?.terminal) {
+      registrationActive = false;
+      paused = true;
+      const label = response.error === 'role_conflict' ? 'ROLE CONFLICT' : 'RELOAD TAB';
+      overlay.setStatus(label, 'error');
+      return false;
+    }
+    overlay.setStatus('REGISTER RETRY', 'warn', 3000);
+    return false;
   }
 
   await register();
-  const registerTimer = setInterval(register, 15000);
+  const registerTimer = setInterval(() => {
+    if (registrationActive) register();
+  }, 15000);
 
   async function forwardText(text, kind = 'question', metadata = {}) {
     const normalized = String(text || '').trim();
     if (!normalized || paused) return false;
     forwarder.markEmitted(normalized);
     let envelope;
+    const nextSenderSequence = nextSequence(senderSequence);
+    senderSequence = nextSenderSequence;
+    sessionStorage.setItem(senderSequenceKey, String(senderSequence));
     try {
       envelope = makeEnvelope({
         sessionId: runtimeConfig.sessionId,
         sourceProvider: runtimeConfig.provider,
         text: normalized,
         kind,
+        seq: nextSenderSequence,
         metadata
       });
     } catch {
       return false;
     }
     const response = await message({ type: 'PMIA_FORWARD', envelope });
-    overlay.setStatus(response?.delivered ? 'FORWARDED' : 'QUEUED', response?.delivered ? 'ok' : 'warn', 1200);
+    if (response?.terminal) {
+      registrationActive = false;
+      paused = true;
+      overlay.setStatus('SENDER REVOKED', 'error');
+    } else if (response?.delivered) {
+      overlay.setStatus('FORWARDED', 'ok', 1200);
+    } else if (response?.queued) {
+      overlay.setStatus('QUEUED', 'warn', 1600);
+    } else {
+      overlay.setStatus('SEND REJECTED', 'error', 2000);
+    }
     await logEvent('sender_text', {
       envelopeId: envelope.id,
       kind,
       text: normalized,
-      delivered: Boolean(response?.delivered)
+      delivered: Boolean(response?.delivered),
+      queued: Boolean(response?.queued),
+      reason: response?.reason || response?.error || ''
     });
     return Boolean(response?.ok);
+  }
+
+  const flushStableCandidate = () => {
+    senderFlushTimer = null;
+    if (paused) return;
+    const stable = forwarder.pollCandidate(Date.now());
+    if (stable) forwardText(stable.text, 'question', { source: stable.source });
+  };
+
+  const considerSenderCandidate = candidate => {
+    if (paused) return;
+    const now = Date.now();
+    forwarder.consider(candidate, now);
+    const delay = forwarder.pendingDelay(now);
+    if (senderFlushTimer) clearTimeout(senderFlushTimer);
+    if (delay === null) return;
+    senderFlushTimer = setTimeout(flushStableCandidate, delay + 20);
+  };
+
+  if (runtimeConfig.provider === 'claude') {
+    providerSignalBridge = createClaudeSignalBridge(window);
+    const handleClaudeSignal = createClaudeSignalHandler({
+      role: runtimeConfig.role,
+      forwardText,
+      setStatus: (...args) => overlay.setStatus(...args),
+      onAssistantFinal: () => { assistantFinalHintVersion += 1; }
+    });
+    unsubscribeProviderSignals = providerSignalBridge.subscribe(signal => {
+      Promise.resolve(handleClaudeSignal(signal)).catch(error => {
+        console.warn('[PMIA] Claude signal handling failed', error);
+        overlay.setStatus('VOICE SIGNAL ERROR', 'error', 2500);
+      });
+    });
   }
 
   function scrollToLatest() {
@@ -133,7 +216,7 @@ async function startRuntime(runtimeConfig) {
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
   }
 
-  async function captureAnswer(envelope, beforeText, token) {
+  async function captureAnswer(envelope, beforeText, token, hintVersionAtStart) {
     const startedAt = Date.now();
     let sawGenerating = false;
     let candidate = '';
@@ -152,7 +235,9 @@ async function startRuntime(runtimeConfig) {
         if (current !== candidate) {
           candidate = current;
           stableSince = Date.now();
-        } else if (Date.now() - stableSince >= 850) {
+        } else if (Date.now() - stableSince >= (
+          assistantFinalHintVersion > hintVersionAtStart ? 100 : 850
+        )) {
           const words = candidate.split(/\s+/).filter(Boolean).length;
           await logEvent('answer', {
             envelopeId: envelope.id,
@@ -182,9 +267,20 @@ async function startRuntime(runtimeConfig) {
 
   async function receiveEnvelope(envelope) {
     if (runtimeConfig.role !== 'receiver' || paused) return false;
+    const sequenceCheck = receiverSequenceGate.check(envelope?.seq);
+    if (!sequenceCheck.accepted) {
+      overlay.setStatus('DUPLICATE IGNORED', 'warn', 1400);
+      await logEvent('delivery_ignored', {
+        envelopeId: envelope?.id || '',
+        seq: envelope?.seq || 0,
+        reason: sequenceCheck.reason
+      });
+      return true;
+    }
     answerCaptureToken += 1;
     const token = answerCaptureToken;
     const beforeText = adapter.getLatestAssistantText();
+    const hintVersionAtStart = assistantFinalHintVersion;
     await logEvent('received_text', {
       envelopeId: envelope.id,
       kind: envelope.kind,
@@ -193,33 +289,48 @@ async function startRuntime(runtimeConfig) {
     });
     const submitted = await receiver.deliver(envelope);
     if (!submitted) return false;
+    receiverSequenceGate.accept(envelope.seq);
+    sessionStorage.setItem(
+      receiverSequenceKey,
+      String(receiverSequenceGate.lastAcceptedSeq)
+    );
     scrollToLatest();
     if (envelope.kind === 'boot') {
       overlay.setStatus('ARMED', 'ok', 3500);
       await logEvent('session_armed', { envelopeId: envelope.id });
     } else {
-      captureAnswer(envelope, beforeText, token);
+      captureAnswer(envelope, beforeText, token, hintVersionAtStart);
     }
     return true;
   }
 
   chrome.runtime.onMessage.addListener((incoming, _sender, sendResponse) => {
+    if (incoming?.type === 'PMIA_ROLE_REVOKED') {
+      registrationActive = false;
+      paused = true;
+      answerCaptureToken += 1;
+      receiver.supersede({ id: `revoked-${Date.now()}` });
+      overlay.setStatus('ROLE REVOKED', 'error');
+      sendResponse({ ok: true });
+      return false;
+    }
     if (incoming?.type !== 'PMIA_DELIVER') return false;
     receiveEnvelope(incoming.envelope)
-      .then(ok => sendResponse({ ok }))
+      .then(ok => sendResponse(ok
+        ? { ok: true }
+        : { ok: false, error: paused ? 'receiver_paused' : 'delivery_rejected' }))
       .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
     return true;
   });
 
-  let senderTimer = null;
   if (runtimeConfig.role === 'sender') {
-    senderTimer = setInterval(() => {
-      if (paused) return;
-      const now = Date.now();
-      forwarder.consider(adapter.getSenderCandidate(), now);
-      const stable = forwarder.poll(now);
-      if (stable) forwardText(stable, 'question', { source: 'stable_dom' });
-    }, POLL_MS);
+    primeHistoricalCandidate(forwarder, adapter.getSenderCandidateInfo());
+    senderObserver = createProviderObserver({
+      adapter,
+      document,
+      onCandidate: considerSenderCandidate,
+      watchdogMs: 1000
+    });
 
     document.addEventListener('copy', () => {
       setTimeout(() => {
@@ -241,40 +352,26 @@ async function startRuntime(runtimeConfig) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function logMarkdown(events) {
-    const lines = [
-      '# PM Interview Dual-Provider Session', '',
-      `Session: ${runtimeConfig.sessionId}`,
-      `Window: ${runtimeConfig.role} / ${runtimeConfig.provider}`, '',
-      '## Events', ''
-    ];
-    for (const event of events) {
-      lines.push(`### ${event.recordedAt || ''} â€” ${event.type || 'event'}`);
-      lines.push('');
-      if (event.text) lines.push(redactSensitiveSessionText(event.text), '');
-      const metadata = { ...event };
-      delete metadata.text;
-      lines.push('```json', JSON.stringify(metadata, null, 2), '```', '');
-    }
-    return lines.join('\n');
-  }
-
   async function exportSession() {
     const response = await message({ type: 'PMIA_GET_LOG', sessionId: runtimeConfig.sessionId });
     if (!response?.ok) {
       overlay.setStatus('EXPORT FAIL', 'error', 2500);
       return;
     }
-    const payload = {
-      schemaVersion: '1.0',
-      exportedAt: new Date().toISOString(),
+    const exportedAt = new Date().toISOString();
+    const payload = buildSessionExport({
       session: runtimeConfig,
-      events: response.events || []
-    };
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const base = `pmia-session-${runtimeConfig.sessionId}-${stamp}`;
+      events: response.events || [],
+      exportedAt
+    });
+    const stamp = exportedAt.replace(/[:.]/g, '-');
+    const base = `pmia-session-${runtimeConfig.sessionId}-${runtimeConfig.role}-${runtimeConfig.provider}-${stamp}`;
     download(`${base}.json`, JSON.stringify(payload, null, 2), 'application/json');
-    download(`${base}.md`, logMarkdown(payload.events), 'text/markdown');
+    download(
+      `${base}.md`,
+      renderSessionMarkdown(payload),
+      'text/markdown;charset=utf-8'
+    );
     overlay.setStatus('EXPORTED', 'ok', 1800);
   }
 
@@ -336,7 +433,7 @@ async function startRuntime(runtimeConfig) {
       return;
     }
 
-    if (key === 'F8' && runtimeConfig.role === 'receiver') {
+    if (key === 'F8') {
       event.preventDefault();
       event.stopImmediatePropagation();
       await exportSession();
@@ -359,14 +456,22 @@ async function startRuntime(runtimeConfig) {
 
     if (key === 'F12' && runtimeConfig.role === 'sender') {
       event.preventDefault();
-      const text = adapter.getSenderCandidate();
-      if (text) await forwardText(text, 'question', { source: 'forced_flush' });
+      const candidate = adapter.getSenderCandidateInfo();
+      if (candidate.text) {
+        await forwardText(candidate.text, 'question', {
+          source: candidate.source,
+          trigger: 'forced_flush'
+        });
+      }
     }
   }, true);
 
   window.addEventListener('pagehide', () => {
     clearInterval(registerTimer);
-    if (senderTimer) clearInterval(senderTimer);
+    if (senderObserver) senderObserver.disconnect();
+    if (senderFlushTimer) clearTimeout(senderFlushTimer);
+    unsubscribeProviderSignals?.();
+    if (providerSignalBridge) providerSignalBridge.disconnect();
     restoreTitle.disconnect?.();
   }, { once: true });
 }

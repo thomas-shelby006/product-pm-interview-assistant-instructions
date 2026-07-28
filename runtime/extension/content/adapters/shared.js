@@ -1,6 +1,6 @@
-export function firstMatch(doc, selectors) {
+﻿export function firstMatch(doc, selectors) {
   for (const selector of selectors) {
-    const match = doc.querySelector(selector);
+    const match = doc.querySelector?.(selector);
     if (match) return match;
   }
   return null;
@@ -8,10 +8,12 @@ export function firstMatch(doc, selectors) {
 
 export function latestText(doc, selectors) {
   for (const selector of selectors) {
-    const nodes = Array.from(doc.querySelectorAll(selector) || []);
+    const nodes = Array.from(doc.querySelectorAll?.(selector) || []);
     if (!nodes.length) continue;
-    const value = nodes[nodes.length - 1]?.innerText || nodes[nodes.length - 1]?.textContent || '';
-    if (String(value).trim()) return String(value).trim();
+    for (let index = nodes.length - 1; index >= 0; index -= 1) {
+      const value = composerText(nodes[index]);
+      if (value) return value;
+    }
   }
   return '';
 }
@@ -35,7 +37,9 @@ export function setEditableText(element, text) {
   element.focus?.();
   const tag = String(element.tagName || '').toUpperCase();
   if (tag === 'TEXTAREA' || tag === 'INPUT') {
-    const proto = tag === 'TEXTAREA' ? globalThis.HTMLTextAreaElement?.prototype : globalThis.HTMLInputElement?.prototype;
+    const proto = tag === 'TEXTAREA'
+      ? globalThis.HTMLTextAreaElement?.prototype
+      : globalThis.HTMLInputElement?.prototype;
     const setter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set;
     if (setter) setter.call(element, text);
     else element.value = text;
@@ -48,7 +52,33 @@ export function setEditableText(element, text) {
 
 export function composerText(element) {
   if (!element) return '';
-  return String(element.value ?? element.innerText ?? element.textContent ?? '').trim();
+  for (const candidate of [element.value, element.innerText, element.textContent]) {
+    const normalized = String(candidate ?? '').trim();
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+export function firstNonEmptyCandidate(doc, selectors) {
+  const seen = new Set();
+  for (const selector of selectors) {
+    const nodes = Array.from(doc.querySelectorAll?.(selector) || []);
+    if (!nodes.length) {
+      const single = doc.querySelector?.(selector);
+      if (single) nodes.push(single);
+    }
+    for (const node of nodes) {
+      if (!node || seen.has(node)) continue;
+      seen.add(node);
+      const text = composerText(node);
+      if (text) return { element: node, text };
+    }
+  }
+  return null;
+}
+
+export function firstNonEmptyText(doc, selectors) {
+  return firstNonEmptyCandidate(doc, selectors)?.text || '';
 }
 
 export function clickFirst(doc, selectors) {
@@ -63,8 +93,12 @@ export function submitWithEnter(element) {
   const EventCtor = globalThis.KeyboardEvent || globalThis.Event;
   if (!EventCtor) return false;
   const event = new EventCtor('keydown', {
-    key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-    bubbles: true, cancelable: true
+    key: 'Enter',
+    code: 'Enter',
+    keyCode: 13,
+    which: 13,
+    bubbles: true,
+    cancelable: true
   });
   return element.dispatchEvent(event);
 }

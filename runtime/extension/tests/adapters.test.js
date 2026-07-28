@@ -94,7 +94,7 @@ test('Claude adapter reads semantic user and assistant message containers', () =
   const assistant = fakeElement({ innerText: 'latest answer' });
   const doc = fakeDocument({}, {
     '[data-testid="user-message"]': [user],
-    '[data-is-streaming="false"]': [assistant]
+    '[data-testid="assistant-message"]': [assistant]
   });
   const adapter = claudeModule.createClaudeAdapter(doc);
   assert.equal(adapter.getLatestUserText(), 'latest user');
@@ -106,7 +106,7 @@ test('provider adapters expose the same contract', () => {
   const required = [
     'findComposer', 'setComposerText', 'submit', 'isGenerating',
     'stopGenerating', 'getLatestUserText', 'getLatestAssistantText',
-    'getSenderCandidate', 'findVoiceButton'
+    'getSenderCandidate', 'findVoiceButton', 'getObservationTargets', 'isVoiceActive'
   ];
   for (const factory of [chatgptModule.createChatGptAdapter, claudeModule.createClaudeAdapter]) {
     const adapter = factory(fakeDocument());
@@ -129,4 +129,79 @@ test('provider adapters toggle captured microphone controls without coordinates'
   assert.equal(claude.toggleMute(), true);
   assert.equal(chatMute.clicked, true);
   assert.equal(claudeMute.clicked, true);
+});
+
+
+test('ChatGPT sender candidate skips an empty shadow textarea for populated editor', () => {
+  assert.ok(chatgptModule, 'ChatGPT adapter module must exist');
+  const emptyTextarea = fakeElement({ tagName: 'TEXTAREA', value: '' });
+  const populatedEditor = fakeElement({ tagName: 'DIV', textContent: 'What metric would you use?' });
+  const doc = {
+    querySelector(selector) {
+      if (selector === 'textarea[name="prompt-textarea"]') return emptyTextarea;
+      if (selector === 'div[contenteditable="true"][role="textbox"]') return populatedEditor;
+      return null;
+    },
+    querySelectorAll(selector) {
+      const match = this.querySelector(selector);
+      return match ? [match] : [];
+    }
+  };
+  const adapter = chatgptModule.createChatGptAdapter(doc);
+  assert.equal(adapter.getSenderCandidate(), 'What metric would you use?');
+});
+
+
+test('sender candidate prefers populated composer over previous submitted turn', () => {
+  const previousUser = fakeElement({ textContent: 'old submitted question' });
+  const composer = fakeElement({ tagName: 'TEXTAREA', value: 'new dictated question' });
+  const doc = fakeDocument({
+    'textarea[name="prompt-textarea"]': composer
+  }, {
+    '[data-message-author-role="user"]': [previousUser],
+    'textarea[name="prompt-textarea"]': [composer]
+  });
+  const adapter = chatgptModule.createChatGptAdapter(doc);
+  assert.equal(adapter.getSenderCandidate(), 'new dictated question');
+  assert.deepEqual(adapter.getSenderCandidateInfo(), {
+    text: 'new dictated question', source: 'composer'
+  });
+});
+
+test('ChatGPT adapter recognizes captured native voice controls', () => {
+  const startVoice = fakeElement({ tagName: 'BUTTON' });
+  const mic = fakeElement({ tagName: 'BUTTON' });
+  const adapter = chatgptModule.createChatGptAdapter(fakeDocument({
+    'button[aria-label="Start Voice"]': startVoice,
+    'button[aria-label="Turn off microphone"]': mic
+  }));
+  assert.equal(adapter.findVoiceButton(), startVoice);
+  assert.equal(adapter.toggleMute(), true);
+  assert.equal(mic.clicked, true);
+});
+
+test('Claude assistant extraction ignores generic non-message streaming containers', () => {
+  const unrelated = fakeElement({ innerText: 'settings panel text' });
+  const assistant = fakeElement({ innerText: 'actual Claude answer' });
+  const doc = fakeDocument({}, {
+    '[data-is-streaming="false"]': [unrelated],
+    '[data-testid="assistant-message"]': [assistant]
+  });
+  const adapter = claudeModule.createClaudeAdapter(doc);
+  assert.equal(adapter.getLatestAssistantText(), 'actual Claude answer');
+});
+
+test('Claude sender candidate reports final submitted-turn source when composer is empty', () => {
+  const user = fakeElement({ innerText: 'final voice transcript' });
+  const composer = fakeElement({ tagName: 'DIV', textContent: '' });
+  const doc = fakeDocument({
+    'div[contenteditable="true"].ProseMirror': composer
+  }, {
+    '[data-testid="user-message"]': [user],
+    'div[contenteditable="true"].ProseMirror': [composer]
+  });
+  const adapter = claudeModule.createClaudeAdapter(doc);
+  assert.deepEqual(adapter.getSenderCandidateInfo(), {
+    text: 'final voice transcript', source: 'user_message'
+  });
 });

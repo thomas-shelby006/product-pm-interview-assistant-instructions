@@ -32,8 +32,9 @@ test('stable transcript forwarder ignores non-actionable text', () => {
 test('receiver controller supersedes active generation with latest prompt', async () => {
   assert.ok(runtimeModule, 'runtime module must exist');
   const calls = [];
+  let generationChecks = 0;
   const adapter = {
-    isGenerating: () => true,
+    isGenerating: () => generationChecks++ === 0,
     stopGenerating: () => { calls.push('stop'); return true; },
     setComposerText: text => calls.push(['set', text]),
     submit: () => { calls.push('submit'); return true; },
@@ -87,4 +88,92 @@ test('session export redacts Resume and Job Description bodies', () => {
   assert.match(result, /Company: Acme/);
   assert.doesNotMatch(result, /private resume|private jd/);
   assert.match(result, /redacted/i);
+});
+
+
+test('runtime title includes session suffix so stale windows cannot be reused', () => {
+  assert.ok(runtimeModule, 'runtime module must exist');
+  assert.equal(
+    runtimeModule.runtimeTitle({ role: 'sender', provider: 'chatgpt', sessionId: 'pmia_20260720_1234' }),
+    'PMIA_SENDER_CHATGPT_PMIA_20260720_1234'
+  );
+});
+
+
+test('source-aware forwarder waits longer for changing composer text than final user turns', () => {
+  const forwarder = new runtimeModule.StableTranscriptForwarder({
+    stableMs: 500,
+    sourceStableMs: { composer: 1200, user_message: 200 }
+  });
+  forwarder.consider({ text: 'How would you price this?', source: 'composer' }, 0);
+  assert.equal(forwarder.poll(500), null);
+  assert.equal(forwarder.poll(1199), null);
+  assert.equal(forwarder.poll(1200), 'How would you price this?');
+
+  forwarder.consider({ text: 'What metric matters most?', source: 'user_message' }, 2000);
+  assert.equal(forwarder.poll(2199), null);
+  assert.equal(forwarder.poll(2200), 'What metric matters most?');
+});
+
+test('receiver waits for generation to stop before writing replacement prompt', async () => {
+  const calls = [];
+  let checks = 0;
+  const adapter = {
+    isGenerating: () => checks++ < 3,
+    stopGenerating: () => { calls.push('stop'); return true; },
+    setComposerText: text => { calls.push(['set', text]); return true; },
+    submit: () => { calls.push('submit'); return true; }
+  };
+  const controller = runtimeModule.createReceiverController({
+    adapter,
+    sleep: async ms => calls.push(['sleep', ms]),
+    onStatus: status => calls.push(['status', status]),
+    stopTimeoutMs: 1000,
+    stopPollMs: 50
+  });
+  assert.equal(await controller.deliver({ id: 'm3', text: 'replacement' }), true);
+  assert.equal(calls[0], 'stop');
+  const setIndex = calls.findIndex(value => Array.isArray(value) && value[0] === 'set');
+  const sleepCountBeforeSet = calls.slice(0, setIndex).filter(value => Array.isArray(value) && value[0] === 'sleep').length;
+  assert.ok(sleepCountBeforeSet >= 2);
+});
+test('stable transcript forwarder preserves the candidate source', () => {
+  const forwarder = new runtimeModule.StableTranscriptForwarder({
+    sourceStableMs: { composer: 100 }
+  });
+  forwarder.consider({ text: 'Final pricing question?', source: 'composer' }, 0);
+  assert.deepEqual(forwarder.pollCandidate(100), {
+    text: 'Final pricing question?',
+    source: 'composer'
+  });
+});
+
+
+test('stable transcript forwarder reports remaining stabilization delay', () => {
+  const forwarder = new runtimeModule.StableTranscriptForwarder({
+    sourceStableMs: { composer: 1400, user_message: 300 }
+  });
+  forwarder.consider({ text: 'How should we launch?', source: 'composer' }, 100);
+  assert.equal(forwarder.pendingDelay(600), 900);
+  assert.equal(forwarder.pendingDelay(1500), 0);
+  assert.equal(forwarder.pollCandidate(1500).source, 'composer');
+  assert.equal(forwarder.pendingDelay(1500), null);
+});
+
+test('sender baseline suppresses historical submitted turns but preserves composer drafts', () => {
+  const historical = new runtimeModule.StableTranscriptForwarder();
+  assert.equal(runtimeModule.primeHistoricalCandidate(historical, {
+    text: 'Old interview question?', source: 'user_message'
+  }), true);
+  historical.consider({ text: 'Old interview question?', source: 'user_message' }, 0);
+  assert.equal(historical.pollCandidate(5000), null);
+
+  const draft = new runtimeModule.StableTranscriptForwarder({
+    sourceStableMs: { composer: 100 }
+  });
+  assert.equal(runtimeModule.primeHistoricalCandidate(draft, {
+    text: 'Unsent draft question?', source: 'composer'
+  }), false);
+  draft.consider({ text: 'Unsent draft question?', source: 'composer' }, 0);
+  assert.equal(draft.pollCandidate(100).text, 'Unsent draft question?');
 });

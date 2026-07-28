@@ -15,6 +15,7 @@ export function makeEnvelope({
   sourceProvider,
   text,
   kind = 'question',
+  seq = 0,
   metadata = {},
   now = Date.now()
 }) {
@@ -27,6 +28,7 @@ export function makeEnvelope({
     sessionId,
     sourceProvider,
     kind,
+    seq: Number.isSafeInteger(seq) && seq > 0 ? seq : 0,
     text: normalized,
     metadata: metadata && typeof metadata === 'object' ? metadata : {},
     createdAt: now
