@@ -1,4 +1,4 @@
-﻿export function createLatestPreviewScheduler({
+export function createLatestPreviewScheduler({
   send,
   scheduleMicrotask = globalThis.queueMicrotask
 }) {

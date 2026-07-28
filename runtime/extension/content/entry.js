@@ -331,7 +331,7 @@ async function startRuntime(runtimeConfig) {
     const sequenceCheck = receiverSequenceGate.check(envelope?.seq);
     if (!sequenceCheck.accepted) {
       overlay.setStatus('DUPLICATE IGNORED', 'warn', 1400);
-      await logEvent('delivery_ignored', {
+      void logEvent('delivery_ignored', {
         envelopeId: envelope?.id || '',
         seq: envelope?.seq || 0,
         reason: sequenceCheck.reason
@@ -352,7 +352,7 @@ async function startRuntime(runtimeConfig) {
       receiverSequenceKey,
       String(receiverSequenceGate.lastAcceptedSeq)
     );
-    const receivedLog = logEvent('received_text', {
+    void logEvent('received_text', {
       envelopeId: envelope.id,
       kind: envelope.kind,
       sourceProvider: envelope.sourceProvider,
@@ -362,11 +362,9 @@ async function startRuntime(runtimeConfig) {
     scrollToLatest();
     if (envelope.kind === 'boot') {
       overlay.setStatus('ARMED', 'ok', 3500);
-      await receivedLog;
-      await logEvent('session_armed', { envelopeId: envelope.id });
+      void logEvent('session_armed', { envelopeId: envelope.id });
     } else {
       captureAnswer(envelope, beforeText, token, hintVersionAtStart);
-      await receivedLog;
     }
     return true;
   }
@@ -570,7 +568,10 @@ async function startRuntime(runtimeConfig) {
     }
   }, true);
 
-  window.addEventListener('pagehide', () => {
+  let runtimeDisposed = false;
+  const disposeRuntime = () => {
+    if (runtimeDisposed) return;
+    runtimeDisposed = true;
     clearInterval(registerTimer);
     runtimeRecovery?.disconnect();
     if (senderObserver) senderObserver.disconnect();
@@ -581,5 +582,10 @@ async function startRuntime(runtimeConfig) {
     unsubscribeProviderSignals?.();
     if (providerSignalBridge) providerSignalBridge.disconnect();
     restoreTitle.disconnect?.();
-  }, { once: true });
+  };
+
+  window.addEventListener('pagehide', event => {
+    if (event.persisted) return;
+    disposeRuntime();
+  });
 }

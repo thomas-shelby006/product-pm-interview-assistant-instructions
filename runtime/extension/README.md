@@ -1,83 +1,88 @@
-# PM Interview Dual-Provider Runtime
+# PM Interview Dual-Provider Runtime 0.5
 
 Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
 
 ## Architecture
 
-- AutoHotkey owns provider selection, session launch, exact window handles, layout, hide/restore, screenshots, and global hotkeys.
-- The service worker owns durable role registration, sender authorization, final-envelope sequence idempotency, latest-message queueing, delivery acknowledgement, and role-scoped logs.
-- The service worker also exposes a direct ephemeral preview lane that bypasses durable serialization, persistence, final queues, and logs.
-- Provider adapters own semantic composer/message discovery, submit, generation detection, stop, and microphone controls.
-- Content scripts own provisional transcript previews, authoritative finalization, receiver prefill/submit, mutation-driven answer capture, status UI, and export.
+- AutoHotkey owns provider selection, exact managed windows, layout, screenshots, and global hotkeys.
+- The service worker owns role registration, sender authorization, durable final ordering, latest-only recovery, acknowledgements, and role-scoped logs.
+- Content scripts own provisional transcript previews, provider-specific finalization, receiver prefill/submission, answer capture, recovery events, status UI, and export.
+- Provider adapters own semantic composer discovery, message extraction, submit readiness, generation controls, and microphone controls.
 - Provider APIs, cookies, authorization headers, and raw audio are never used by the runtime.
 
-## Provider combinations
+Normal ChatGPT and Claude tabs without PMIA runtime configuration are untouched.
 
-- ChatGPT sender → ChatGPT receiver
-- ChatGPT sender → Claude receiver
-- Claude sender → ChatGPT receiver
-- Claude sender → Claude receiver
+## Preview and commit lanes
 
-Normal ChatGPT or Claude tabs without PMIA runtime parameters are untouched.
+Provisional text and final questions use separate paths.
 
-## Preview and commit behavior
+- Preview updates are disposable, in-memory, latest-only, and never queued or persisted.
+- Same-task transcript growth is collapsed to the newest value with a microtask, not a timer.
+- Each sender page has a unique preview stream ID, so sender reloads can safely restart preview sequence numbers.
+- Receiver preview state is bounded and the exact provisional turn is removed after a successful final submission.
+- Final envelopes remain durable, sequenced, acknowledged, and latest-only when a receiver is unavailable.
+## Provider boundaries
 
-- ChatGPT remains DOM-first because the supplied evidence did not expose a stable per-turn RTC data-channel schema.
-- Each distinct rendered ChatGPT user-text growth is mirrored to the receiver composer immediately as a provisional preview.
-- A following ChatGPT assistant turn is the authoritative final boundary; a 1.2-second stable-tail fallback is allowed only outside active voice mode.
-- Claude has a passive main-world observer for the existing `/api/ws/voice/` socket.
-- Each distinct Claude `transcript_interim` value is mirrored to the receiver composer; repeated interim frames are coalesced.
-- Binary microphone and PCM frames are ignored. `user_input_end`, `server_interrupt`, and `transcript_empty` never submit a question.
-- A human Claude `message_complete` is the only native-voice commit signal. Interruption or empty-transcript events clear stale provisional text.
-- Receiver previews only prefill text. They never stop generation or press Send. The authoritative final replaces the preview and submits exactly once.
-- Assistant `message_stop` wakes answer capture immediately but does not replace semantic DOM extraction.
+### ChatGPT
 
-## Reliability rules
+- ChatGPT remains DOM-first because the supplied voice export did not expose a dependable per-turn transcript protocol.
+- Distinct growth of the latest rendered user message is mirrored immediately to the receiver composer.
+- The following assistant turn is the preferred final boundary.
+- A 650-millisecond stable-tail fallback is allowed only when voice is inactive and the sender composer is empty.
+- Existing submitted messages are baselined on startup and composer drafts are never auto-forwarded.
 
-- One live sender and receiver own each session.
-- A duplicate live role is rejected; stale takeover is allowed after the registration timeout.
-- Every final sender envelope carries a monotonic sequence. Duplicate or stale final sequences are rejected by both service worker and receiver.
-- Preview updates use a separate monotonic sequence and per-turn revision. Stale previews are ignored and previews are never queued or persisted.
-- Only explicit receiver acknowledgement counts as final delivery. A rejected or transport-failed final leaves only the latest envelope queued.
-- Provider observation watches child/text changes only, coalesces mutation bursts, and uses a 500-millisecond rerender watchdog.
-- Answer capture is mutation-driven, uses a 250-millisecond stability window, and retains a 90-second hard timeout.
+### Claude
 
-## Load in Edge
+- A passive main-world observer reads only string frames from the existing `/api/ws/voice/` WebSocket.
+- Each distinct `transcript_interim` value is mirrored immediately; repeated frames are coalesced.
+- `transcription_start` activates the native-voice gate. `user_input_end` is a boundary hint, not a final.
+- `server_interrupt` preserves the current growing utterance. The supplied export shows it repeatedly inside one long transcript.
+- `transcript_empty` clears the provisional turn. Provider errors also clear provisional state.
+- Only a human `message_complete` commits native-voice text.
+- Assistant `message_stop` wakes answer capture immediately.
 
-1. Open `edge://extensions` in the existing Edge Default profile.
-2. Enable **Developer mode**.
-3. Choose **Load unpacked**.
-4. Select this `runtime/extension` directory.
-5. Keep the extension enabled and use `runtime/Final_2_Window_Extension.ahk` to launch managed windows.
+Binary microphone and playback frames are ignored.
+## Latency and recovery
 
-The launcher creates session-suffixed titles and closes only older windows whose title matches a PMIA sender/receiver pattern. It never closes unrelated Edge windows.
+- Ready receivers submit immediately after the final composer update; there is no fixed 60-millisecond wait.
+- A temporarily disabled send control gets at most two provider-readiness yields before delivery is rejected and retained for recovery.
+- Final submission completes before durable receiver telemetry begins.
+- Provider observation reacts to child/text mutations, ignores attribute churn, and keeps a 500-millisecond rebind watchdog.
+- Answer capture is mutation-driven with a 250-millisecond stability window and a 90-second hard timeout.
+- `pageshow`, network reconnection, and returning to a visible tab trigger immediate role re-registration and observer rebind.
+- The 15-second heartbeat remains a fallback, not the primary recovery path.
 
 ## Keyboard bridge
 
-- `Ctrl+Shift+F5`: sender boot/context route and local provider submission.
-- `Ctrl+Shift+F6`: toggle sender microphone control.
+- `Ctrl+Shift+F5`: route boot/context and submit it through provider readiness.
+- `Ctrl+Shift+F6`: toggle the sender microphone control.
 - `Ctrl+Shift+F7`: direct receiver boot/context delivery.
-- `Ctrl+Shift+F8`: export the current managed window's JSON and Markdown log.
-- `Ctrl+Shift+F9`: focus receiver composer.
+- `Ctrl+Shift+F8`: export the current role's JSON and Markdown log.
+- `Ctrl+Shift+F9`: focus the receiver composer.
 - `Ctrl+Shift+F10`: toggle receiver auto-scroll.
-- `Ctrl+Shift+F12`: force-forward current sender candidate.
-- `Ctrl+Alt+0`: pause/resume the managed tab.
+- `Ctrl+Shift+F11`: run an authorized preflight check (`LINK OK`, missing role, or queued final).
+- `Ctrl+Shift+F12`: force-forward the current sender candidate.
+- `Ctrl+Alt+0`: pause or resume the managed tab.
+## Load in Edge
+
+1. Open `edge://extensions` in the Edge Default profile.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked**.
+4. Select this `runtime/extension` directory.
+5. Keep the extension enabled and launch managed windows with `runtime/Final_2_Window_Extension.ahk`.
+
+The launcher closes only exact PMIA-titled windows. It does not close unrelated Edge windows.
 
 ## Verification
 
-From repository root:
+From the repository root:
 
 ```powershell
 npm test
 npm run validate
-powershell -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-Manual browser validation remains a separate release gate:
+Manual release checks should cover all four sender/receiver provider combinations, both native-voice senders, long-question growth, interruption, receiver reload, missing receiver recovery, preflight status, and a long-session soak.
 
-- Run all four provider combinations in text mode.
-- Run native voice with ChatGPT and Claude as sender.
-- Verify long-question finalization, interruption/latest-wins behavior, receiver reload recovery, and a 45-minute soak.
-- Disable the legacy Tampermonkey transport before testing the extension to avoid duplicate routing.
-
-The legacy Tampermonkey and AHK runtime remain an archived fallback until manual parity is confirmed.
+The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.5 runtime.

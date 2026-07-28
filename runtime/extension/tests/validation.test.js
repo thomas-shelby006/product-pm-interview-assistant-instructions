@@ -201,3 +201,23 @@ test('runtime exposes an authorized F11 preflight status check', async () => {
   assert.match(background, /PMIA_GET_STATUS/);
   assert.match(background, /authorizeSessionMessage/);
 });
+test('entry preserves runtime resources for back-forward cache restoration', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const pagehide = entry.slice(entry.indexOf("window.addEventListener('pagehide'"));
+  assert.match(pagehide, /event\.persisted/);
+  assert.match(pagehide, /if \(event\.persisted\) return/);
+});
+test('receiver acknowledgement never waits for telemetry after successful submission', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const receive = entry.slice(
+    entry.indexOf('async function receiveEnvelope'),
+    entry.indexOf('chrome.runtime.onMessage.addListener')
+  );
+  assert.match(receive, /void logEvent\('received_text'/);
+  assert.doesNotMatch(receive, /await receivedLog/);
+  assert.doesNotMatch(receive, /const receivedLog/);
+});

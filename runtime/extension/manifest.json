@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PM Interview Dual-Provider Runtime",
-  "version": "0.4.0",
-  "description": "Low-latency dual-provider interview runtime with provisional text previews and evidence-backed final turn boundaries.",
+  "version": "0.5.0",
+  "description": "Low-latency self-healing dual-provider interview runtime with provisional text previews and evidence-backed final turn boundaries.",
   "permissions": [
     "storage",
     "tabs"
@@ -51,7 +51,9 @@
         "shared/*.js",
         "content/signals/*.js",
         "content/observation/*.js",
-        "content/senders/*.js"
+        "content/senders/*.js",
+        "content/preview-scheduler.js",
+        "content/runtime-recovery.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

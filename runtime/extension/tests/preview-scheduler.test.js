@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLatestPreviewScheduler } from '../content/preview-scheduler.js';
 
