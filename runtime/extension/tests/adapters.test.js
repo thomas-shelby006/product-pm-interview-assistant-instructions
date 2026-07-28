@@ -289,3 +289,17 @@ test('provider readiness reports a disabled send control', () => {
   assert.equal(adapter.composerContains('question'), true);
   assert.equal(adapter.canSubmit(), false);
 });
+
+test('Claude distinguishes idle press-to-record from active recording', () => {
+  const idle = fakeElement({ tagName: 'BUTTON' });
+  const idleAdapter = claudeModule.createClaudeAdapter(fakeDocument({
+    'button[aria-label="Press and hold to record"]': idle
+  }));
+  assert.equal(idleAdapter.isVoiceActive(), false);
+
+  const active = fakeElement({ tagName: 'BUTTON' });
+  const activeAdapter = claudeModule.createClaudeAdapter(fakeDocument({
+    'button[aria-label^="Release to" i]': active
+  }));
+  assert.equal(activeAdapter.isVoiceActive(), true);
+});

@@ -69,6 +69,7 @@ async function startRuntime(runtimeConfig) {
   let answerCaptureToken = 0;
   let registrationActive = true;
   let assistantFinalHintVersion = 0;
+  let claudeProtocolVoiceActive = false;
   let providerSignalBridge = null;
   let unsubscribeProviderSignals = null;
   let senderObserver = null;
@@ -201,11 +202,18 @@ async function startRuntime(runtimeConfig) {
   }
 
 
+  const isCombinedVoiceActive = () => Boolean(
+    adapter.isVoiceActive?.() ||
+    (runtimeConfig.provider === 'claude' && claudeProtocolVoiceActive)
+  );
+
   if (runtimeConfig.role === 'sender') {
     senderController = createProviderSender({
       adapter,
+      isVoiceActive: isCombinedVoiceActive,
+      isComposerEmpty: () => adapter.isComposerEmpty?.() ?? true,
       onPreview(preview) {
-        if (runtimeConfig.provider === 'claude' && adapter.isVoiceActive?.()) return false;
+        if (runtimeConfig.provider === 'claude' && isCombinedVoiceActive()) return false;
         return previewScheduler.push(preview);
       },
       onFinal(final) {
@@ -233,6 +241,10 @@ async function startRuntime(runtimeConfig) {
       onAssistantFinal: () => {
         assistantFinalHintVersion += 1;
         answerWake.pulse();
+      },
+      onVoiceStateChange(active) {
+        claudeProtocolVoiceActive = active;
+        if (!active) senderController?.observe();
       }
     });
     unsubscribeProviderSignals = providerSignalBridge.subscribe(signal => {

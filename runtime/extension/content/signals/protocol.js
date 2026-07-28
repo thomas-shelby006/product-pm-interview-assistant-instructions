@@ -50,8 +50,12 @@ export function parseClaudeVoiceFrame(frame) {
     return { type: 'voice_boundary' };
   }
 
-  if (payload.type === 'server_interrupt' || payload.type === 'transcript_empty') {
-    return { type: 'voice_reset', reason: payload.type };
+  if (payload.type === 'server_interrupt') {
+    return { type: 'voice_interrupt' };
+  }
+
+  if (payload.type === 'transcript_empty') {
+    return { type: 'voice_reset', reason: 'transcript_empty' };
   }
 
   if (payload.type === 'message_complete') {
@@ -110,13 +114,11 @@ export function normalizeClaudeSignalDetail(detail) {
     return { type, reason };
   }
   if (type === 'voice_reset') {
-    const reason = ['server_interrupt', 'transcript_empty'].includes(detail.reason)
-      ? detail.reason
-      : 'server_interrupt';
-    return { type, reason };
+    return { type, reason: 'transcript_empty' };
   }
   if ([
     'voice_boundary',
+    'voice_interrupt',
     'assistant_final_hint',
     'voice_active',
     'voice_playback'

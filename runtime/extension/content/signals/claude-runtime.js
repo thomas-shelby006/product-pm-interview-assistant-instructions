@@ -12,13 +12,22 @@ export function createClaudeSignalHandler({
   forwardPreview = async () => {},
   forwardText,
   setStatus,
-  onAssistantFinal
+  onAssistantFinal,
+  onVoiceStateChange = () => {}
 }) {
   let voiceTurnNumber = 1;
   let previewRevision = 0;
   let lastPreviewText = '';
+  let voiceActive = false;
 
   const turnKey = () => `claude-voice-${voiceTurnNumber}`;
+  const setVoiceActive = active => {
+    const next = Boolean(active);
+    if (next === voiceActive) return false;
+    voiceActive = next;
+    onVoiceStateChange(next);
+    return true;
+  };
   const advanceTurn = () => {
     voiceTurnNumber += 1;
     previewRevision = 0;
@@ -54,24 +63,28 @@ export function createClaudeSignalHandler({
       return true;
     }
 
+    if (signal.type === 'voice_interrupt') {
+      return true;
+    }
+
     if (signal.type === 'voice_reset') {
       if (role === 'sender' && previewRevision > 0) {
         await emitPreview('', 'clear');
         advanceTurn();
       }
-      if (signal.reason === 'transcript_empty') {
-        setStatus('VOICE EMPTY', 'info', 1200);
-      } else {
-        setStatus('VOICE INTERRUPTED', 'warn', 1600);
-      }
+      setVoiceActive(false);
+      setStatus('VOICE EMPTY', 'info', 1200);
       return true;
     }
 
     if (signal.type === 'voice_final' && role === 'sender') {
+      const committedTurnKey = turnKey();
       await forwardText(signal.text, 'question', {
         source: 'voice_final',
-        messageId: signal.messageId || ''
+        messageId: signal.messageId || '',
+        turnKey: committedTurnKey
       });
+      setVoiceActive(false);
       advanceTurn();
       setStatus('VOICE FORWARDED', 'ok', 1400);
       return true;
@@ -83,6 +96,7 @@ export function createClaudeSignalHandler({
     }
 
     if (signal.type === 'voice_active') {
+      setVoiceActive(true);
       setStatus('VOICE ACTIVE', 'ok', 1200);
       return true;
     }
@@ -93,6 +107,11 @@ export function createClaudeSignalHandler({
     }
 
     if (signal.type === 'voice_error') {
+      if (role === 'sender' && previewRevision > 0) {
+        await emitPreview('', 'clear');
+        advanceTurn();
+      }
+      setVoiceActive(false);
       setStatus(ERROR_LABELS[signal.reason] || ERROR_LABELS.provider_error, 'error', 3500);
       return true;
     }

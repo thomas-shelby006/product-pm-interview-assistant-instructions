@@ -81,10 +81,14 @@ test('provider sender mirrors distinct provisional text without finalizing it', 
   sender.disconnect();
 });
 
-test('provider sender uses an aggressive 1200ms fallback only outside voice mode', () => {
+test('provider sender uses a 650ms fallback only when voice is inactive and composer is empty', () => {
   let messages = [];
   const timers = [];
-  const adapter = { getConversationMessages: () => messages, isVoiceActive: () => false };
+  const adapter = {
+    getConversationMessages: () => messages,
+    isVoiceActive: () => false,
+    isComposerEmpty: () => true
+  };
   const sender = senderModule.createProviderSender({
     adapter,
     onFinal: () => {},
@@ -93,6 +97,47 @@ test('provider sender uses an aggressive 1200ms fallback only outside voice mode
   });
   messages = [message('u1', 'user', 'How would you measure activation?')];
   sender.observe(100);
-  assert.equal(timers.at(-1).delay, 1220);
+  assert.equal(timers.at(-1).delay, 670);
+  sender.disconnect();
+});
+
+test('provider sender blocks fallback while submitted composer text remains present', () => {
+  let messages = [];
+  const timers = [];
+  const adapter = {
+    getConversationMessages: () => messages,
+    isVoiceActive: () => false,
+    isComposerEmpty: () => false
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    onFinal: () => { throw new Error('must not emit'); },
+    setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeoutFn: () => {}
+  });
+  messages = [message('u1', 'user', 'How would you measure activation?')];
+  sender.observe(100);
+  assert.deepEqual(timers, []);
+  sender.disconnect();
+});
+
+test('provider sender accepts protocol voice activity in addition to DOM state', () => {
+  let messages = [];
+  const timers = [];
+  const adapter = {
+    getConversationMessages: () => messages,
+    isVoiceActive: () => false,
+    isComposerEmpty: () => true
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    isVoiceActive: () => true,
+    onFinal: () => { throw new Error('must not emit'); },
+    setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeoutFn: () => {}
+  });
+  messages = [message('u1', 'user', 'How would you measure activation?')];
+  sender.observe(100);
+  assert.deepEqual(timers, []);
   sender.disconnect();
 });

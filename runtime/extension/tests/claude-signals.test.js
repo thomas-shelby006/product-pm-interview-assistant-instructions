@@ -115,7 +115,7 @@ test('Claude signal handler forwards only final human voice text', async () => {
   assert.deepEqual(calls, [[
     'What is the launch strategy?',
     'question',
-    { source: 'voice_final', messageId: 'human-2' }
+    { source: 'voice_final', messageId: 'human-2', turnKey: 'claude-voice-1' }
   ]]);
 });
 
@@ -134,10 +134,10 @@ test('Claude signal handler exposes assistant final and provider errors', async 
   assert.deepEqual(statuses.at(-1), ['VOICE IDLE TIMEOUT', 'error', 3500]);
 });
 
-test('Claude interruption and empty transcript reset provisional voice state', () => {
+test('Claude interruption preserves the utterance while an empty transcript resets it', () => {
   assert.deepEqual(parseClaudeVoiceFrame(JSON.stringify({
     type: 'server_interrupt'
-  })), { type: 'voice_reset', reason: 'server_interrupt' });
+  })), { type: 'voice_interrupt' });
   assert.deepEqual(parseClaudeVoiceFrame(JSON.stringify({
     type: 'transcript_empty'
   })), { type: 'voice_reset', reason: 'transcript_empty' });
@@ -154,15 +154,13 @@ test('Claude reset and repeated boundary signals never forward text', async () =
   });
   await handler({ type: 'voice_boundary' });
   await handler({ type: 'voice_boundary' });
-  await handler({ type: 'voice_reset', reason: 'server_interrupt' });
+  await handler({ type: 'voice_interrupt' });
   await handler({ type: 'voice_reset', reason: 'transcript_empty' });
   assert.deepEqual(forwarded, []);
-  assert.deepEqual(statuses.slice(-2), [
-    ['VOICE INTERRUPTED', 'warn', 1600],
-    ['VOICE EMPTY', 'info', 1200]
-  ]);
+  assert.deepEqual(statuses.at(-1), ['VOICE EMPTY', 'info', 1200]);
+  assert.equal(statuses.some(([label]) => label === 'VOICE INTERRUPTED'), false);
 });
-test('Claude handler mirrors distinct interim text and clears it on interruption', async () => {
+test('Claude handler preserves growing interim text through interruption and clears on empty transcript', async () => {
   const previews = [];
   const finals = [];
   const handler = createClaudeSignalHandler({
@@ -176,13 +174,15 @@ test('Claude handler mirrors distinct interim text and clears it on interruption
   await handler({ type: 'voice_interim', text: 'How should', utteranceSeq: 2 });
   await handler({ type: 'voice_interim', text: 'How should we price?', utteranceSeq: 3 });
   await handler({ type: 'voice_boundary' });
-  await handler({ type: 'voice_reset', reason: 'server_interrupt' });
+  await handler({ type: 'voice_interrupt' });
+  await handler({ type: 'voice_interim', text: 'How should we price this product?', utteranceSeq: 4 });
   await handler({ type: 'voice_reset', reason: 'transcript_empty' });
   await handler({ type: 'voice_interim', text: 'What metric', utteranceSeq: 4 });
   assert.deepEqual(previews, [
     { turnKey: 'claude-voice-1', text: 'How should', revision: 1, phase: 'interim' },
     { turnKey: 'claude-voice-1', text: 'How should we price?', revision: 2, phase: 'interim' },
-    { turnKey: 'claude-voice-1', text: '', revision: 3, phase: 'clear' },
+    { turnKey: 'claude-voice-1', text: 'How should we price this product?', revision: 3, phase: 'interim' },
+    { turnKey: 'claude-voice-1', text: '', revision: 4, phase: 'clear' },
     { turnKey: 'claude-voice-2', text: 'What metric', revision: 1, phase: 'interim' }
   ]);
   assert.deepEqual(finals, []);
@@ -204,8 +204,41 @@ test('Claude human final commits once and starts a new preview turn', async () =
   assert.equal(finals.length, 1);
   assert.deepEqual(finals[0], [
     'How would you launch?', 'question',
-    { source: 'voice_final', messageId: 'human-7' }
+    { source: 'voice_final', messageId: 'human-7', turnKey: 'claude-voice-1' }
   ]);
   assert.equal(previews.at(-1).turnKey, 'claude-voice-2');
   assert.equal(previews.at(-1).revision, 1);
+});
+
+test('Claude protocol activity remains active through boundary and clears on final', async () => {
+  const states = [];
+  const handler = createClaudeSignalHandler({
+    role: 'sender',
+    forwardPreview: async () => {},
+    forwardText: async () => {},
+    setStatus: () => {},
+    onAssistantFinal: () => {},
+    onVoiceStateChange: active => states.push(active)
+  });
+  await handler({ type: 'voice_active' });
+  await handler({ type: 'voice_boundary' });
+  await handler({ type: 'voice_final', text: 'Why?', messageId: 'human-9' });
+  assert.deepEqual(states, [true, false]);
+});
+
+test('Claude reset and error clear protocol voice activity', async () => {
+  const states = [];
+  const handler = createClaudeSignalHandler({
+    role: 'sender',
+    forwardPreview: async () => {},
+    forwardText: async () => {},
+    setStatus: () => {},
+    onAssistantFinal: () => {},
+    onVoiceStateChange: active => states.push(active)
+  });
+  await handler({ type: 'voice_active' });
+  await handler({ type: 'voice_reset', reason: 'server_interrupt' });
+  await handler({ type: 'voice_active' });
+  await handler({ type: 'voice_error', reason: 'idle_timeout' });
+  assert.deepEqual(states, [true, false, true, false]);
 });

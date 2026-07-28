@@ -41,6 +41,12 @@ const MUTE_SELECTORS = [
 const ACTIVE_VOICE_SELECTORS = [
   'button[aria-label="End voice mode"]',
   'button[aria-label="End voice"]',
+  'button[aria-label="Turn off microphone"]',
+  'button[aria-label="Turn on microphone"]',
+  'button[aria-label^="Release to" i]',
+  'button[aria-label*="recording" i]',
+  '[data-state="recording"]',
+  '[aria-pressed="true"][aria-label*="record" i]',
   ...MUTE_SELECTORS
 ];
 const OBSERVATION_ROOT_SELECTORS = ['main', '[role="main"]'];
@@ -90,6 +96,7 @@ export function createClaudeAdapter(doc = document) {
     composerContains(text) {
       return composerText(findComposer()) === String(text ?? '').trim();
     },
+    isComposerEmpty() { return !composerText(findComposer()); },
     canSubmit() {
       const button = findSendButton();
       return Boolean(findComposer() && (!button || !button.disabled));

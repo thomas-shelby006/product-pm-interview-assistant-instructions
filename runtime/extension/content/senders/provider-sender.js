@@ -5,6 +5,8 @@ export function createProviderSender({
   onPreview,
   onFinal,
   tracker = new DomTurnTracker(),
+  isVoiceActive = () => Boolean(adapter.isVoiceActive?.()),
+  isComposerEmpty = () => Boolean(adapter.isComposerEmpty?.() ?? true),
   nowFn = Date.now,
   setTimeoutFn = globalThis.setTimeout,
   clearTimeoutFn = globalThis.clearTimeout
@@ -28,12 +30,12 @@ export function createProviderSender({
 
   const scheduleFallback = now => {
     clearTimer();
-    if (stopped || adapter.isVoiceActive?.()) return;
+    if (stopped || isVoiceActive() || !isComposerEmpty()) return;
     const delay = tracker.pendingDelay(now);
     if (delay === null) return;
     timer = setTimeoutFn(() => {
       timer = null;
-      if (stopped || adapter.isVoiceActive?.()) return;
+      if (stopped || isVoiceActive() || !isComposerEmpty()) return;
       for (const final of tracker.poll(nowFn(), { allowFallback: true })) emitFinal(final);
     }, delay + 20);
   };
@@ -55,7 +57,7 @@ export function createProviderSender({
       scheduleFallback(nowFn());
     },
     flushFallback(now = nowFn()) {
-      if (stopped || adapter.isVoiceActive?.()) return [];
+      if (stopped || isVoiceActive() || !isComposerEmpty()) return [];
       const finals = tracker.poll(now, { allowFallback: true });
       for (const final of finals) emitFinal(final);
       return finals;

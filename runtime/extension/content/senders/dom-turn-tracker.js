@@ -23,7 +23,7 @@ function isMeaningfulFinal(text) {
 }
 
 export class DomTurnTracker {
-  constructor({ fallbackMs = 1200 } = {}) {
+  constructor({ fallbackMs = 650 } = {}) {
     this.fallbackMs = fallbackMs;
     this.historicalIds = new Set();
     this.emittedIds = new Set();
