@@ -50,6 +50,10 @@ export function parseClaudeVoiceFrame(frame) {
     return { type: 'voice_boundary' };
   }
 
+  if (payload.type === 'server_interrupt' || payload.type === 'transcript_empty') {
+    return { type: 'voice_reset', reason: payload.type };
+  }
+
   if (payload.type === 'message_complete') {
     if (payload.data?.sender !== 'human') return null;
     const text = textFromContent(payload.data?.content);
@@ -75,7 +79,8 @@ export function parseClaudeVoiceFrame(frame) {
 
   const reason = normalizedText(
     payload.reason || payload.code || payload.error || payload.data?.reason || payload.type
-  );  if (ERROR_REASONS.has(reason)) {
+  );
+  if (ERROR_REASONS.has(reason)) {
     return { type: 'voice_error', reason };
   }
 
@@ -102,6 +107,12 @@ export function normalizeClaudeSignalDetail(detail) {
     const reason = ERROR_REASONS.has(detail.reason)
       ? detail.reason
       : 'provider_error';
+    return { type, reason };
+  }
+  if (type === 'voice_reset') {
+    const reason = ['server_interrupt', 'transcript_empty'].includes(detail.reason)
+      ? detail.reason
+      : 'server_interrupt';
     return { type, reason };
   }
   if ([

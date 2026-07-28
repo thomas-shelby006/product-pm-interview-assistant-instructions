@@ -1,0 +1,98 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+const senderModule = await import('../content/senders/provider-sender.js').catch(() => null);
+const message = (id, role, text) => ({ id, role, text });
+
+test('provider sender emits only when the DOM tracker reaches a final boundary', () => {
+  assert.ok(senderModule, 'provider sender module must exist');
+  let messages = [message('old-u', 'user', 'Historical?'), message('old-a', 'assistant', 'Old')];
+  const emitted = [];
+  const adapter = {
+    getConversationMessages: () => messages,
+    isVoiceActive: () => false
+  };
+  const sender = senderModule.createProviderSender({ adapter, onFinal: value => emitted.push(value) });
+  messages = [...messages, message('u1', 'user', 'How would you launch this?')];
+  sender.observe(1000);
+  assert.deepEqual(emitted, []);
+  messages = [...messages, message('a1', 'assistant', 'I would start')];
+  sender.observe(1800);
+  assert.deepEqual(emitted, [{ id: 'u1', text: 'How would you launch this?', boundary: 'assistant_successor' }]);
+  sender.disconnect();
+});
+
+test('provider sender never schedules automatic fallback while voice is active', () => {
+  assert.ok(senderModule, 'provider sender module must exist');
+  let messages = [];
+  const timers = [];
+  const adapter = {
+    getConversationMessages: () => messages,
+    isVoiceActive: () => true
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    onFinal: () => { throw new Error('must not emit'); },
+    setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeoutFn: () => {}
+  });
+  messages = [message('u1', 'user', 'How would you')];
+  sender.observe(0);
+  assert.deepEqual(timers, []);
+  sender.disconnect();
+});
+
+test('provider sender suppresses a DOM copy of an externally finalized voice turn', () => {
+  assert.ok(senderModule, 'provider sender module must exist');
+  let messages = [];
+  const emitted = [];
+  const adapter = { getConversationMessages: () => messages, isVoiceActive: () => false };
+  const sender = senderModule.createProviderSender({ adapter, onFinal: value => emitted.push(value) });
+  sender.markExternalFinal({ id: 'voice-1', text: 'What is the strategy?' });
+  messages = [message('voice-1', 'user', 'What is the strategy?'), message('a1', 'assistant', 'Answer')];
+  sender.observe(1000);
+  assert.deepEqual(emitted, []);
+  sender.disconnect();
+});
+test('provider sender mirrors distinct provisional text without finalizing it', () => {
+  let messages = [];
+  const previews = [];
+  const finals = [];
+  const adapter = {
+    getConversationMessages: () => messages,
+    isVoiceActive: () => true
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    onPreview: value => previews.push(value),
+    onFinal: value => finals.push(value)
+  });
+  messages = [message('u1', 'user', 'How would')];
+  sender.observe(0);
+  messages = [message('u1', 'user', 'How would')];
+  sender.observe(50);
+  messages = [message('u1', 'user', 'How would you improve activation?')];
+  sender.observe(100);
+  assert.deepEqual(previews, [
+    { turnKey: 'u1', text: 'How would', revision: 1, phase: 'interim' },
+    { turnKey: 'u1', text: 'How would you improve activation?', revision: 2, phase: 'interim' }
+  ]);
+  assert.deepEqual(finals, []);
+  sender.disconnect();
+});
+
+test('provider sender uses an aggressive 1200ms fallback only outside voice mode', () => {
+  let messages = [];
+  const timers = [];
+  const adapter = { getConversationMessages: () => messages, isVoiceActive: () => false };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    onFinal: () => {},
+    setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeoutFn: () => {}
+  });
+  messages = [message('u1', 'user', 'How would you measure activation?')];
+  sender.observe(100);
+  assert.equal(timers.at(-1).delay, 1220);
+  sender.disconnect();
+});

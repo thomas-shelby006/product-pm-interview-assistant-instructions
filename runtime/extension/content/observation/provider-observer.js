@@ -17,11 +17,12 @@ export function createProviderObserver({
   adapter,
   document,
   onCandidate,
+  onChange,
   MutationObserverCtor = globalThis.MutationObserver,
   scheduleMicrotask = globalThis.queueMicrotask,
   setIntervalFn = globalThis.setInterval,
   clearIntervalFn = globalThis.clearInterval,
-  watchdogMs = 1000
+  watchdogMs = 500
 }) {
   let observer = null;
   let targets = [];
@@ -32,8 +33,12 @@ export function createProviderObserver({
     if (disposed) return;
     const hidden = document?.visibilityState === 'hidden';
     if (hidden && !adapter.isVoiceActive?.()) return;
+    if (typeof onChange === 'function') {
+      onChange();
+      return;
+    }
     const candidate = adapter.getSenderCandidateInfo?.();
-    if (candidate?.text) onCandidate(candidate);
+    if (candidate?.text && typeof onCandidate === 'function') onCandidate(candidate);
   };
 
   const schedule = () => {
@@ -57,8 +62,7 @@ export function createProviderObserver({
       observer.observe(target, {
         childList: true,
         subtree: true,
-        characterData: true,
-        attributes: true
+        characterData: true
       });
     }
   };

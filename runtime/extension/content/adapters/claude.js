@@ -4,7 +4,8 @@ import {
   setEditableText,
   firstNonEmptyCandidate,
   clickFirst,
-  submitWithEnter
+  submitWithEnter,
+  createConversationMessageReader
 } from './shared.js';
 
 const COMPOSER_SELECTORS = [
@@ -55,6 +56,7 @@ const ASSISTANT_SELECTORS = [
   '[data-message-author-role="assistant"]',
   '.font-claude-message'
 ];
+const MESSAGE_SELECTOR = '[data-testid="user-message"],[data-testid="assistant-message"],[data-author="user"],[data-author="assistant"],[data-message-author-role="user"],[data-message-author-role="assistant"]';
 const STREAMING_SELECTORS = [
   '[data-testid="assistant-message"][data-is-streaming="true"]',
   '[data-testid*="assistant-message"][data-is-streaming="true"]',
@@ -66,6 +68,18 @@ export function createClaudeAdapter(doc = document) {
   const findComposer = () => firstMatch(doc, COMPOSER_SELECTORS);
   const getComposerCandidate = () => firstNonEmptyCandidate(doc, COMPOSER_SELECTORS);
   const getLatestUserText = () => latestText(doc, USER_SELECTORS);
+  const getConversationMessages = createConversationMessageReader(doc, {
+    selector: MESSAGE_SELECTOR,
+    roleOf(element) {
+      const explicit = element.getAttribute?.('data-message-author-role')
+        || element.getAttribute?.('data-author');
+      if (explicit) return explicit;
+      const testId = String(element.getAttribute?.('data-testid') || '').toLowerCase();
+      if (testId.includes('user-message')) return 'user';
+      if (testId.includes('assistant-message')) return 'assistant';
+      return '';
+    }
+  });
 
   return {
     provider: 'claude',
@@ -80,6 +94,7 @@ export function createClaudeAdapter(doc = document) {
     },
     stopGenerating() { return clickFirst(doc, STOP_SELECTORS); },
     getLatestUserText,
+    getConversationMessages,
     getLatestAssistantText() { return latestText(doc, ASSISTANT_SELECTORS); },
     getSenderCandidateInfo() {
       const composer = getComposerCandidate();

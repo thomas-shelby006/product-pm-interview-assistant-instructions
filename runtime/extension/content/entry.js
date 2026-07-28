@@ -1,9 +1,8 @@
 import { parseRuntimeConfig, makeEnvelope } from '../shared/protocol.js';
+import { makePreview } from '../shared/preview.js';
 import { createChatGptAdapter } from './adapters/chatgpt.js';
 import { createClaudeAdapter } from './adapters/claude.js';
 import {
-  StableTranscriptForwarder,
-  primeHistoricalCandidate,
   createReceiverController,
   runtimeTitle,
   defendTitle,
@@ -14,6 +13,8 @@ import { createStatusOverlay } from './status-overlay.js';
 import { createClaudeSignalBridge } from './signals/claude-isolated.js';
 import { createClaudeSignalHandler } from './signals/claude-runtime.js';
 import { createProviderObserver } from './observation/provider-observer.js';
+import { createProviderSender } from './senders/provider-sender.js';
+import { createAnswerTracker, createWakeSignal } from './answer-tracker.js';
 import { SequenceGate, nextSequence } from '../shared/sequence.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 
@@ -70,17 +71,17 @@ async function startRuntime(runtimeConfig) {
   let providerSignalBridge = null;
   let unsubscribeProviderSignals = null;
   let senderObserver = null;
-  let senderFlushTimer = null;
+  let receiverObserver = null;
+  let senderController = null;
+  const answerWake = createWakeSignal();
   const senderSequenceKey = `pmia_sender_seq_${runtimeConfig.sessionId}`;
   const receiverSequenceKey = `pmia_receiver_seq_${runtimeConfig.sessionId}`;
+  const previewSequenceKey = `pmia_preview_seq_${runtimeConfig.sessionId}`;
   let senderSequence = Number(sessionStorage.getItem(senderSequenceKey) || 0);
+  let previewSequence = Number(sessionStorage.getItem(previewSequenceKey) || 0);
   const receiverSequenceGate = new SequenceGate(
     Number(sessionStorage.getItem(receiverSequenceKey) || 0)
   );
-  const forwarder = new StableTranscriptForwarder({
-    stableMs: 900,
-    sourceStableMs: { composer: 1400, user_message: 300 }
-  });
 
   const message = async payload => {
     try {
@@ -129,10 +130,36 @@ async function startRuntime(runtimeConfig) {
     if (registrationActive) register();
   }, 15000);
 
+  async function forwardPreview(candidate) {
+    if (runtimeConfig.role !== 'sender' || paused) return false;
+    const nextPreviewSequence = nextSequence(previewSequence);
+    let preview;
+    try {
+      preview = makePreview({
+        sessionId: runtimeConfig.sessionId,
+        sourceProvider: runtimeConfig.provider,
+        text: String(candidate?.text ?? ''),
+        turnKey: String(candidate?.turnKey || ''),
+        revision: Number(candidate?.revision || 0),
+        phase: String(candidate?.phase || 'interim'),
+        seq: nextPreviewSequence
+      });
+    } catch {
+      return false;
+    }
+    previewSequence = nextPreviewSequence;
+    sessionStorage.setItem(previewSequenceKey, String(previewSequence));
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'PMIA_PREVIEW', preview });
+      return Boolean(response?.ok);
+    } catch {
+      return false;
+    }
+  }
+
   async function forwardText(text, kind = 'question', metadata = {}) {
     const normalized = String(text || '').trim();
     if (!normalized || paused) return false;
-    forwarder.markEmitted(normalized);
     let envelope;
     const nextSenderSequence = nextSequence(senderSequence);
     senderSequence = nextSenderSequence;
@@ -172,30 +199,40 @@ async function startRuntime(runtimeConfig) {
     return Boolean(response?.ok);
   }
 
-  const flushStableCandidate = () => {
-    senderFlushTimer = null;
-    if (paused) return;
-    const stable = forwarder.pollCandidate(Date.now());
-    if (stable) forwardText(stable.text, 'question', { source: stable.source });
-  };
 
-  const considerSenderCandidate = candidate => {
-    if (paused) return;
-    const now = Date.now();
-    forwarder.consider(candidate, now);
-    const delay = forwarder.pendingDelay(now);
-    if (senderFlushTimer) clearTimeout(senderFlushTimer);
-    if (delay === null) return;
-    senderFlushTimer = setTimeout(flushStableCandidate, delay + 20);
-  };
+  if (runtimeConfig.role === 'sender') {
+    senderController = createProviderSender({
+      adapter,
+      onPreview(preview) {
+        if (runtimeConfig.provider === 'claude' && adapter.isVoiceActive?.()) return false;
+        return forwardPreview(preview);
+      },
+      onFinal(final) {
+        return forwardText(final.text, 'question', {
+          source: 'dom_turn',
+          messageId: final.id,
+          boundary: final.boundary
+        });
+      }
+    });
+  }
 
   if (runtimeConfig.provider === 'claude') {
     providerSignalBridge = createClaudeSignalBridge(window);
     const handleClaudeSignal = createClaudeSignalHandler({
       role: runtimeConfig.role,
-      forwardText,
+      forwardPreview,
+      async forwardText(text, kind, metadata = {}) {
+        if (runtimeConfig.role === 'sender' && metadata.source === 'voice_final') {
+          senderController?.markExternalFinal({ id: metadata.messageId, text });
+        }
+        return forwardText(text, kind, metadata);
+      },
       setStatus: (...args) => overlay.setStatus(...args),
-      onAssistantFinal: () => { assistantFinalHintVersion += 1; }
+      onAssistantFinal: () => {
+        assistantFinalHintVersion += 1;
+        answerWake.pulse();
+      }
     });
     unsubscribeProviderSignals = providerSignalBridge.subscribe(signal => {
       Promise.resolve(handleClaudeSignal(signal)).catch(error => {
@@ -218,39 +255,34 @@ async function startRuntime(runtimeConfig) {
 
   async function captureAnswer(envelope, beforeText, token, hintVersionAtStart) {
     const startedAt = Date.now();
-    let sawGenerating = false;
-    let candidate = '';
-    let stableSince = 0;
+    const tracker = createAnswerTracker({
+      beforeText,
+      startedAt,
+      initialHintVersion: hintVersionAtStart,
+      stabilityMs: 250,
+      noGenerationGraceMs: 600
+    });
     while (Date.now() - startedAt < ANSWER_TIMEOUT_MS) {
       if (token !== answerCaptureToken) return;
-      const generating = adapter.isGenerating();
-      if (generating) {
-        sawGenerating = true;
-        stableSince = 0;
-        await sleep(300);
-        continue;
+      const result = tracker.observe({
+        now: Date.now(),
+        text: adapter.getLatestAssistantText(),
+        generating: adapter.isGenerating(),
+        hintVersion: assistantFinalHintVersion
+      });
+      if (result) {
+        const words = result.text.split(/\s+/).filter(Boolean).length;
+        await logEvent('answer', {
+          envelopeId: envelope.id,
+          text: result.text,
+          wordCount: words,
+          elapsedMs: result.elapsedMs
+        });
+        overlay.setStatus(`ANSWER ${words}w`, 'ok', 1800);
+        scrollToLatest();
+        return;
       }
-      const current = adapter.getLatestAssistantText();
-      if (current && current !== beforeText && (sawGenerating || Date.now() - startedAt > 1200)) {
-        if (current !== candidate) {
-          candidate = current;
-          stableSince = Date.now();
-        } else if (Date.now() - stableSince >= (
-          assistantFinalHintVersion > hintVersionAtStart ? 100 : 850
-        )) {
-          const words = candidate.split(/\s+/).filter(Boolean).length;
-          await logEvent('answer', {
-            envelopeId: envelope.id,
-            text: candidate,
-            wordCount: words,
-            elapsedMs: Date.now() - startedAt
-          });
-          overlay.setStatus(`ANSWER ${words}w`, 'ok', 1800);
-          scrollToLatest();
-          return;
-        }
-      }
-      await sleep(300);
+      await answerWake.wait(500);
     }
     await logEvent('answer_timeout', { envelopeId: envelope.id });
     overlay.setStatus('ANSWER TIMEOUT', 'warn', 2500);
@@ -265,6 +297,15 @@ async function startRuntime(runtimeConfig) {
     }
   });
 
+  if (runtimeConfig.role === 'receiver') {
+    receiverObserver = createProviderObserver({
+      adapter,
+      document,
+      onChange: () => answerWake.pulse(),
+      watchdogMs: 500
+    });
+  }
+
   async function receiveEnvelope(envelope) {
     if (runtimeConfig.role !== 'receiver' || paused) return false;
     const sequenceCheck = receiverSequenceGate.check(envelope?.seq);
@@ -278,6 +319,7 @@ async function startRuntime(runtimeConfig) {
       return true;
     }
     answerCaptureToken += 1;
+    answerWake.pulse();
     const token = answerCaptureToken;
     const beforeText = adapter.getLatestAssistantText();
     const hintVersionAtStart = assistantFinalHintVersion;
@@ -309,9 +351,15 @@ async function startRuntime(runtimeConfig) {
       registrationActive = false;
       paused = true;
       answerCaptureToken += 1;
+      answerWake.pulse();
       receiver.supersede({ id: `revoked-${Date.now()}` });
       overlay.setStatus('ROLE REVOKED', 'error');
       sendResponse({ ok: true });
+      return false;
+    }
+    if (incoming?.type === 'PMIA_PREVIEW_DELIVER') {
+      const accepted = runtimeConfig.role === 'receiver' && !paused && receiver.preview(incoming.preview);
+      sendResponse(accepted ? { ok: true } : { ok: false, error: 'preview_rejected' });
       return false;
     }
     if (incoming?.type !== 'PMIA_DELIVER') return false;
@@ -324,12 +372,11 @@ async function startRuntime(runtimeConfig) {
   });
 
   if (runtimeConfig.role === 'sender') {
-    primeHistoricalCandidate(forwarder, adapter.getSenderCandidateInfo());
     senderObserver = createProviderObserver({
       adapter,
       document,
-      onCandidate: considerSenderCandidate,
-      watchdogMs: 1000
+      onChange: () => senderController?.observe(),
+      watchdogMs: 500
     });
 
     document.addEventListener('copy', () => {
@@ -400,6 +447,7 @@ async function startRuntime(runtimeConfig) {
       event.stopImmediatePropagation();
       const text = await readClipboard();
       if (!text) return;
+      senderController?.markExternalFinal({ text });
       await forwardText(text, 'boot', { source: 'ahk_boot' });
       if (adapter.setComposerText(text)) {
         await sleep(60);
@@ -458,6 +506,7 @@ async function startRuntime(runtimeConfig) {
       event.preventDefault();
       const candidate = adapter.getSenderCandidateInfo();
       if (candidate.text) {
+        senderController?.markExternalFinal({ text: candidate.text });
         await forwardText(candidate.text, 'question', {
           source: candidate.source,
           trigger: 'forced_flush'
@@ -469,7 +518,9 @@ async function startRuntime(runtimeConfig) {
   window.addEventListener('pagehide', () => {
     clearInterval(registerTimer);
     if (senderObserver) senderObserver.disconnect();
-    if (senderFlushTimer) clearTimeout(senderFlushTimer);
+    if (receiverObserver) receiverObserver.disconnect();
+    senderController?.disconnect();
+    answerWake.disconnect();
     unsubscribeProviderSignals?.();
     if (providerSignalBridge) providerSignalBridge.disconnect();
     restoreTitle.disconnect?.();

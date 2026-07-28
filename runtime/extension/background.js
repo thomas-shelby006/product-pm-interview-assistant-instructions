@@ -1,5 +1,6 @@
 import { SessionRegistry } from './shared/session-registry.js';
 import { isEnvelope } from './shared/protocol.js';
+import { deliverPreview } from './shared/preview.js';
 import { classifyDelivery } from './shared/delivery.js';
 import { roleLogKey, appendBoundedLog } from './shared/session-log.js';
 
@@ -8,6 +9,7 @@ const MAX_LOG_EVENTS = 500;
 const STALE_AFTER_MS = 45_000;
 const registryStorage = chrome.storage.session || chrome.storage.local;
 let operationQueue = Promise.resolve();
+let registryPromise = null;
 
 function serialize(operation) {
   const next = operationQueue.then(operation, operation);
@@ -16,14 +18,28 @@ function serialize(operation) {
 }
 
 async function loadRegistry() {
-  const stored = await registryStorage.get(REGISTRY_KEY);
-  const registry = new SessionRegistry(stored[REGISTRY_KEY] || []);
-  registry.pruneStale(Date.now(), STALE_AFTER_MS);
-  return registry;
+  if (!registryPromise) {
+    registryPromise = registryStorage.get(REGISTRY_KEY)
+      .then(stored => {
+        const registry = new SessionRegistry(stored[REGISTRY_KEY] || []);
+        registry.pruneStale(Date.now(), STALE_AFTER_MS);
+        return registry;
+      })
+      .catch(error => {
+        registryPromise = null;
+        throw error;
+      });
+  }
+  return registryPromise;
 }
 
 async function saveRegistry(registry) {
-  await registryStorage.set({ [REGISTRY_KEY]: registry.exportState() });
+  try {
+    await registryStorage.set({ [REGISTRY_KEY]: registry.exportState() });
+  } catch (error) {
+    registryPromise = null;
+    throw error;
+  }
 }
 
 async function appendLog(sessionId, role, event) {
@@ -158,8 +174,21 @@ function authorizeSessionMessage(registry, sessionId, tabId) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const tabId = sender.tab?.id;
+  if (message?.type === 'PMIA_PREVIEW') {
+    loadRegistry()
+      .then(registry => deliverPreview({
+        registry,
+        preview: message.preview,
+        senderTabId: tabId,
+        sendToTab: (targetTabId, outgoing) => chrome.tabs.sendMessage(targetTabId, outgoing)
+      }))
+      .then(sendResponse)
+      .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
+    return true;
+  }
+
   serialize(async () => {
-    const tabId = sender.tab?.id;
     const registry = await loadRegistry();
 
     if (message?.type === 'PMIA_REGISTER') {

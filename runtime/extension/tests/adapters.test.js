@@ -205,3 +205,54 @@ test('Claude sender candidate reports final submitted-turn source when composer 
     text: 'final voice transcript', source: 'user_message'
   });
 });
+function roleMessage({ id, role, text, turnId = '' }) {
+  const attrs = {
+    'data-message-id': id,
+    'data-message-author-role': role,
+    'data-turn-id': turnId
+  };
+  const turn = turnId ? { getAttribute: name => name === 'data-turn-id' ? turnId : '' } : null;
+  return fakeElement({
+    innerText: text,
+    getAttribute(name) { return attrs[name] || ''; },
+    closest(selector) { return selector.includes('data-turn-id') ? turn : null; }
+  });
+}
+
+test('ChatGPT adapter returns ordered messages with captured stable identities', () => {
+  const user = roleMessage({ id: 'u-1', role: 'user', text: 'Full question', turnId: 'turn-1' });
+  const assistant = roleMessage({ id: 'a-1', role: 'assistant', text: 'Answer', turnId: 'turn-2' });
+  const selector = '[data-message-author-role="user"],[data-message-author-role="assistant"]';
+  const adapter = chatgptModule.createChatGptAdapter(fakeDocument({}, { [selector]: [user, assistant] }));
+  assert.deepEqual(adapter.getConversationMessages().map(({ id, turnId, role, text }) => ({ id, turnId, role, text })), [
+    { id: 'u-1', turnId: 'turn-1', role: 'user', text: 'Full question' },
+    { id: 'a-1', turnId: 'turn-2', role: 'assistant', text: 'Answer' }
+  ]);
+});
+
+test('Claude adapter returns ordered typed conversation messages', () => {
+  const user = fakeElement({
+    innerText: 'Typed Claude question',
+    getAttribute(name) {
+      if (name === 'data-testid') return 'user-message';
+      if (name === 'data-message-id') return 'claude-u-1';
+      return '';
+    },
+    closest() { return null; }
+  });
+  const assistant = fakeElement({
+    innerText: 'Claude answer',
+    getAttribute(name) {
+      if (name === 'data-testid') return 'assistant-message';
+      if (name === 'data-message-id') return 'claude-a-1';
+      return '';
+    },
+    closest() { return null; }
+  });
+  const selector = '[data-testid="user-message"],[data-testid="assistant-message"],[data-author="user"],[data-author="assistant"],[data-message-author-role="user"],[data-message-author-role="assistant"]';
+  const adapter = claudeModule.createClaudeAdapter(fakeDocument({}, { [selector]: [user, assistant] }));
+  assert.deepEqual(adapter.getConversationMessages().map(({ id, role, text }) => ({ id, role, text })), [
+    { id: 'claude-u-1', role: 'user', text: 'Typed Claude question' },
+    { id: 'claude-a-1', role: 'assistant', text: 'Claude answer' }
+  ]);
+});

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PM Interview Dual-Provider Runtime",
-  "version": "0.2.0",
-  "description": "Durable dual-provider text and voice interview runtime for managed ChatGPT and Claude windows launched by AutoHotkey.",
+  "version": "0.4.0",
+  "description": "Low-latency dual-provider interview runtime with provisional text previews and evidence-backed final turn boundaries.",
   "permissions": [
     "storage",
     "tabs"
@@ -26,7 +26,8 @@
       ],
       "run_at": "document_start",
       "world": "MAIN"
-    },    {
+    },
+    {
       "matches": [
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
@@ -44,11 +45,13 @@
       "resources": [
         "content/entry.js",
         "content/runtime.js",
+        "content/answer-tracker.js",
         "content/status-overlay.js",
         "content/adapters/*.js",
         "shared/*.js",
         "content/signals/*.js",
-        "content/observation/*.js"
+        "content/observation/*.js",
+        "content/senders/*.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

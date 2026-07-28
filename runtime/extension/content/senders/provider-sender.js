@@ -1,0 +1,69 @@
+import { DomTurnTracker } from './dom-turn-tracker.js';
+
+export function createProviderSender({
+  adapter,
+  onPreview,
+  onFinal,
+  tracker = new DomTurnTracker(),
+  nowFn = Date.now,
+  setTimeoutFn = globalThis.setTimeout,
+  clearTimeoutFn = globalThis.clearTimeout
+}) {
+  let timer = null;
+  let stopped = false;
+
+  const invoke = (callback, value, label) => {
+    if (!value || stopped) return;
+    Promise.resolve(callback?.(value)).catch(error => {
+      console.warn(`[PMIA] sender ${label} callback failed`, error);
+    });
+  };
+  const emitFinal = final => invoke(onFinal, final, 'final');
+  const emitPreview = preview => invoke(onPreview, preview, 'preview');
+
+  const clearTimer = () => {
+    if (timer !== null) clearTimeoutFn(timer);
+    timer = null;
+  };
+
+  const scheduleFallback = now => {
+    clearTimer();
+    if (stopped || adapter.isVoiceActive?.()) return;
+    const delay = tracker.pendingDelay(now);
+    if (delay === null) return;
+    timer = setTimeoutFn(() => {
+      timer = null;
+      if (stopped || adapter.isVoiceActive?.()) return;
+      for (const final of tracker.poll(nowFn(), { allowFallback: true })) emitFinal(final);
+    }, delay + 20);
+  };
+
+  tracker.prime(adapter.getConversationMessages?.() || []);
+
+  return {
+    observe(now = nowFn()) {
+      if (stopped) return [];
+      const finals = tracker.update(adapter.getConversationMessages?.() || [], now);
+      const preview = tracker.takePreview?.();
+      if (preview) emitPreview(preview);
+      for (const final of finals) emitFinal(final);
+      scheduleFallback(now);
+      return finals;
+    },
+    markExternalFinal(final) {
+      tracker.markExternalFinal(final);
+      scheduleFallback(nowFn());
+    },
+    flushFallback(now = nowFn()) {
+      if (stopped || adapter.isVoiceActive?.()) return [];
+      const finals = tracker.poll(now, { allowFallback: true });
+      for (const final of finals) emitFinal(final);
+      return finals;
+    },
+    disconnect() {
+      stopped = true;
+      clearTimer();
+    },
+    tracker
+  };
+}

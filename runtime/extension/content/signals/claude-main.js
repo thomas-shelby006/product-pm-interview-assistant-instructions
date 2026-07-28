@@ -48,6 +48,11 @@
       return;
     }
 
+    if (payload.type === 'server_interrupt' || payload.type === 'transcript_empty') {
+      emit({ type: 'voice_reset', reason: payload.type });
+      return;
+    }
+
     if (payload.type === 'message_complete' && payload.data?.sender === 'human') {
       const value = contentText(payload.data?.content);
       if (value) emit({

@@ -4,7 +4,8 @@ import {
   setEditableText,
   firstNonEmptyCandidate,
   clickFirst,
-  submitWithEnter
+  submitWithEnter,
+  createConversationMessageReader
 } from './shared.js';
 
 const COMPOSER_SELECTORS = [
@@ -45,11 +46,13 @@ const ACTIVE_VOICE_SELECTORS = [
 const OBSERVATION_ROOT_SELECTORS = ['main', '[role="main"]'];
 const USER_SELECTORS = ['[data-message-author-role="user"]'];
 const ASSISTANT_SELECTORS = ['[data-message-author-role="assistant"]'];
+const MESSAGE_SELECTOR = '[data-message-author-role="user"],[data-message-author-role="assistant"]';
 
 export function createChatGptAdapter(doc = document) {
   const findComposer = () => firstMatch(doc, COMPOSER_SELECTORS);
   const getComposerCandidate = () => firstNonEmptyCandidate(doc, COMPOSER_SELECTORS);
   const getLatestUserText = () => latestText(doc, USER_SELECTORS);
+  const getConversationMessages = createConversationMessageReader(doc, { selector: MESSAGE_SELECTOR });
 
   return {
     provider: 'chatgpt',
@@ -62,6 +65,7 @@ export function createChatGptAdapter(doc = document) {
     isGenerating() { return Boolean(firstMatch(doc, STOP_SELECTORS)); },
     stopGenerating() { return clickFirst(doc, STOP_SELECTORS); },
     getLatestUserText,
+    getConversationMessages,
     getLatestAssistantText() { return latestText(doc, ASSISTANT_SELECTORS); },
     getSenderCandidateInfo() {
       const composer = getComposerCandidate();

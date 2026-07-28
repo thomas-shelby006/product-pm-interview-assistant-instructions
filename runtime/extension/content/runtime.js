@@ -1,85 +1,3 @@
-import { isActionableTranscript } from '../shared/transcript-filter.js';
-
-function normalizeCandidate(input) {
-  if (input && typeof input === 'object') {
-    return {
-      text: String(input.text ?? '').trim(),
-      source: String(input.source || 'unknown')
-    };
-  }
-  return { text: String(input ?? '').trim(), source: 'unknown' };
-}
-
-export class StableTranscriptForwarder {
-  constructor({ stableMs = 850, sourceStableMs = {} } = {}) {
-    this.stableMs = stableMs;
-    this.sourceStableMs = { ...sourceStableMs };
-    this.pending = '';
-    this.pendingSource = 'unknown';
-    this.pendingSince = 0;
-    this.pendingStableMs = stableMs;
-    this.lastEmitted = '';
-  }
-
-  consider(input, now = Date.now()) {
-    const candidate = normalizeCandidate(input);
-    if (!isActionableTranscript(candidate.text)) {
-      this.pending = '';
-      this.pendingSource = 'unknown';
-      this.pendingSince = 0;
-      return null;
-    }
-    if (candidate.text === this.lastEmitted) return null;
-    const requiredStableMs = this.sourceStableMs[candidate.source] ?? this.stableMs;
-    if (candidate.text !== this.pending) {
-      this.pending = candidate.text;
-      this.pendingSince = now;
-    }
-    this.pendingSource = candidate.source;
-    this.pendingStableMs = requiredStableMs;
-    return null;
-  }
-
-  markEmitted(text) {
-    const normalized = String(text ?? '').trim();
-    if (!normalized) return;
-    this.lastEmitted = normalized;
-    if (this.pending === normalized) {
-      this.pending = '';
-      this.pendingSource = 'unknown';
-      this.pendingSince = 0;
-    }
-  }
-
-  pendingDelay(now = Date.now()) {
-    if (!this.pending || this.pending === this.lastEmitted) return null;
-    return Math.max(0, this.pendingStableMs - (now - this.pendingSince));
-  }
-
-  pollCandidate(now = Date.now()) {
-    if (!this.pending || this.pending === this.lastEmitted) return null;
-    if (now - this.pendingSince < this.pendingStableMs) return null;
-    const result = { text: this.pending, source: this.pendingSource };
-    this.lastEmitted = this.pending;
-    this.pending = '';
-    this.pendingSource = 'unknown';
-    this.pendingSince = 0;
-    return result;
-  }
-
-  poll(now = Date.now()) {
-    return this.pollCandidate(now)?.text || null;
-  }
-}
-
-export function primeHistoricalCandidate(forwarder, candidate) {
-  if (!forwarder || candidate?.source !== 'user_message') return false;
-  const text = String(candidate.text || '').trim();
-  if (!text) return false;
-  forwarder.markEmitted(text);
-  return true;
-}
-
 export function createReceiverController({
   adapter,
   sleep,
@@ -88,6 +6,8 @@ export function createReceiverController({
   stopPollMs = 75
 }) {
   let latestDeliveryId = '';
+  let lastPreviewSeq = 0;
+  const previewRevisions = new Map();
 
   async function waitForIdle(deliveryId) {
     const attempts = Math.max(1, Math.ceil(stopTimeoutMs / stopPollMs));
@@ -100,6 +20,21 @@ export function createReceiverController({
   }
 
   return {
+    preview(preview) {
+      const turnKey = String(preview?.turnKey || '').trim();
+      const text = String(preview?.text ?? '').trim();
+      const phase = String(preview?.phase || 'interim');
+      const revision = Number(preview?.revision || 0);
+      const seq = Number(preview?.seq || 0);
+      if (!turnKey || !Number.isSafeInteger(revision) || revision < 1) return false;
+      if (phase !== 'clear' && !text) return false;
+      if (Number.isSafeInteger(seq) && seq > 0 && seq <= lastPreviewSeq) return false;
+      if (revision <= (previewRevisions.get(turnKey) || 0)) return false;
+      if (!adapter.setComposerText(text)) return false;
+      previewRevisions.set(turnKey, revision);
+      if (Number.isSafeInteger(seq) && seq > 0) lastPreviewSeq = seq;
+      return true;
+    },
     async deliver(envelope) {
       const text = String(envelope?.text ?? '').trim();
       if (!text) return false;

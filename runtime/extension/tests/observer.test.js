@@ -100,3 +100,72 @@ test('provider observer suppresses hidden tabs unless native voice remains activ
   assert.equal(received.length, 1);
   observer.disconnect();
 });
+
+test('provider observer can report state changes without reading generic sender text', () => {
+  FakeMutationObserver.instances = [];
+  const clock = createClock();
+  let changes = 0;
+  const observer = createProviderObserver({
+    adapter: {
+      getObservationTargets: () => [{ id: 'conversation-root' }],
+      isVoiceActive: () => false
+    },
+    document: { visibilityState: 'visible' },
+    onChange: () => { changes += 1; },
+    MutationObserverCtor: FakeMutationObserver,
+    scheduleMicrotask: fn => fn(),
+    ...clock
+  });
+  assert.equal(changes, 1);
+  FakeMutationObserver.instances[0].trigger();
+  assert.equal(changes, 2);
+  observer.disconnect();
+});
+test('provider observer excludes attribute churn from transcript observation', () => {
+  FakeMutationObserver.instances = [];
+  const clock = createClock();
+  const observer = createProviderObserver({
+    adapter: {
+      getObservationTargets: () => [{ id: 'conversation' }],
+      isVoiceActive: () => false
+    },
+    document: { visibilityState: 'visible' },
+    onChange: () => {},
+    MutationObserverCtor: FakeMutationObserver,
+    scheduleMicrotask: fn => fn(),
+    ...clock
+  });
+  assert.deepEqual(FakeMutationObserver.instances[0].targets[0].options, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+  observer.disconnect();
+});
+
+test('provider observer defaults to a 500ms watchdog and coalesces mutation bursts', () => {
+  FakeMutationObserver.instances = [];
+  let intervalMs = 0;
+  const microtasks = [];
+  let changes = 0;
+  const observer = createProviderObserver({
+    adapter: {
+      getObservationTargets: () => [{ id: 'conversation' }],
+      isVoiceActive: () => false
+    },
+    document: { visibilityState: 'visible' },
+    onChange: () => { changes += 1; },
+    MutationObserverCtor: FakeMutationObserver,
+    scheduleMicrotask: fn => microtasks.push(fn),
+    setIntervalFn: (_fn, ms) => { intervalMs = ms; return 1; },
+    clearIntervalFn: () => {}
+  });
+  assert.equal(intervalMs, 500);
+  assert.equal(changes, 1);
+  FakeMutationObserver.instances[0].trigger();
+  FakeMutationObserver.instances[0].trigger();
+  assert.equal(microtasks.length, 1);
+  microtasks.shift()();
+  assert.equal(changes, 2);
+  observer.disconnect();
+});

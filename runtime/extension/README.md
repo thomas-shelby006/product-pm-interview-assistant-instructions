@@ -5,9 +5,10 @@ Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
 ## Architecture
 
 - AutoHotkey owns provider selection, session launch, exact window handles, layout, hide/restore, screenshots, and global hotkeys.
-- The service worker owns durable role registration, sender authorization, sequence idempotency, latest-message queueing, delivery acknowledgement, and role-scoped logs.
+- The service worker owns durable role registration, sender authorization, final-envelope sequence idempotency, latest-message queueing, delivery acknowledgement, and role-scoped logs.
+- The service worker also exposes a direct ephemeral preview lane that bypasses durable serialization, persistence, final queues, and logs.
 - Provider adapters own semantic composer/message discovery, submit, generation detection, stop, and microphone controls.
-- Content scripts own transcript finalization, provider signals, receiver delivery, answer capture, status UI, and export.
+- Content scripts own provisional transcript previews, authoritative finalization, receiver prefill/submit, mutation-driven answer capture, status UI, and export.
 - Provider APIs, cookies, authorization headers, and raw audio are never used by the runtime.
 
 ## Provider combinations
@@ -19,25 +20,27 @@ Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
 
 Normal ChatGPT or Claude tabs without PMIA runtime parameters are untouched.
 
-## Voice behavior
+## Preview and commit behavior
 
-- ChatGPT remains DOM-first because the supplied evidence did not expose a stable RTC data-channel message schema.
+- ChatGPT remains DOM-first because the supplied evidence did not expose a stable per-turn RTC data-channel schema.
+- Each distinct rendered ChatGPT user-text growth is mirrored to the receiver composer immediately as a provisional preview.
+- A following ChatGPT assistant turn is the authoritative final boundary; a 1.2-second stable-tail fallback is allowed only outside active voice mode.
 - Claude has a passive main-world observer for the existing `/api/ws/voice/` socket.
-- Binary microphone and PCM frames are ignored.
-- `transcript_interim` is status preview only.
-- `user_input_end` is a non-final boundary only.
-- A human `message_complete` is the only Claude native-voice final question signal.
-- Assistant `message_stop` shortens answer stabilization but does not replace semantic DOM extraction.
+- Each distinct Claude `transcript_interim` value is mirrored to the receiver composer; repeated interim frames are coalesced.
+- Binary microphone and PCM frames are ignored. `user_input_end`, `server_interrupt`, and `transcript_empty` never submit a question.
+- A human Claude `message_complete` is the only native-voice commit signal. Interruption or empty-transcript events clear stale provisional text.
+- Receiver previews only prefill text. They never stop generation or press Send. The authoritative final replaces the preview and submits exactly once.
+- Assistant `message_stop` wakes answer capture immediately but does not replace semantic DOM extraction.
 
 ## Reliability rules
 
 - One live sender and receiver own each session.
 - A duplicate live role is rejected; stale takeover is allowed after the registration timeout.
-- Every sender envelope carries a monotonic sequence.
-- Duplicate or stale sequences are rejected by both service worker and receiver.
-- Only explicit receiver acknowledgement counts as delivery.
-- A rejected or transport-failed delivery leaves only the latest envelope queued.
-- Provider observation uses scoped MutationObservers plus a one-second rerender watchdog.
+- Every final sender envelope carries a monotonic sequence. Duplicate or stale final sequences are rejected by both service worker and receiver.
+- Preview updates use a separate monotonic sequence and per-turn revision. Stale previews are ignored and previews are never queued or persisted.
+- Only explicit receiver acknowledgement counts as final delivery. A rejected or transport-failed final leaves only the latest envelope queued.
+- Provider observation watches child/text changes only, coalesces mutation bursts, and uses a 500-millisecond rerender watchdog.
+- Answer capture is mutation-driven, uses a 250-millisecond stability window, and retains a 90-second hard timeout.
 
 ## Load in Edge
 

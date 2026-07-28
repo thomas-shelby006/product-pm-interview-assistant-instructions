@@ -61,10 +61,26 @@ test('Claude main-world observer ignores non-string WebSocket frames', async () 
   assert.doesNotMatch(source, /FileReader|arrayBuffer\(|base64/i);
 });
 
-test('manifest identifies the rearchitected runtime as a pre-live-validation release', async () => {
+test('manifest identifies the low-latency preview/commit runtime', async () => {
   const manifest = await readManifest();
   assert.equal(manifest.name, 'PM Interview Dual-Provider Runtime');
-  assert.equal(manifest.version, '0.2.0');
-  assert.match(manifest.description, /durable/i);
-  assert.match(manifest.description, /voice/i);
+  assert.equal(manifest.version, '0.4.0');
+  assert.match(manifest.description, /low-latency/i);
+  assert.match(manifest.description, /preview/i);
+  assert.match(manifest.description, /turn boundar/i);
+});
+
+test('manifest exposes all dynamically imported sender and answer modules', async () => {
+  const manifest = await readManifest();
+  const resources = manifest.web_accessible_resources.flatMap(item => item.resources || []);
+  assert.ok(resources.includes('content/senders/*.js'));
+  assert.ok(resources.includes('content/answer-tracker.js'));
+  assert.ok(resources.includes('shared/*.js'));
+});
+
+test('manifest versions the low-latency evidence-driven runtime', async () => {
+  const manifest = await readManifest();
+  assert.equal(manifest.version, '0.4.0');
+  assert.match(manifest.description, /provisional text previews/i);
+  assert.match(manifest.description, /final turn boundar/i);
 });

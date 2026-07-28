@@ -1,4 +1,4 @@
-﻿export function firstMatch(doc, selectors) {
+export function firstMatch(doc, selectors) {
   for (const selector of selectors) {
     const match = doc.querySelector?.(selector);
     if (match) return match;
@@ -101,4 +101,30 @@ export function submitWithEnter(element) {
     cancelable: true
   });
   return element.dispatchEvent(event);
+}
+
+
+export function createConversationMessageReader(doc, { selector, roleOf } = {}) {
+  const fallbackIds = new WeakMap();
+  let nextFallbackId = 1;
+  const fallbackId = element => {
+    if (!fallbackIds.has(element)) fallbackIds.set(element, `dom-message-${nextFallbackId++}`);
+    return fallbackIds.get(element);
+  };
+
+  return () => Array.from(doc.querySelectorAll?.(selector) || [])
+    .map(element => {
+      const turn = element.closest?.('[data-turn-id]') || null;
+      const turnId = String(
+        element.getAttribute?.('data-turn-id') || turn?.getAttribute?.('data-turn-id') || ''
+      ).trim();
+      const id = String(
+        element.getAttribute?.('data-message-id') || turnId || fallbackId(element)
+      ).trim();
+      const role = String(
+        roleOf?.(element) || element.getAttribute?.('data-message-author-role') || ''
+      ).trim().toLowerCase();
+      return { id, turnId, role, text: composerText(element), element };
+    })
+    .filter(message => message.id && message.text && ['user', 'assistant'].includes(message.role));
 }

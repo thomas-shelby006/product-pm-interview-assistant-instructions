@@ -11,24 +11,6 @@ test('transcript filter suppresses filler and incomplete fragments', () => {
   assert.equal(filterModule.isActionableTranscript('How would you prioritize this launch?'), true);
 });
 
-test('stable transcript forwarder emits only changed stable text', () => {
-  assert.ok(runtimeModule, 'runtime module must exist');
-  const forwarder = new runtimeModule.StableTranscriptForwarder({ stableMs: 500 });
-  assert.equal(forwarder.consider('How would you', 0), null);
-  assert.equal(forwarder.consider('How would you prioritize this launch?', 200), null);
-  assert.equal(forwarder.poll(600), null);
-  assert.equal(forwarder.poll(701), 'How would you prioritize this launch?');
-  assert.equal(forwarder.consider('How would you prioritize this launch?', 900), null);
-  assert.equal(forwarder.poll(1500), null);
-});
-
-test('stable transcript forwarder ignores non-actionable text', () => {
-  assert.ok(runtimeModule, 'runtime module must exist');
-  const forwarder = new runtimeModule.StableTranscriptForwarder({ stableMs: 100 });
-  forwarder.consider('yeah', 0);
-  assert.equal(forwarder.poll(500), null);
-});
-
 test('receiver controller supersedes active generation with latest prompt', async () => {
   assert.ok(runtimeModule, 'runtime module must exist');
   const calls = [];
@@ -100,21 +82,6 @@ test('runtime title includes session suffix so stale windows cannot be reused', 
 });
 
 
-test('source-aware forwarder waits longer for changing composer text than final user turns', () => {
-  const forwarder = new runtimeModule.StableTranscriptForwarder({
-    stableMs: 500,
-    sourceStableMs: { composer: 1200, user_message: 200 }
-  });
-  forwarder.consider({ text: 'How would you price this?', source: 'composer' }, 0);
-  assert.equal(forwarder.poll(500), null);
-  assert.equal(forwarder.poll(1199), null);
-  assert.equal(forwarder.poll(1200), 'How would you price this?');
-
-  forwarder.consider({ text: 'What metric matters most?', source: 'user_message' }, 2000);
-  assert.equal(forwarder.poll(2199), null);
-  assert.equal(forwarder.poll(2200), 'What metric matters most?');
-});
-
 test('receiver waits for generation to stop before writing replacement prompt', async () => {
   const calls = [];
   let checks = 0;
@@ -137,43 +104,60 @@ test('receiver waits for generation to stop before writing replacement prompt', 
   const sleepCountBeforeSet = calls.slice(0, setIndex).filter(value => Array.isArray(value) && value[0] === 'sleep').length;
   assert.ok(sleepCountBeforeSet >= 2);
 });
-test('stable transcript forwarder preserves the candidate source', () => {
-  const forwarder = new runtimeModule.StableTranscriptForwarder({
-    sourceStableMs: { composer: 100 }
-  });
-  forwarder.consider({ text: 'Final pricing question?', source: 'composer' }, 0);
-  assert.deepEqual(forwarder.pollCandidate(100), {
-    text: 'Final pricing question?',
-    source: 'composer'
-  });
-});
 
-
-test('stable transcript forwarder reports remaining stabilization delay', () => {
-  const forwarder = new runtimeModule.StableTranscriptForwarder({
-    sourceStableMs: { composer: 1400, user_message: 300 }
+test('receiver preview updates composer without stopping or submitting', () => {
+  const calls = [];
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => true,
+      stopGenerating: () => { calls.push('stop'); return true; },
+      setComposerText: text => { calls.push(['set', text]); return true; },
+      submit: () => { calls.push('submit'); return true; }
+    },
+    sleep: async () => {},
+    onStatus: status => calls.push(['status', status])
   });
-  forwarder.consider({ text: 'How should we launch?', source: 'composer' }, 100);
-  assert.equal(forwarder.pendingDelay(600), 900);
-  assert.equal(forwarder.pendingDelay(1500), 0);
-  assert.equal(forwarder.pollCandidate(1500).source, 'composer');
-  assert.equal(forwarder.pendingDelay(1500), null);
-});
-
-test('sender baseline suppresses historical submitted turns but preserves composer drafts', () => {
-  const historical = new runtimeModule.StableTranscriptForwarder();
-  assert.equal(runtimeModule.primeHistoricalCandidate(historical, {
-    text: 'Old interview question?', source: 'user_message'
+  assert.equal(controller.preview({
+    turnKey: 'u1', text: 'How would', revision: 1, seq: 1, phase: 'interim'
   }), true);
-  historical.consider({ text: 'Old interview question?', source: 'user_message' }, 0);
-  assert.equal(historical.pollCandidate(5000), null);
+  assert.deepEqual(calls, [['set', 'How would']]);
+});
 
-  const draft = new runtimeModule.StableTranscriptForwarder({
-    sourceStableMs: { composer: 100 }
+test('receiver preview ignores stale global sequence and supports explicit clear', () => {
+  const calls = [];
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      stopGenerating: () => false,
+      setComposerText: text => { calls.push(text); return true; },
+      submit: () => true
+    },
+    sleep: async () => {},
+    onStatus: () => {}
   });
-  assert.equal(runtimeModule.primeHistoricalCandidate(draft, {
-    text: 'Unsent draft question?', source: 'composer'
-  }), false);
-  draft.consider({ text: 'Unsent draft question?', source: 'composer' }, 0);
-  assert.equal(draft.pollCandidate(100).text, 'Unsent draft question?');
+  assert.equal(controller.preview({ turnKey: 'u1', text: 'newer', revision: 2, seq: 5, phase: 'interim' }), true);
+  assert.equal(controller.preview({ turnKey: 'u1', text: 'older', revision: 1, seq: 4, phase: 'interim' }), false);
+  assert.equal(controller.preview({ turnKey: 'u1', text: '', revision: 3, seq: 6, phase: 'clear' }), true);
+  assert.deepEqual(calls, ['newer', '']);
+});
+
+test('receiver final replaces provisional text and submits exactly once', async () => {
+  const calls = [];
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      stopGenerating: () => false,
+      setComposerText: text => { calls.push(['set', text]); return true; },
+      submit: () => { calls.push('submit'); return true; }
+    },
+    sleep: async () => {},
+    onStatus: () => {}
+  });
+  controller.preview({ turnKey: 'u1', text: 'How would you', revision: 1, seq: 1, phase: 'interim' });
+  assert.equal(await controller.deliver({ id: 'final-1', text: 'How would you launch this product?' }), true);
+  assert.deepEqual(calls, [
+    ['set', 'How would you'],
+    ['set', 'How would you launch this product?'],
+    'submit'
+  ]);
 });
