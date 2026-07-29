@@ -1,4 +1,4 @@
-# PM Interview Dual-Provider Runtime 0.5.3
+# PM Interview Dual-Provider Runtime 0.6.0
 
 Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
 
@@ -68,15 +68,39 @@ Binary microphone and playback frames are ignored.
 
 ## Session Studio
 
-`runtime/Final_2_Window_Extension.ahk` opens a branded Session Studio before launching managed tabs.
+`runtime/Final_2_Window_Extension.ahk` opens a 960-by-780 operational Session Studio before launching managed tabs.
 
-- Choose any of the four ChatGPT/Claude sender and receiver routes.
-- Swap the route in one action.
-- Add Resume, Job Description, and optional session notes in memory only.
-- Context counters show readiness before launch.
-- The short-context confirmation is owned by the Studio, so it remains in front instead of opening behind the launcher.
+- Microsoft Edge Stable is the only supported browser executable.
+- The profile doctor reads Edge profile metadata and unpacked-extension registration without reading cookies, account data, or provider conversation content.
+- A saved valid profile is preferred; otherwise the launcher recommends the profile with the matching PMIA extension, then falls back to `Default`.
+- **Run Preflight** validates the selected profile, extension path, and extension version before launch.
+- The route, selected profile directory, and initial layout are persisted. Resume, Job Description, session notes, session IDs, prompts, and answers are never persisted by the Studio.
+- Resume, Job Description, and optional session notes remain only in the current AutoHotkey process memory.
+- Short context uses an inline two-step action: the first click arms **Launch Anyway** for ten seconds; the second click proceeds. No modal confirmation is used.
+- Launch progress is explicit: `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `READY`, or `ERROR`.
+- **Repair Launch** opens the selected profile's PMIA extension page for registration/path/version failures, or retries the same session route after a partial lifecycle failure.
 - Diagnostics are written under `%LOCALAPPDATA%\PMInterviewAssistant\logs`, never into the repository.
 
+### Lifecycle readiness
+
+Managed tabs expose title phases that the launcher treats as a deterministic handshake:
+
+- `PMIA_BOOT_<ROLE>_<PROVIDER>_<SESSION>`: the content runtime started.
+- `PMIA_REGISTERED_<ROLE>_<PROVIDER>_<SESSION>`: the tab registered with the background service.
+- `PMIA_<ROLE>_<PROVIDER>_<SESSION>`: the provider composer is available and the tab is ready.
+
+Boot context is sent only after both sender and receiver reach the final ready title. Polling is condition-driven at 100 milliseconds; the launcher no longer treats a browser window merely opening as runtime readiness.
+
+### Persistence boundary
+
+`%LOCALAPPDATA%\PMInterviewAssistant\settings.ini` contains only:
+
+- `ProfileDirectory`
+- `SenderProvider`
+- `ReceiverProvider`
+- `LayoutMode`
+
+No Resume, Job Description, notes, prompt, answer, session identifier, cookie, token, or provider account data is written there.
 ## Keyboard bridge
 
 - `Ctrl+Shift+F5`: route boot/context and submit it through provider readiness.
@@ -91,16 +115,16 @@ Binary microphone and playback frames are ignored.
 
 ## Load in Edge
 
-1. Open `edge://extensions` in the Edge Default profile.
+1. Open `edge://extensions` in the same Edge Stable profile selected in Session Studio.
 2. Enable **Developer mode**.
 3. Choose **Load unpacked**.
 4. Select this `runtime/extension` directory.
-5. Keep the extension enabled and launch managed windows with `runtime/Final_2_Window_Extension.ahk`.
+5. Return to Session Studio and choose **Run Preflight**. The profile health line must report the expected path and version before launch.
+6. Launch managed windows with `runtime/Final_2_Window_Extension.ahk`.
 
-After updating an unpacked build, use the extension card's **Reload** action and reload any already-open managed tabs. A `RUNTIME LOAD FAILED`, `RUNTIME START FAILED`, or `RELOAD TAB` banner means the current page must not be trusted as operational until this recovery is completed.
+After updating an unpacked build, use the extension card's **Reload** action and reload any already-open managed tabs. A `RUNTIME LOAD FAILED`, `RUNTIME START FAILED`, `RELOAD TAB`, path mismatch, or version mismatch means the current page must not be trusted as operational until preflight is green.
 
-The launcher closes only exact PMIA-titled windows. It does not close unrelated Edge windows.
-
+The launcher closes only PMIA lifecycle windows. It does not close unrelated Edge windows or edit Edge preference files.
 ## Verification
 
 From the repository root:
@@ -113,4 +137,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_R
 
 Manual release checks should cover all four sender/receiver provider combinations, both native-voice senders, long-question growth, interruption, receiver reload, missing receiver recovery, preflight status, and a long-session soak.
 
-The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.5 runtime.
+The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.6 runtime.

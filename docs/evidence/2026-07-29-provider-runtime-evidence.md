@@ -162,3 +162,38 @@ A final synthetic long-session soak processed 25,000 user/assistant turns on the
 - finalized identity memory bounded to 512 entries
 - preview revision memory returned to zero
 - retained heap delta after garbage collection: 178,736 bytes
+
+## 0.6.0 operational hardening evidence
+
+The 0.6 release keeps the proven 0.5.3 provider transport and hardens browser/profile selection, launch readiness, repair, and Session Studio behavior around it.
+
+### Sanitized pre-reload profile diagnosis
+
+The read-only profile doctor was run against Microsoft Edge Stable before loading the 0.6 candidate.
+
+- Profile directory: `Default`
+- Edge display name: `Profile 1`
+- Registered PMIA version: `0.5.3`
+- Expected release version: `0.6.0`
+- Expected-path match: `False`
+- Classification: `EXTENSION_PATH_MISMATCH`
+- Actionable message: PMIA pointed to a different unpacked-extension directory.
+
+No cookie, account identifier, provider URL containing identifiers, Resume, Job Description, prompt, answer, or conversation body was read or recorded. This result demonstrates that the doctor distinguishes an opened browser profile from a profile using the intended release directory.
+### Operational contracts
+
+- Session Studio supports `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `READY`, and `ERROR` states.
+- Managed tabs expose boot, registered, and composer-ready title phases. Boot context is sent only after both roles are ready.
+- New launches close all PMIA lifecycle windows and leave unrelated Edge windows untouched. Repair retries are scoped to the current PMIA session.
+- Registration, version, and path failures open the selected profile's extension page; Edge preference files are never edited.
+- Short context uses a ten-second inline `Launch Anyway` state instead of a modal dialog.
+- `%LOCALAPPDATA%\PMInterviewAssistant\settings.ini` stores only profile directory, sender provider, receiver provider, and layout mode.
+
+### Automated release-candidate gate before live reload
+
+- Node tests: 212 passed, zero failed.
+- Extension validation: 56 JavaScript files checked.
+- AutoHotkey v2 parser/runtime validation: passed and emitted `AHK_VALID`.
+- Git whitespace check: passed.
+
+Live 0.6 profile reload and four-route verification are recorded only after the exact release candidate is loaded in Edge Stable.
