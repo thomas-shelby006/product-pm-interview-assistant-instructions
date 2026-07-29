@@ -340,3 +340,23 @@ test('transient delivery errors preserve the registered receiver for wake recove
   assert.ok(!deliver.includes('registry.unregister(route.tabId)'));
   assert.ok(deliver.includes('registry.queueLatest(route.message.sessionId, route.message)'));
 });
+
+test('sender boot shortcut forwards context without submitting into the question source', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
+  const block = source.slice(source.indexOf("if (key === 'F5'"), source.indexOf("if (key === 'F6'"));
+  assert.match(block, /forwardText\(text, 'boot'/);
+  assert.doesNotMatch(block, /submitComposerWhenReady/);
+});
+
+test('content runtime exposes an exact managed-session end command', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  assert.match(source, /key === 'F4'/);
+  assert.match(source, /type: 'PMIA_END_SESSION'/);
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  assert.match(background, /message\?\.type === 'PMIA_END_SESSION'/);
+  assert.match(background, /closeOwnedSessionTabs/);
+});

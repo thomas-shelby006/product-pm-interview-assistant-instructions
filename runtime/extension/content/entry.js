@@ -573,17 +573,28 @@ async function startRuntime(runtimeConfig) {
     if (!event.ctrlKey || !event.shiftKey) return;
     const key = event.key.toUpperCase();
 
+    if (key === 'F4') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      overlay.setStatus('ENDING SESSION', 'warn', 1200);
+      const response = await message({
+        type: 'PMIA_END_SESSION',
+        sessionId: runtimeConfig.sessionId
+      });
+      if (!response?.ok) overlay.setStatus('END SESSION FAILED', 'error', 2500);
+      return;
+    }
+
     if (key === 'F5' && runtimeConfig.role === 'sender') {
       event.preventDefault();
       event.stopImmediatePropagation();
       const text = await readClipboard();
       if (!text) return;
       senderController?.markExternalFinal({ text });
-      await forwardText(text, 'boot', { source: 'ahk_boot' });
-      const submitted = await submitComposerWhenReady({ adapter, text });
+      const forwarded = await forwardText(text, 'boot', { source: 'ahk_boot' });
       overlay.setStatus(
-        submitted ? 'BOOT SENT' : 'BOOT SUBMIT FAIL',
-        submitted ? 'ok' : 'error',
+        forwarded ? 'BOOT FORWARDED' : 'BOOT QUEUED',
+        forwarded ? 'ok' : 'warn',
         1800
       );
       return;

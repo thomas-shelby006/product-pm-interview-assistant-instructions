@@ -5,6 +5,7 @@ import { deliverWithWakeRetry } from './shared/delivery.js';
 import { roleLogKey, appendBoundedLog } from './shared/session-log.js';
 import { buildSessionStatus } from './shared/session-status.js';
 import { runCounterpartPreflight } from './shared/preflight.js';
+import { closeOwnedSessionTabs } from './shared/end-session.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -284,6 +285,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         now: Date.now(),
         staleAfterMs: STALE_AFTER_MS
       }));
+      return;
+    }
+
+    if (message?.type === 'PMIA_END_SESSION') {
+      const result = await closeOwnedSessionTabs({
+        registry,
+        sessionId: message.sessionId,
+        requesterTabId: tabId,
+        removeTabs: async tabIds => {
+          setTimeout(() => {
+            chrome.tabs.remove(tabIds).catch(() => {});
+          }, 40);
+        }
+      });
+      sendResponse(result);
       return;
     }
 

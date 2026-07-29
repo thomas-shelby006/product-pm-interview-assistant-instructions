@@ -218,3 +218,19 @@ test('launcher confirms sender readiness before opening the receiver window', ()
   assert.ok(senderReady > senderRun);
   assert.ok(receiverRun > senderReady);
 });
+
+test('launcher delivers boot context directly to the receiver and never submits it in the sender', () => {
+  const launch = launcher.slice(
+    launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
+    launcher.indexOf('RepairLaunch(*)')
+  );
+  assert.match(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F7\}", g_hWin2\)/);
+  assert.doesNotMatch(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F5\}", g_hWin1\)/);
+});
+
+test('Alt+Delete asks the extension to close the exact session before Win32 fallback', () => {
+  const endBlock = launcher.match(/!Delete:: \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(endBlock, /SendToWindow\("", "\^\+\{F4\}"/);
+  assert.match(endBlock, /CloseManagedPmiaWindows\(\)/);
+  assert.ok(endBlock.indexOf('^+{F4}') < endBlock.indexOf('CloseManagedPmiaWindows()'));
+});

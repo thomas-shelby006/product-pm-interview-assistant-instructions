@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const protocol = await import('../shared/protocol.js').catch(() => null);
@@ -209,4 +209,32 @@ test('session registry resolves the owned role for a tab', () => {
   assert.equal(registry.roleForTab('s1', 4), 'sender');
   assert.equal(registry.roleForTab('s1', 5), 'receiver');
   assert.equal(registry.roleForTab('s1', 6), null);
+});
+
+test('end-session helper closes only tabs owned by the requested PMIA session', async () => {
+  const { closeOwnedSessionTabs } = await import('../shared/end-session.js');
+  const registry = new registryModule.SessionRegistry();
+  registry.register({ sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 11 });
+  registry.register({ sessionId: 's1', role: 'receiver', provider: 'claude', tabId: 22 });
+  registry.register({ sessionId: 'other', role: 'sender', provider: 'chatgpt', tabId: 33 });
+  const removed = [];
+  const result = await closeOwnedSessionTabs({
+    registry, sessionId: 's1', requesterTabId: 11,
+    removeTabs: async ids => removed.push(...ids)
+  });
+  assert.deepEqual(result, { ok: true, closedTabIds: [11, 22] });
+  assert.deepEqual(removed, [11, 22]);
+});
+
+test('end-session helper rejects a tab that does not own the PMIA session', async () => {
+  const { closeOwnedSessionTabs } = await import('../shared/end-session.js');
+  const registry = new registryModule.SessionRegistry();
+  registry.register({ sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 11 });
+  let called = false;
+  const result = await closeOwnedSessionTabs({
+    registry, sessionId: 's1', requesterTabId: 99,
+    removeTabs: async () => { called = true; }
+  });
+  assert.deepEqual(result, { ok: false, error: 'session_not_owned' });
+  assert.equal(called, false);
 });

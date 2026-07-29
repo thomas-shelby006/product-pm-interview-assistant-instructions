@@ -907,7 +907,7 @@ RunManagedLaunch(reuseSession := false) {
     EnsureAlwaysOnTop(g_hWin1)
     EnsureAlwaysOnTop(g_hWin2)
     ApplyConfiguredInitialLayout()
-    SendToWindow(BuildBootPrompt(), "^+{F5}", g_hWin1)
+    SendToWindow(BuildBootPrompt(), "^+{F7}", g_hWin2)
     g_interviewActive := true
     SaveStudioPreferences()
     SetLaunchState("READY", "Session linked and boot context delivered.", "ok")
@@ -1321,10 +1321,16 @@ RestoreLayout(layout) {
  ; Alt+Delete — Cleanly end this AHK session.
 ; Resume/JD are stored only in process memory and are not saved to disk.
 !Delete:: {
-    global g_interviewActive
+    global g_interviewActive, g_hWin1, g_hWin2
     if GetKeyState("Alt", "P")
         KeyWait "Alt"
     LogEvent("Alt+Delete exit requested")
+    if IsActiveSession() {
+        target := IsAlive(g_hWin1) ? g_hWin1 : g_hWin2
+        if IsAlive(target)
+            SendToWindow("", "^+{F4}", target)
+        Sleep 500
+    }
     g_interviewActive := false
     CloseManagedPmiaWindows()
     ExitApp
