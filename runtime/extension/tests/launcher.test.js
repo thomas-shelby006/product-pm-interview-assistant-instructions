@@ -195,3 +195,11 @@ test('launcher foregrounds both registered providers before composer readiness',
   assert.ok(between.includes('WinActivate "ahk_id " registeredPair["sender"]["hwnd"]'));
   assert.ok(between.includes('WinActivate "ahk_id " registeredPair["receiver"]["hwnd"]'));
 });
+
+test('Alt+Delete closes every managed PMIA lifecycle window even with stale cached state', () => {
+  const endBlock = launcher.match(/!Delete:: \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(endBlock, /CloseManagedPmiaWindows\(\)/);
+  assert.match(endBlock, /g_interviewActive\s*:=\s*false/);
+  assert.match(endBlock, /ExitApp/);
+  assert.doesNotMatch(endBlock, /if IsAlive\(g_hWin1\)/);
+});

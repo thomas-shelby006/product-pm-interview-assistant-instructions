@@ -54,3 +54,27 @@ test('delivery preserves specific receiver failure reason for diagnostics', () =
     reason: 'receiver_delivery_failed'
   });
 });
+
+test('delivery wakes and retries the same envelope before queueing', async () => {
+  const module = await import('../shared/delivery.js');
+  assert.equal(typeof module.deliverWithWakeRetry, 'function');
+  const calls = [];
+  let attempts = 0;
+  const outcome = await module.deliverWithWakeRetry({
+    route: { tabId: 22, message: { id: 'q1', sessionId: 's1', text: 'Question?' } },
+    async sendToTab(tabId, outgoing) {
+      calls.push(['send', tabId, outgoing.envelope.id]);
+      attempts += 1;
+      return attempts === 1
+        ? { ok: false, error: 'receiver_delivery_failed' }
+        : { ok: true, reason: 'accepted' };
+    },
+    async wakeTab(tabId) { calls.push(['wake', tabId]); },
+    async wait(ms) { calls.push(['wait', ms]); },
+    retryDelaysMs: [80]
+  });
+  assert.deepEqual(calls, [
+    ['send', 22, 'q1'], ['wake', 22], ['wait', 80], ['send', 22, 'q1']
+  ]);
+  assert.deepEqual(outcome, { delivered: true, queued: false, reason: 'accepted' });
+});

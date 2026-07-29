@@ -1295,17 +1295,12 @@ RestoreLayout(layout) {
  ; Alt+Delete — Cleanly end this AHK session.
 ; Resume/JD are stored only in process memory and are not saved to disk.
 !Delete:: {
-    global g_hWin1, g_hWin2, g_interviewActive
+    global g_interviewActive
     if GetKeyState("Alt", "P")
         KeyWait "Alt"
     LogEvent("Alt+Delete exit requested")
     g_interviewActive := false
-    try {
-        if IsAlive(g_hWin1)
-            WinClose "ahk_id " g_hWin1
-        if IsAlive(g_hWin2)
-            WinClose "ahk_id " g_hWin2
-    }
+    CloseManagedPmiaWindows()
     ExitApp
 }
 

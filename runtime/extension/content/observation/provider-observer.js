@@ -22,7 +22,8 @@ export function createProviderObserver({
   scheduleMicrotask = globalThis.queueMicrotask,
   setIntervalFn = globalThis.setInterval,
   clearIntervalFn = globalThis.clearInterval,
-  watchdogMs = 500
+  watchdogMs = 500,
+  allowHidden = false
 }) {
   let observer = null;
   let targets = [];
@@ -32,7 +33,7 @@ export function createProviderObserver({
   const emit = () => {
     if (disposed) return;
     const hidden = document?.visibilityState === 'hidden';
-    if (hidden && !adapter.isVoiceActive?.()) return;
+    if (hidden && !allowHidden && !adapter.isVoiceActive?.()) return;
     if (typeof onChange === 'function') {
       onChange();
       return;

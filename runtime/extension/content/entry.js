@@ -22,6 +22,7 @@ import { SequenceGate, nextSequence } from '../shared/sequence.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 import { describeRuntimeStatus } from '../shared/session-status.js';
 import { renderRuntimeFatal } from './runtime-fatal.js';
+import { isActionableTranscript, isTransientTranscriptStatus } from '../shared/transcript-filter.js';
 import { createPreflightResponder } from './preflight-responder.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
@@ -175,6 +176,7 @@ async function startRuntime(runtimeConfig) {
 
   async function forwardPreview(candidate) {
     if (runtimeConfig.role !== 'sender' || paused) return false;
+    if (isTransientTranscriptStatus(candidate?.text)) return false;
     const nextPreviewSequence = nextSequence(previewSequence);
     let preview;
     try {
@@ -205,6 +207,7 @@ async function startRuntime(runtimeConfig) {
   async function forwardText(text, kind = 'question', metadata = {}) {
     const normalized = String(text || '').trim();
     if (!normalized || paused) return false;
+    if (kind === 'question' && !isActionableTranscript(normalized)) return false;
     let envelope;
     const nextSenderSequence = nextSequence(senderSequence);
     senderSequence = nextSenderSequence;
@@ -257,6 +260,7 @@ async function startRuntime(runtimeConfig) {
       adapter,
       isVoiceActive: isCombinedVoiceActive,
       isComposerEmpty: () => adapter.isComposerEmpty?.() ?? true,
+      allowVoiceFallback: runtimeConfig.provider === 'chatgpt',
       onPreview(preview) {
         if (runtimeConfig.provider === 'claude' && isCombinedVoiceActive()) return false;
         return previewScheduler.push(preview);
@@ -488,7 +492,8 @@ async function startRuntime(runtimeConfig) {
         refreshLifecycleTitle();
         senderController?.observe();
       },
-      watchdogMs: 500
+      watchdogMs: 500,
+      allowHidden: true
     });
 
     document.addEventListener('copy', () => {

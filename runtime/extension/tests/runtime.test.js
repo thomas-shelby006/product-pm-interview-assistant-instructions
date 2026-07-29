@@ -459,3 +459,10 @@ test('title defender changes lifecycle target without creating another observer'
   defend.disconnect();
   assert.equal(disconnectCalls, 1);
 });
+
+test('transcript filter blocks provider status text without blocking real questions', () => {
+  assert.equal(filterModule.isActionableTranscript('Transcribing?'), false);
+  assert.equal(filterModule.isActionableTranscript('Listening...'), false);
+  assert.equal(filterModule.isActionableTranscript('Processing audio'), false);
+  assert.equal(filterModule.isActionableTranscript('How are you transcribing customer calls?'), true);
+});

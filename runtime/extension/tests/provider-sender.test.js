@@ -81,7 +81,7 @@ test('provider sender mirrors distinct provisional text without finalizing it', 
   sender.disconnect();
 });
 
-test('provider sender uses a 650ms fallback only when voice is inactive and composer is empty', () => {
+test('provider sender uses a 300ms fallback only when voice is inactive and composer is empty', () => {
   let messages = [];
   const timers = [];
   const adapter = {
@@ -97,7 +97,7 @@ test('provider sender uses a 650ms fallback only when voice is inactive and comp
   });
   messages = [message('u1', 'user', 'How would you measure activation?')];
   sender.observe(100);
-  assert.equal(timers.at(-1).delay, 670);
+  assert.equal(timers.at(-1).delay, 320);
   sender.disconnect();
 });
 
@@ -138,6 +138,71 @@ test('provider sender accepts protocol voice activity in addition to DOM state',
   });
   messages = [message('u1', 'user', 'How would you measure activation?')];
   sender.observe(100);
+  assert.deepEqual(timers, []);
+  sender.disconnect();
+});
+
+test('provider sender never previews transient provider status text', () => {
+  let messages = [];
+  const previews = [];
+  const adapter = { getConversationMessages: () => messages, isVoiceActive: () => true };
+  const sender = senderModule.createProviderSender({ adapter, onPreview: value => previews.push(value) });
+  messages = [message('status-1', 'user', 'Transcribing?')];
+  sender.observe(0);
+  messages = [message('status-1', 'user', 'How would you improve activation?')];
+  sender.observe(100);
+  assert.deepEqual(previews, [
+    { turnKey: 'status-1', text: 'How would you improve activation?', revision: 1, phase: 'interim' }
+  ]);
+  sender.disconnect();
+});
+
+test('provider sender can finalize a strongly punctuated stable ChatGPT voice turn', () => {
+  let messages = [];
+  const timers = [];
+  const finals = [];
+  let now = 0;
+  const adapter = {
+    getConversationMessages: () => messages,
+    isVoiceActive: () => true,
+    isComposerEmpty: () => true
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    allowVoiceFallback: true,
+    onFinal: value => finals.push(value),
+    nowFn: () => now,
+    setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeoutFn: () => {}
+  });
+  messages = [message('voice-u1', 'user', 'How would you improve activation?')];
+  sender.observe(now);
+  assert.equal(timers.at(-1).delay, 320);
+  now = 320;
+  timers.at(-1).callback();
+  assert.deepEqual(finals, [{
+    id: 'voice-u1', text: 'How would you improve activation?', boundary: 'stable_tail_fallback'
+  }]);
+  sender.disconnect();
+});
+
+test('provider sender keeps unpunctuated active voice text provisional', () => {
+  let messages = [];
+  const timers = [];
+  const adapter = {
+    getConversationMessages: () => messages,
+    isVoiceActive: () => true,
+    isComposerEmpty: () => true
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    allowVoiceFallback: true,
+    onFinal: () => { throw new Error('must not emit'); },
+    setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeoutFn: () => {}
+  });
+  messages = [message('voice-u2', 'user', 'How would you improve activation')];
+  sender.observe(0);
   assert.deepEqual(timers, []);
   sender.disconnect();
 });

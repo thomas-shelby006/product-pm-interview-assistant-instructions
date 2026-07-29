@@ -35,15 +35,6 @@ export async function runCounterpartPreflight({
     };
   }
 
-  const ageMs = Math.max(0, now - Number(registration.registeredAt || 0));
-  if (!registration.registeredAt || ageMs > staleAfterMs) {
-    return {
-      ok: true,
-      status,
-      counterpart: counterpartResult(counterpartRole, registration, 'stale')
-    };
-  }
-
   try {
     const response = await sendToTab(registration.tabId, {
       type: 'PMIA_PREFLIGHT_PING',

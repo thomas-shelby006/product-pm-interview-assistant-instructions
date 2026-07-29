@@ -59,18 +59,25 @@ test('active preflight reports a missing counterpart without sending', async () 
   assert.equal(result.counterpart.reason, 'missing');
 });
 
-test('active preflight distinguishes stale and unreachable counterparts', async () => {
+test('active preflight pings present counterparts even after heartbeat age expires', async () => {
   assert.ok(preflightModule, 'preflight module must exist');
   const registry = registryWithRoles(10_000);
-  const stale = await preflightModule.runCounterpartPreflight({
+  let calls = 0;
+  const recovered = await preflightModule.runCounterpartPreflight({
     registry, sessionId: 's1', requesterTabId: 11, now: 60_001,
     staleAfterMs: 45_000,
-    sendToTab: async () => { throw new Error('must not send stale'); }
+    sendToTab: async () => {
+      calls += 1;
+      return { ok: true, role: 'receiver', provider: 'claude', version: '0.6.0', composerAvailable: true };
+    }
   });
-  assert.equal(stale.counterpart.reason, 'stale');
+  assert.equal(calls, 1);
+  assert.equal(recovered.counterpart.responsive, true);
+  assert.equal(recovered.status.receiver.connected, true);
+  assert.equal(recovered.status.receiver.stale, true);
 
   const unreachable = await preflightModule.runCounterpartPreflight({
-    registry, sessionId: 's1', requesterTabId: 11, now: 10_100,
+    registry, sessionId: 's1', requesterTabId: 11, now: 60_001,
     staleAfterMs: 45_000,
     sendToTab: async () => { throw new Error('port closed'); }
   });

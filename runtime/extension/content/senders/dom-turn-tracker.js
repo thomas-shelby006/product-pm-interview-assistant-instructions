@@ -1,4 +1,4 @@
-import { isActionableTranscript, normalizeTranscript } from '../../shared/transcript-filter.js';
+import { isActionableTranscript, isStrongFinalTranscript, isTransientTranscriptStatus, normalizeTranscript } from '../../shared/transcript-filter.js';
 
 const FINAL_FILLER = new Set([
   'ok', 'okay', 'yes', 'yeah', 'yep', 'fine', 'good', 'correct', 'right',
@@ -21,7 +21,7 @@ function normalizeMessages(messages, limit = Infinity) {
 
 function isMeaningfulFinal(text) {
   const normalized = normalizeTranscript(text);
-  return Boolean(normalized && !FINAL_FILLER.has(normalized));
+  return Boolean(normalized && !FINAL_FILLER.has(normalized) && !isTransientTranscriptStatus(text));
 }
 
 function canonicalTranscript(text) {
@@ -38,7 +38,7 @@ function isExternalShadowMatch(first, second) {
 
 export class DomTurnTracker {
   constructor({
-    fallbackMs = 650,
+    fallbackMs = 300,
     historyLimit = 512,
     duplicateTextWindowMs = 30000,
     externalShadowMs = 8000
@@ -156,6 +156,7 @@ export class DomTurnTracker {
   }
 
   queuePreview(message) {
+    if (isTransientTranscriptStatus(message?.text)) return;
     const revision = (this.previewRevisions.get(message.id) || 0) + 1;
     this.rememberRevision(message.id, revision);
     this.queuedPreview = {
@@ -215,6 +216,10 @@ export class DomTurnTracker {
       this.queuePreview(tailUser);
     }
     return emitted;
+  }
+
+  canFinalizeStrongTail() {
+    return Boolean(this.pending && isStrongFinalTranscript(this.pending.text));
   }
 
   pendingDelay(now = Date.now()) {

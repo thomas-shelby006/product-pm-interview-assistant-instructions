@@ -193,3 +193,24 @@ test('provider observer refreshes replaced targets immediately', () => {
   assert.deepEqual(observed, ['first', 'second']);
   observer.disconnect();
 });
+
+test('managed sender observer remains active while hidden', () => {
+  FakeMutationObserver.instances = [];
+  const received = [];
+  const clock = createClock();
+  const observer = createProviderObserver({
+    adapter: {
+      getObservationTargets: () => [{ id: 'root' }],
+      getSenderCandidateInfo: () => ({ text: 'How would you improve activation?', source: 'user_message' }),
+      isVoiceActive: () => false
+    },
+    document: { visibilityState: 'hidden' },
+    allowHidden: true,
+    onCandidate: candidate => received.push(candidate),
+    MutationObserverCtor: FakeMutationObserver,
+    scheduleMicrotask: fn => fn(),
+    ...clock
+  });
+  assert.equal(received.length, 1);
+  observer.disconnect();
+});

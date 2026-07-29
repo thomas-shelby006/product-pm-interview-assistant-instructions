@@ -12,8 +12,8 @@ test('session status reports fresh sender, receiver, and pending final', () => {
     pending: { id: 'queued' }
   }, 1000, 200);
   assert.deepEqual(status, {
-    sender: { connected: true, provider: 'chatgpt', ageMs: 100 },
-    receiver: { connected: true, provider: 'claude', ageMs: 50 },
+    sender: { connected: true, provider: 'chatgpt', ageMs: 100, stale: false },
+    receiver: { connected: true, provider: 'claude', ageMs: 50, stale: false },
     hasPending: true
   });
   assert.deepEqual(describeRuntimeStatus(status), {
@@ -21,15 +21,16 @@ test('session status reports fresh sender, receiver, and pending final', () => {
   });
 });
 
-test('session status distinguishes a missing or stale role', () => {
+test('session status keeps a present role connected regardless of heartbeat age', () => {
   const status = buildSessionStatus({
-    sender: { provider: 'chatgpt', registeredAt: 100 },
+    sender: { provider: 'chatgpt', registeredAt: 100, tabId: 11 },
     receiver: null,
     pending: null
   }, 1000, 200);
-  assert.equal(status.sender.connected, false);
+  assert.equal(status.sender.connected, true);
+  assert.equal(status.sender.stale, true);
   assert.deepEqual(describeRuntimeStatus(status), {
-    text: 'WAITING SENDER + RECEIVER', tone: 'error'
+    text: 'WAITING RECEIVER', tone: 'warn'
   });
 });
 

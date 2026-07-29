@@ -3,9 +3,10 @@ function roleStatus(registration, now, staleAfterMs) {
   const registeredAt = Number(registration.registeredAt || 0);
   const ageMs = Math.max(0, now - registeredAt);
   return {
-    connected: Boolean(registeredAt && ageMs <= staleAfterMs),
+    connected: true,
     provider: String(registration.provider || ''),
-    ageMs
+    ageMs,
+    stale: Boolean(registeredAt && ageMs > staleAfterMs)
   };
 }
 

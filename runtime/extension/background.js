@@ -1,7 +1,7 @@
 import { SessionRegistry } from './shared/session-registry.js';
 import { isEnvelope } from './shared/protocol.js';
 import { deliverPreview } from './shared/preview.js';
-import { classifyDelivery } from './shared/delivery.js';
+import { deliverWithWakeRetry } from './shared/delivery.js';
 import { roleLogKey, appendBoundedLog } from './shared/session-log.js';
 import { buildSessionStatus } from './shared/session-status.js';
 import { runCounterpartPreflight } from './shared/preflight.js';
@@ -54,24 +54,30 @@ async function appendLog(sessionId, role, event) {
   await chrome.storage.local.set({ [key]: events });
 }
 
-async function deliver(route, registry) {
-  if (!route) return classifyDelivery({ route });
+async function wakeManagedTab(tabId) {
   try {
-    const response = await chrome.tabs.sendMessage(route.tabId, {
-      type: 'PMIA_DELIVER',
-      envelope: route.message
-    });
-    const outcome = classifyDelivery({ route, response });
-    if (!outcome.delivered) {
-      registry.queueLatest(route.message.sessionId, route.message);
-      await saveRegistry(registry);
+    const tab = await chrome.tabs.get(tabId);
+    await chrome.tabs.update(tabId, { active: true, autoDiscardable: false });
+    if (Number.isInteger(tab?.windowId)) {
+      await chrome.windows.update(tab.windowId, { focused: true });
     }
-    return outcome;
-  } catch (error) {
+    await chrome.tabs.sendMessage(tabId, { type: 'PMIA_RUNTIME_RESUME' }).catch(() => {});
+  } catch {
+    // The final remains queued if the managed receiver cannot be woken.
+  }
+}
+
+async function deliver(route, registry) {
+  const outcome = await deliverWithWakeRetry({
+    route,
+    sendToTab: (tabId, outgoing) => chrome.tabs.sendMessage(tabId, outgoing),
+    wakeTab: wakeManagedTab
+  });
+  if (!outcome.delivered && route?.message?.sessionId) {
     registry.queueLatest(route.message.sessionId, route.message);
     await saveRegistry(registry);
-    return classifyDelivery({ route, error });
   }
+  return outcome;
 }
 
 async function handleRegistration(message, tabId, registry) {

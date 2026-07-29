@@ -9,7 +9,8 @@ export function createProviderSender({
   isComposerEmpty = () => Boolean(adapter.isComposerEmpty?.() ?? true),
   nowFn = Date.now,
   setTimeoutFn = globalThis.setTimeout,
-  clearTimeoutFn = globalThis.clearTimeout
+  clearTimeoutFn = globalThis.clearTimeout,
+  allowVoiceFallback = false
 }) {
   let timer = null;
   let stopped = false;
@@ -30,12 +31,16 @@ export function createProviderSender({
 
   const scheduleFallback = now => {
     clearTimer();
-    if (stopped || isVoiceActive() || !isComposerEmpty()) return;
+    const voiceActive = isVoiceActive();
+    const voiceFallbackAllowed = voiceActive && allowVoiceFallback && tracker.canFinalizeStrongTail?.();
+    if (stopped || !isComposerEmpty() || (voiceActive && !voiceFallbackAllowed)) return;
     const delay = tracker.pendingDelay(now);
     if (delay === null) return;
     timer = setTimeoutFn(() => {
       timer = null;
-      if (stopped || isVoiceActive() || !isComposerEmpty()) return;
+      const activeVoice = isVoiceActive();
+      const activeVoiceFallbackAllowed = activeVoice && allowVoiceFallback && tracker.canFinalizeStrongTail?.();
+      if (stopped || !isComposerEmpty() || (activeVoice && !activeVoiceFallbackAllowed)) return;
       for (const final of tracker.poll(nowFn(), { allowFallback: true })) emitFinal(final);
     }, delay + 20);
   };
