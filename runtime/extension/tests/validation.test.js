@@ -347,6 +347,7 @@ test('sender boot shortcut forwards context without submitting into the question
   const source = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
   const block = source.slice(source.indexOf("if (key === 'F5'"), source.indexOf("if (key === 'F6'"));
   assert.match(block, /forwardText\(text, 'boot'/);
+  assert.match(block, /clearSubmittedComposer\(adapter, text\)/);
   assert.doesNotMatch(block, /submitComposerWhenReady/);
 });
 

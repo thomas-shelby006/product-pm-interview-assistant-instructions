@@ -5,6 +5,7 @@ import { createClaudeAdapter } from './adapters/claude.js';
 import {
   createReceiverController,
   submitComposerWhenReady,
+  clearSubmittedComposer,
   runtimeLifecycleTitle,
   defendTitle,
   redactSensitiveSessionText,
@@ -592,6 +593,7 @@ async function startRuntime(runtimeConfig) {
       if (!text) return;
       senderController?.markExternalFinal({ text });
       const forwarded = await forwardText(text, 'boot', { source: 'ahk_boot' });
+      clearSubmittedComposer(adapter, text);
       overlay.setStatus(
         forwarded ? 'BOOT FORWARDED' : 'BOOT QUEUED',
         forwarded ? 'ok' : 'warn',
