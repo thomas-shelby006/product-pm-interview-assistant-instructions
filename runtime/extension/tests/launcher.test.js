@@ -67,6 +67,12 @@ test('preflight waits for Edge to persist a path-matched extension version reloa
   const preflightBlock = block('RunStudioPreflight(*)', 'FindLifecycleWindow(');
   assert.match(preflightBlock, /WaitForSelectedProfileReady\(\)/);
 });
+test('cleanup includes hidden PMIA lifecycle windows and restores the prior detection mode', () => {
+  const cleanup = block('CloseManagedPmiaWindows(sessionId := "")', 'AutoStartup()');
+  assert.match(cleanup, /previousDetectHidden := A_DetectHiddenWindows/);
+  assert.match(cleanup, /DetectHiddenWindows true/);
+  assert.match(cleanup, /DetectHiddenWindows previousDetectHidden/);
+});
 test('new launches close all PMIA windows while repair is scoped to the current session', () => {
   const launchBlock = block('RunManagedLaunch(reuseSession := false)', 'ApplyConfiguredInitialLayout()');
   assert.match(launchBlock, /if !reuseSession[\s\S]*CloseManagedPmiaWindows\(\)/);

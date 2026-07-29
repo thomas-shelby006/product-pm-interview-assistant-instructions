@@ -928,25 +928,31 @@ RepairLaunch(*) {
 
 CloseManagedPmiaWindows(sessionId := "") {
     managed := []
-    suffix := sessionId = "" ? "" : StrUpper(RegExReplace(sessionId, "[^A-Za-z0-9]+", "_"))
-    for hwnd in WinGetList("ahk_exe msedge.exe") {
-        title := ""
-        try title := WinGetTitle("ahk_id " hwnd)
-        catch
-            continue
-        if !RegExMatch(title, "^PMIA_(?:BOOT_|REGISTERED_)?(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_")
-            continue
-        if (suffix != "" && !InStr(title, suffix))
-            continue
-        managed.Push(hwnd)
-        try WinClose "ahk_id " hwnd
-    }
-    deadline := A_TickCount + 3000
-    for hwnd in managed {
-        while IsAlive(hwnd) && A_TickCount < deadline
-            Sleep 50
-        if IsAlive(hwnd)
-            try WinKill "ahk_id " hwnd
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try {
+        suffix := sessionId = "" ? "" : StrUpper(RegExReplace(sessionId, "[^A-Za-z0-9]+", "_"))
+        for hwnd in WinGetList("ahk_exe msedge.exe") {
+            title := ""
+            try title := WinGetTitle("ahk_id " hwnd)
+            catch
+                continue
+            if !RegExMatch(title, "^PMIA_(?:BOOT_|REGISTERED_)?(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_")
+                continue
+            if (suffix != "" && !InStr(title, suffix))
+                continue
+            managed.Push(hwnd)
+            try WinClose "ahk_id " hwnd
+        }
+        deadline := A_TickCount + 3000
+        for hwnd in managed {
+            while IsAlive(hwnd) && A_TickCount < deadline
+                Sleep 50
+            if IsAlive(hwnd)
+                try WinKill "ahk_id " hwnd
+        }
+    } finally {
+        DetectHiddenWindows previousDetectHidden
     }
 }
 AutoStartup() {
