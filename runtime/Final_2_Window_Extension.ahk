@@ -303,9 +303,28 @@ global g_senderProvider      := "chatgpt"
 global g_receiverProvider    := "chatgpt"
 global g_sessionId           := ""
 global g_interviewActive     := false
-global LOG_DIR               := EnvGet("LOCALAPPDATA") "\PMInterviewAssistant\logs"
+global SETTINGS_DIR          := EnvGet("LOCALAPPDATA") "\PMInterviewAssistant"
+global SETTINGS_FILE         := SETTINGS_DIR "\settings.ini"
+global EDGE_USER_DATA_ROOT   := EnvGet("LOCALAPPDATA") "\Microsoft\Edge\User Data"
+global PROFILE_DOCTOR_SCRIPT := A_ScriptDir "\Browser_Profile_Doctor.ps1"
+global EXPECTED_EXTENSION_PATH := A_ScriptDir "\extension"
+global LOG_DIR               := SETTINGS_DIR "\logs"
 global LOG_FILE              := LOG_DIR "\session_debug.log"
+global g_selectedProfileDirectory := "Default"
+global g_layoutMode          := "TwoWindow"
+global g_profileRecords      := []
+global g_profileChoiceMap    := Map()
+global g_selectedProfileRecord := Map()
+global g_profileDdl          := 0
+global g_layoutDdl           := 0
+global g_runtimeHealth       := 0
+global g_preflightButton     := 0
+global g_repairButton        := 0
+global g_shortContextArmedUntil := 0
+global g_launchStateCode     := "PREFLIGHT"
+global g_lastLaunchFailure   := Map()
 
+LoadStudioPreferences()
 ShowSessionLaunchGui()
 ~LAlt::return
 
@@ -321,90 +340,280 @@ ShowSessionLaunchGui()
     ShowSessionLaunchGui()
 }
 
+LoadStudioPreferences() {
+    global SETTINGS_DIR, SETTINGS_FILE
+    global g_selectedProfileDirectory, g_senderProvider, g_receiverProvider, g_layoutMode
+    DirCreate SETTINGS_DIR
+    try {
+        g_selectedProfileDirectory := IniRead(SETTINGS_FILE, "Studio", "ProfileDirectory", "Default")
+        g_senderProvider := NormalizeProvider(IniRead(SETTINGS_FILE, "Studio", "SenderProvider", "chatgpt"))
+        g_receiverProvider := NormalizeProvider(IniRead(SETTINGS_FILE, "Studio", "ReceiverProvider", "chatgpt"))
+        g_layoutMode := NormalizeLayoutMode(IniRead(SETTINGS_FILE, "Studio", "LayoutMode", "TwoWindow"))
+    } catch {
+        g_selectedProfileDirectory := "Default"
+        g_senderProvider := "chatgpt"
+        g_receiverProvider := "chatgpt"
+        g_layoutMode := "TwoWindow"
+    }
+}
+
+SaveStudioPreferences() {
+    global SETTINGS_DIR, SETTINGS_FILE
+    global g_selectedProfileDirectory, g_senderProvider, g_receiverProvider, g_layoutMode
+    DirCreate SETTINGS_DIR
+    IniWrite g_selectedProfileDirectory, SETTINGS_FILE, "Studio", "ProfileDirectory"
+    IniWrite g_senderProvider, SETTINGS_FILE, "Studio", "SenderProvider"
+    IniWrite g_receiverProvider, SETTINGS_FILE, "Studio", "ReceiverProvider"
+    IniWrite g_layoutMode, SETTINGS_FILE, "Studio", "LayoutMode"
+}
+
+RunProfileDoctor(profileDirectory := "") {
+    global PROFILE_DOCTOR_SCRIPT, EDGE_USER_DATA_ROOT, EXPECTED_EXTENSION_PATH
+    if !FileExist(PROFILE_DOCTOR_SCRIPT)
+        return []
+    command := 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' PROFILE_DOCTOR_SCRIPT '"'
+        . ' -UserDataRoot "' EDGE_USER_DATA_ROOT '"'
+        . ' -ExpectedExtensionPath "' EXPECTED_EXTENSION_PATH '"'
+    if (profileDirectory != "")
+        command .= ' -ProfileDirectory "' profileDirectory '"'
+    try {
+        process := ComObject("WScript.Shell").Exec(command)
+        output := process.StdOut.ReadAll()
+    } catch {
+        return []
+    }
+    return ParseProfileDoctorOutput(output)
+}
+
+ParseProfileDoctorOutput(output) {
+    lines := StrSplit(StrReplace(output, "`r"), "`n")
+    if (lines.Length < 1 || Trim(lines[1]) = "")
+        return []
+    headers := StrSplit(lines[1], "`t")
+    records := []
+    Loop lines.Length - 1 {
+        line := lines[A_Index + 1]
+        if (Trim(line) = "")
+            continue
+        fields := StrSplit(line, "`t")
+        record := Map()
+        Loop headers.Length
+            record[headers[A_Index]] := A_Index <= fields.Length ? fields[A_Index] : ""
+        records.Push(record)
+    }
+    return records
+}
+
+SelectRecommendedProfile(records, savedDirectory := "") {
+    if (savedDirectory != "") {
+        for record in records {
+            if (record["directory"] = savedDirectory && record["issueCode"] = "OK")
+                return record
+        }
+    }
+    for record in records {
+        if (record["issueCode"] = "OK")
+            return record
+    }
+    for record in records {
+        if (record["directory"] = savedDirectory)
+            return record
+    }
+    for record in records {
+        if (record["directory"] = "Default")
+            return record
+    }
+    return records.Length ? records[1] : Map()
+}
+
+RefreshRuntimeDoctor(updateUi := true) {
+    global g_profileRecords, g_selectedProfileRecord, g_selectedProfileDirectory
+    g_profileRecords := RunProfileDoctor()
+    g_selectedProfileRecord := SelectRecommendedProfile(g_profileRecords, g_selectedProfileDirectory)
+    if (g_selectedProfileRecord.Count)
+        g_selectedProfileDirectory := g_selectedProfileRecord["directory"]
+    if updateUi
+        RenderDoctorStatus()
+    return g_selectedProfileRecord
+}
+
+RefreshSelectedProfileDoctor() {
+    global g_selectedProfileDirectory, g_selectedProfileRecord
+    records := RunProfileDoctor(g_selectedProfileDirectory)
+    g_selectedProfileRecord := records.Length ? records[1] : Map()
+    return g_selectedProfileRecord
+}
+
+NormalizeProvider(value) {
+    normalized := StrLower(Trim(value))
+    return normalized = "claude" ? "claude" : "chatgpt"
+}
+
+NormalizeLayoutMode(value) {
+    normalized := Trim(value)
+    return (normalized = "SenderOnly" || normalized = "ReceiverOnly") ? normalized : "TwoWindow"
+}
+
 ShowSessionLaunchGui() {
-    global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit, g_sessionResume, g_sessionJD, g_sessionMeta
+    global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit
+    global g_sessionResume, g_sessionJD, g_sessionMeta
     global g_senderProviderDdl, g_receiverProviderDdl, g_senderProvider, g_receiverProvider
+    global g_profileDdl, g_layoutDdl, g_layoutMode
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
+    global g_runtimeHealth, g_preflightButton, g_repairButton
 
     try {
         if IsObject(g_launchGui) {
             g_launchGui.Show()
+            RefreshRuntimeDoctor()
             UpdateLaunchRouteSummary()
             UpdateLaunchContextStatus()
             return
         }
     }
 
-    g_launchGui := Gui("+AlwaysOnTop -MaximizeBox +OwnDialogs +MinSize820x710", "PM Interview Assistant — Session Studio")
+    RefreshRuntimeDoctor(false)
+    choices := BuildProfileChoices()
+    g_launchGui := Gui("+AlwaysOnTop -MaximizeBox +MinSize960x780", "PM Interview Assistant — Session Studio")
     g_launchGui.BackColor := "F4F7FB"
     g_launchGui.SetFont("s10 c334155", "Segoe UI")
 
-    title := g_launchGui.Add("Text", "x30 y22 w760 h34", "PM Interview Assistant")
+    title := g_launchGui.Add("Text", "x30 y20 w600 h34", "PM Interview Assistant")
     title.SetFont("s22 w700 c0F172A", "Segoe UI")
-    subtitle := g_launchGui.Add("Text", "x30 y60 w760 h24", "Build your live interview workspace")
-    subtitle.SetFont("s11 c64748B", "Segoe UI")
+    subtitle := g_launchGui.Add("Text", "x30 y57 w600 h22", "Build and verify your live interview workspace")
+    subtitle.SetFont("s10 c64748B", "Segoe UI")
+    healthBox := g_launchGui.Add("GroupBox", "x30 y91 w900 h112", "Browser and runtime health")
+    healthBox.SetFont("s10 w600 c334155", "Segoe UI")
+    edgeLabel := g_launchGui.Add("Text", "x52 y121 w215 h20", "Microsoft Edge Stable")
+    edgeLabel.SetFont("s10 w600 c0F172A", "Segoe UI")
+    g_profileDdl := g_launchGui.Add("DropDownList", "x270 y116 w300", choices.labels)
+    if (choices.selectedIndex > 0)
+        g_profileDdl.Choose(choices.selectedIndex)
+    g_runtimeHealth := g_launchGui.Add("Text", "x52 y154 w605 h28", "Checking PMIA runtime registration...")
+    g_runtimeHealth.SetFont("s9 c64748B", "Segoe UI")
+    g_preflightButton := g_launchGui.Add("Button", "x676 y118 w108 h32", "Run Preflight")
+    g_repairButton := g_launchGui.Add("Button", "x792 y118 w112 h32", "Repair Launch")
 
-    routeBox := g_launchGui.Add("GroupBox", "x30 y98 w760 h132", "Conversation route")
+    routeBox := g_launchGui.Add("GroupBox", "x30 y216 w900 h138", "Conversation route")
     routeBox.SetFont("s10 w600 c334155", "Segoe UI")
-    g_launchGui.Add("Text", "x52 y128 w190 h20", "Question source")
-    g_senderProviderDdl := g_launchGui.Add("DropDownList", "x52 y151 w190", ["ChatGPT", "Claude"])
+    g_launchGui.Add("Text", "x52 y246 w200 h20", "Question source")
+    g_senderProviderDdl := g_launchGui.Add("DropDownList", "x52 y269 w205", ["ChatGPT", "Claude"])
     g_senderProviderDdl.Choose(g_senderProvider = "claude" ? 2 : 1)
-
-    swapBtn := g_launchGui.Add("Button", "x337 y149 w112 h30", "Swap route")
+    swapBtn := g_launchGui.Add("Button", "x423 y267 w114 h32", "Swap route")
     swapBtn.SetFont("s9 w600", "Segoe UI")
-
-    g_launchGui.Add("Text", "x526 y128 w190 h20", "Answer workspace")
-    g_receiverProviderDdl := g_launchGui.Add("DropDownList", "x526 y151 w190", ["ChatGPT", "Claude"])
+    g_launchGui.Add("Text", "x678 y246 w200 h20", "Answer workspace")
+    g_receiverProviderDdl := g_launchGui.Add("DropDownList", "x678 y269 w205", ["ChatGPT", "Claude"])
     g_receiverProviderDdl.Choose(g_receiverProvider = "claude" ? 2 : 1)
-
-    g_routeSummary := g_launchGui.Add("Text", "x52 y193 w714 h24 c0F766E", "")
+    g_routeSummary := g_launchGui.Add("Text", "x52 y315 w830 h24", "")
     g_routeSummary.SetFont("s9 w600 c0F766E", "Segoe UI")
-
-    contextBox := g_launchGui.Add("GroupBox", "x30 y246 w760 h370", "Interview context")
+    contextBox := g_launchGui.Add("GroupBox", "x30 y367 w900 h300", "Interview context")
     contextBox.SetFont("s10 w600 c334155", "Segoe UI")
-
-    g_launchGui.Add("Text", "x52 y278 w340 h20", "Resume")
-    g_resumeEdit := g_launchGui.Add("Edit", "x52 y301 w350 h164 -Wrap WantTab", g_sessionResume)
-
-    g_launchGui.Add("Text", "x418 y278 w350 h20", "Job description")
-    g_jdEdit := g_launchGui.Add("Edit", "x418 y301 w350 h164 -Wrap WantTab", g_sessionJD)
-
-    g_launchGui.Add("Text", "x52 y482 w716 h20", "Session notes (optional)")
-    g_metaEdit := g_launchGui.Add("Edit", "x52 y505 w716 h72 -Wrap WantTab", g_sessionMeta)
-    g_contextStatus := g_launchGui.Add("Text", "x52 y586 w716 h22 c475569", "")
+    g_launchGui.Add("Text", "x52 y396 w410 h20", "Resume")
+    g_resumeEdit := g_launchGui.Add("Edit", "x52 y419 w412 h154 -Wrap WantTab", g_sessionResume)
+    g_launchGui.Add("Text", "x478 y396 w410 h20", "Job description")
+    g_jdEdit := g_launchGui.Add("Edit", "x478 y419 w412 h154 -Wrap WantTab", g_sessionJD)
+    g_launchGui.Add("Text", "x52 y586 w610 h20", "Session notes (optional)")
+    g_metaEdit := g_launchGui.Add("Edit", "x52 y609 w610 h38 -Wrap WantTab", g_sessionMeta)
+    g_launchGui.Add("Text", "x678 y586 w210 h20", "Initial layout")
+    g_layoutDdl := g_launchGui.Add("DropDownList", "x678 y609 w212", ["Two windows", "Sender only", "Receiver only"])
+    g_layoutDdl.Choose(g_layoutMode = "SenderOnly" ? 2 : g_layoutMode = "ReceiverOnly" ? 3 : 1)
+    g_contextStatus := g_launchGui.Add("Text", "x52 y650 w838 h18", "")
     g_contextStatus.SetFont("s9 c475569", "Segoe UI")
 
-    privacy := g_launchGui.Add("Text", "x30 y632 w470 h22", "Resume, JD, and notes stay in memory.")
+    privacy := g_launchGui.Add("Text", "x30 y687 w430 h22", "Resume, JD, and notes stay in memory.")
     privacy.SetFont("s9 c64748B", "Segoe UI")
-    g_launchStatus := g_launchGui.Add("Text", "x30 y661 w360 h26 c0F766E", "Ready to create a new managed session")
+    g_launchStatus := g_launchGui.Add("Text", "x30 y716 w555 h34", "PREFLIGHT  •  Ready to verify the selected browser profile")
     g_launchStatus.SetFont("s9 w600 c0F766E", "Segoe UI")
-
-    closeBtn := g_launchGui.Add("Button", "x548 y650 w96 h36", "Close")
-    g_launchButton := g_launchGui.Add("Button", "x654 y650 w136 h36 Default", "Launch Interview")
+    closeBtn := g_launchGui.Add("Button", "x648 y705 w92 h38", "Close")
+    g_launchButton := g_launchGui.Add("Button", "x750 y705 w180 h38 Default", "Launch Interview")
     g_launchButton.SetFont("s10 w600", "Segoe UI")
-
+    g_profileDdl.OnEvent("Change", HandleProfileChange)
     g_senderProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
     g_receiverProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
+    g_layoutDdl.OnEvent("Change", UpdateLaunchLayoutMode)
     g_resumeEdit.OnEvent("Change", UpdateLaunchContextStatus)
     g_jdEdit.OnEvent("Change", UpdateLaunchContextStatus)
     swapBtn.OnEvent("Click", SwapLaunchProviders)
+    g_preflightButton.OnEvent("Click", RunStudioPreflight)
+    g_repairButton.OnEvent("Click", RepairLaunch)
     g_launchButton.OnEvent("Click", StartLaunchFromGui)
     closeBtn.OnEvent("Click", CloseSessionLaunchGui)
     g_launchGui.OnEvent("Close", CloseSessionLaunchGui)
     g_launchGui.OnEvent("Escape", CloseSessionLaunchGui)
 
+    RenderDoctorStatus()
     UpdateLaunchRouteSummary()
     UpdateLaunchContextStatus()
-    g_launchGui.Show("w820 h710")
+    g_launchGui.Show("w960 h780")
 }
 
+BuildProfileChoices() {
+    global g_profileRecords, g_profileChoiceMap, g_selectedProfileDirectory
+    labels := []
+    g_profileChoiceMap := Map()
+    selectedIndex := 0
+    for record in g_profileRecords {
+        label := record["displayName"] "  —  " record["directory"]
+        labels.Push(label)
+        g_profileChoiceMap[label] := record
+        if (record["directory"] = g_selectedProfileDirectory)
+            selectedIndex := labels.Length
+    }
+    if !labels.Length {
+        labels.Push("Default  —  profile doctor unavailable")
+        selectedIndex := 1
+    }
+    return {labels: labels, selectedIndex: selectedIndex}
+}
+HandleProfileChange(*) {
+    global g_profileDdl, g_profileChoiceMap, g_selectedProfileDirectory, g_selectedProfileRecord
+    if !IsObject(g_profileDdl)
+        return
+    label := g_profileDdl.Text
+    if g_profileChoiceMap.Has(label) {
+        g_selectedProfileRecord := g_profileChoiceMap[label]
+        g_selectedProfileDirectory := g_selectedProfileRecord["directory"]
+    }
+    RenderDoctorStatus()
+    SaveStudioPreferences()
+}
+
+RenderDoctorStatus() {
+    global g_runtimeHealth, g_profileDdl, g_profileRecords, g_selectedProfileRecord
+    if IsObject(g_profileDdl) {
+        choices := BuildProfileChoices()
+        g_profileDdl.Delete()
+        g_profileDdl.Add(choices.labels)
+        if (choices.selectedIndex > 0)
+            g_profileDdl.Choose(choices.selectedIndex)
+    }
+    if !IsObject(g_runtimeHealth)
+        return
+    if !g_profileRecords.Length || !g_selectedProfileRecord.Count {
+        g_runtimeHealth.Text := "Profile doctor failed. Verify Edge Stable and the PMIA extension manually."
+        g_runtimeHealth.SetFont("s9 cB91C1C", "Segoe UI")
+        return
+    }
+    code := g_selectedProfileRecord["issueCode"]
+    version := g_selectedProfileRecord["version"]
+    if (code = "OK") {
+        g_runtimeHealth.Text := "PMIA " version " is registered from the expected path in this profile."
+        g_runtimeHealth.SetFont("s9 c15803D", "Segoe UI")
+    } else {
+        g_runtimeHealth.Text := code ": " g_selectedProfileRecord["issueMessage"]
+        g_runtimeHealth.SetFont("s9 cB45309", "Segoe UI")
+    }
+}
 UpdateLaunchRouteSummary(*) {
     global g_senderProviderDdl, g_receiverProviderDdl, g_routeSummary
-    if !IsObject(g_routeSummary)
-        return
+    global g_senderProvider, g_receiverProvider
     sender := IsObject(g_senderProviderDdl) ? g_senderProviderDdl.Text : "ChatGPT"
     receiver := IsObject(g_receiverProviderDdl) ? g_receiverProviderDdl.Text : "ChatGPT"
-    g_routeSummary.Text := sender " captures the question  →  " receiver " prepares the live answer"
+    g_senderProvider := NormalizeProvider(sender)
+    g_receiverProvider := NormalizeProvider(receiver)
+    if IsObject(g_routeSummary)
+        g_routeSummary.Text := sender " captures the question  →  " receiver " prepares the live answer"
+    SaveStudioPreferences()
 }
 
 SwapLaunchProviders(*) {
@@ -417,19 +626,45 @@ SwapLaunchProviders(*) {
     UpdateLaunchRouteSummary()
 }
 
+UpdateLaunchLayoutMode(*) {
+    global g_layoutDdl, g_layoutMode
+    if !IsObject(g_layoutDdl)
+        return
+    g_layoutMode := g_layoutDdl.Value = 2 ? "SenderOnly" : g_layoutDdl.Value = 3 ? "ReceiverOnly" : "TwoWindow"
+    SaveStudioPreferences()
+}
+
 UpdateLaunchContextStatus(*) {
     global g_resumeEdit, g_jdEdit, g_contextStatus
+    ResetShortContextConfirmation()
     if !IsObject(g_contextStatus)
         return
     resumeChars := IsObject(g_resumeEdit) ? StrLen(Trim(g_resumeEdit.Value)) : 0
     jdChars := IsObject(g_jdEdit) ? StrLen(Trim(g_jdEdit.Value)) : 0
-    readiness := (resumeChars >= 100 && jdChars >= 100) ? "Context ready" : "Add more context for stronger answers"
+    readiness := (resumeChars >= 100 && jdChars >= 100) ? "Context ready" : "More context recommended"
     g_contextStatus.Text := "Resume: " resumeChars " characters   •   Job description: " jdChars " characters   •   " readiness
+}
+ArmShortContextConfirmation() {
+    global g_shortContextArmedUntil, g_launchButton
+    g_shortContextArmedUntil := A_TickCount + 10000
+    if IsObject(g_launchButton)
+        g_launchButton.Text := "Launch Anyway"
+    SetLaunchState("PREFLIGHT", "Resume or JD is short. Click Launch Anyway within 10 seconds.", "warn")
+    SetTimer ResetShortContextConfirmation, -10000
+}
+
+ResetShortContextConfirmation(*) {
+    global g_shortContextArmedUntil, g_launchButton
+    g_shortContextArmedUntil := 0
+    if IsObject(g_launchButton)
+        g_launchButton.Text := "Launch Interview"
 }
 
 StartLaunchFromGui(*) {
-    global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit, g_sessionResume, g_sessionJD, g_sessionMeta
+    global g_resumeEdit, g_jdEdit, g_metaEdit
+    global g_sessionResume, g_sessionJD, g_sessionMeta
     global g_senderProviderDdl, g_receiverProviderDdl, g_senderProvider, g_receiverProvider
+    global g_shortContextArmedUntil
 
     if IsObject(g_resumeEdit)
         g_sessionResume := g_resumeEdit.Value
@@ -438,25 +673,24 @@ StartLaunchFromGui(*) {
     if IsObject(g_metaEdit)
         g_sessionMeta := g_metaEdit.Value
     if IsObject(g_senderProviderDdl)
-        g_senderProvider := StrLower(g_senderProviderDdl.Text)
+        g_senderProvider := NormalizeProvider(g_senderProviderDdl.Text)
     if IsObject(g_receiverProviderDdl)
-        g_receiverProvider := StrLower(g_receiverProviderDdl.Text)
+        g_receiverProvider := NormalizeProvider(g_receiverProviderDdl.Text)
 
-    if (StrLen(Trim(g_sessionResume)) < 100 || StrLen(Trim(g_sessionJD)) < 100) {
-        g_launchGui.Opt("+OwnDialogs")
-        continueChoice := MsgBox("Resume or JD looks too short. Continue anyway?", "PM Interview Assistant", "YesNo Icon!")
-        if (continueChoice != "Yes")
-            return
+    shortContext := StrLen(Trim(g_sessionResume)) < 100 || StrLen(Trim(g_sessionJD)) < 100
+    if shortContext && (g_shortContextArmedUntil = 0 || A_TickCount > g_shortContextArmedUntil) {
+        ArmShortContextConfirmation()
+        return
     }
-
-    CloseSessionLaunchGui()
-    AutoStartup()
+    ResetShortContextConfirmation()
+    SaveStudioPreferences()
+    RunManagedLaunch(false)
 }
-
 CloseSessionLaunchGui(*) {
     global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit
-    global g_senderProviderDdl, g_receiverProviderDdl
+    global g_senderProviderDdl, g_receiverProviderDdl, g_profileDdl, g_layoutDdl
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
+    global g_runtimeHealth, g_preflightButton, g_repairButton
     try {
         if IsObject(g_launchGui)
             g_launchGui.Destroy()
@@ -467,104 +701,244 @@ CloseSessionLaunchGui(*) {
     g_metaEdit := 0
     g_senderProviderDdl := 0
     g_receiverProviderDdl := 0
+    g_profileDdl := 0
+    g_layoutDdl := 0
     g_routeSummary := 0
     g_contextStatus := 0
     g_launchStatus := 0
+    g_runtimeHealth := 0
+    g_preflightButton := 0
+    g_repairButton := 0
     g_launchButton := 0
+    ResetShortContextConfirmation()
 }
 
-AutoStartup() {
+SetLaunchState(code, message, tone := "info") {
+    global g_launchStateCode, g_launchStatus
+    g_launchStateCode := code
+    LogEvent("Launch state " code ": " message)
+    if !IsObject(g_launchStatus)
+        return
+    g_launchStatus.Text := code "  •  " message
+    color := tone = "ok" ? "15803D" : tone = "warn" ? "B45309" : tone = "error" ? "B91C1C" : "0F766E"
+    g_launchStatus.SetFont("s9 w600 c" color, "Segoe UI")
+}
+RunStudioPreflight(*) {
+    global g_preflightButton, g_selectedProfileRecord
+    if IsObject(g_preflightButton)
+        g_preflightButton.Enabled := false
+    SetLaunchState("PREFLIGHT", "Checking Edge profile and PMIA extension registration...", "info")
+    RefreshSelectedProfileDoctor()
+    RenderDoctorStatus()
+    if (g_selectedProfileRecord.Count && g_selectedProfileRecord["issueCode"] = "OK") {
+        SetLaunchState("PREFLIGHT", "Selected Edge profile and PMIA runtime path verified.", "ok")
+        result := true
+    } else {
+        code := g_selectedProfileRecord.Count ? g_selectedProfileRecord["issueCode"] : "PROFILE_DOCTOR_FAILED"
+        message := g_selectedProfileRecord.Count ? g_selectedProfileRecord["issueMessage"] : "Profile doctor returned no usable records."
+        SetLaunchState("ERROR", code ": " message, "error")
+        result := false
+    }
+    if IsObject(g_preflightButton)
+        g_preflightButton.Enabled := true
+    return result
+}
+
+FindLifecycleWindow(role, provider, sessionId, minimumPhase := "boot") {
+    phases := minimumPhase = "ready" ? ["ready"]
+        : minimumPhase = "registered" ? ["ready", "registered"]
+        : ["ready", "registered", "boot"]
+    for phase in phases {
+        title := RuntimeLifecycleTitle(role, provider, sessionId, phase)
+        hwnd := WinExist(title)
+        if hwnd
+            return Map("hwnd", hwnd, "phase", phase, "title", title)
+    }
+    return Map()
+}
+
+WaitForLifecycleTitle(role, provider, sessionId, phase, timeoutMs) {
+    deadline := A_TickCount + Max(0, timeoutMs)
+    loop {
+        match := FindLifecycleWindow(role, provider, sessionId, phase)
+        if match.Count
+            return match
+        if (A_TickCount >= deadline)
+            return Map()
+        Sleep 100
+    }
+}
+DiagnoseLaunchFailure(stage, role := "") {
+    global g_selectedProfileRecord, g_lastLaunchFailure
+    RefreshSelectedProfileDoctor()
+    if !g_selectedProfileRecord.Count {
+        result := Map("code", "PROFILE_DOCTOR_FAILED", "message", "Could not inspect Edge profile registration.")
+    } else if (g_selectedProfileRecord["issueCode"] != "OK") {
+        result := Map("code", g_selectedProfileRecord["issueCode"], "message", g_selectedProfileRecord["issueMessage"])
+    } else if (stage = "boot") {
+        result := Map("code", "EXTENSION_NOT_BOOTED", "message", role " window opened but PMIA did not start.")
+    } else if (stage = "registered") {
+        result := Map("code", "EXTENSION_NOT_REGISTERED", "message", role " runtime did not register with the PMIA background service.")
+    } else {
+        result := Map("code", "PROVIDER_NOT_READY", "message", role " provider composer was not ready before timeout.")
+    }
+    g_lastLaunchFailure := result
+    SetLaunchState("ERROR", result["code"] ": " result["message"], "error")
+    RenderDoctorStatus()
+    return result
+}
+
+WaitForLifecyclePair(phase, timeoutMs) {
+    global g_senderProvider, g_receiverProvider, g_sessionId
+    deadline := A_TickCount + timeoutMs
+    sender := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, phase, Max(0, deadline - A_TickCount))
+    if !sender.Count
+        return Map("ok", false, "role", "sender")
+    receiver := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, phase, Max(0, deadline - A_TickCount))
+    if !receiver.Count
+        return Map("ok", false, "role", "receiver")
+    return Map("ok", true, "sender", sender, "receiver", receiver)
+}
+
+RunManagedLaunch(reuseSession := false) {
     global g_hWin1, g_hWin2, BrowserExe, g_interviewActive
     global g_mode, g_pos2Win, g_posWin1, g_posWin2
     global g_layoutEnteredAt, g_currentLayout, g_lastStableLayout
     global g_senderProvider, g_receiverProvider, g_sessionId
+    global g_selectedProfileDirectory, g_layoutMode, g_launchButton, g_launchGui
 
-    g_interviewActive := false
-    g_sessionId := CreateSessionId()
-    LogEvent("Alt+R launch requested; session=" g_sessionId "; sender=" g_senderProvider "; receiver=" g_receiverProvider)
-
+    if !RunStudioPreflight()
+        return false
     if !FileExist(BrowserExe) {
-        LogEvent("Preflight failed: Microsoft Edge executable not found at " BrowserExe)
-        MsgBox "Microsoft Edge was not found at the expected stable-channel path.", "PM Interview Assistant", "Icon!"
-        return
+        SetLaunchState("ERROR", "Microsoft Edge Stable was not found at the configured path.", "error")
+        return false
     }
-
-    if !RegExMatch(A_AhkVersion, "^2\.")
-        LogEvent("Preflight warning: expected AutoHotkey v2, found " A_AhkVersion)
-
-    CloseManagedPmiaWindows()
-    g_hWin1 := 0
-    g_hWin2 := 0
-
+    if IsObject(g_launchButton)
+        g_launchButton.Enabled := false
+    g_interviewActive := false
+    if !reuseSession || (g_sessionId = "") {
+        CloseManagedPmiaWindows()
+        g_sessionId := CreateSessionId()
+    } else {
+        CloseManagedPmiaWindows(g_sessionId)
+    }
+    SetLaunchState("LAUNCHING", "Opening managed Edge windows in profile " g_selectedProfileDirectory "...", "info")
     flags := " --disable-background-timer-throttling"
         . " --disable-backgrounding-occluded-windows"
         . " --disable-renderer-backgrounding"
         . " --disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling"
-
     senderUrl := UrlWithRuntime(ProviderUrl(g_senderProvider), g_sessionId, "sender", g_senderProvider)
     receiverUrl := UrlWithRuntime(ProviderUrl(g_receiverProvider), g_sessionId, "receiver", g_receiverProvider)
-    senderTitle := RuntimeWindowTitle("sender", g_senderProvider, g_sessionId)
-    receiverTitle := RuntimeWindowTitle("receiver", g_receiverProvider, g_sessionId)
+    Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' senderUrl '"' . flags
+    Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' receiverUrl '"' . flags
 
-    Run BrowserExe ' --new-window --profile-directory="Default" --app="' senderUrl '"' . flags
-    Run BrowserExe ' --new-window --profile-directory="Default" --app="' receiverUrl '"' . flags
-
-    if !WinWait(senderTitle, , 20) {
-        LogEvent("Launch failed: Win1 title not detected: " senderTitle)
-        MsgBox "Win1 was not detected. Load and enable runtime\extension in edge://extensions, then retry.", "PM Interview Assistant", "Icon!"
-        return
+    SetLaunchState("WAITING_BOOT", "Waiting for PMIA content runtime in both windows...", "info")
+    bootPair := WaitForLifecyclePair("boot", 15000)
+    if !bootPair["ok"] {
+        DiagnoseLaunchFailure("boot", bootPair["role"])
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
     }
-    g_hWin1 := WinGetID(senderTitle)
 
-    if !WinWait(receiverTitle, , 20) {
-        LogEvent("Launch failed: Win2 title not detected: " receiverTitle)
-        MsgBox "Win2 was not detected. Check extension status and provider login, then retry.", "PM Interview Assistant", "Icon!"
-        return
+    SetLaunchState("WAITING_REGISTRATION", "Both runtimes started; waiting for session registration...", "info")
+    registeredPair := WaitForLifecyclePair("registered", 15000)
+    if !registeredPair["ok"] {
+        DiagnoseLaunchFailure("registered", registeredPair["role"])
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
     }
-    g_hWin2 := WinGetID(receiverTitle)
 
+    SetLaunchState("WAITING_COMPOSER", "Registration complete; waiting for provider composers...", "info")
+    readyPair := WaitForLifecyclePair("ready", 30000)
+    if !readyPair["ok"] {
+        DiagnoseLaunchFailure("ready", readyPair["role"])
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
+    }
+
+    g_hWin1 := readyPair["sender"]["hwnd"]
+    g_hWin2 := readyPair["receiver"]["hwnd"]
     EnsureAlwaysOnTop(g_hWin1)
     EnsureAlwaysOnTop(g_hWin2)
-
-    g_mode := 1
+    ApplyConfiguredInitialLayout()
+    SendToWindow(BuildBootPrompt(), "^+{F5}", g_hWin1)
+    g_interviewActive := true
+    SaveStudioPreferences()
+    SetLaunchState("READY", "Session linked and boot context delivered.", "ok")
+    if IsObject(g_launchButton)
+        g_launchButton.Enabled := true
+    Sleep 500
+    if IsObject(g_launchGui)
+        g_launchGui.Hide()
+    WinActivate "ahk_id " g_hWin2
+    return true
+}
+ApplyConfiguredInitialLayout() {
+    global g_layoutMode, g_mode, g_pos2Win, g_posWin1, g_posWin2, g_lastStableLayout
     g_pos2Win := 1
     g_posWin1 := 1
     g_posWin2 := 1
     g_lastStableLayout := 0
-    Apply2WinLayout(1)
-    RecordLayoutChange(1, 1, 1, 1)
-
-    Sleep 1200
-    SendToWindow(BuildBootPrompt(), "^+{F5}", g_hWin1)
-    g_interviewActive := true
-    LogEvent("Interview session active; boot sent; session=" g_sessionId)
-    WinActivate "ahk_id " g_hWin2
+    if (g_layoutMode = "SenderOnly") {
+        g_mode := 2
+        ApplyWin1OnlyLayout(1)
+        RecordLayoutChange(2, 1, 1, 1)
+    } else if (g_layoutMode = "ReceiverOnly") {
+        g_mode := 3
+        ApplyWin2OnlyLayout(1)
+        RecordLayoutChange(3, 1, 1, 1)
+    } else {
+        g_mode := 1
+        Apply2WinLayout(1)
+        RecordLayoutChange(1, 1, 1, 1)
+    }
 }
 
-CloseManagedPmiaWindows() {
+RepairLaunch(*) {
+    global g_selectedProfileRecord, g_lastLaunchFailure, BrowserExe, g_selectedProfileDirectory
+    RefreshSelectedProfileDoctor()
+    RenderDoctorStatus()
+    issue := g_selectedProfileRecord.Count ? g_selectedProfileRecord["issueCode"] : "PROFILE_DOCTOR_FAILED"
+    lastCode := g_lastLaunchFailure.Count ? g_lastLaunchFailure["code"] : ""
+    if (issue != "OK" || InStr(lastCode, "EXTENSION_") || lastCode = "PROFILE_DOCTOR_FAILED") {
+        extensionId := g_selectedProfileRecord.Count ? g_selectedProfileRecord["extensionId"] : ""
+        repairUrl := extensionId != "" ? "edge://extensions/?id=" extensionId : "edge://extensions/"
+        Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" "' repairUrl '"'
+        SetLaunchState("ERROR", "Opened Edge extension settings for the selected profile. Reload or correct PMIA, then run Preflight.", "warn")
+        return false
+    }
+    SetLaunchState("LAUNCHING", "Retrying the current route with the same session context...", "info")
+    return RunManagedLaunch(true)
+}
+
+CloseManagedPmiaWindows(sessionId := "") {
     managed := []
+    suffix := sessionId = "" ? "" : StrUpper(RegExReplace(sessionId, "[^A-Za-z0-9]+", "_"))
     for hwnd in WinGetList("ahk_exe msedge.exe") {
         title := ""
-        try
-            title := WinGetTitle("ahk_id " hwnd)
+        try title := WinGetTitle("ahk_id " hwnd)
         catch
             continue
-        if RegExMatch(title, "^PMIA_(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_") {
-            managed.Push(hwnd)
-            try
-                WinClose "ahk_id " hwnd
-        }
+        if !RegExMatch(title, "^PMIA_(?:BOOT_|REGISTERED_)?(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_")
+            continue
+        if (suffix != "" && !InStr(title, suffix))
+            continue
+        managed.Push(hwnd)
+        try WinClose "ahk_id " hwnd
     }
-
     deadline := A_TickCount + 3000
     for hwnd in managed {
         while IsAlive(hwnd) && A_TickCount < deadline
             Sleep 50
-        if IsAlive(hwnd) {
-            try
-                WinKill "ahk_id " hwnd
-        }
+        if IsAlive(hwnd)
+            try WinKill "ahk_id " hwnd
     }
+}
+AutoStartup() {
+    return RunManagedLaunch(false)
 }
 
 ProviderUrl(provider) {
@@ -585,6 +959,15 @@ RuntimeWindowTitle(role, provider, sessionId := "") {
     if (sessionId != "")
         title .= "_" . StrUpper(RegExReplace(sessionId, "[^A-Za-z0-9]+", "_"))
     return title
+}
+
+RuntimeLifecycleTitle(role, provider, sessionId, phase := "ready") {
+    base := RuntimeWindowTitle(role, provider, sessionId)
+    if (phase = "boot")
+        return "PMIA_BOOT_" SubStr(base, 6)
+    if (phase = "registered")
+        return "PMIA_REGISTERED_" SubStr(base, 6)
+    return base
 }
 
 CreateSessionId() {

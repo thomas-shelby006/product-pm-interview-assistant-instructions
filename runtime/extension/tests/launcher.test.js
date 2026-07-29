@@ -8,24 +8,129 @@ const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const launcherPath = resolve(extensionRoot, '..', 'Final_2_Window_Extension.ahk');
 const launcher = await readFile(launcherPath, 'utf8');
 
-test('launcher forces fresh Default-profile Edge app windows', () => {
-  assert.match(launcher, /--profile-directory=\\?"Default\\?"/);
+function block(start, end) {
+  return launcher.slice(launcher.indexOf(start), launcher.indexOf(end));
+}
+
+test('launcher standardizes on Edge Stable and the selected profile', () => {
+  assert.match(launcher, /Microsoft\\Edge\\Application\\msedge\.exe/);
+  assert.match(launcher, /--profile-directory=\\?"' g_selectedProfileDirectory '\\?"/);
   assert.match(launcher, /--new-window/);
   assert.match(launcher, /--app=/);
+  assert.doesNotMatch(launcher, /Edge Beta|Canary|Chrome\\Application/i);
 });
 
-test('launcher closes only managed PMIA windows before a new session', () => {
-  assert.match(launcher, /CloseManagedPmiaWindows\(\)/);
-  assert.match(launcher, /\^PMIA_\(SENDER\|RECEIVER\)_\(CHATGPT\|CLAUDE\)_/);
+test('launcher closes only PMIA lifecycle windows', () => {
+  assert.match(launcher, /CloseManagedPmiaWindows\(/);
+  assert.match(launcher, /\^PMIA_\(\?:BOOT_\|REGISTERED_\)\?\(SENDER\|RECEIVER\)_\(CHATGPT\|CLAUDE\)_/);
   assert.match(launcher, /WinGetList\("ahk_exe msedge\.exe"\)/);
   assert.doesNotMatch(launcher, /taskkill|ProcessClose\("msedge\.exe"\)/i);
 });
 
-test('launcher retains exact session-suffixed window detection', () => {
-  assert.match(launcher, /RuntimeWindowTitle\("sender", g_senderProvider, g_sessionId\)/);
-  assert.match(launcher, /RuntimeWindowTitle\("receiver", g_receiverProvider, g_sessionId\)/);
-  assert.match(launcher, /WinWait\(senderTitle/);
-  assert.match(launcher, /WinWait\(receiverTitle/);
+test('launcher retains final session-suffixed ready titles', () => {
+  assert.match(launcher, /RuntimeLifecycleTitle\(role, provider, sessionId, phase/);
+  assert.match(launcher, /base := RuntimeWindowTitle\(role, provider, sessionId\)/);
+  assert.match(launcher, /WaitForLifecyclePair\("ready", 30000\)/);
+});
+
+test('launcher reads profile doctor output and persists only safe preferences', () => {
+  assert.match(launcher, /Browser_Profile_Doctor\.ps1/);
+  assert.match(launcher, /ComObject\("WScript\.Shell"\)\.Exec/);
+  assert.match(launcher, /LoadStudioPreferences\(\)/);
+  assert.match(launcher, /SaveStudioPreferences\(\)/);
+  assert.match(launcher, /settings\.ini/);
+  const saveBlock = block('SaveStudioPreferences()', 'RunProfileDoctor(');
+  for (const key of ['ProfileDirectory', 'SenderProvider', 'ReceiverProvider', 'LayoutMode']) {
+    assert.match(saveBlock, new RegExp(`IniWrite[\\s\\S]*${key}`));
+  }
+  assert.doesNotMatch(saveBlock, /Resume|JobDescription|SessionNotes|Prompt|Answer|sessionId/i);
+});
+
+test('profile selection prefers a saved valid profile then a matching PMIA profile', () => {
+  assert.match(launcher, /SelectRecommendedProfile\(/);
+  assert.match(launcher, /record\["issueCode"\]\s*=\s*"OK"/);
+  assert.match(launcher, /g_selectedProfileDirectory/);
+});
+
+test('preflight diagnoses the selected profile without silently switching profiles', () => {
+  assert.match(launcher, /RefreshSelectedProfileDoctor\(\)/);
+  const preflightBlock = block('RunStudioPreflight(*)', 'FindLifecycleWindow(');
+  assert.match(preflightBlock, /RefreshSelectedProfileDoctor\(\)/);
+  assert.doesNotMatch(preflightBlock, /SelectRecommendedProfile\(/);
+});
+
+test('new launches close all PMIA windows while repair is scoped to the current session', () => {
+  const launchBlock = block('RunManagedLaunch(reuseSession := false)', 'ApplyConfiguredInitialLayout()');
+  assert.match(launchBlock, /if !reuseSession[\s\S]*CloseManagedPmiaWindows\(\)/);
+  assert.match(launchBlock, /else[\s\S]*CloseManagedPmiaWindows\(g_sessionId\)/);
+});
+test('session studio exposes browser health and operational actions', () => {
+  assert.match(launcher, /PM Interview Assistant — Session Studio/);
+  assert.match(launcher, /Microsoft Edge Stable/);
+  assert.match(launcher, /Run Preflight/);
+  assert.match(launcher, /Repair Launch/);
+  assert.match(launcher, /Swap route/);
+  assert.match(launcher, /Launch Interview/);
+  assert.match(launcher, /Show\("w960 h780"\)/);
+});
+
+test('session studio provides route and context feedback', () => {
+  assert.match(launcher, /g_routeSummary/);
+  assert.match(launcher, /UpdateLaunchRouteSummary/);
+  assert.match(launcher, /SwapLaunchProviders/);
+  assert.match(launcher, /g_contextStatus/);
+  assert.match(launcher, /Resume.*characters/);
+  assert.match(launcher, /Job description.*characters/i);
+  assert.match(launcher, /Resume, JD, and notes stay in memory/);
+});
+
+test('short context uses inline two-step confirmation with no modal', () => {
+  assert.match(launcher, /ArmShortContextConfirmation\(\)/);
+  assert.match(launcher, /ResetShortContextConfirmation\(\)/);
+  assert.match(launcher, /Launch Anyway/);
+  const launchBlock = block('StartLaunchFromGui(*)', 'CloseSessionLaunchGui(*)');
+  assert.doesNotMatch(launchBlock, /MsgBox/);
+  assert.match(launchBlock, /g_shortContextArmedUntil/);
+});
+
+test('launcher uses explicit lifecycle launch states and repair classifications', () => {
+  for (const fn of [
+    'SetLaunchState', 'WaitForLifecycleTitle', 'DiagnoseLaunchFailure',
+    'RunManagedLaunch', 'RepairLaunch', 'RunStudioPreflight'
+  ]) assert.match(launcher, new RegExp(`${fn}\\(`));
+  for (const state of [
+    'PREFLIGHT', 'LAUNCHING', 'WAITING_BOOT', 'WAITING_REGISTRATION',
+    'WAITING_COMPOSER', 'READY', 'ERROR'
+  ]) assert.match(launcher, new RegExp(`"${state}"`));
+  assert.doesNotMatch(launcher, /Win1 was not detected|Win2 was not detected/);
+});
+
+test('repair opens the selected profile extension page without editing browser preferences', () => {
+  assert.match(launcher, /edge:\/\/extensions\/\?id=/);
+  assert.match(launcher, /--profile-directory=\\?"' g_selectedProfileDirectory '\\?"/);
+  assert.doesNotMatch(launcher, /Secure Preferences|Preferences.*FileAppend|RegWrite/i);
+});
+
+test('launcher stores diagnostics outside the repository', () => {
+  assert.match(launcher, /SETTINGS_DIR\s*:=\s*EnvGet\("LOCALAPPDATA"\)\s+"\\PMInterviewAssistant"/);
+  assert.match(launcher, /LOG_DIR\s*:=\s*SETTINGS_DIR\s+"\\logs"/);
+  assert.match(launcher, /DirCreate LOG_DIR/);
+  assert.doesNotMatch(launcher, /A_ScriptDir\s+"\\runtime_logs"/);
+});
+
+test('startup studio opens synchronously without timer races', () => {
+  assert.doesNotMatch(launcher, /SetTimer ShowSessionLaunchGui/);
+  assert.ok(launcher.indexOf('ShowSessionLaunchGui()') < launcher.indexOf('~LAlt::return'));
+});
+
+test('closing the session studio releases every operational control reference', () => {
+  const closeBlock = block('CloseSessionLaunchGui(*)', 'AutoStartup() {');
+  for (const control of [
+    'g_launchGui', 'g_resumeEdit', 'g_jdEdit', 'g_metaEdit',
+    'g_senderProviderDdl', 'g_receiverProviderDdl', 'g_profileDdl',
+    'g_routeSummary', 'g_contextStatus', 'g_launchStatus',
+    'g_runtimeHealth', 'g_preflightButton', 'g_repairButton', 'g_launchButton'
+  ]) assert.match(closeBlock, new RegExp(`${control}\\s*:=\\s*0`));
 });
 
 test('Alt+E exports sender and receiver role-scoped records', () => {
@@ -33,76 +138,4 @@ test('Alt+E exports sender and receiver role-scoped records', () => {
   assert.match(exportBlock, /global g_hWin1, g_hWin2/);
   assert.match(exportBlock, /SendToWindow\("", "\^\+\{F8\}", g_hWin1\)/);
   assert.match(exportBlock, /SendToWindow\("", "\^\+\{F8\}", g_hWin2\)/);
-  assert.match(exportBlock, /sender export/);
-  assert.match(exportBlock, /receiver export/);
-});
-
-test('launcher opens a branded session studio on startup', () => {
-  assert.match(launcher, /ShowSessionLaunchGui\(\)/);
-  assert.match(launcher, /PM Interview Assistant — Session Studio/);
-  assert.match(launcher, /Build your live interview workspace/);
-  assert.match(launcher, /Launch Interview/);
-});
-
-test('session studio provides route feedback and fast provider swapping', () => {
-  assert.match(launcher, /g_routeSummary/);
-  assert.match(launcher, /UpdateLaunchRouteSummary/);
-  assert.match(launcher, /SwapLaunchProviders/);
-  assert.match(launcher, /OnEvent\("Change", UpdateLaunchRouteSummary\)/);
-  assert.match(launcher, /Resume, JD, and notes stay in memory/);
-});
-
-test('session studio reports context readiness before launch', () => {
-  assert.match(launcher, /g_contextStatus/);
-  assert.match(launcher, /UpdateLaunchContextStatus/);
-  assert.match(launcher, /Resume.*characters/);
-  assert.match(launcher, /Job description.*characters/i);
-});
-
-test('launcher stores diagnostics outside the repository', () => {
-  assert.match(launcher, /EnvGet\("LOCALAPPDATA"\)\s+"\\PMInterviewAssistant\\logs"/);
-  assert.doesNotMatch(launcher, /A_ScriptDir\s+"\\runtime_logs"/);
-  assert.match(launcher, /DirCreate LOG_DIR/);
-});
-
-test('startup studio avoids timer races during prompt initialization', () => {
-  assert.doesNotMatch(launcher, /SetTimer ShowSessionLaunchGui/);
-});
-
-test('startup studio opens synchronously before hotkeys become active', () => {
-  const startupCallIndex = launcher.indexOf('ShowSessionLaunchGui()');
-  const firstHotkeyIndex = launcher.indexOf('~LAlt::return');
-  assert.ok(startupCallIndex >= 0);
-  assert.ok(startupCallIndex < firstHotkeyIndex);
-});
-
-test('closing the session studio releases every control reference', () => {
-  const closeBlock = launcher.slice(
-    launcher.indexOf('CloseSessionLaunchGui(*)'),
-    launcher.indexOf('AutoStartup() {')
-  );
-  for (const control of [
-    'g_launchGui', 'g_resumeEdit', 'g_jdEdit', 'g_metaEdit',
-    'g_senderProviderDdl', 'g_receiverProviderDdl', 'g_routeSummary',
-    'g_contextStatus', 'g_launchStatus', 'g_launchButton'
-  ]) {
-    assert.match(closeBlock, new RegExp(`${control}\\s*:=\\s*0`));
-  }
-});
-
-test('short-context confirmation is owned by the session studio', () => {
-  const launchBlock = launcher.slice(
-    launcher.indexOf('StartLaunchFromGui(*)'),
-    launcher.indexOf('CloseSessionLaunchGui(*)')
-  );
-  const ownerIndex = launchBlock.indexOf('g_launchGui.Opt("+OwnDialogs")');
-  const confirmIndex = launchBlock.indexOf('MsgBox("Resume or JD looks too short. Continue anyway?"');
-  assert.ok(ownerIndex >= 0, 'Session Studio must own its confirmation dialog');
-  assert.ok(confirmIndex > ownerIndex, 'dialog ownership must be set before MsgBox');
-});
-
-
-test('session studio owns validation dialogs so they cannot open behind the launcher', () => {
-  assert.match(launcher, /Gui\("[^"]*\+OwnDialogs[^"]*",\s*"PM Interview Assistant/);
-  assert.match(launcher, /MsgBox\("Resume or JD looks too short\. Continue anyway\?"/);
 });
