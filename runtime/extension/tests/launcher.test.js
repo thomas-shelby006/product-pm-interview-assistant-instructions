@@ -249,3 +249,21 @@ test('composer readiness uses a long watchdog without slowing successful launche
   assert.match(launch, /"ready", COMPOSER_READY_TIMEOUT_MS/);
   assert.doesNotMatch(launch, /"ready", 30000/);
 });
+
+test('runtime boot and registration use event-driven long watchdogs without fixed delay', () => {
+  assert.match(launcher, /RUNTIME_LIFECYCLE_TIMEOUT_MS\s*:=\s*60000/);
+  const launch = launcher.slice(
+    launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
+    launcher.indexOf('ApplyConfiguredInitialLayout()')
+  );
+  for (const role of ['sender', 'receiver']) {
+    assert.match(launch, new RegExp(`WaitForLifecycleTitle\\("${role}", g_${role}Provider, g_sessionId, "boot", RUNTIME_LIFECYCLE_TIMEOUT_MS\\)`));
+    assert.match(launch, new RegExp(`WaitForLifecycleTitle\\("${role}", g_${role}Provider, g_sessionId, "registered", RUNTIME_LIFECYCLE_TIMEOUT_MS\\)`));
+  }
+  assert.doesNotMatch(launch, /"(?:boot|registered)", 15000/);
+  const waitBlock = launcher.slice(
+    launcher.indexOf('WaitForLifecycleTitle(role, provider, sessionId, phase, timeoutMs)'),
+    launcher.indexOf('DiagnoseLaunchFailure', launcher.indexOf('WaitForLifecycleTitle(role, provider, sessionId, phase, timeoutMs)'))
+  );
+  assert.match(waitBlock, /Sleep 100/);
+});

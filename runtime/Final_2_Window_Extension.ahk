@@ -25,6 +25,7 @@
 
 global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 global COMPOSER_READY_TIMEOUT_MS := 60000
+global RUNTIME_LIFECYCLE_TIMEOUT_MS := 60000
 
 ; Default ChatGPT Project targets.
 ; PM_HELPER_PROJECT_URL is used by Alt+R for the live two-window PM helper runtime.
@@ -844,7 +845,7 @@ RunManagedLaunch(reuseSession := false) {
     receiverUrl := UrlWithRuntime(ProviderUrl(g_receiverProvider), g_sessionId, "receiver", g_receiverProvider)
     Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' senderUrl '"' . flags
     SetLaunchState("WAITING_BOOT", "Waiting for PMIA sender runtime...", "info")
-    senderBoot := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "boot", 15000)
+    senderBoot := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "boot", RUNTIME_LIFECYCLE_TIMEOUT_MS)
     if !senderBoot.Count {
         DiagnoseLaunchFailure("boot", "sender")
         if IsObject(g_launchButton)
@@ -853,7 +854,7 @@ RunManagedLaunch(reuseSession := false) {
     }
 
     SetLaunchState("WAITING_REGISTRATION", "Sender started; waiting for sender registration...", "info")
-    senderRegistered := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "registered", 15000)
+    senderRegistered := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "registered", RUNTIME_LIFECYCLE_TIMEOUT_MS)
     if !senderRegistered.Count {
         DiagnoseLaunchFailure("registered", "sender")
         if IsObject(g_launchButton)
@@ -874,7 +875,7 @@ RunManagedLaunch(reuseSession := false) {
 
     Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' receiverUrl '"' . flags
     SetLaunchState("WAITING_BOOT", "Sender ready; waiting for PMIA receiver runtime...", "info")
-    receiverBoot := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "boot", 15000)
+    receiverBoot := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "boot", RUNTIME_LIFECYCLE_TIMEOUT_MS)
     if !receiverBoot.Count {
         DiagnoseLaunchFailure("boot", "receiver")
         if IsObject(g_launchButton)
@@ -883,7 +884,7 @@ RunManagedLaunch(reuseSession := false) {
     }
 
     SetLaunchState("WAITING_REGISTRATION", "Receiver started; waiting for receiver registration...", "info")
-    receiverRegistered := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "registered", 15000)
+    receiverRegistered := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "registered", RUNTIME_LIFECYCLE_TIMEOUT_MS)
     if !receiverRegistered.Count {
         DiagnoseLaunchFailure("registered", "receiver")
         if IsObject(g_launchButton)
