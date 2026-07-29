@@ -24,6 +24,7 @@
 ; ============================================================
 
 global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+global COMPOSER_READY_TIMEOUT_MS := 60000
 
 ; Default ChatGPT Project targets.
 ; PM_HELPER_PROJECT_URL is used by Alt+R for the live two-window PM helper runtime.
@@ -863,7 +864,7 @@ RunManagedLaunch(reuseSession := false) {
     Sleep 250
 
     SetLaunchState("WAITING_COMPOSER", "Sender registered; waiting for sender composer...", "info")
-    senderReady := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "ready", 30000)
+    senderReady := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "ready", COMPOSER_READY_TIMEOUT_MS)
     if !senderReady.Count {
         DiagnoseLaunchFailure("ready", "sender")
         if IsObject(g_launchButton)
@@ -893,7 +894,7 @@ RunManagedLaunch(reuseSession := false) {
     Sleep 250
 
     SetLaunchState("WAITING_COMPOSER", "Receiver registered; waiting for receiver composer...", "info")
-    receiverReady := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "ready", 30000)
+    receiverReady := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "ready", COMPOSER_READY_TIMEOUT_MS)
     if !receiverReady.Count {
         DiagnoseLaunchFailure("ready", "receiver")
         if IsObject(g_launchButton)

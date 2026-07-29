@@ -30,8 +30,8 @@ test('launcher closes only PMIA lifecycle windows', () => {
 test('launcher retains final session-suffixed ready titles', () => {
   assert.match(launcher, /RuntimeLifecycleTitle\(role, provider, sessionId, phase/);
   assert.match(launcher, /base := RuntimeWindowTitle\(role, provider, sessionId\)/);
-  assert.match(launcher, /WaitForLifecycleTitle\("sender", g_senderProvider, g_sessionId, "ready", 30000\)/);
-  assert.match(launcher, /WaitForLifecycleTitle\("receiver", g_receiverProvider, g_sessionId, "ready", 30000\)/);
+  assert.match(launcher, /WaitForLifecycleTitle\("sender", g_senderProvider, g_sessionId, "ready", COMPOSER_READY_TIMEOUT_MS\)/);
+  assert.match(launcher, /WaitForLifecycleTitle\("receiver", g_receiverProvider, g_sessionId, "ready", COMPOSER_READY_TIMEOUT_MS\)/);
 });
 
 test('launcher reads profile doctor output and persists only safe preferences', () => {
@@ -233,4 +233,19 @@ test('Alt+Delete asks the extension to close the exact session before Win32 fall
   assert.match(endBlock, /SendToWindow\("", "\^\+\{F4\}"/);
   assert.match(endBlock, /CloseManagedPmiaWindows\(\)/);
   assert.ok(endBlock.indexOf('^+{F4}') < endBlock.indexOf('CloseManagedPmiaWindows()'));
+});
+
+test('composer readiness uses a long watchdog without slowing successful launches', () => {
+  assert.match(launcher, /COMPOSER_READY_TIMEOUT_MS\s*:=\s*60000/);
+  const waitBlock = launcher.slice(
+    launcher.indexOf('WaitForLifecycleTitle(role, provider, sessionId, phase, timeoutMs)'),
+    launcher.indexOf('DiagnoseLaunchFailure', launcher.indexOf('WaitForLifecycleTitle(role, provider, sessionId, phase, timeoutMs)'))
+  );
+  assert.match(waitBlock, /Sleep 100/);
+  const launch = launcher.slice(
+    launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
+    launcher.indexOf('ApplyConfiguredInitialLayout()')
+  );
+  assert.match(launch, /"ready", COMPOSER_READY_TIMEOUT_MS/);
+  assert.doesNotMatch(launch, /"ready", 30000/);
 });
