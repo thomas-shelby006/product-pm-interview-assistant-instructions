@@ -7,7 +7,8 @@ import {
   submitComposerWhenReady,
   runtimeTitle,
   defendTitle,
-  redactSensitiveSessionText
+  redactSensitiveSessionText,
+  sleep
 } from './runtime.js';
 import { createStatusOverlay } from './status-overlay.js';
 import { createClaudeSignalBridge } from './signals/claude-isolated.js';

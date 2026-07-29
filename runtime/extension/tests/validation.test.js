@@ -221,3 +221,17 @@ test('receiver acknowledgement never waits for telemetry after successful submis
   assert.doesNotMatch(receive, /await receivedLog/);
   assert.doesNotMatch(receive, /const receivedLog/);
 });
+test('entry imports every runtime dependency passed to the receiver controller', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const runtimeImport = entry.match(
+    /import\s*\{([\s\S]*?)\}\s*from '\.\/runtime\.js';/
+  )?.[1] || '';
+  const receiverCall = entry.slice(
+    entry.indexOf('const receiver = createReceiverController'),
+    entry.indexOf("if (runtimeConfig.role === 'receiver')")
+  );
+  assert.match(receiverCall, /\bsleep\b/);
+  assert.match(runtimeImport, /\bsleep\b/);
+});
