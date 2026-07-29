@@ -487,3 +487,67 @@ test('receiver default readiness window survives slow provider send-button activ
   assert.equal(submitted, 1);
   assert.ok(yields >= 150);
 });
+
+test('receiver stages boot context without touching the provider composer', async () => {
+  let writes = 0;
+  let submits = 0;
+  const adapter = {
+    isGenerating: () => false,
+    setComposerText() { writes += 1; return true; },
+    composerContains: () => true,
+    canSubmit: () => true,
+    submit() { submits += 1; return true; },
+    getConversationMessages: () => [],
+    findComposer: () => ({})
+  };
+  const controller = runtimeModule.createReceiverController({ adapter, sleep: async () => {} });
+  const accepted = await controller.deliver({ id: 'boot-1', kind: 'boot', text: 'SESSION CONTEXT' });
+  assert.equal(accepted, true);
+  assert.equal(writes, 0);
+  assert.equal(submits, 0);
+  assert.equal(controller.hasStagedContext(), true);
+});
+
+test('receiver prepends staged context to the first question exactly once', async () => {
+  const writes = [];
+  const messages = [];
+  const adapter = {
+    isGenerating: () => false,
+    setComposerText(text) { writes.push(text); return true; },
+    composerContains: () => true,
+    canSubmit: () => true,
+    submit() {
+      messages.push({ id: `user-${messages.length + 1}`, role: 'user', text: writes.at(-1) });
+      return true;
+    },
+    getConversationMessages: () => messages,
+    findComposer: () => ({}),
+    clearComposer: () => true
+  };
+  const controller = runtimeModule.createReceiverController({ adapter, sleep: async () => {} });
+  await controller.deliver({ id: 'boot-1', kind: 'boot', text: 'SESSION CONTEXT' });
+  assert.equal(await controller.deliver({ id: 'q1', kind: 'question', text: 'First question?' }), true);
+  assert.match(writes[0], /SESSION CONTEXT/);
+  assert.match(writes[0], /LIVE INTERVIEWER QUESTION:\nFirst question\?/);
+  assert.equal(controller.hasStagedContext(), false);
+  assert.equal(await controller.deliver({ id: 'q2', kind: 'question', text: 'Second question?' }), true);
+  assert.equal(writes.filter(Boolean).at(-1), 'Second question?');
+});
+
+test('receiver retains staged context when first-question submission fails', async () => {
+  const adapter = {
+    isGenerating: () => false,
+    setComposerText: () => true,
+    composerContains: () => true,
+    canSubmit: () => false,
+    submit: () => false,
+    getConversationMessages: () => [],
+    findComposer: () => ({})
+  };
+  const controller = runtimeModule.createReceiverController({
+    adapter, sleep: async () => {}, maxSubmitChecks: 1, maxConfirmChecks: 1
+  });
+  await controller.deliver({ id: 'boot-1', kind: 'boot', text: 'SESSION CONTEXT' });
+  assert.equal(await controller.deliver({ id: 'q1', kind: 'question', text: 'Question?' }), false);
+  assert.equal(controller.hasStagedContext(), true);
+});

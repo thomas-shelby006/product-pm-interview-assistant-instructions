@@ -91,6 +91,7 @@ export function createReceiverController({
   const lastPreviewSeqByStream = new Map();
   const previewRevisions = new Map();
   const submissionBaselines = new Map();
+  let stagedContext = '';
 
   const boundedSet = (map, key, value, maxSize) => {
     if (map.has(key)) map.delete(key);
@@ -118,7 +119,21 @@ export function createReceiverController({
     return !adapter.isGenerating();
   }
 
+  const questionWithStagedContext = question => {
+    const normalizedQuestion = String(question || '').trim();
+    if (!stagedContext) return normalizedQuestion;
+    return `${stagedContext}
+
+---
+
+LIVE INTERVIEWER QUESTION:
+${normalizedQuestion}`;
+  };
+
   return {
+    hasStagedContext() {
+      return Boolean(stagedContext);
+    },
     preview(preview) {
       const turnKey = String(preview?.turnKey || '').trim();
       const text = String(preview?.text ?? '').trim();
@@ -142,6 +157,13 @@ export function createReceiverController({
     async deliver(envelope) {
       const text = String(envelope?.text ?? '').trim();
       if (!text) return false;
+      if (envelope?.kind === 'boot') {
+        stagedContext = text;
+        clearCommittedPreview(envelope);
+        onStatus('ARMED');
+        return true;
+      }
+      const deliveryText = questionWithStagedContext(text);
       latestDeliveryId = envelope.id || `${Date.now()}`;
       const deliveryId = latestDeliveryId;
 
@@ -166,16 +188,17 @@ export function createReceiverController({
           boundedSet(submissionBaselines, envelopeKey, baselineUserIds, 16);
         }
       }
-      if (hasNewSubmittedUserTurn(adapter, text, baselineUserIds)) {
-        clearSubmittedComposer(adapter, text);
+      if (hasNewSubmittedUserTurn(adapter, deliveryText, baselineUserIds)) {
+        clearSubmittedComposer(adapter, deliveryText);
         submissionBaselines.delete(envelopeKey);
+        stagedContext = '';
         clearCommittedPreview(envelope);
         onStatus('SENT');
         return true;
       }
       const submitted = await submitComposerWhenReady({
         adapter,
-        text,
+        text: deliveryText,
         yieldFn,
         maxChecks: maxSubmitChecks,
         maxConfirmChecks,
@@ -187,6 +210,7 @@ export function createReceiverController({
         return false;
       }
       submissionBaselines.delete(envelopeKey);
+      stagedContext = '';
       clearCommittedPreview(envelope);
       onStatus('SENT');
       return true;
