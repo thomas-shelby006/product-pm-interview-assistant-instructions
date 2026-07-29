@@ -68,7 +68,6 @@ async function deliver(route, registry) {
     }
     return outcome;
   } catch (error) {
-    registry.unregister(route.tabId);
     registry.queueLatest(route.message.sessionId, route.message);
     await saveRegistry(registry);
     return classifyDelivery({ route, error });

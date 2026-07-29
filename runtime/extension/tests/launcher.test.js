@@ -169,6 +169,29 @@ test('operational checks reacquire exact managed window handles after Edge repla
   const activeStart = launcher.indexOf('IsActiveSession() {');
   const activeEnd = launcher.indexOf('RefreshManagedWindowHandles() {', activeStart);
   const activeBlock = launcher.slice(activeStart, activeEnd + 'RefreshManagedWindowHandles()'.length);
-  assert.match(activeBlock, /g_interviewActive/);
   assert.match(activeBlock, /RefreshManagedWindowHandles\(\)/);
+});
+
+test('active session derives from exact lifecycle windows rather than a mutable flag', () => {
+  const activeStart = launcher.indexOf('IsActiveSession() {');
+  const activeEnd = launcher.indexOf('RefreshManagedWindowHandles() {', activeStart);
+  const activeBlock = launcher.slice(activeStart, activeEnd);
+  assert.ok(activeBlock.includes('return RefreshManagedWindowHandles()'));
+  assert.ok(!activeBlock.includes('g_interviewActive &&'));
+  const refreshStart = launcher.indexOf('RefreshManagedWindowHandles() {');
+  const refreshEnd = launcher.indexOf('IsAlive(hWnd)', refreshStart);
+  const refreshBlock = launcher.slice(refreshStart, refreshEnd);
+  assert.ok(!refreshBlock.includes('!g_interviewActive'));
+});
+
+test('launcher foregrounds both registered providers before composer readiness', () => {
+  const launch = launcher.slice(
+    launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
+    launcher.indexOf('ApplyConfiguredInitialLayout()')
+  );
+  const registered = launch.indexOf('registeredPair :=');
+  const ready = launch.indexOf('readyPair :=');
+  const between = launch.slice(registered, ready);
+  assert.ok(between.includes('WinActivate "ahk_id " registeredPair["sender"]["hwnd"]'));
+  assert.ok(between.includes('WinActivate "ahk_id " registeredPair["receiver"]["hwnd"]'));
 });

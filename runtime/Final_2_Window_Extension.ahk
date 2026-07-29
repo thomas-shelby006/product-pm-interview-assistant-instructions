@@ -862,6 +862,11 @@ RunManagedLaunch(reuseSession := false) {
         return false
     }
 
+    try WinActivate "ahk_id " registeredPair["sender"]["hwnd"]
+    Sleep 250
+    try WinActivate "ahk_id " registeredPair["receiver"]["hwnd"]
+    Sleep 250
+
     SetLaunchState("WAITING_COMPOSER", "Registration complete; waiting for provider composers...", "info")
     readyPair := WaitForLifecyclePair("ready", 30000)
     if !readyPair["ok"] {
@@ -1472,14 +1477,13 @@ LogEvent(message) {
 }
 
 IsActiveSession() {
-    global g_interviewActive
-    return g_interviewActive && RefreshManagedWindowHandles()
+    return RefreshManagedWindowHandles()
 }
 
 RefreshManagedWindowHandles() {
-    global g_interviewActive, g_sessionId, g_senderProvider, g_receiverProvider
+    global g_sessionId, g_senderProvider, g_receiverProvider
     global g_hWin1, g_hWin2
-    if !g_interviewActive || (g_sessionId = "")
+    if (g_sessionId = "")
         return false
     g_hWin1 := 0
     g_hWin2 := 0

@@ -328,3 +328,15 @@ test('content runtime accepts a managed-tab restore signal', async () => {
   assert.match(listener, /PMIA_RUNTIME_RESUME/);
   assert.match(listener, /runtimeRecovery\?\.trigger\('tab_restored'\)/);
 });
+
+test('transient delivery errors preserve the registered receiver for wake recovery', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const deliver = background.slice(
+    background.indexOf('async function deliver('),
+    background.indexOf('async function handleRegistration')
+  );
+  assert.ok(!deliver.includes('registry.unregister(route.tabId)'));
+  assert.ok(deliver.includes('registry.queueLatest(route.message.sessionId, route.message)'));
+});
