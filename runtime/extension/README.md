@@ -1,4 +1,4 @@
-# PM Interview Dual-Provider Runtime 0.5.2
+# PM Interview Dual-Provider Runtime 0.5.3
 
 Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
 
@@ -49,6 +49,8 @@ Binary microphone and playback frames are ignored.
 - Ready receivers submit immediately after the final composer update; there is no fixed 60-millisecond wait.
 - A late-mounted composer or send control gets a bounded microtask readiness window; ready providers still submit on the first pass with no fixed delay.
 - A receiver acknowledges success only after a new matching provider user turn renders; a synthetic click or Enter event is not treated as delivery.
+- Composer and send-control discovery ignores hidden stale nodes left by provider navigation.
+- After a confirmed provider turn, PMIA clears the receiver composer only when it still exactly matches the submitted question; a newer manual draft is preserved.
 - Final submission completes before durable receiver telemetry begins.
 - Provider observation reacts to child/text mutations, ignores attribute churn, and keeps a 500-millisecond rebind watchdog.
 - Answer capture is mutation-driven with a 250-millisecond stability window and a 90-second hard timeout.

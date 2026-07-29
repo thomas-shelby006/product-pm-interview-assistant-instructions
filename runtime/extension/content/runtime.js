@@ -33,6 +33,11 @@ export function hasNewSubmittedUserTurn(adapter, text, baselineUserIds) {
   ));
 }
 
+export function clearSubmittedComposer(adapter, text) {
+  if (!(adapter.composerContains?.(text) ?? false)) return false;
+  return Boolean(adapter.setComposerText?.(''));
+}
+
 export async function submitComposerWhenReady({
   adapter,
   text,
@@ -61,7 +66,10 @@ export async function submitComposerWhenReady({
   if (!(baselineUserIds instanceof Set)) return true;
   for (let check = 0; check <= maxConfirmChecks; check += 1) {
     if (!isCurrent()) return false;
-    if (hasNewSubmittedUserTurn(adapter, normalized, baselineUserIds)) return true;
+    if (hasNewSubmittedUserTurn(adapter, normalized, baselineUserIds)) {
+      clearSubmittedComposer(adapter, normalized);
+      return true;
+    }
     if (check < maxConfirmChecks) await yieldFn();
   }
   return false;
@@ -159,6 +167,7 @@ export function createReceiverController({
         }
       }
       if (hasNewSubmittedUserTurn(adapter, text, baselineUserIds)) {
+        clearSubmittedComposer(adapter, text);
         submissionBaselines.delete(envelopeKey);
         clearCommittedPreview(envelope);
         onStatus('SENT');

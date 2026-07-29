@@ -375,3 +375,50 @@ test('receiver retry acknowledges a late rendered turn without submitting twice'
   assert.equal(await controller.deliver(envelope), true);
   assert.equal(submitCalls, 1);
 });
+
+test('confirmed provider turn clears only a stale matching receiver composer', async () => {
+  let composer = '';
+  const messages = [];
+  let yields = 0;
+  const adapter = {
+    setComposerText(text) { composer = text; return true; },
+    composerContains(text) { return composer === text; },
+    canSubmit: () => true,
+    submit: () => true,
+    getConversationMessages: () => messages
+  };
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter,
+    text: 'Confirmed question',
+    yieldFn: async () => {
+      yields += 1;
+      if (yields === 1) messages.push({ id: 'confirmed-user', role: 'user', text: 'Confirmed question' });
+    },
+    maxConfirmChecks: 3
+  });
+  assert.equal(result, true);
+  assert.equal(composer, '');
+});
+
+test('confirmed provider turn preserves a newer receiver draft', async () => {
+  let composer = '';
+  const messages = [];
+  const adapter = {
+    setComposerText(text) { composer = text; return true; },
+    composerContains(text) { return composer === text; },
+    canSubmit: () => true,
+    submit: () => true,
+    getConversationMessages: () => messages
+  };
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter,
+    text: 'Submitted question',
+    yieldFn: async () => {
+      composer = 'Newer manual draft';
+      messages.push({ id: 'submitted-user', role: 'user', text: 'Submitted question' });
+    },
+    maxConfirmChecks: 2
+  });
+  assert.equal(result, true);
+  assert.equal(composer, 'Newer manual draft');
+});

@@ -127,3 +127,38 @@ Observed result:
 - The earlier false-positive receiver acknowledgement was eliminated by requiring a new matching provider user turn before `received_text` can be accepted.
 
 This live result validates the previously failing Claude-to-ChatGPT path on the same installed Edge runtime used for the final release candidate.
+
+## 0.5.3 four-route live matrix and stale-composer fix
+
+The 0.5.2 live matrix exposed two final receiver-side risks after the routing and sequence fixes were already active.
+
+- ChatGPT can retain hidden stale composer or send-button nodes after project/conversation navigation. Selecting the first matching node can write to an inactive composer or report readiness from the wrong control.
+- A synthetic Enter dispatch can return successfully even when the provider does not render a user turn. PMIA must not acknowledge delivery until the provider conversation contains a new matching user turn.
+- Claude can render the submitted turn while leaving the exact question text in its receiver composer. That is one rendered turn plus stale composer text, not two user turns, but it creates a future resubmission risk.
+
+The 0.5.3 corrections are:
+
+1. Select the newest visible composer and visible send control, while requiring the clicked control itself to be enabled. Hidden stale nodes are ignored.
+2. Snapshot provider user-turn identities before submission and acknowledge only after a new matching user turn renders.
+3. Preserve retry idempotency: if the provider turn rendered after an acknowledgement timeout, the retry is accepted without a second submit.
+4. Clear the receiver composer after confirmation only when it still exactly matches the submitted question. A newer manual draft is never cleared.
+
+The existing Microsoft Edge Stable Profile 1 tabs were reused for every route. No new browser instance or profile was created. Fresh session IDs prevented prior sequence state from affecting results.
+
+| Route | Live result | Duplicate/stale check |
+|---|---|---|
+| Claude -> ChatGPT | Exact prompt and exact acknowledgement rendered | Sender log recorded one accepted envelope; receiver recorded one matching turn |
+| ChatGPT -> Claude | One exact prompt rendered; exact acknowledgement arrived after normal Claude generation | Prompt exact count: 1 |
+| ChatGPT -> ChatGPT | One exact prompt and one exact acknowledgement rendered | Prompt exact count: 1 |
+| Claude -> Claude | One rendered prompt and one exact acknowledgement | Receiver composer contained zero matching prompt text after confirmation |
+
+The final Claude -> Claude verification used marker `PMIA_052_CLCL_CLEAR_20260729_171800` and observed `PROMPT=1`, `ACK=1`, and `COMPOSER_PROMPT=0`.
+
+A final synthetic long-session soak processed 25,000 user/assistant turns on the 0.5.3 tracker:
+
+- 25,000 finals emitted exactly once
+- 14,623 ms elapsed, approximately 1,710 turns per second
+- latest scan bounded to 1,024 rendered messages
+- finalized identity memory bounded to 512 entries
+- preview revision memory returned to zero
+- retained heap delta after garbage collection: 178,736 bytes
