@@ -1,5 +1,7 @@
 import {
   firstMatch,
+  firstInteractiveMatch,
+  firstVisibleMatch,
   latestText,
   setEditableText,
   composerText,
@@ -50,8 +52,8 @@ const ASSISTANT_SELECTORS = ['[data-message-author-role="assistant"]'];
 const MESSAGE_SELECTOR = '[data-message-author-role="user"],[data-message-author-role="assistant"]';
 
 export function createChatGptAdapter(doc = document) {
-  const findComposer = () => firstMatch(doc, COMPOSER_SELECTORS);
-  const findSendButton = () => firstMatch(doc, SEND_SELECTORS);
+  const findComposer = () => firstInteractiveMatch(doc, COMPOSER_SELECTORS);
+  const findSendButton = () => firstVisibleMatch(doc, SEND_SELECTORS);
   const getComposerCandidate = () => firstNonEmptyCandidate(doc, COMPOSER_SELECTORS);
   const getLatestUserText = () => latestText(doc, USER_SELECTORS);
   const getConversationMessages = createConversationMessageReader(doc, { selector: MESSAGE_SELECTOR });

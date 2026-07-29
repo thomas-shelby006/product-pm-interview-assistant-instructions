@@ -64,7 +64,7 @@ test('Claude main-world observer ignores non-string WebSocket frames', async () 
 test('manifest identifies the low-latency preview/commit runtime', async () => {
   const manifest = await readManifest();
   assert.equal(manifest.name, 'PM Interview Dual-Provider Runtime');
-  assert.equal(manifest.version, '0.5.0');
+  assert.equal(manifest.version, '0.5.2');
   assert.match(manifest.description, /low-latency/i);
   assert.match(manifest.description, /preview/i);
   assert.match(manifest.description, /turn boundar/i);
@@ -84,7 +84,7 @@ test('manifest exposes all dynamically imported sender and answer modules', asyn
 
 test('manifest versions the low-latency evidence-driven runtime', async () => {
   const manifest = await readManifest();
-  assert.equal(manifest.version, '0.5.0');
+  assert.equal(manifest.version, '0.5.2');
   assert.match(manifest.description, /provisional text previews/i);
   assert.match(manifest.description, /final turn boundar/i);
   assert.match(manifest.description, /self-healing/i);

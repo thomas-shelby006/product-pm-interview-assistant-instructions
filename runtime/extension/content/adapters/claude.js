@@ -1,5 +1,7 @@
 import {
   firstMatch,
+  firstInteractiveMatch,
+  firstVisibleMatch,
   latestText,
   setEditableText,
   composerText,
@@ -49,7 +51,12 @@ const ACTIVE_VOICE_SELECTORS = [
   '[aria-pressed="true"][aria-label*="record" i]',
   ...MUTE_SELECTORS
 ];
-const OBSERVATION_ROOT_SELECTORS = ['main', '[role="main"]'];
+const OBSERVATION_ROOT_SELECTORS = [
+  '[role="feed"][aria-label="Chat messages"]',
+  'div[role="main"]',
+  'main',
+  '[role="main"]'
+];
 const USER_SELECTORS = [
   '[data-testid="user-message"]',
   '[data-testid*="user-message"]',
@@ -63,7 +70,7 @@ const ASSISTANT_SELECTORS = [
   '[data-message-author-role="assistant"]',
   '.font-claude-message'
 ];
-const MESSAGE_SELECTOR = '[data-testid="user-message"],[data-testid="assistant-message"],[data-author="user"],[data-author="assistant"],[data-message-author-role="user"],[data-message-author-role="assistant"]';
+const MESSAGE_SELECTOR = '[data-testid="user-message"],[data-testid="assistant-message"],[data-author="user"],[data-author="assistant"],[data-message-author-role="user"],[data-message-author-role="assistant"],[role="article"]';
 const STREAMING_SELECTORS = [
   '[data-testid="assistant-message"][data-is-streaming="true"]',
   '[data-testid*="assistant-message"][data-is-streaming="true"]',
@@ -71,11 +78,53 @@ const STREAMING_SELECTORS = [
   '.font-claude-message[data-is-streaming="true"]'
 ];
 
+function articleRole(text) {
+  if (/^You said:\s*/i.test(text)) return 'user';
+  if (/^Claude responded:\s*/i.test(text)) return 'assistant';
+  return '';
+}
+
+function compactSentence(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function stripCompactAccessibilityEcho(text) {
+  const match = String(text || '').match(/^([a-z0-9]{12,})[.!?]\s+([\s\S]+)$/i);
+  if (!match) return text;
+  const compactEcho = compactSentence(match[1]);
+  const visibleText = match[2].trim();
+  return compactSentence(visibleText).startsWith(compactEcho) ? visibleText : text;
+}
+
+function collapseCapturedDuplicate(text) {
+  const midpoint = Math.floor(text.length / 2);
+  const left = text.slice(0, midpoint).trim();
+  const right = text.slice(midpoint).trim();
+  if (left && left === right) return left;
+  const repeated = text.replace(/^(.+?[.!?])\s+\1(?:\s+|$)/, '$1 ');
+  const parts = repeated.match(/^(.+?[.!?])\s+(.+?[.!?])(?:\s+|$)([\s\S]*)$/);
+  if (parts && compactSentence(parts[1]) === compactSentence(parts[2])) {
+    return `${parts[2]} ${parts[3]}`.trim();
+  }
+  return repeated;
+}
+
+function articleText(element) {
+  let text = composerText(element).replace(/[\uE000-\uF8FF]/g, ' ').replace(/\s+/g, ' ').trim();
+  text = text.replace(/^(?:You said:|Claude responded:)\s*/i, '');
+  text = text.replace(/\s+\d{1,2}:\d{2}\s*(?:am|pm)\b.*$/i, '').trim();
+  return collapseCapturedDuplicate(stripCompactAccessibilityEcho(text)).trim();
+}
+
+function hasCapturedStopControl(doc) {
+  return Array.from(doc.querySelectorAll?.('button') || [])
+    .some(button => composerText(button).toLowerCase() === 'stop');
+}
+
 export function createClaudeAdapter(doc = document) {
-  const findComposer = () => firstMatch(doc, COMPOSER_SELECTORS);
-  const findSendButton = () => firstMatch(doc, SEND_SELECTORS);
+  const findComposer = () => firstInteractiveMatch(doc, COMPOSER_SELECTORS);
+  const findSendButton = () => firstVisibleMatch(doc, SEND_SELECTORS);
   const getComposerCandidate = () => firstNonEmptyCandidate(doc, COMPOSER_SELECTORS);
-  const getLatestUserText = () => latestText(doc, USER_SELECTORS);
   const getConversationMessages = createConversationMessageReader(doc, {
     selector: MESSAGE_SELECTOR,
     roleOf(element) {
@@ -85,9 +134,18 @@ export function createClaudeAdapter(doc = document) {
       const testId = String(element.getAttribute?.('data-testid') || '').toLowerCase();
       if (testId.includes('user-message')) return 'user';
       if (testId.includes('assistant-message')) return 'assistant';
-      return '';
+      return articleRole(composerText(element));
+    },
+    textOf(element) {
+      return element.getAttribute?.('role') === 'article'
+        ? articleText(element)
+        : composerText(element);
     }
   });
+  const latestRoleText = role => [...getConversationMessages()]
+    .reverse()
+    .find(message => message.role === role)?.text || '';
+  const getLatestUserText = () => latestRoleText('user') || latestText(doc, USER_SELECTORS);
 
   return {
     provider: 'claude',
@@ -99,11 +157,10 @@ export function createClaudeAdapter(doc = document) {
     isComposerEmpty() { return !composerText(findComposer()); },
     canSubmit() {
       const button = findSendButton();
-      return Boolean(findComposer() && (!button || !button.disabled));
+      return Boolean(findComposer() && button && !button.disabled);
     },
     submit() {
-      if (clickFirst(doc, SEND_SELECTORS)) return true;
-      return submitWithEnter(findComposer());
+      return clickFirst(doc, SEND_SELECTORS);
     },
     isGenerating() {
       return Boolean(firstMatch(doc, STOP_SELECTORS) || firstMatch(doc, STREAMING_SELECTORS));
@@ -111,7 +168,9 @@ export function createClaudeAdapter(doc = document) {
     stopGenerating() { return clickFirst(doc, STOP_SELECTORS); },
     getLatestUserText,
     getConversationMessages,
-    getLatestAssistantText() { return latestText(doc, ASSISTANT_SELECTORS); },
+    getLatestAssistantText() {
+      return latestRoleText('assistant') || latestText(doc, ASSISTANT_SELECTORS);
+    },
     getSenderCandidateInfo() {
       const composer = getComposerCandidate();
       if (composer) return { text: composer.text, source: 'composer' };
@@ -122,8 +181,14 @@ export function createClaudeAdapter(doc = document) {
     findVoiceButton() { return firstMatch(doc, VOICE_SELECTORS); },
     toggleMute() { return clickFirst(doc, MUTE_SELECTORS); },
     getObservationTargets() {
-      return [findComposer(), firstMatch(doc, OBSERVATION_ROOT_SELECTORS)].filter(Boolean);
+      const targets = [
+        findComposer(),
+        ...OBSERVATION_ROOT_SELECTORS.map(selector => firstMatch(doc, [selector]))
+      ].filter(Boolean);
+      return [...new Set(targets)];
     },
-    isVoiceActive() { return Boolean(firstMatch(doc, ACTIVE_VOICE_SELECTORS)); }
+    isVoiceActive() {
+      return Boolean(firstMatch(doc, ACTIVE_VOICE_SELECTORS) || hasCapturedStopControl(doc));
+    }
   };
 }

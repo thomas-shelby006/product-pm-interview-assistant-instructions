@@ -277,3 +277,101 @@ test('successful final clears the exact provisional turn identity', async () => 
     streamId: 'page-a', turnKey: 'u1', text: 'fresh reuse', revision: 1, seq: 2
   }), true);
 });
+
+test('receiver waits for a late-mounted composer instead of rejecting the queued final', async () => {
+  let attempts = 0;
+  let current = '';
+  let submissions = 0;
+  const adapter = {
+    setComposerText(text) {
+      attempts += 1;
+      if (attempts < 8) return false;
+      current = text;
+      return true;
+    },
+    composerContains: text => current === text,
+    canSubmit: () => Boolean(current),
+    submit() { submissions += 1; return true; }
+  };
+
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter,
+    text: 'PMIA_DEDUP_20260729_141000. Reply exactly PMIA_DEDUP_OK.',
+    yieldFn: async () => {},
+    maxChecks: 12
+  });
+
+  assert.equal(result, true);
+  assert.equal(attempts, 8);
+  assert.equal(submissions, 1);
+});
+
+
+test('receiver confirms a new provider user turn before acknowledging submission', async () => {
+  const messages = [{ id: 'old-user', role: 'user', text: 'Earlier question' }];
+  let yields = 0;
+  const adapter = {
+    setComposerText: () => true,
+    composerContains: () => true,
+    canSubmit: () => true,
+    submit: () => true,
+    getConversationMessages: () => messages
+  };
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter,
+    text: 'New question',
+    yieldFn: async () => {
+      yields += 1;
+      if (yields === 2) messages.push({ id: 'new-user', role: 'user', text: 'New question' });
+    },
+    maxChecks: 2,
+    maxConfirmChecks: 4
+  });
+  assert.equal(result, true);
+  assert.equal(yields, 2);
+});
+
+test('receiver rejects an unconfirmed synthetic submit instead of reporting delivery', async () => {
+  const adapter = {
+    setComposerText: () => true,
+    composerContains: () => true,
+    canSubmit: () => true,
+    submit: () => true,
+    getConversationMessages: () => []
+  };
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter,
+    text: 'Question that never rendered',
+    yieldFn: async () => {},
+    maxChecks: 1,
+    maxConfirmChecks: 3
+  });
+  assert.equal(result, false);
+});
+
+
+test('receiver retry acknowledges a late rendered turn without submitting twice', async () => {
+  const messages = [];
+  let submitCalls = 0;
+  const adapter = {
+    isGenerating: () => false,
+    setComposerText: () => true,
+    composerContains: () => true,
+    canSubmit: () => true,
+    submit() { submitCalls += 1; return true; },
+    getConversationMessages: () => messages,
+    findComposer: () => ({})
+  };
+  const controller = runtimeModule.createReceiverController({
+    adapter,
+    sleep: async () => {},
+    yieldFn: async () => {},
+    maxSubmitChecks: 1,
+    maxConfirmChecks: 1
+  });
+  const envelope = { id: 'retry-envelope', text: 'Late rendered question' };
+  assert.equal(await controller.deliver(envelope), false);
+  messages.push({ id: 'late-user', role: 'user', text: envelope.text });
+  assert.equal(await controller.deliver(envelope), true);
+  assert.equal(submitCalls, 1);
+});

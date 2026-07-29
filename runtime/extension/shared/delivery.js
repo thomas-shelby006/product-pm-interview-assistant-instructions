@@ -6,7 +6,13 @@ export function classifyDelivery({ route, response, error } = {}) {
     return { delivered: false, queued: true, reason: 'transport_error' };
   }
   if (response?.ok === true) {
-    return { delivered: true, queued: false, reason: 'accepted' };
+    const outcome = {
+      delivered: true,
+      queued: false,
+      reason: String(response.reason || 'accepted')
+    };
+    if (response.duplicate === true) outcome.duplicate = true;
+    return outcome;
   }
   return {
     delivered: false,

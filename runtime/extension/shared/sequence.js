@@ -36,9 +36,29 @@ export class SequenceGate {
     };
   }
 
+  admit(value) {
+    const seq = normalizeSequence(value);
+    const previousAcceptedSeq = this.lastAcceptedSeq;
+    if (!seq) {
+      return { accepted: true, duplicate: false, reason: 'unsequenced', seq, previousAcceptedSeq };
+    }
+    if (seq === previousAcceptedSeq) {
+      return { accepted: true, duplicate: true, reason: 'duplicate', seq, previousAcceptedSeq };
+    }
+    if (seq < previousAcceptedSeq) {
+      return { accepted: false, duplicate: false, reason: 'stale', seq, previousAcceptedSeq };
+    }
+    return { accepted: true, duplicate: false, reason: 'new', seq, previousAcceptedSeq };
+  }
+
   accept(value) {
     const seq = normalizeSequence(value);
     if (seq > this.lastAcceptedSeq) this.lastAcceptedSeq = seq;
+    return this.lastAcceptedSeq;
+  }
+
+  restore(value) {
+    this.lastAcceptedSeq = normalizeSequence(value);
     return this.lastAcceptedSeq;
   }
 }

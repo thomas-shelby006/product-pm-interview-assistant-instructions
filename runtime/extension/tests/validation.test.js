@@ -56,7 +56,7 @@ test('runtime applies sender and receiver sequence idempotency', async () => {
   assert.match(entry, /nextSequence/);
   assert.match(entry, /new SequenceGate/);
   assert.match(entry, /seq: nextSenderSequence/);
-  assert.match(entry, /receiverSequenceGate\.check/);
+  assert.match(entry, /receiverSequenceGate\.admit/);
   assert.match(entry, /receiverSequenceGate\.accept/);
   assert.match(background, /registry\.acceptSequence/);
   assert.match(background, /stale_sequence|duplicate_sequence/);
@@ -283,4 +283,11 @@ test('an invalidated extension context becomes a stable reload state', async () 
   );
   assert.match(messageBlock, /invalidated \? 0 : 3500/);
   assert.match(messageBlock, /RELOAD TAB/);
+});
+
+test('runtime fallback diagnostics contain no replacement-character mojibake', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const main = await readFile(resolve(extensionRoot, 'content/main.js'), 'utf8');
+  assert.doesNotMatch(main, /\uFFFD|A�|Ã|â€™|â€“/);
 });

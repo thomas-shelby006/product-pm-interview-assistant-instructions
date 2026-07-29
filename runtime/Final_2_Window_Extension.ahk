@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
 
 ; ============================================================
@@ -43,7 +43,6 @@ if (A_Args.Length >= 1 && A_Args[1] = "--validate") {
 SetCapsLockState "AlwaysOff"
 SetTitleMatchMode 2
 SendMode "Input"
-~LAlt::return
 
 ; ============================================================
 ;  PROMPTS  — AHK is the single source of truth for automation prompts.
@@ -293,6 +292,10 @@ global g_jdEdit              := 0
 global g_metaEdit            := 0
 global g_senderProviderDdl   := 0
 global g_receiverProviderDdl := 0
+global g_routeSummary        := 0
+global g_contextStatus       := 0
+global g_launchStatus        := 0
+global g_launchButton        := 0
 global g_sessionResume       := ""
 global g_sessionJD           := ""
 global g_sessionMeta         := ""
@@ -300,8 +303,12 @@ global g_senderProvider      := "chatgpt"
 global g_receiverProvider    := "chatgpt"
 global g_sessionId           := ""
 global g_interviewActive     := false
-global LOG_DIR               := A_ScriptDir "\runtime_logs"
+global LOG_DIR               := EnvGet("LOCALAPPDATA") "\PMInterviewAssistant\logs"
 global LOG_FILE              := LOG_DIR "\session_debug.log"
+
+ShowSessionLaunchGui()
+~LAlt::return
+
 
 ; ============================================================
 ;  ALT+R — LAUNCH / RELAUNCH FLOW
@@ -317,43 +324,107 @@ global LOG_FILE              := LOG_DIR "\session_debug.log"
 ShowSessionLaunchGui() {
     global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit, g_sessionResume, g_sessionJD, g_sessionMeta
     global g_senderProviderDdl, g_receiverProviderDdl, g_senderProvider, g_receiverProvider
+    global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
 
     try {
         if IsObject(g_launchGui) {
             g_launchGui.Show()
+            UpdateLaunchRouteSummary()
+            UpdateLaunchContextStatus()
             return
         }
     }
 
-    g_launchGui := Gui("+AlwaysOnTop", "PM Interview Assistant — Resume + JD")
-    g_launchGui.SetFont("s10", "Segoe UI")
+    g_launchGui := Gui("+AlwaysOnTop -MaximizeBox +OwnDialogs +MinSize820x710", "PM Interview Assistant — Session Studio")
+    g_launchGui.BackColor := "F4F7FB"
+    g_launchGui.SetFont("s10 c334155", "Segoe UI")
 
-    g_launchGui.Add("Text", "xm ym+3 w90", "Win1 sender")
-    g_senderProviderDdl := g_launchGui.Add("DropDownList", "x+8 yp-3 w150", ["ChatGPT", "Claude"])
+    title := g_launchGui.Add("Text", "x30 y22 w760 h34", "PM Interview Assistant")
+    title.SetFont("s22 w700 c0F172A", "Segoe UI")
+    subtitle := g_launchGui.Add("Text", "x30 y60 w760 h24", "Build your live interview workspace")
+    subtitle.SetFont("s11 c64748B", "Segoe UI")
+
+    routeBox := g_launchGui.Add("GroupBox", "x30 y98 w760 h132", "Conversation route")
+    routeBox.SetFont("s10 w600 c334155", "Segoe UI")
+    g_launchGui.Add("Text", "x52 y128 w190 h20", "Question source")
+    g_senderProviderDdl := g_launchGui.Add("DropDownList", "x52 y151 w190", ["ChatGPT", "Claude"])
     g_senderProviderDdl.Choose(g_senderProvider = "claude" ? 2 : 1)
-    g_launchGui.Add("Text", "x+30 yp+3 w100", "Win2 receiver")
-    g_receiverProviderDdl := g_launchGui.Add("DropDownList", "x+8 yp-3 w150", ["ChatGPT", "Claude"])
+
+    swapBtn := g_launchGui.Add("Button", "x337 y149 w112 h30", "Swap route")
+    swapBtn.SetFont("s9 w600", "Segoe UI")
+
+    g_launchGui.Add("Text", "x526 y128 w190 h20", "Answer workspace")
+    g_receiverProviderDdl := g_launchGui.Add("DropDownList", "x526 y151 w190", ["ChatGPT", "Claude"])
     g_receiverProviderDdl.Choose(g_receiverProvider = "claude" ? 2 : 1)
-    g_launchGui.Add("Text", "x+20 yp+3 w190", "Uses current Edge Default profile")
 
-    g_launchGui.Add("Text", "xm y+16", "Resume")
-    g_resumeEdit := g_launchGui.Add("Edit", "xm w760 h190 -Wrap", g_sessionResume)
+    g_routeSummary := g_launchGui.Add("Text", "x52 y193 w714 h24 c0F766E", "")
+    g_routeSummary.SetFont("s9 w600 c0F766E", "Segoe UI")
 
-    g_launchGui.Add("Text", "xm y+12", "Job Description")
-    g_jdEdit := g_launchGui.Add("Edit", "xm w760 h190 -Wrap", g_sessionJD)
+    contextBox := g_launchGui.Add("GroupBox", "x30 y246 w760 h370", "Interview context")
+    contextBox.SetFont("s10 w600 c334155", "Segoe UI")
 
-    g_launchGui.Add("Text", "xm y+12 w760", "Session setup (optional) — one item per line, e.g.  Company: Acme   Target role: Product Manager   Interview round: product sense   Emphasis: fintech   Avoid mentioning: pricing   Answer mode: concise")
-    g_metaEdit := g_launchGui.Add("Edit", "xm w760 h90 -Wrap", g_sessionMeta)
+    g_launchGui.Add("Text", "x52 y278 w340 h20", "Resume")
+    g_resumeEdit := g_launchGui.Add("Edit", "x52 y301 w350 h164 -Wrap WantTab", g_sessionResume)
 
-    startBtn := g_launchGui.Add("Button", "xm y+14 w140 h32 Default", "Start / Launch")
-    cancelBtn := g_launchGui.Add("Button", "x+10 yp w90 h32", "Cancel")
+    g_launchGui.Add("Text", "x418 y278 w350 h20", "Job description")
+    g_jdEdit := g_launchGui.Add("Edit", "x418 y301 w350 h164 -Wrap WantTab", g_sessionJD)
 
-    g_launchGui.Add("Text", "xm y+10 w760", "Resume, Job Description, and optional Session setup are collected here. Answer length, style, truth rules, and PM routing are predefined in the boot prompt and Project files.")
+    g_launchGui.Add("Text", "x52 y482 w716 h20", "Session notes (optional)")
+    g_metaEdit := g_launchGui.Add("Edit", "x52 y505 w716 h72 -Wrap WantTab", g_sessionMeta)
+    g_contextStatus := g_launchGui.Add("Text", "x52 y586 w716 h22 c475569", "")
+    g_contextStatus.SetFont("s9 c475569", "Segoe UI")
 
-    startBtn.OnEvent("Click", StartLaunchFromGui)
-    cancelBtn.OnEvent("Click", CloseSessionLaunchGui)
+    privacy := g_launchGui.Add("Text", "x30 y632 w470 h22", "Resume, JD, and notes stay in memory.")
+    privacy.SetFont("s9 c64748B", "Segoe UI")
+    g_launchStatus := g_launchGui.Add("Text", "x30 y661 w360 h26 c0F766E", "Ready to create a new managed session")
+    g_launchStatus.SetFont("s9 w600 c0F766E", "Segoe UI")
+
+    closeBtn := g_launchGui.Add("Button", "x548 y650 w96 h36", "Close")
+    g_launchButton := g_launchGui.Add("Button", "x654 y650 w136 h36 Default", "Launch Interview")
+    g_launchButton.SetFont("s10 w600", "Segoe UI")
+
+    g_senderProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
+    g_receiverProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
+    g_resumeEdit.OnEvent("Change", UpdateLaunchContextStatus)
+    g_jdEdit.OnEvent("Change", UpdateLaunchContextStatus)
+    swapBtn.OnEvent("Click", SwapLaunchProviders)
+    g_launchButton.OnEvent("Click", StartLaunchFromGui)
+    closeBtn.OnEvent("Click", CloseSessionLaunchGui)
     g_launchGui.OnEvent("Close", CloseSessionLaunchGui)
-    g_launchGui.Show("w800 h730")
+    g_launchGui.OnEvent("Escape", CloseSessionLaunchGui)
+
+    UpdateLaunchRouteSummary()
+    UpdateLaunchContextStatus()
+    g_launchGui.Show("w820 h710")
+}
+
+UpdateLaunchRouteSummary(*) {
+    global g_senderProviderDdl, g_receiverProviderDdl, g_routeSummary
+    if !IsObject(g_routeSummary)
+        return
+    sender := IsObject(g_senderProviderDdl) ? g_senderProviderDdl.Text : "ChatGPT"
+    receiver := IsObject(g_receiverProviderDdl) ? g_receiverProviderDdl.Text : "ChatGPT"
+    g_routeSummary.Text := sender " captures the question  →  " receiver " prepares the live answer"
+}
+
+SwapLaunchProviders(*) {
+    global g_senderProviderDdl, g_receiverProviderDdl
+    if !IsObject(g_senderProviderDdl) || !IsObject(g_receiverProviderDdl)
+        return
+    senderIndex := g_senderProviderDdl.Value
+    g_senderProviderDdl.Choose(g_receiverProviderDdl.Value)
+    g_receiverProviderDdl.Choose(senderIndex)
+    UpdateLaunchRouteSummary()
+}
+
+UpdateLaunchContextStatus(*) {
+    global g_resumeEdit, g_jdEdit, g_contextStatus
+    if !IsObject(g_contextStatus)
+        return
+    resumeChars := IsObject(g_resumeEdit) ? StrLen(Trim(g_resumeEdit.Value)) : 0
+    jdChars := IsObject(g_jdEdit) ? StrLen(Trim(g_jdEdit.Value)) : 0
+    readiness := (resumeChars >= 100 && jdChars >= 100) ? "Context ready" : "Add more context for stronger answers"
+    g_contextStatus.Text := "Resume: " resumeChars " characters   •   Job description: " jdChars " characters   •   " readiness
 }
 
 StartLaunchFromGui(*) {
@@ -372,6 +443,7 @@ StartLaunchFromGui(*) {
         g_receiverProvider := StrLower(g_receiverProviderDdl.Text)
 
     if (StrLen(Trim(g_sessionResume)) < 100 || StrLen(Trim(g_sessionJD)) < 100) {
+        g_launchGui.Opt("+OwnDialogs")
         continueChoice := MsgBox("Resume or JD looks too short. Continue anyway?", "PM Interview Assistant", "YesNo Icon!")
         if (continueChoice != "Yes")
             return
@@ -384,6 +456,7 @@ StartLaunchFromGui(*) {
 CloseSessionLaunchGui(*) {
     global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit
     global g_senderProviderDdl, g_receiverProviderDdl
+    global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
     try {
         if IsObject(g_launchGui)
             g_launchGui.Destroy()
@@ -394,6 +467,10 @@ CloseSessionLaunchGui(*) {
     g_metaEdit := 0
     g_senderProviderDdl := 0
     g_receiverProviderDdl := 0
+    g_routeSummary := 0
+    g_contextStatus := 0
+    g_launchStatus := 0
+    g_launchButton := 0
 }
 
 AutoStartup() {

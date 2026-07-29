@@ -249,7 +249,7 @@ test('Claude adapter returns ordered typed conversation messages', () => {
     },
     closest() { return null; }
   });
-  const selector = '[data-testid="user-message"],[data-testid="assistant-message"],[data-author="user"],[data-author="assistant"],[data-message-author-role="user"],[data-message-author-role="assistant"]';
+  const selector = '[data-testid="user-message"],[data-testid="assistant-message"],[data-author="user"],[data-author="assistant"],[data-message-author-role="user"],[data-message-author-role="assistant"],[role="article"]';
   const adapter = claudeModule.createClaudeAdapter(fakeDocument({}, { [selector]: [user, assistant] }));
   assert.deepEqual(adapter.getConversationMessages().map(({ id, role, text }) => ({ id, role, text })), [
     { id: 'claude-u-1', role: 'user', text: 'Typed Claude question' },
@@ -302,4 +302,118 @@ test('Claude distinguishes idle press-to-record from active recording', () => {
     'button[aria-label^="Release to" i]': active
   }));
   assert.equal(activeAdapter.isVoiceActive(), true);
+});
+
+test('Claude adapter reads current role=article conversation turns from captured evidence', () => {
+  const user = fakeElement({
+    innerText: 'You said: Explain activation. Explain activation. 11:42 am \ue11d \ue064',
+    getAttribute(name) { return name === 'role' ? 'article' : ''; },
+    closest() { return null; }
+  });
+  const assistant = fakeElement({
+    innerText: 'Claude responded: Start with the target behavior. Start with the target behavior. Then define the metric. \ue056 \ue03b',
+    getAttribute(name) { return name === 'role' ? 'article' : ''; },
+    closest() { return null; }
+  });
+  const selector = '[data-testid="user-message"],[data-testid="assistant-message"],[data-author="user"],[data-author="assistant"],[data-message-author-role="user"],[data-message-author-role="assistant"],[role="article"]';
+  const adapter = claudeModule.createClaudeAdapter(fakeDocument({}, { [selector]: [user, assistant] }));
+  assert.deepEqual(adapter.getConversationMessages().map(({ role, text }) => ({ role, text })), [
+    { role: 'user', text: 'Explain activation.' },
+    { role: 'assistant', text: 'Start with the target behavior. Then define the metric.' }
+  ]);
+  assert.equal(adapter.getLatestUserText(), 'Explain activation.');
+  assert.equal(adapter.getLatestAssistantText(), 'Start with the target behavior. Then define the metric.');
+});
+
+test('Claude recognizes the captured text-only Stop voice control', () => {
+  const stop = fakeElement({ tagName: 'BUTTON', innerText: 'Stop' });
+  const adapter = claudeModule.createClaudeAdapter(fakeDocument({}, {
+    'button': [stop]
+  }));
+  assert.equal(adapter.isVoiceActive(), true);
+});
+
+test('Claude waits for its mounted Send message control before reporting submit readiness', () => {
+  assert.ok(claudeModule, 'Claude adapter module must exist');
+  const composer = fakeElement({ tagName: 'DIV', textContent: 'question' });
+  const send = fakeElement({ tagName: 'BUTTON' });
+  let sendMounted = false;
+  const doc = {
+    querySelector(selector) {
+      if (selector === 'div[contenteditable="true"].ProseMirror') return composer;
+      if (selector === 'button[aria-label="Send message"]') return sendMounted ? send : null;
+      return null;
+    },
+    querySelectorAll() { return []; }
+  };
+  const adapter = claudeModule.createClaudeAdapter(doc);
+  assert.equal(adapter.canSubmit(), false);
+  assert.equal(adapter.submit(), false);
+  sendMounted = true;
+  assert.equal(adapter.canSubmit(), true);
+  assert.equal(adapter.submit(), true);
+  assert.equal(send.clicked, true);
+});
+
+
+test('Claude observes the current chat feed and role=main container directly', () => {
+  assert.ok(claudeModule, 'Claude adapter module must exist');
+  const composer = fakeElement({ tagName: 'DIV' });
+  const feed = fakeElement({ tagName: 'DIV' });
+  const roleMain = fakeElement({ tagName: 'DIV' });
+  const doc = fakeDocument({
+    'div[contenteditable="true"].ProseMirror': composer,
+    '[role="feed"][aria-label="Chat messages"]': feed,
+    'div[role="main"]': roleMain
+  });
+  const adapter = claudeModule.createClaudeAdapter(doc);
+  assert.deepEqual(adapter.getObservationTargets(), [composer, feed, roleMain]);
+});
+
+
+test('Claude removes compact accessibility echo before the visible user prompt', () => {
+  const user = fakeElement({
+    innerText: 'You said: PMIACLCG20260729144000. PMIA_CLCG_20260729_144000. Reply exactly PMIA_CLCG_OK.',
+    getAttribute(name) { return name === 'role' ? 'article' : ''; },
+    closest() { return null; }
+  });
+  const selector = '[data-testid="user-message"],[data-testid="assistant-message"],[data-author="user"],[data-author="assistant"],[data-message-author-role="user"],[data-message-author-role="assistant"],[role="article"]';
+  const adapter = claudeModule.createClaudeAdapter(fakeDocument({}, { [selector]: [user] }));
+
+  assert.equal(
+    adapter.getLatestUserText(),
+    'PMIA_CLCG_20260729_144000. Reply exactly PMIA_CLCG_OK.'
+  );
+});
+
+
+test('ChatGPT receiver ignores hidden stale composer and send controls after navigation', () => {
+  const hidden = fakeElement({
+    tagName: 'TEXTAREA',
+    getAttribute: name => name === 'aria-hidden' ? 'true' : '',
+    getClientRects: () => []
+  });
+  const active = fakeElement({
+    tagName: 'DIV',
+    getAttribute: name => name === 'contenteditable' ? 'true' : '',
+    getClientRects: () => [{}]
+  });
+  const hiddenSend = fakeElement({ tagName: 'BUTTON', getClientRects: () => [] });
+  const activeSend = fakeElement({ tagName: 'BUTTON', getClientRects: () => [{}] });
+  const lists = {
+    'textarea[name="prompt-textarea"]': [hidden],
+    '#prompt-textarea': [hidden],
+    'div[contenteditable="true"][role="textbox"]': [active],
+    'button[aria-label="Send prompt"]': [hiddenSend],
+    'button[data-testid="send-button"]': [activeSend]
+  };
+  const doc = {
+    querySelector: selector => lists[selector]?.[0] || null,
+    querySelectorAll: selector => lists[selector] || []
+  };
+  const adapter = chatgptModule.createChatGptAdapter(doc);
+  assert.equal(adapter.findComposer(), active);
+  assert.equal(adapter.submit(), true);
+  assert.equal(hiddenSend.clicked, false);
+  assert.equal(activeSend.clicked, true);
 });

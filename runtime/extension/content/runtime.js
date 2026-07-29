@@ -7,21 +7,62 @@ function yieldToProvider() {
     globalThis.queueMicrotask(resolve);
   });
 }
+export function snapshotUserTurnIds(adapter) {
+  if (typeof adapter.getConversationMessages !== 'function') return null;
+  return new Set(
+    adapter.getConversationMessages()
+      .filter(message => message.role === 'user')
+      .map(message => String(message.id || ''))
+      .filter(Boolean)
+  );
+}
+
+function normalizedTurnText(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+export function hasNewSubmittedUserTurn(adapter, text, baselineUserIds) {
+  if (!(baselineUserIds instanceof Set) || typeof adapter.getConversationMessages !== 'function') {
+    return false;
+  }
+  const expected = normalizedTurnText(text);
+  return adapter.getConversationMessages().some(message => (
+    message.role === 'user'
+    && !baselineUserIds.has(String(message.id || ''))
+    && normalizedTurnText(message.text) === expected
+  ));
+}
+
 export async function submitComposerWhenReady({
   adapter,
   text,
   yieldFn = yieldToProvider,
-  maxChecks = 2,
+  maxChecks = 90,
+  maxConfirmChecks = 180,
+  baselineUserIds = snapshotUserTurnIds(adapter),
   isCurrent = () => true
 }) {
   const normalized = String(text ?? '').trim();
-  if (!normalized || !isCurrent() || !adapter.setComposerText(normalized)) return false;
+  if (!normalized || !isCurrent()) return false;
+  let composerWritten = false;
+  let submitTriggered = false;
   for (let check = 0; check <= maxChecks; check += 1) {
     if (!isCurrent()) return false;
-    const composerReady = adapter.composerContains?.(normalized) ?? true;
-    const submitReady = adapter.canSubmit?.() ?? true;
-    if (composerReady && submitReady && adapter.submit()) return true;
+    if (!composerWritten) composerWritten = Boolean(adapter.setComposerText(normalized));
+    const composerReady = composerWritten && (adapter.composerContains?.(normalized) ?? true);
+    const submitReady = composerReady && (adapter.canSubmit?.() ?? true);
+    if (submitReady && adapter.submit()) {
+      submitTriggered = true;
+      break;
+    }
     if (check < maxChecks) await yieldFn();
+  }
+  if (!submitTriggered) return false;
+  if (!(baselineUserIds instanceof Set)) return true;
+  for (let check = 0; check <= maxConfirmChecks; check += 1) {
+    if (!isCurrent()) return false;
+    if (hasNewSubmittedUserTurn(adapter, normalized, baselineUserIds)) return true;
+    if (check < maxConfirmChecks) await yieldFn();
   }
   return false;
 }
@@ -33,13 +74,15 @@ export function createReceiverController({
   stopTimeoutMs = 2500,
   stopPollMs = 75,
   yieldFn = yieldToProvider,
-  maxSubmitChecks = 2,
+  maxSubmitChecks = 90,
+  maxConfirmChecks = 180,
   maxPreviewTurns = 64,
   maxPreviewStreams = 8
 }) {
   let latestDeliveryId = '';
   const lastPreviewSeqByStream = new Map();
   const previewRevisions = new Map();
+  const submissionBaselines = new Map();
 
   const boundedSet = (map, key, value, maxSize) => {
     if (map.has(key)) map.delete(key);
@@ -107,17 +150,34 @@ export function createReceiverController({
       }
 
       if (deliveryId !== latestDeliveryId) return false;
+      const envelopeKey = String(envelope.id || deliveryId);
+      let baselineUserIds = submissionBaselines.get(envelopeKey);
+      if (!(baselineUserIds instanceof Set)) {
+        baselineUserIds = snapshotUserTurnIds(adapter);
+        if (baselineUserIds instanceof Set) {
+          boundedSet(submissionBaselines, envelopeKey, baselineUserIds, 16);
+        }
+      }
+      if (hasNewSubmittedUserTurn(adapter, text, baselineUserIds)) {
+        submissionBaselines.delete(envelopeKey);
+        clearCommittedPreview(envelope);
+        onStatus('SENT');
+        return true;
+      }
       const submitted = await submitComposerWhenReady({
         adapter,
         text,
         yieldFn,
         maxChecks: maxSubmitChecks,
+        maxConfirmChecks,
+        baselineUserIds,
         isCurrent: () => deliveryId === latestDeliveryId
       });
       if (!submitted) {
         onStatus(adapter.findComposer?.() ? 'SUBMIT FAIL' : 'NO COMPOSER');
         return false;
       }
+      submissionBaselines.delete(envelopeKey);
       clearCommittedPreview(envelope);
       onStatus('SENT');
       return true;

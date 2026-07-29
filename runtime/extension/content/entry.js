@@ -350,17 +350,37 @@ async function startRuntime(runtimeConfig) {
   }
 
   async function receiveEnvelope(envelope) {
-    if (runtimeConfig.role !== 'receiver' || paused) return false;
-    const sequenceCheck = receiverSequenceGate.check(envelope?.seq);
-    if (!sequenceCheck.accepted) {
-      overlay.setStatus('DUPLICATE IGNORED', 'warn', 1400);
+    if (runtimeConfig.role !== 'receiver') {
+      return { ok: false, error: 'receiver_role_mismatch' };
+    }
+    if (paused) return { ok: false, error: 'receiver_paused' };
+
+    const sequenceDecision = receiverSequenceGate.admit(envelope?.seq);
+    if (sequenceDecision.duplicate) {
+      overlay.setStatus('DUPLICATE ACK', 'warn', 1400);
       void logEvent('delivery_ignored', {
         envelopeId: envelope?.id || '',
         seq: envelope?.seq || 0,
-        reason: sequenceCheck.reason
+        reason: 'duplicate_ack'
       });
-      return true;
+      return { ok: true, reason: 'duplicate_ack', duplicate: true };
     }
+    if (!sequenceDecision.accepted) {
+      overlay.setStatus('STALE IGNORED', 'warn', 1400);
+      void logEvent('delivery_ignored', {
+        envelopeId: envelope?.id || '',
+        seq: envelope?.seq || 0,
+        reason: 'stale_ack'
+      });
+      return { ok: true, reason: 'stale_ack', duplicate: true };
+    }
+
+    const previousAcceptedSeq = sequenceDecision.previousAcceptedSeq;
+    receiverSequenceGate.accept(envelope.seq);
+    sessionStorage.setItem(
+      receiverSequenceKey,
+      String(receiverSequenceGate.lastAcceptedSeq)
+    );
     answerCaptureToken += 1;
     answerWake.pulse();
     const token = answerCaptureToken;
@@ -368,13 +388,19 @@ async function startRuntime(runtimeConfig) {
     const hintVersionAtStart = assistantFinalHintVersion;
     const deliveryStartedAt = Date.now();
     const submitted = await receiver.deliver(envelope);
-    if (!submitted) return false;
+    if (!submitted) {
+      receiverSequenceGate.restore(previousAcceptedSeq);
+      if (previousAcceptedSeq > 0) {
+        sessionStorage.setItem(receiverSequenceKey, String(previousAcceptedSeq));
+      } else {
+        sessionStorage.removeItem(receiverSequenceKey);
+      }
+      return {
+        ok: false,
+        error: adapter.findComposer?.() ? 'receiver_delivery_failed' : 'receiver_composer_missing'
+      };
+    }
     const deliveryElapsedMs = Date.now() - deliveryStartedAt;
-    receiverSequenceGate.accept(envelope.seq);
-    sessionStorage.setItem(
-      receiverSequenceKey,
-      String(receiverSequenceGate.lastAcceptedSeq)
-    );
     void logEvent('received_text', {
       envelopeId: envelope.id,
       kind: envelope.kind,
@@ -389,7 +415,7 @@ async function startRuntime(runtimeConfig) {
     } else {
       captureAnswer(envelope, beforeText, token, hintVersionAtStart);
     }
-    return true;
+    return { ok: true, reason: 'accepted', duplicate: false };
   }
 
   chrome.runtime.onMessage.addListener((incoming, _sender, sendResponse) => {
@@ -425,9 +451,7 @@ async function startRuntime(runtimeConfig) {
     }
     if (incoming?.type !== 'PMIA_DELIVER') return false;
     receiveEnvelope(incoming.envelope)
-      .then(ok => sendResponse(ok
-        ? { ok: true }
-        : { ok: false, error: paused ? 'receiver_paused' : 'delivery_rejected' }))
+      .then(result => sendResponse(result))
       .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
     return true;
   });

@@ -63,3 +63,67 @@ This record summarizes the two Browser Evidence Capture full exports supplied fo
 ## Future change trigger
 
 The ChatGPT sender should move away from DOM finalization only after a new capture demonstrates a stable, human-readable, per-turn final transcript event across multiple sessions and reloads. Claude handling should change only when a new export disproves the human `message_complete` contract or introduces a stronger documented boundary.
+
+## Live 0.5.0 failure investigation
+
+A uniquely marked ChatGPT sender turn rendered and received its local ChatGPT answer, while the managed Claude receiver remained unchanged. Edge's PMIA extension error page then exposed the actual startup failure on fresh managed tabs:
+
+`[PMIA] runtime failed ReferenceError: sleep is not defined`
+
+The 0.5.0 entry module still passed `sleep` to `createReceiverController`, but the named import had been removed while fixed receiver-submit waits were being eliminated. The title and overlay were created before this reference was evaluated, so a managed window could display a PMIA title and appear `READY` even though receiver-controller creation aborted the rest of startup.
+
+This explains the complete observed symptom chain:
+
+- provider pages themselves remained functional
+- PMIA titles appeared
+- sender observation never started
+- role registration did not complete reliably
+- no `PMIA_FORWARD` event reached the service worker
+- the receiver never received or submitted the marker
+
+The extension page also contained `Extension context invalidated` and dynamic-import errors from tabs that predated an unpacked-extension reload. Those are reload-recovery signals, but they were not the reproducible fresh-tab root cause.
+
+## 0.5.1 decisions from the live failure
+
+1. Add a source-level dependency contract proving every identifier passed into receiver creation is imported.
+2. Render startup/import failures directly on the provider page with the extension version and recovery action.
+3. Keep `RELOAD TAB` persistent when the extension context is invalidated.
+4. Replace registry-only preflight with an active ping to the opposite managed content runtime.
+5. Maintain a stable link-health label beneath transient routing statuses.
+6. Broadcast link degradation immediately when either managed tab closes.
+## 0.5.2 duplicate and receiver-rejection evidence
+
+Two role-scoped PMIA exports narrowed the remaining failures to separate boundaries.
+
+- The Claude sender accepted and forwarded one authoritative marker, then forwarded a second altered DOM form about 1.4 seconds later. The second text prepended a compact copy of the marker before the visible prompt. This proved a protocol-final/DOM-shadow race rather than two independent user questions.
+- The ChatGPT sender export recorded `delivered: false`, `queued: true`, and `reason: delivery_rejected`. This proved the sender and service-worker route were active while the receiver declined the final.
+
+The resulting 0.5.2 decisions are:
+
+1. Canonicalize authoritative external finals and suppress only the first matching DOM shadow within an eight-second window. The suppression is one-shot, requires at least 20 canonical characters, and expires so a genuine later repeated question remains valid.
+2. Remove Claude's compact accessibility echo at article extraction before routing.
+3. Reserve receiver sequence state before provider submission, then roll it back if submission fails.
+4. Acknowledge an exact retry as `duplicate_ack` without a second provider submission. Acknowledge stale finals as discarded so they cannot remain in the latest-only queue.
+5. Preserve specific receiver failure reasons such as `receiver_composer_missing` and `receiver_delivery_failed` instead of collapsing every failure to `delivery_rejected`.
+6. Keep receiver composer mounting aggressive: immediate first attempt followed by a bounded microtask readiness window, with no fixed sleep on the fast path.
+7. Bound long-session DOM tracking to the newest 1,024 messages and retain at most 512 finalized identities/revisions.
+
+## 0.5.2 final live Edge verification
+
+The release candidate was loaded as an unpacked extension in the existing Microsoft Edge Stable Default profile. Edge's extension card reported version `0.5.2` before and after reload. The existing managed Claude sender and ChatGPT receiver tabs were refreshed in place; no additional browser profile or PMIA provider pair was created.
+
+Final marker:
+
+```text
+PMIA_052_CONFIRM_20260729_164500. Reply exactly PMIA_052_CONFIRM_OK.
+```
+
+Observed result:
+
+- Claude submitted the marker through its current `Send message` control.
+- ChatGPT rendered exactly one matching user turn.
+- ChatGPT rendered the exact acknowledgement `PMIA_052_CONFIRM_OK`.
+- The ChatGPT composer remained available after completion.
+- The earlier false-positive receiver acknowledgement was eliminated by requiring a new matching provider user turn before `received_text` can be accepted.
+
+This live result validates the previously failing Claude-to-ChatGPT path on the same installed Edge runtime used for the final release candidate.

@@ -30,3 +30,27 @@ test('missing receiver and transport errors remain queued', () => {
     reason: 'transport_error'
   });
 });
+
+
+test('delivery preserves receiver acknowledgement reason for accepted retries', () => {
+  assert.deepEqual(classifyDelivery({
+    route: { tabId: 2 },
+    response: { ok: true, reason: 'duplicate_ack', duplicate: true }
+  }), {
+    delivered: true,
+    queued: false,
+    reason: 'duplicate_ack',
+    duplicate: true
+  });
+});
+
+test('delivery preserves specific receiver failure reason for diagnostics', () => {
+  assert.deepEqual(classifyDelivery({
+    route: { tabId: 2 },
+    response: { ok: false, error: 'receiver_delivery_failed' }
+  }), {
+    delivered: false,
+    queued: true,
+    reason: 'receiver_delivery_failed'
+  });
+});

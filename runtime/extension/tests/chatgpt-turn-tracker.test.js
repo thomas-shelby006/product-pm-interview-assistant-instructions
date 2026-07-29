@@ -120,3 +120,100 @@ test('finalization clears any pending preview for the committed turn', () => {
   ], 500);
   assert.equal(tracker.takePreview(), null);
 });
+
+
+test('turn tracking stays bounded across a 2000-turn session', () => {
+  const tracker = createTracker({ historyLimit: 64 });
+  tracker.prime([]);
+  const conversation = [];
+  let emittedCount = 0;
+  for (let index = 0; index < 2000; index += 1) {
+    const user = message(`u-${index}`, 'user', `How would you prioritize launch ${index}?`);
+    conversation.push(user);
+    tracker.update(conversation, index * 2);
+    tracker.takePreview();
+    conversation.push(message(`a-${index}`, 'assistant', `Answer ${index}`));
+    emittedCount += tracker.update(conversation, index * 2 + 1).length;
+  }
+  assert.equal(emittedCount, 2000);
+  assert.ok(tracker.emittedIds.size <= 64);
+  assert.ok(tracker.previewRevisions.size <= 64);
+  assert.ok(tracker.lastScanSize <= 128);
+});
+
+test('rendered turn fingerprint suppresses a rerender but permits an immediate genuine repeat', () => {
+  const tracker = createTracker({ fallbackMs: 5000, duplicateTextWindowMs: 30000 });
+  tracker.prime([]);
+  const first = tracker.update([
+    message('dom-user-1', 'user', 'What is the product strategy?'),
+    message('dom-assistant-1', 'assistant', 'I would start with the target outcome.')
+  ], 1000);
+  assert.equal(first.length, 1);
+
+  const rerendered = tracker.update([
+    message('dom-user-99', 'user', 'What is the product strategy?'),
+    message('dom-assistant-99', 'assistant', 'I would start with the target outcome.')
+  ], 4000);
+  assert.deepEqual(rerendered, []);
+
+  const laterRepeat = tracker.update([
+    message('dom-user-100', 'user', 'What is the product strategy?'),
+    message('dom-assistant-100', 'assistant', 'Here is a later answer.')
+  ], 5000);
+  assert.equal(laterRepeat.length, 1);
+});
+
+
+test('authoritative Claude final suppresses one altered DOM shadow from captured evidence', () => {
+  const tracker = createTracker({ externalShadowMs: 8000 });
+  tracker.prime([]);
+  tracker.markExternalFinal({
+    id: 'voice-final-1',
+    text: 'PMIA_CLCG_20260729_144000. Reply exactly PMIA_CLCG_OK.',
+    now: 1000
+  });
+
+  const emitted = tracker.update([
+    message(
+      'claude-dom-user-1',
+      'user',
+      'PMIACLCG20260729144000. PMIA_CLCG_20260729_144000. Reply exactly PMIA_CLCG_OK.'
+    ),
+    message('claude-dom-assistant-1', 'assistant', 'PMIA_CLCG_OK')
+  ], 2400);
+
+  assert.deepEqual(emitted, []);
+  assert.ok(tracker.emittedIds.has('claude-dom-user-1'));
+});
+
+test('external final shadow is one-shot and expires before a genuine repeated question', () => {
+  const tracker = createTracker({ externalShadowMs: 3000 });
+  tracker.prime([]);
+  tracker.markExternalFinal({
+    id: 'voice-final-1',
+    text: 'How would you prioritize this launch?',
+    now: 1000
+  });
+
+  assert.deepEqual(tracker.update([
+    message('dom-copy', 'user', 'How would you prioritize this launch?'),
+    message('a-copy', 'assistant', 'First answer')
+  ], 1500), []);
+
+  const later = tracker.update([
+    message('dom-repeat', 'user', 'How would you prioritize this launch?'),
+    message('a-repeat', 'assistant', 'Second answer')
+  ], 5000);
+  assert.equal(later.length, 1);
+});
+
+test('external final shadow does not fuzzy-suppress short unrelated text', () => {
+  const tracker = createTracker({ externalShadowMs: 8000 });
+  tracker.prime([]);
+  tracker.markExternalFinal({ id: 'voice-short', text: 'Okay now', now: 1000 });
+  const emitted = tracker.update([
+    message('dom-short', 'user', 'Okay now explain the product strategy'),
+    message('a-short', 'assistant', 'Answer')
+  ], 1500);
+  assert.equal(emitted.length, 1);
+});

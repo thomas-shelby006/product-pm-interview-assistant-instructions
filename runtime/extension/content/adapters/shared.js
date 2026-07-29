@@ -6,6 +6,45 @@ export function firstMatch(doc, selectors) {
   return null;
 }
 
+export function isVisibleElement(element) {
+  if (!element || element.hidden) return false;
+  if (String(element.getAttribute?.('aria-hidden') || '').toLowerCase() === 'true') return false;
+  const style = String(element.getAttribute?.('style') || '').toLowerCase();
+  if (/display\s*:\s*none|visibility\s*:\s*hidden/.test(style)) return false;
+  if (typeof element.getClientRects === 'function' && element.getClientRects().length === 0) return false;
+  return true;
+}
+
+export function isInteractiveElement(element) {
+  return isVisibleElement(element) && !element.disabled;
+}
+
+export function firstVisibleMatch(doc, selectors) {
+  for (const selector of selectors) {
+    const nodes = Array.from(doc.querySelectorAll?.(selector) || []);
+    if (!nodes.length) {
+      const single = doc.querySelector?.(selector);
+      if (single) nodes.push(single);
+    }
+    const visible = nodes.filter(isVisibleElement);
+    if (visible.length) return visible.at(-1);
+  }
+  return null;
+}
+
+export function firstInteractiveMatch(doc, selectors) {
+  for (const selector of selectors) {
+    const nodes = Array.from(doc.querySelectorAll?.(selector) || []);
+    if (!nodes.length) {
+      const single = doc.querySelector?.(selector);
+      if (single) nodes.push(single);
+    }
+    const usable = nodes.filter(isInteractiveElement);
+    if (usable.length) return usable.at(-1);
+  }
+  return null;
+}
+
 export function latestText(doc, selectors) {
   for (const selector of selectors) {
     const nodes = Array.from(doc.querySelectorAll?.(selector) || []);
@@ -82,7 +121,7 @@ export function firstNonEmptyText(doc, selectors) {
 }
 
 export function clickFirst(doc, selectors) {
-  const button = firstMatch(doc, selectors);
+  const button = firstInteractiveMatch(doc, selectors);
   if (!button || button.disabled) return false;
   button.click?.();
   return true;
@@ -100,31 +139,47 @@ export function submitWithEnter(element) {
     bubbles: true,
     cancelable: true
   });
-  return element.dispatchEvent(event);
+  element.dispatchEvent(event);
+  return true;
 }
 
 
-export function createConversationMessageReader(doc, { selector, roleOf } = {}) {
-  const fallbackIds = new WeakMap();
-  let nextFallbackId = 1;
-  const fallbackId = element => {
-    if (!fallbackIds.has(element)) fallbackIds.set(element, `dom-message-${nextFallbackId++}`);
-    return fallbackIds.get(element);
-  };
+export function createConversationMessageReader(doc, { selector, roleOf, textOf } = {}) {
+  const elementIds = new WeakMap();
+  let previousSlots = [];
+  let anonymousId = 0;
 
-  return () => Array.from(doc.querySelectorAll?.(selector) || [])
-    .map(element => {
+  return () => {
+    const logical = [];
+    const nextSlots = [];
+    for (const element of Array.from(doc.querySelectorAll?.(selector) || [])) {
       const turn = element.closest?.('[data-turn-id]') || null;
       const turnId = String(
         element.getAttribute?.('data-turn-id') || turn?.getAttribute?.('data-turn-id') || ''
       ).trim();
-      const id = String(
-        element.getAttribute?.('data-message-id') || turnId || fallbackId(element)
-      ).trim();
       const role = String(
         roleOf?.(element) || element.getAttribute?.('data-message-author-role') || ''
       ).trim().toLowerCase();
-      return { id, turnId, role, text: composerText(element), element };
-    })
-    .filter(message => message.id && message.text && ['user', 'assistant'].includes(message.role));
+      const text = String(textOf?.(element, role) ?? composerText(element)).trim();
+      if (!text || !['user', 'assistant'].includes(role)) continue;
+
+      const previous = logical.at(-1);
+      if (previous?.role === role && previous.text === text) continue;
+
+      const stableId = String(element.getAttribute?.('data-message-id') || turnId || '').trim();
+      const logicalIndex = logical.length;
+      let id = stableId || elementIds.get(element) || '';
+      if (!id) {
+        const prior = previousSlots[logicalIndex];
+        id = prior?.anonymous && prior.role === role
+          ? prior.id
+          : `dom-${role}-${++anonymousId}`;
+        elementIds.set(element, id);
+      }
+      nextSlots[logicalIndex] = { id, role, anonymous: !stableId };
+      logical.push({ id, turnId, role, text, element });
+    }
+    previousSlots = nextSlots;
+    return logical;
+  };
 }
