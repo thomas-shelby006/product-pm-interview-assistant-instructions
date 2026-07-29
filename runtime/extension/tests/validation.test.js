@@ -73,7 +73,7 @@ test('runtime stores and exports logs per managed window role', async () => {
   assert.match(entry, /buildSessionExport/);
   assert.match(entry, /renderSessionMarkdown/);
   assert.match(entry, /role: runtimeConfig\.role/);
-  assert.doesNotMatch(entry, /ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â/);
+  assert.doesNotMatch(entry, /ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â/);
 });
 
 test('entry runtime primes historical sender turns before observation starts', async () => {
@@ -197,9 +197,9 @@ test('runtime exposes an authorized F11 preflight status check', async () => {
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
   const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
   assert.match(entry, /key === 'F11'/);
-  assert.match(entry, /PMIA_GET_STATUS/);
-  assert.match(background, /PMIA_GET_STATUS/);
-  assert.match(background, /authorizeSessionMessage/);
+  assert.match(entry, /PMIA_RUN_PREFLIGHT/);
+  assert.match(background, /PMIA_RUN_PREFLIGHT/);
+  assert.match(background, /runCounterpartPreflight/);
 });
 test('entry preserves runtime resources for back-forward cache restoration', async () => {
   const { readFile } = await import('node:fs/promises');
@@ -246,4 +246,41 @@ test('content startup renders fatal diagnostics for import and runtime failures'
   assert.match(entry, /renderRuntimeFatal/);
   assert.match(entry, /stage:\s*'start'/);
   assert.match(entry, /chrome\.runtime\.getManifest\(\)\.version/);
+});
+test('runtime uses an active counterpart preflight and automatic link status', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  assert.match(background, /runCounterpartPreflight/);
+  assert.match(background, /PMIA_RUN_PREFLIGHT/);
+  assert.match(background, /PMIA_LINK_STATUS/);
+  assert.match(entry, /createPreflightResponder/);
+  assert.match(entry, /PMIA_PREFLIGHT_PING/);
+  assert.match(entry, /PMIA_LINK_STATUS/);
+  const f11 = entry.slice(entry.indexOf("if (key === 'F11')"), entry.indexOf("if (key === 'F12'"));
+  assert.match(f11, /PMIA_RUN_PREFLIGHT/);
+  assert.match(f11, /response\.counterpart/);
+  assert.doesNotMatch(f11, /PMIA_GET_STATUS/);
+});
+
+test('background broadcasts link status after a managed tab closes', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const removed = background.slice(background.indexOf('chrome.tabs.onRemoved.addListener'));
+  assert.match(removed, /affectedSessionIds/);
+  assert.match(removed, /registry\.unregister\(tabId\)/);
+  assert.match(removed, /broadcastLinkStatus/);
+});
+test('an invalidated extension context becomes a stable reload state', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const messageBlock = entry.slice(
+    entry.indexOf('const message = async payload'),
+    entry.indexOf('const logEvent = async')
+  );
+  assert.match(messageBlock, /invalidated \? 0 : 3500/);
+  assert.match(messageBlock, /RELOAD TAB/);
 });

@@ -5,7 +5,10 @@ const TONES = {
   info: ['#172554', '#93c5fd']
 };
 
-export function createStatusOverlay(doc, config) {
+export function createStatusOverlay(doc, config, {
+  setTimeoutFn = globalThis.setTimeout,
+  clearTimeoutFn = globalThis.clearTimeout
+} = {}) {
   const root = doc.createElement('div');
   root.id = 'pmia-runtime-status';
   root.setAttribute('aria-live', 'polite');
@@ -18,17 +21,28 @@ export function createStatusOverlay(doc, config) {
   (doc.body || doc.documentElement).appendChild(root);
 
   let timer = null;
+  let stable = { text: 'STARTING', tone: 'info' };
   const prefix = `${config.role.toUpperCase()} · ${config.provider.toUpperCase()}`;
-  function setStatus(text, tone = 'info', holdMs = 0) {
-    clearTimeout(timer);
+
+  function render(text, tone) {
     const [background, color] = TONES[tone] || TONES.info;
     root.textContent = `${prefix} · ${text}`;
     root.style.background = background;
     root.style.color = color;
     root.style.border = `1px solid ${color}66`;
     root.style.display = 'block';
+  }
+
+  function setStatus(text, tone = 'info', holdMs = 0) {
+    clearTimeoutFn(timer);
+    timer = null;
+    if (holdMs <= 0) stable = { text, tone };
+    render(text, tone);
     if (holdMs > 0) {
-      timer = setTimeout(() => setStatus('READY', 'ok'), holdMs);
+      timer = setTimeoutFn(() => {
+        timer = null;
+        render(stable.text, stable.tone);
+      }, holdMs);
     }
   }
 
@@ -36,6 +50,6 @@ export function createStatusOverlay(doc, config) {
   return {
     element: root,
     setStatus,
-    remove() { clearTimeout(timer); root.remove(); }
+    remove() { clearTimeoutFn(timer); root.remove(); }
   };
 }

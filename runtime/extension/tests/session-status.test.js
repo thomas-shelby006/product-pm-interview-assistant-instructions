@@ -32,3 +32,26 @@ test('session status distinguishes a missing or stale role', () => {
     text: 'WAITING SENDER + RECEIVER', tone: 'error'
   });
 });
+
+test('active preflight distinguishes unreachable runtime and unavailable composer', () => {
+  const status = buildSessionStatus({
+    sender: { provider: 'chatgpt', registeredAt: 990 },
+    receiver: { provider: 'claude', registeredAt: 995 },
+    pending: null
+  }, 1000, 200);
+  assert.deepEqual(describeRuntimeStatus(status, {
+    responsive: false, reason: 'unreachable'
+  }), {
+    text: 'RUNTIME UNREACHABLE', tone: 'error'
+  });
+  assert.deepEqual(describeRuntimeStatus(status, {
+    responsive: true, composerAvailable: false
+  }), {
+    text: 'COMPOSER NOT READY', tone: 'warn'
+  });
+  assert.deepEqual(describeRuntimeStatus(status, {
+    responsive: true, composerAvailable: true
+  }), {
+    text: 'LINK OK', tone: 'ok'
+  });
+});

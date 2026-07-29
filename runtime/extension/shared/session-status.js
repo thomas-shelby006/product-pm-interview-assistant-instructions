@@ -21,13 +21,18 @@ export function buildSessionStatus(
   };
 }
 
-export function describeRuntimeStatus(status) {
+export function describeRuntimeStatus(status, counterpart = null) {
   if (status?.hasPending) return { text: 'FINAL QUEUED', tone: 'warn' };
   const sender = Boolean(status?.sender?.connected);
   const receiver = Boolean(status?.receiver?.connected);
-  if (sender && receiver) return { text: 'LINK OK', tone: 'ok' };
   if (!sender && !receiver) return { text: 'WAITING SENDER + RECEIVER', tone: 'error' };
-  return sender
-    ? { text: 'WAITING RECEIVER', tone: 'warn' }
-    : { text: 'WAITING SENDER', tone: 'warn' };
+  if (!sender) return { text: 'WAITING SENDER', tone: 'warn' };
+  if (!receiver) return { text: 'WAITING RECEIVER', tone: 'warn' };
+  if (counterpart && !counterpart.responsive) {
+    return { text: 'RUNTIME UNREACHABLE', tone: 'error' };
+  }
+  if (counterpart?.responsive && !counterpart.composerAvailable) {
+    return { text: 'COMPOSER NOT READY', tone: 'warn' };
+  }
+  return { text: 'LINK OK', tone: 'ok' };
 }

@@ -22,6 +22,7 @@ import { SequenceGate, nextSequence } from '../shared/sequence.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 import { describeRuntimeStatus } from '../shared/session-status.js';
 import { renderRuntimeFatal } from './runtime-fatal.js';
+import { createPreflightResponder } from './preflight-responder.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -72,6 +73,12 @@ async function startRuntime(runtimeConfig) {
   const adapter = runtimeConfig.provider === 'claude'
     ? createClaudeAdapter(document)
     : createChatGptAdapter(document);
+  const runtimeVersion = chrome.runtime.getManifest().version;
+  const respondToPreflight = createPreflightResponder({
+    runtimeConfig,
+    adapter,
+    version: runtimeVersion
+  });
   const overlay = createStatusOverlay(document, runtimeConfig);
   const targetTitle = runtimeTitle(runtimeConfig);
   const restoreTitle = defendTitle(document, targetTitle);
@@ -104,7 +111,11 @@ async function startRuntime(runtimeConfig) {
     } catch (error) {
       const detail = String(error?.message || error);
       const invalidated = /extension context invalidated/i.test(detail);
-      overlay.setStatus(invalidated ? 'RELOAD TAB' : 'EXTENSION OFFLINE', 'error', 3500);
+      overlay.setStatus(
+        invalidated ? 'RELOAD TAB' : 'EXTENSION OFFLINE',
+        'error',
+        invalidated ? 0 : 3500
+      );
       console.warn('[PMIA] message failed', error);
       return { ok: false, error: detail, terminal: invalidated };
     }
@@ -126,7 +137,10 @@ async function startRuntime(runtimeConfig) {
       registration: runtimeConfig
     });
     if (response?.ok) {
-      if (!paused) overlay.setStatus('READY', 'ok');
+      if (!paused) {
+        const status = describeRuntimeStatus(response.status);
+        overlay.setStatus(status.text, status.tone);
+      }
       return true;
     }
     if (response?.terminal) {
@@ -379,6 +393,21 @@ async function startRuntime(runtimeConfig) {
   }
 
   chrome.runtime.onMessage.addListener((incoming, _sender, sendResponse) => {
+    if (incoming?.type === 'PMIA_PREFLIGHT_PING') {
+      sendResponse(respondToPreflight());
+      return false;
+    }
+    if (
+      incoming?.type === 'PMIA_LINK_STATUS' &&
+      incoming.sessionId === runtimeConfig.sessionId
+    ) {
+      if (!paused) {
+        const status = describeRuntimeStatus(incoming.status);
+        overlay.setStatus(status.text, status.tone);
+      }
+      sendResponse({ ok: true });
+      return false;
+    }
     if (incoming?.type === 'PMIA_ROLE_REVOKED') {
       registrationActive = false;
       paused = true;
@@ -553,14 +582,17 @@ async function startRuntime(runtimeConfig) {
       event.preventDefault();
       event.stopImmediatePropagation();
       const response = await message({
-        type: 'PMIA_GET_STATUS',
+        type: 'PMIA_RUN_PREFLIGHT',
         sessionId: runtimeConfig.sessionId
       });
       if (!response?.ok) {
         overlay.setStatus('PREFLIGHT FAIL', 'error', 2200);
         return;
       }
-      const status = describeRuntimeStatus(response.status);
+      const status = describeRuntimeStatus(
+        response.status,
+        response.counterpart
+      );
       overlay.setStatus(status.text, status.tone, 2400);
       return;
     }

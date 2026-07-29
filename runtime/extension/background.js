@@ -4,6 +4,7 @@ import { deliverPreview } from './shared/preview.js';
 import { classifyDelivery } from './shared/delivery.js';
 import { roleLogKey, appendBoundedLog } from './shared/session-log.js';
 import { buildSessionStatus } from './shared/session-status.js';
+import { runCounterpartPreflight } from './shared/preflight.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -117,11 +118,16 @@ async function handleRegistration(message, tabId, registry) {
     });
   }
 
+  const status = await broadcastLinkStatus(
+    message.registration.sessionId,
+    registry
+  );
   return {
     ok: true,
     changed: result.changed,
     pendingDelivered: Boolean(pendingOutcome?.delivered),
-    pendingQueued: Boolean(pendingOutcome?.queued)
+    pendingQueued: Boolean(pendingOutcome?.queued),
+    status
   };
 }
 
@@ -167,11 +173,35 @@ async function handleForward(message, tabId, registry) {
     queued: outcome.queued,
     reason: outcome.reason
   });
+  await broadcastLinkStatus(message.envelope.sessionId, registry);
   return { ok: true, ...outcome };
 }
 
 function authorizeSessionMessage(registry, sessionId, tabId) {
   return Boolean(sessionId && Number.isInteger(tabId) && registry.ownsTab(sessionId, tabId));
+}
+
+function currentSessionStatus(registry, sessionId) {
+  return buildSessionStatus(
+    registry.getSession(sessionId),
+    Date.now(),
+    STALE_AFTER_MS
+  );
+}
+
+async function broadcastLinkStatus(sessionId, registry) {
+  const session = registry.getSession(sessionId);
+  const status = currentSessionStatus(registry, sessionId);
+  const deliveries = ['sender', 'receiver']
+    .map(role => session?.[role]?.tabId)
+    .filter(Number.isInteger)
+    .map(tabId => chrome.tabs.sendMessage(tabId, {
+      type: 'PMIA_LINK_STATUS',
+      sessionId,
+      status
+    }));
+  await Promise.allSettled(deliveries);
+  return status;
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -236,6 +266,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
+    if (message?.type === 'PMIA_RUN_PREFLIGHT') {
+      sendResponse(await runCounterpartPreflight({
+        registry,
+        sessionId: message.sessionId,
+        requesterTabId: tabId,
+        sendToTab: (targetTabId, outgoing) => chrome.tabs.sendMessage(targetTabId, outgoing),
+        now: Date.now(),
+        staleAfterMs: STALE_AFTER_MS
+      }));
+      return;
+    }
+
     if (message?.type === 'PMIA_GET_STATUS') {
       if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
         sendResponse({ ok: false, error: 'session_not_owned' });
@@ -243,11 +285,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       sendResponse({
         ok: true,
-        status: buildSessionStatus(
-          registry.getSession(message.sessionId),
-          Date.now(),
-          STALE_AFTER_MS
-        )
+        status: currentSessionStatus(registry, message.sessionId)
       });
       return;
     }
@@ -266,7 +304,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener(tabId => {
   serialize(async () => {
     const registry = await loadRegistry();
+    const affectedSessionIds = registry.exportState()
+      .filter(session => (
+        session.sender?.tabId === tabId ||
+        session.receiver?.tabId === tabId
+      ))
+      .map(session => session.sessionId);
     registry.unregister(tabId);
     await saveRegistry(registry);
+    for (const sessionId of affectedSessionIds) {
+      await broadcastLinkStatus(sessionId, registry);
+    }
   });
 });
