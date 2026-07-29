@@ -28,12 +28,14 @@ export function createRuntimeRecovery({
   };
   const onPageShow = () => schedule('pageshow');
   const onOnline = () => schedule('online');
+  const onResume = () => schedule('resume');
   const onVisibility = () => {
     if (document?.visibilityState === 'visible') schedule('visible');
   };
 
   window?.addEventListener?.('pageshow', onPageShow);
   window?.addEventListener?.('online', onOnline);
+  document?.addEventListener?.('resume', onResume);
   document?.addEventListener?.('visibilitychange', onVisibility);
 
   return {
@@ -43,6 +45,7 @@ export function createRuntimeRecovery({
       pendingReason = '';
       window?.removeEventListener?.('pageshow', onPageShow);
       window?.removeEventListener?.('online', onOnline);
+      document?.removeEventListener?.('resume', onResume);
       document?.removeEventListener?.('visibilitychange', onVisibility);
     }
   };

@@ -442,6 +442,11 @@ async function startRuntime(runtimeConfig) {
       sendResponse(respondToPreflight());
       return false;
     }
+    if (incoming?.type === 'PMIA_RUNTIME_RESUME') {
+      const scheduled = runtimeRecovery?.trigger('tab_restored') || false;
+      sendResponse({ ok: true, scheduled });
+      return false;
+    }
     if (
       incoming?.type === 'PMIA_LINK_STATUS' &&
       incoming.sessionId === runtimeConfig.sessionId

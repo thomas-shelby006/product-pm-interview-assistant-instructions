@@ -23,9 +23,7 @@ async function loadRegistry() {
   if (!registryPromise) {
     registryPromise = registryStorage.get(REGISTRY_KEY)
       .then(stored => {
-        const registry = new SessionRegistry(stored[REGISTRY_KEY] || []);
-        registry.pruneStale(Date.now(), STALE_AFTER_MS);
-        return registry;
+        return new SessionRegistry(stored[REGISTRY_KEY] || []);
       })
       .catch(error => {
         registryPromise = null;
@@ -91,6 +89,12 @@ async function handleRegistration(message, tabId, registry) {
       error: 'role_conflict',
       ownerTabId: result.registration?.tabId || null
     };
+  }
+
+  try {
+    await chrome.tabs.update(tabId, { autoDiscardable: false });
+  } catch {
+    // Registration remains valid even if this browser cannot change discard policy.
   }
 
   if (result.replacedTabId) {
@@ -299,6 +303,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: false, error: String(error?.message || error) });
   });
   return true;
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  const restored = changeInfo?.discarded === false || changeInfo?.frozen === false;
+  if (!restored) return;
+  serialize(async () => {
+    const registry = await loadRegistry();
+    const managed = registry.exportState().some(session => (
+      session.sender?.tabId === tabId || session.receiver?.tabId === tabId
+    ));
+    if (!managed) return;
+    try {
+      await chrome.tabs.update(tabId, { autoDiscardable: false });
+    } catch {
+      // A waking tab may briefly reject updates; content recovery is still attempted.
+    }
+    chrome.tabs.sendMessage(tabId, { type: 'PMIA_RUNTIME_RESUME' }).catch(() => {});
+  });
 });
 
 chrome.tabs.onRemoved.addListener(tabId => {

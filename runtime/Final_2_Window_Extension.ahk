@@ -444,6 +444,18 @@ RefreshSelectedProfileDoctor() {
     return g_selectedProfileRecord
 }
 
+WaitForSelectedProfileReady(timeoutMs := 15000) {
+    deadline := A_TickCount + Max(0, timeoutMs)
+    loop {
+        record := RefreshSelectedProfileDoctor()
+        if !record.Count || record["issueCode"] != "EXTENSION_VERSION_MISMATCH"
+            return record
+        if (A_TickCount >= deadline)
+            return record
+        Sleep 500
+    }
+}
+
 NormalizeProvider(value) {
     normalized := StrLower(Trim(value))
     return normalized = "claude" ? "claude" : "chatgpt"
@@ -728,7 +740,7 @@ RunStudioPreflight(*) {
     if IsObject(g_preflightButton)
         g_preflightButton.Enabled := false
     SetLaunchState("PREFLIGHT", "Checking Edge profile and PMIA extension registration...", "info")
-    RefreshSelectedProfileDoctor()
+    WaitForSelectedProfileReady()
     RenderDoctorStatus()
     if (g_selectedProfileRecord.Count && g_selectedProfileRecord["issueCode"] = "OK") {
         SetLaunchState("PREFLIGHT", "Selected Edge profile and PMIA runtime path verified.", "ok")
@@ -1455,7 +1467,29 @@ LogEvent(message) {
 
 IsActiveSession() {
     global g_interviewActive
-    return g_interviewActive
+    return g_interviewActive && RefreshManagedWindowHandles()
+}
+
+RefreshManagedWindowHandles() {
+    global g_interviewActive, g_sessionId, g_senderProvider, g_receiverProvider
+    global g_hWin1, g_hWin2
+    if !g_interviewActive || (g_sessionId = "")
+        return false
+    g_hWin1 := 0
+    g_hWin2 := 0
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try {
+        sender := FindLifecycleWindow("sender", g_senderProvider, g_sessionId, "boot")
+        receiver := FindLifecycleWindow("receiver", g_receiverProvider, g_sessionId, "boot")
+        if sender.Count
+            g_hWin1 := sender["hwnd"]
+        if receiver.Count
+            g_hWin2 := receiver["hwnd"]
+    } finally {
+        DetectHiddenWindows previousDetectHidden
+    }
+    return IsAlive(g_hWin1) && IsAlive(g_hWin2)
 }
 
 IsAlive(hWnd) {

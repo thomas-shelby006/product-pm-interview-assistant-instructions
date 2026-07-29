@@ -55,10 +55,18 @@ test('profile selection prefers a saved valid profile then a matching PMIA profi
 test('preflight diagnoses the selected profile without silently switching profiles', () => {
   assert.match(launcher, /RefreshSelectedProfileDoctor\(\)/);
   const preflightBlock = block('RunStudioPreflight(*)', 'FindLifecycleWindow(');
-  assert.match(preflightBlock, /RefreshSelectedProfileDoctor\(\)/);
+  assert.match(preflightBlock, /WaitForSelectedProfileReady\(\)/);
   assert.doesNotMatch(preflightBlock, /SelectRecommendedProfile\(/);
 });
 
+test('preflight waits for Edge to persist a path-matched extension version reload', () => {
+  assert.match(launcher, /WaitForSelectedProfileReady\(timeoutMs := 15000\)/);
+  const settleBlock = block('WaitForSelectedProfileReady(timeoutMs := 15000)', 'NormalizeProvider(value)');
+  assert.match(settleBlock, /EXTENSION_VERSION_MISMATCH/);
+  assert.match(settleBlock, /Sleep 500/);
+  const preflightBlock = block('RunStudioPreflight(*)', 'FindLifecycleWindow(');
+  assert.match(preflightBlock, /WaitForSelectedProfileReady\(\)/);
+});
 test('new launches close all PMIA windows while repair is scoped to the current session', () => {
   const launchBlock = block('RunManagedLaunch(reuseSession := false)', 'ApplyConfiguredInitialLayout()');
   assert.match(launchBlock, /if !reuseSession[\s\S]*CloseManagedPmiaWindows\(\)/);
@@ -138,4 +146,23 @@ test('Alt+E exports sender and receiver role-scoped records', () => {
   assert.match(exportBlock, /global g_hWin1, g_hWin2/);
   assert.match(exportBlock, /SendToWindow\("", "\^\+\{F8\}", g_hWin1\)/);
   assert.match(exportBlock, /SendToWindow\("", "\^\+\{F8\}", g_hWin2\)/);
+});
+
+test('operational checks reacquire exact managed window handles after Edge replaces them', () => {
+  assert.match(launcher, /RefreshManagedWindowHandles\(\)/);
+  const refreshStart = launcher.indexOf('RefreshManagedWindowHandles()');
+  const refreshEnd = launcher.indexOf('IsAlive(hWnd)', refreshStart);
+  const refreshBlock = launcher.slice(refreshStart, refreshEnd);
+  assert.match(refreshBlock, /DetectHiddenWindows true/);
+  assert.match(refreshBlock, /FindLifecycleWindow\("sender"/);
+  assert.match(refreshBlock, /FindLifecycleWindow\("receiver"/);
+  assert.match(refreshBlock, /g_hWin1\s*:=\s*sender\["hwnd"\]/);
+  assert.match(refreshBlock, /g_hWin2\s*:=\s*receiver\["hwnd"\]/);
+  assert.match(refreshBlock, /g_hWin1\s*:=\s*0/);
+  assert.match(refreshBlock, /g_hWin2\s*:=\s*0/);
+  const activeStart = launcher.indexOf('IsActiveSession() {');
+  const activeEnd = launcher.indexOf('RefreshManagedWindowHandles() {', activeStart);
+  const activeBlock = launcher.slice(activeStart, activeEnd + 'RefreshManagedWindowHandles()'.length);
+  assert.match(activeBlock, /g_interviewActive/);
+  assert.match(activeBlock, /RefreshManagedWindowHandles\(\)/);
 });

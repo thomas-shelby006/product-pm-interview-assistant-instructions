@@ -301,3 +301,30 @@ test('entry promotes lifecycle title only after registration and composer readin
   assert.match(source, /adapter\.findComposer\(\)/);
   assert.match(source, /setTarget\(runtimeLifecycleTitle\(runtimeConfig, 'ready'\)\)/);
 });
+
+test('background preserves sleeping registrations and protects managed tabs from discard', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const loadBlock = background.slice(
+    background.indexOf('async function loadRegistry()'),
+    background.indexOf('async function saveRegistry')
+  );
+  assert.doesNotMatch(loadBlock, /pruneStale/);
+  const registrationBlock = background.slice(
+    background.indexOf('async function handleRegistration'),
+    background.indexOf('async function handleForward')
+  );
+  assert.match(registrationBlock, /autoDiscardable:\s*false/);
+  assert.match(background, /chrome\.tabs\.onUpdated\.addListener/);
+  assert.match(background, /PMIA_RUNTIME_RESUME/);
+});
+
+test('content runtime accepts a managed-tab restore signal', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const listener = entry.slice(entry.indexOf('chrome.runtime.onMessage.addListener'));
+  assert.match(listener, /PMIA_RUNTIME_RESUME/);
+  assert.match(listener, /runtimeRecovery\?\.trigger\('tab_restored'\)/);
+});

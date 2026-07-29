@@ -50,3 +50,23 @@ test('runtime recovery ignores hidden visibility and removes listeners on discon
   win.emit('pageshow');
   assert.equal(jobs.length, 0);
 });
+test('runtime recovery re-registers when a frozen page resumes', async () => {
+  const win = new FakeTarget();
+  const doc = new FakeTarget();
+  doc.visibilityState = 'hidden';
+  const jobs = [];
+  const reasons = [];
+  const recovery = createRuntimeRecovery({
+    window: win,
+    document: doc,
+    recover: async reason => reasons.push(reason),
+    scheduleMicrotask: job => jobs.push(job)
+  });
+  doc.emit('resume');
+  assert.equal(jobs.length, 1);
+  await jobs[0]();
+  assert.deepEqual(reasons, ['resume']);
+  recovery.disconnect();
+  doc.emit('resume');
+  assert.equal(jobs.length, 1);
+});
