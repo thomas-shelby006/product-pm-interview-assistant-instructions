@@ -203,3 +203,16 @@ test('Alt+Delete closes every managed PMIA lifecycle window even with stale cach
   assert.match(endBlock, /ExitApp/);
   assert.doesNotMatch(endBlock, /if IsAlive\(g_hWin1\)/);
 });
+
+test('launcher confirms sender boot before opening the receiver window', () => {
+  const launch = launcher.slice(
+    launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
+    launcher.indexOf('ApplyConfiguredInitialLayout()')
+  );
+  const senderRun = launch.indexOf("Run BrowserExe ' --new-window");
+  const senderBoot = launch.indexOf('WaitForLifecycleTitle("sender"');
+  const receiverRun = launch.indexOf("Run BrowserExe ' --new-window", senderRun + 1);
+  assert.ok(senderRun >= 0);
+  assert.ok(senderBoot > senderRun);
+  assert.ok(receiverRun > senderBoot);
+});

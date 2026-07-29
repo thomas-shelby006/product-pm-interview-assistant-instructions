@@ -842,12 +842,20 @@ RunManagedLaunch(reuseSession := false) {
     senderUrl := UrlWithRuntime(ProviderUrl(g_senderProvider), g_sessionId, "sender", g_senderProvider)
     receiverUrl := UrlWithRuntime(ProviderUrl(g_receiverProvider), g_sessionId, "receiver", g_receiverProvider)
     Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' senderUrl '"' . flags
-    Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' receiverUrl '"' . flags
+    SetLaunchState("WAITING_BOOT", "Waiting for PMIA sender runtime before opening the receiver...", "info")
+    senderBoot := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "boot", 15000)
+    if !senderBoot.Count {
+        DiagnoseLaunchFailure("boot", "sender")
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
+    }
 
-    SetLaunchState("WAITING_BOOT", "Waiting for PMIA content runtime in both windows...", "info")
-    bootPair := WaitForLifecyclePair("boot", 15000)
-    if !bootPair["ok"] {
-        DiagnoseLaunchFailure("boot", bootPair["role"])
+    Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' receiverUrl '"' . flags
+    SetLaunchState("WAITING_BOOT", "Sender started; waiting for PMIA receiver runtime...", "info")
+    receiverBoot := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "boot", 15000)
+    if !receiverBoot.Count {
+        DiagnoseLaunchFailure("boot", "receiver")
         if IsObject(g_launchButton)
             g_launchButton.Enabled := true
         return false
