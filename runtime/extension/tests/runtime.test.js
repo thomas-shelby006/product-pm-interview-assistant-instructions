@@ -466,3 +466,24 @@ test('transcript filter blocks provider status text without blocking real questi
   assert.equal(filterModule.isActionableTranscript('Processing audio'), false);
   assert.equal(filterModule.isActionableTranscript('How are you transcribing customer calls?'), true);
 });
+
+test('receiver default readiness window survives slow provider send-button activation', async () => {
+  let yields = 0;
+  let submitted = 0;
+  const messages = [];
+  const adapter = {
+    setComposerText: () => true,
+    composerContains: () => true,
+    canSubmit: () => yields >= 150,
+    submit() { submitted += 1; messages.push({ id: 'late', role: 'user', text: 'Slow provider question' }); return true; },
+    getConversationMessages: () => messages
+  };
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter,
+    text: 'Slow provider question',
+    yieldFn: async () => { yields += 1; }
+  });
+  assert.equal(result, true);
+  assert.equal(submitted, 1);
+  assert.ok(yields >= 150);
+});

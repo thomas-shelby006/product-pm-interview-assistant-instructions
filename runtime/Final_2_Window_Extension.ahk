@@ -907,7 +907,7 @@ RunManagedLaunch(reuseSession := false) {
     EnsureAlwaysOnTop(g_hWin1)
     EnsureAlwaysOnTop(g_hWin2)
     ApplyConfiguredInitialLayout()
-    SendToWindow(BuildBootPrompt(), "^+{F7}", g_hWin2)
+    SendToWindow(BuildBootPrompt(), "^+{F5}", g_hWin1)
     g_interviewActive := true
     SaveStudioPreferences()
     SetLaunchState("READY", "Session linked and boot context delivered.", "ok")

@@ -42,8 +42,8 @@ export async function submitComposerWhenReady({
   adapter,
   text,
   yieldFn = yieldToProvider,
-  maxChecks = 90,
-  maxConfirmChecks = 180,
+  maxChecks = 320,
+  maxConfirmChecks = 640,
   baselineUserIds = snapshotUserTurnIds(adapter),
   isCurrent = () => true
 }) {
@@ -82,8 +82,8 @@ export function createReceiverController({
   stopTimeoutMs = 2500,
   stopPollMs = 75,
   yieldFn = yieldToProvider,
-  maxSubmitChecks = 90,
-  maxConfirmChecks = 180,
+  maxSubmitChecks = 320,
+  maxConfirmChecks = 640,
   maxPreviewTurns = 64,
   maxPreviewStreams = 8
 }) {

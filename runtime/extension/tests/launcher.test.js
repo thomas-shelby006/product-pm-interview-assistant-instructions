@@ -219,13 +219,13 @@ test('launcher confirms sender readiness before opening the receiver window', ()
   assert.ok(receiverRun > senderReady);
 });
 
-test('launcher delivers boot context directly to the receiver and never submits it in the sender', () => {
+test('launcher sends boot context through the sender transport without local sender submission', () => {
   const launch = launcher.slice(
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
     launcher.indexOf('RepairLaunch(*)')
   );
-  assert.match(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F7\}", g_hWin2\)/);
-  assert.doesNotMatch(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F5\}", g_hWin1\)/);
+  assert.match(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F5\}", g_hWin1\)/);
+  assert.doesNotMatch(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F7\}", g_hWin2\)/);
 });
 
 test('Alt+Delete asks the extension to close the exact session before Win32 fallback', () => {
