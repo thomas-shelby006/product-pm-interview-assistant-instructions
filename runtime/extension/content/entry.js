@@ -5,7 +5,7 @@ import { createClaudeAdapter } from './adapters/claude.js';
 import {
   createReceiverController,
   submitComposerWhenReady,
-  runtimeTitle,
+  runtimeLifecycleTitle,
   defendTitle,
   redactSensitiveSessionText,
   sleep
@@ -80,8 +80,15 @@ async function startRuntime(runtimeConfig) {
     version: runtimeVersion
   });
   const overlay = createStatusOverlay(document, runtimeConfig);
-  const targetTitle = runtimeTitle(runtimeConfig);
-  const restoreTitle = defendTitle(document, targetTitle);
+  const restoreTitle = defendTitle(document, runtimeLifecycleTitle(runtimeConfig, 'boot'));
+  let runtimeRegistered = false;
+  const refreshLifecycleTitle = () => {
+    const phase = runtimeRegistered
+      ? (adapter.findComposer() ? 'ready' : 'registered')
+      : 'boot';
+    restoreTitle.setTarget(runtimeLifecycleTitle(runtimeConfig, phase));
+    return phase;
+  };
   let paused = false;
   let scrollLocked = false;
   let answerCaptureToken = 0;
@@ -137,6 +144,11 @@ async function startRuntime(runtimeConfig) {
       registration: runtimeConfig
     });
     if (response?.ok) {
+      runtimeRegistered = true;
+      restoreTitle.setTarget(runtimeLifecycleTitle(runtimeConfig, 'registered'));
+      if (adapter.findComposer()) {
+        restoreTitle.setTarget(runtimeLifecycleTitle(runtimeConfig, 'ready'));
+      }
       if (!paused) {
         const status = describeRuntimeStatus(response.status);
         overlay.setStatus(status.text, status.tone);
@@ -144,6 +156,8 @@ async function startRuntime(runtimeConfig) {
       return true;
     }
     if (response?.terminal) {
+      runtimeRegistered = false;
+      refreshLifecycleTitle();
       registrationActive = false;
       paused = true;
       const label = response.error === 'role_conflict' ? 'ROLE CONFLICT' : 'RELOAD TAB';
@@ -209,6 +223,8 @@ async function startRuntime(runtimeConfig) {
     }
     const response = await message({ type: 'PMIA_FORWARD', envelope });
     if (response?.terminal) {
+      runtimeRegistered = false;
+      refreshLifecycleTitle();
       registrationActive = false;
       paused = true;
       overlay.setStatus('SENDER REVOKED', 'error');
@@ -344,7 +360,10 @@ async function startRuntime(runtimeConfig) {
     receiverObserver = createProviderObserver({
       adapter,
       document,
-      onChange: () => answerWake.pulse(),
+      onChange: () => {
+        refreshLifecycleTitle();
+        answerWake.pulse();
+      },
       watchdogMs: 500
     });
   }
@@ -460,7 +479,10 @@ async function startRuntime(runtimeConfig) {
     senderObserver = createProviderObserver({
       adapter,
       document,
-      onChange: () => senderController?.observe(),
+      onChange: () => {
+        refreshLifecycleTitle();
+        senderController?.observe();
+      },
       watchdogMs: 500
     });
 

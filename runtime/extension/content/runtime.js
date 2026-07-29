@@ -197,15 +197,29 @@ export function createReceiverController({
   };
 }
 
+function runtimeTitleSuffix(sessionId = '') {
+  return String(sessionId).trim().replace(/[^a-z0-9]+/gi, '_').toUpperCase();
+}
+
 export function runtimeTitle({ role, provider, sessionId = '' }) {
   const base = `PMIA_${String(role).toUpperCase()}_${String(provider).toUpperCase()}`;
-  const suffix = String(sessionId).trim().replace(/[^a-z0-9]+/gi, '_').toUpperCase();
+  const suffix = runtimeTitleSuffix(sessionId);
+  return suffix ? `${base}_${suffix}` : base;
+}
+
+export function runtimeLifecycleTitle(config, phase = 'ready') {
+  const normalized = String(phase || 'ready').toLowerCase();
+  if (normalized === 'ready') return runtimeTitle(config);
+  const prefix = normalized === 'registered' ? 'PMIA_REGISTERED' : 'PMIA_BOOT';
+  const base = `${prefix}_${String(config.role).toUpperCase()}_${String(config.provider).toUpperCase()}`;
+  const suffix = runtimeTitleSuffix(config.sessionId);
   return suffix ? `${base}_${suffix}` : base;
 }
 
 export function defendTitle(doc, target, Observer = globalThis.MutationObserver) {
+  let currentTarget = String(target);
   const restore = () => {
-    if (doc.title !== target) doc.title = target;
+    if (doc.title !== currentTarget) doc.title = currentTarget;
   };
   restore();
   let observer = null;
@@ -213,6 +227,11 @@ export function defendTitle(doc, target, Observer = globalThis.MutationObserver)
     observer = new Observer(restore);
     observer.observe(doc.head, { childList: true, subtree: true, characterData: true });
   }
+  restore.setTarget = nextTarget => {
+    currentTarget = String(nextTarget);
+    restore();
+    return currentTarget;
+  };
   restore.disconnect = () => observer?.disconnect();
   return restore;
 }

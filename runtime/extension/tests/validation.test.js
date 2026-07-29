@@ -291,3 +291,13 @@ test('runtime fallback diagnostics contain no replacement-character mojibake', a
   const main = await readFile(resolve(extensionRoot, 'content/main.js'), 'utf8');
   assert.doesNotMatch(main, /\uFFFD|A�|Ã|â€™|â€“/);
 });
+
+
+test('entry promotes lifecycle title only after registration and composer readiness', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../content/entry.js', import.meta.url), 'utf8');
+  assert.match(source, /runtimeLifecycleTitle/);
+  assert.match(source, /setTarget\(runtimeLifecycleTitle\(runtimeConfig, 'registered'\)\)/);
+  assert.match(source, /adapter\.findComposer\(\)/);
+  assert.match(source, /setTarget\(runtimeLifecycleTitle\(runtimeConfig, 'ready'\)\)/);
+});

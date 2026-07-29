@@ -422,3 +422,40 @@ test('confirmed provider turn preserves a newer receiver draft', async () => {
   assert.equal(result, true);
   assert.equal(composer, 'Newer manual draft');
 });
+
+
+test('runtime lifecycle titles distinguish boot registered and ready phases', () => {
+  const config = { role: 'sender', provider: 'claude', sessionId: 'pmia_060_test' };
+  assert.equal(
+    runtimeModule.runtimeLifecycleTitle(config, 'boot'),
+    'PMIA_BOOT_SENDER_CLAUDE_PMIA_060_TEST'
+  );
+  assert.equal(
+    runtimeModule.runtimeLifecycleTitle(config, 'registered'),
+    'PMIA_REGISTERED_SENDER_CLAUDE_PMIA_060_TEST'
+  );
+  assert.equal(
+    runtimeModule.runtimeLifecycleTitle(config, 'ready'),
+    runtimeModule.runtimeTitle(config)
+  );
+});
+
+test('title defender changes lifecycle target without creating another observer', () => {
+  let observeCalls = 0;
+  let disconnectCalls = 0;
+  class Observer {
+    constructor(callback) { this.callback = callback; }
+    observe() { observeCalls += 1; }
+    disconnect() { disconnectCalls += 1; }
+  }
+  const doc = { title: 'Provider', head: {} };
+  const defend = runtimeModule.defendTitle(doc, 'PMIA_BOOT_SENDER_CHATGPT_X', Observer);
+  assert.equal(doc.title, 'PMIA_BOOT_SENDER_CHATGPT_X');
+  defend.setTarget('PMIA_REGISTERED_SENDER_CHATGPT_X');
+  assert.equal(doc.title, 'PMIA_REGISTERED_SENDER_CHATGPT_X');
+  defend.setTarget('PMIA_SENDER_CHATGPT_X');
+  assert.equal(doc.title, 'PMIA_SENDER_CHATGPT_X');
+  assert.equal(observeCalls, 1);
+  defend.disconnect();
+  assert.equal(disconnectCalls, 1);
+});
