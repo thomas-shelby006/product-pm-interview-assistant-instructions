@@ -842,7 +842,7 @@ RunManagedLaunch(reuseSession := false) {
     senderUrl := UrlWithRuntime(ProviderUrl(g_senderProvider), g_sessionId, "sender", g_senderProvider)
     receiverUrl := UrlWithRuntime(ProviderUrl(g_receiverProvider), g_sessionId, "receiver", g_receiverProvider)
     Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' senderUrl '"' . flags
-    SetLaunchState("WAITING_BOOT", "Waiting for PMIA sender runtime before opening the receiver...", "info")
+    SetLaunchState("WAITING_BOOT", "Waiting for PMIA sender runtime...", "info")
     senderBoot := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "boot", 15000)
     if !senderBoot.Count {
         DiagnoseLaunchFailure("boot", "sender")
@@ -851,8 +851,28 @@ RunManagedLaunch(reuseSession := false) {
         return false
     }
 
+    SetLaunchState("WAITING_REGISTRATION", "Sender started; waiting for sender registration...", "info")
+    senderRegistered := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "registered", 15000)
+    if !senderRegistered.Count {
+        DiagnoseLaunchFailure("registered", "sender")
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
+    }
+    try WinActivate "ahk_id " senderRegistered["hwnd"]
+    Sleep 250
+
+    SetLaunchState("WAITING_COMPOSER", "Sender registered; waiting for sender composer...", "info")
+    senderReady := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "ready", 30000)
+    if !senderReady.Count {
+        DiagnoseLaunchFailure("ready", "sender")
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
+    }
+
     Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' receiverUrl '"' . flags
-    SetLaunchState("WAITING_BOOT", "Sender started; waiting for PMIA receiver runtime...", "info")
+    SetLaunchState("WAITING_BOOT", "Sender ready; waiting for PMIA receiver runtime...", "info")
     receiverBoot := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "boot", 15000)
     if !receiverBoot.Count {
         DiagnoseLaunchFailure("boot", "receiver")
@@ -861,28 +881,26 @@ RunManagedLaunch(reuseSession := false) {
         return false
     }
 
-    SetLaunchState("WAITING_REGISTRATION", "Both runtimes started; waiting for session registration...", "info")
-    registeredPair := WaitForLifecyclePair("registered", 15000)
-    if !registeredPair["ok"] {
-        DiagnoseLaunchFailure("registered", registeredPair["role"])
+    SetLaunchState("WAITING_REGISTRATION", "Receiver started; waiting for receiver registration...", "info")
+    receiverRegistered := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "registered", 15000)
+    if !receiverRegistered.Count {
+        DiagnoseLaunchFailure("registered", "receiver")
         if IsObject(g_launchButton)
             g_launchButton.Enabled := true
         return false
     }
-
-    try WinActivate "ahk_id " registeredPair["sender"]["hwnd"]
-    Sleep 250
-    try WinActivate "ahk_id " registeredPair["receiver"]["hwnd"]
+    try WinActivate "ahk_id " receiverRegistered["hwnd"]
     Sleep 250
 
-    SetLaunchState("WAITING_COMPOSER", "Registration complete; waiting for provider composers...", "info")
-    readyPair := WaitForLifecyclePair("ready", 30000)
-    if !readyPair["ok"] {
-        DiagnoseLaunchFailure("ready", readyPair["role"])
+    SetLaunchState("WAITING_COMPOSER", "Receiver registered; waiting for receiver composer...", "info")
+    receiverReady := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "ready", 30000)
+    if !receiverReady.Count {
+        DiagnoseLaunchFailure("ready", "receiver")
         if IsObject(g_launchButton)
             g_launchButton.Enabled := true
         return false
     }
+    readyPair := Map("ok", true, "sender", senderReady, "receiver", receiverReady)
 
     g_hWin1 := readyPair["sender"]["hwnd"]
     g_hWin2 := readyPair["receiver"]["hwnd"]

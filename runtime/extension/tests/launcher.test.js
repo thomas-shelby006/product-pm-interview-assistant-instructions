@@ -30,7 +30,8 @@ test('launcher closes only PMIA lifecycle windows', () => {
 test('launcher retains final session-suffixed ready titles', () => {
   assert.match(launcher, /RuntimeLifecycleTitle\(role, provider, sessionId, phase/);
   assert.match(launcher, /base := RuntimeWindowTitle\(role, provider, sessionId\)/);
-  assert.match(launcher, /WaitForLifecyclePair\("ready", 30000\)/);
+  assert.match(launcher, /WaitForLifecycleTitle\("sender", g_senderProvider, g_sessionId, "ready", 30000\)/);
+  assert.match(launcher, /WaitForLifecycleTitle\("receiver", g_receiverProvider, g_sessionId, "ready", 30000\)/);
 });
 
 test('launcher reads profile doctor output and persists only safe preferences', () => {
@@ -184,16 +185,17 @@ test('active session derives from exact lifecycle windows rather than a mutable 
   assert.ok(!refreshBlock.includes('!g_interviewActive'));
 });
 
-test('launcher foregrounds both registered providers before composer readiness', () => {
+test('launcher foregrounds each registered provider before its composer readiness wait', () => {
   const launch = launcher.slice(
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
     launcher.indexOf('ApplyConfiguredInitialLayout()')
   );
-  const registered = launch.indexOf('registeredPair :=');
-  const ready = launch.indexOf('readyPair :=');
-  const between = launch.slice(registered, ready);
-  assert.ok(between.includes('WinActivate "ahk_id " registeredPair["sender"]["hwnd"]'));
-  assert.ok(between.includes('WinActivate "ahk_id " registeredPair["receiver"]["hwnd"]'));
+  const senderRegistered = launch.indexOf('senderRegistered :=');
+  const senderReady = launch.indexOf('senderReady :=');
+  const receiverRegistered = launch.indexOf('receiverRegistered :=');
+  const receiverReady = launch.indexOf('receiverReady :=');
+  assert.ok(launch.slice(senderRegistered, senderReady).includes('WinActivate "ahk_id " senderRegistered["hwnd"]'));
+  assert.ok(launch.slice(receiverRegistered, receiverReady).includes('WinActivate "ahk_id " receiverRegistered["hwnd"]'));
 });
 
 test('Alt+Delete closes every managed PMIA lifecycle window even with stale cached state', () => {
@@ -204,15 +206,15 @@ test('Alt+Delete closes every managed PMIA lifecycle window even with stale cach
   assert.doesNotMatch(endBlock, /if IsAlive\(g_hWin1\)/);
 });
 
-test('launcher confirms sender boot before opening the receiver window', () => {
+test('launcher confirms sender readiness before opening the receiver window', () => {
   const launch = launcher.slice(
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
     launcher.indexOf('ApplyConfiguredInitialLayout()')
   );
   const senderRun = launch.indexOf("Run BrowserExe ' --new-window");
-  const senderBoot = launch.indexOf('WaitForLifecycleTitle("sender"');
+  const senderReady = launch.indexOf('WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "ready"');
   const receiverRun = launch.indexOf("Run BrowserExe ' --new-window", senderRun + 1);
   assert.ok(senderRun >= 0);
-  assert.ok(senderBoot > senderRun);
-  assert.ok(receiverRun > senderBoot);
+  assert.ok(senderReady > senderRun);
+  assert.ok(receiverRun > senderReady);
 });
