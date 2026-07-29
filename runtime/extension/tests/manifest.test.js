@@ -77,6 +77,7 @@ test('manifest exposes all dynamically imported sender and answer modules', asyn
   assert.ok(resources.includes('content/answer-tracker.js'));
   assert.ok(resources.includes('content/preview-scheduler.js'));
   assert.ok(resources.includes('content/runtime-recovery.js'));
+  assert.ok(resources.includes('content/runtime-fatal.js'));
   assert.ok(resources.includes('shared/*.js'));
 });
 

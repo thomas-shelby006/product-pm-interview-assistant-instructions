@@ -53,7 +53,8 @@
         "content/observation/*.js",
         "content/senders/*.js",
         "content/preview-scheduler.js",
-        "content/runtime-recovery.js"
+        "content/runtime-recovery.js",
+        "content/runtime-fatal.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

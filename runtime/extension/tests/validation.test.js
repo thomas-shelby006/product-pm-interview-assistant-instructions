@@ -235,3 +235,15 @@ test('entry imports every runtime dependency passed to the receiver controller',
   assert.match(receiverCall, /\bsleep\b/);
   assert.match(runtimeImport, /\bsleep\b/);
 });
+test('content startup renders fatal diagnostics for import and runtime failures', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const main = await readFile(resolve(extensionRoot, 'content/main.js'), 'utf8');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  assert.match(main, /runtime-fatal\.js/);
+  assert.match(main, /renderRuntimeFatal/);
+  assert.match(main, /stage:\s*'load'/);
+  assert.match(entry, /renderRuntimeFatal/);
+  assert.match(entry, /stage:\s*'start'/);
+  assert.match(entry, /chrome\.runtime\.getManifest\(\)\.version/);
+});

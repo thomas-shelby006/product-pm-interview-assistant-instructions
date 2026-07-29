@@ -21,6 +21,7 @@ import { createRuntimeRecovery } from './runtime-recovery.js';
 import { SequenceGate, nextSequence } from '../shared/sequence.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 import { describeRuntimeStatus } from '../shared/session-status.js';
+import { renderRuntimeFatal } from './runtime-fatal.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -51,7 +52,14 @@ const config = readConfig();
 if (!config) {
   console.debug('[PMIA] no runtime config; normal provider tab left untouched');
 } else {
-  startRuntime(config).catch(error => console.error('[PMIA] runtime failed', error));
+  startRuntime(config).catch(error => {
+    console.error('[PMIA] runtime failed', error);
+    renderRuntimeFatal(document, {
+      stage: 'start',
+      error,
+      version: chrome.runtime.getManifest().version
+    });
+  });
 }
 
 async function startRuntime(runtimeConfig) {
