@@ -1593,23 +1593,80 @@ IsActiveSession() {
 RefreshManagedWindowHandles() {
     global g_sessionId, g_senderProvider, g_receiverProvider
     global g_hWin1, g_hWin2
-    if (g_sessionId = "")
-        return false
-    g_hWin1 := 0
-    g_hWin2 := 0
+    if (g_sessionId != "") {
+        g_hWin1 := 0
+        g_hWin2 := 0
+        previousDetectHidden := A_DetectHiddenWindows
+        DetectHiddenWindows true
+        try {
+            sender := FindLifecycleWindow("sender", g_senderProvider, g_sessionId, "boot")
+            receiver := FindLifecycleWindow("receiver", g_receiverProvider, g_sessionId, "boot")
+            if sender.Count
+                g_hWin1 := sender["hwnd"]
+            if receiver.Count
+                g_hWin2 := receiver["hwnd"]
+        } finally {
+            DetectHiddenWindows previousDetectHidden
+        }
+        if IsAlive(g_hWin1) && IsAlive(g_hWin2)
+            return true
+    }
+    if RecoverUnambiguousManagedSession()
+        return true
+    return false
+}
+
+RecoverUnambiguousManagedSession() {
+    global g_sessionId, g_senderProvider, g_receiverProvider
+    global g_hWin1, g_hWin2, g_interviewActive
+    sessions := Map()
     previousDetectHidden := A_DetectHiddenWindows
     DetectHiddenWindows true
     try {
-        sender := FindLifecycleWindow("sender", g_senderProvider, g_sessionId, "boot")
-        receiver := FindLifecycleWindow("receiver", g_receiverProvider, g_sessionId, "boot")
-        if sender.Count
-            g_hWin1 := sender["hwnd"]
-        if receiver.Count
-            g_hWin2 := receiver["hwnd"]
+        for hwnd in WinGetList("ahk_exe msedge.exe") {
+            title := WinGetTitle("ahk_id " hwnd)
+            if !RegExMatch(title, "^PMIA_(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_(PMIA_[A-Z0-9_]+)$", &match)
+                continue
+            role := StrLower(match[1])
+            provider := StrLower(match[2])
+            sessionId := StrLower(match[3])
+            if !sessions.Has(sessionId) {
+                sessions[sessionId] := Map(
+                    "sessionId", sessionId,
+                    "senderCount", 0, "receiverCount", 0,
+                    "senderHwnd", 0, "receiverHwnd", 0,
+                    "senderProvider", "", "receiverProvider", "")
+            }
+            entry := sessions[sessionId]
+            entry[role "Count"] += 1
+            entry[role "Hwnd"] := hwnd
+            entry[role "Provider"] := provider
+        }
     } finally {
         DetectHiddenWindows previousDetectHidden
     }
-    return IsAlive(g_hWin1) && IsAlive(g_hWin2)
+
+    completeSessions := []
+    for sessionId, entry in sessions {
+        if entry["senderCount"] = 1 && entry["receiverCount"] = 1
+            completeSessions.Push(entry)
+    }
+    if completeSessions.Length != 1 {
+        LogEvent("Active session recovery rejected: complete_pairs=" completeSessions.Length)
+        return false
+    }
+
+    recovered := completeSessions[1]
+    g_sessionId := StrLower(recovered["sessionId"])
+    g_senderProvider := StrLower(recovered["senderProvider"])
+    g_receiverProvider := StrLower(recovered["receiverProvider"])
+    g_hWin1 := recovered["senderHwnd"]
+    g_hWin2 := recovered["receiverHwnd"]
+    g_interviewActive := true
+    if !IsAlive(g_hWin1) || !IsAlive(g_hWin2)
+        return false
+    LogEvent("Recovered active PMIA session from READY lifecycle pair: " g_sessionId)
+    return true
 }
 
 IsAlive(hWnd) {

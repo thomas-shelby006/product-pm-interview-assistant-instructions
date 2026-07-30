@@ -305,3 +305,26 @@ test('structured metadata controls are read for launch and released on close', (
   }
   assert.match(launcher, /Show\("w960 h900"\)/);
 });
+
+test('operational session recovery binds one unambiguous READY lifecycle pair when cached state is stale', () => {
+  assert.match(launcher, /RecoverUnambiguousManagedSession\(\)/);
+  const recoverStart = launcher.indexOf('RecoverUnambiguousManagedSession() {');
+  const recoverEnd = launcher.indexOf('\n}\n\nIsAlive(', recoverStart);
+  const recoverBlock = launcher.slice(recoverStart, recoverEnd);
+  assert.match(recoverBlock, /WinGetList\("ahk_exe msedge\.exe"\)/);
+  assert.match(recoverBlock, /\^PMIA_\(SENDER\|RECEIVER\)_\(CHATGPT\|CLAUDE\)_\(PMIA_/);
+  assert.match(recoverBlock, /completeSessions\.Length != 1/);
+  assert.match(recoverBlock, /g_sessionId\s*:=\s*StrLower/);
+  assert.match(recoverBlock, /g_senderProvider\s*:=\s*StrLower/);
+  assert.match(recoverBlock, /g_receiverProvider\s*:=\s*StrLower/);
+  assert.match(recoverBlock, /g_hWin1\s*:=/);
+  assert.match(recoverBlock, /g_hWin2\s*:=/);
+});
+
+test('handle refresh falls back to unambiguous lifecycle recovery after cached lookup fails', () => {
+  const start = launcher.indexOf('RefreshManagedWindowHandles() {');
+  const end = launcher.indexOf('\n}\n\nRecoverUnambiguousManagedSession() {', start);
+  const block = launcher.slice(start, end);
+  assert.match(block, /RecoverUnambiguousManagedSession\(\)/);
+  assert.match(block, /return true/);
+});
