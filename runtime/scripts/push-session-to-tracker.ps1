@@ -25,6 +25,12 @@ param(
     [string]$TrackerRepoPath,
 
     [Parameter(Mandatory=$false)]
+    [switch]$DryRun,
+
+    [Parameter(Mandatory=$false)]
+    [string]$DryRunOutputPath = '',
+
+    [Parameter(Mandatory=$false)]
     [switch]$NoAutoMerge
 )
 
@@ -53,22 +59,20 @@ function Slugify([string]$Value, [string]$Fallback) {
     return $v
 }
 
-function Run-Git([string[]]$Args, [string]$WorkingDirectory) {
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = 'git'
-    foreach ($arg in $Args) { [void]$psi.ArgumentList.Add($arg) }
-    $psi.WorkingDirectory = $WorkingDirectory
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.UseShellExecute = $false
-    $p = [System.Diagnostics.Process]::Start($psi)
-    $stdout = $p.StandardOutput.ReadToEnd()
-    $stderr = $p.StandardError.ReadToEnd()
-    $p.WaitForExit()
-    if ($p.ExitCode -ne 0) {
-        throw "git $($Args -join ' ') failed`nSTDOUT:`n$stdout`nSTDERR:`n$stderr"
+function Run-Git([string[]]$GitArgs, [string]$WorkingDirectory) {
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        $output = & git @GitArgs 2>&1
+        $exitCode = $LASTEXITCODE
+        $text = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        if ($exitCode -ne 0) {
+            throw "git $($GitArgs -join ' ') failed`n$text"
+        }
+        return $text.Trim()
     }
-    return $stdout.Trim()
+    finally {
+        Pop-Location
+    }
 }
 
 Assert-FileExists $Win1File 'Win1 file'
@@ -86,7 +90,15 @@ $roleSlug = Slugify $Role 'pm'
 $roundSlug = Slugify $Round 'unknown'
 $modeSlug = Slugify $Mode 'mock'
 
-$root = Join-Path $TrackerRepoPath $SessionType
+if ($DryRun) {
+    if ([string]::IsNullOrWhiteSpace($DryRunOutputPath)) {
+        $DryRunOutputPath = Join-Path ([IO.Path]::GetTempPath()) 'PMInterviewAssistant\tracker-dry-run'
+    }
+    New-Item -ItemType Directory -Path $DryRunOutputPath -Force | Out-Null
+    $root = Join-Path $DryRunOutputPath $SessionType
+} else {
+    $root = Join-Path $TrackerRepoPath $SessionType
+}
 if (-not (Test-Path -LiteralPath $root)) {
     New-Item -ItemType Directory -Path $root | Out-Null
 }
@@ -126,6 +138,14 @@ Review source:
 Use these two files in the PM Interview Review Lab.
 "@
 Set-Content -LiteralPath (Join-Path $sessionFolder 'README.md') -Value $readme -Encoding UTF8
+
+if ($DryRun) {
+    Write-Host "Dry run completed."
+    Write-Host "Session ID: $sessionId"
+    Write-Host "Session folder: $sessionFolder"
+    Write-Host "No Git commit, branch, merge, or remote write was performed."
+    return
+}
 
 $branchName = "session/$sessionId"
 Run-Git @('checkout','main') $TrackerRepoPath | Out-Null
