@@ -27,7 +27,7 @@ This file tracks only current Edge Stable / Manifest V3 work. Edge Beta, Tamperm
 
 - Session Studio shows Target company, Target role, Interview round, Emphasis, Avoid mentioning, Answer mode, Resume, Job Description, Additional notes, and launch controls.
 - Session metadata remains memory-only; `settings.ini` stores only profile, route, and layout.
-- Tracker helper discovers one complete PMIA lifecycle-title pair and exports both roles with `Ctrl+Shift+F8`.
+- Tracker Review Studio discovers one complete PMIA lifecycle-title pair and requests export/end through `PMIA_RUNTIME_CONTROL_V1`; no focus-injected review hotkey is required.
 - Missing or multiple sessions produce explicit errors.
 - Dry run creates only `README.md`, `win1_sender.md`, and `win2_receiver.md` under the supplied dry-run path and performs no Git write.
 

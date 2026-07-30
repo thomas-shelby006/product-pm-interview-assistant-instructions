@@ -29,13 +29,14 @@ Resume, Job Description, notes, prompts, answers, and session identifiers are no
 
 Session Studio exposes memory-only fields for **Target company**, **Target role**, **Interview round**, **Emphasis**, **Avoid mentioning**, **Answer mode**, and **Additional notes** beside Resume and Job Description. Blank dropdowns infer from the JD. These fields are not persisted; only profile, route, and layout preferences are stored.
 
-## End-session tracker
+## End-session Review Studio
 
-1. Start `runtime/Session_Tracker_End_Session.ahk` after a managed interview session is complete.
-2. Choose **Export Both Windows**. The helper finds one complete PMIA lifecycle-title pair and sends `Ctrl+Shift+F8` to each role.
-3. The newest matching sender and receiver Markdown exports are discovered automatically in Downloads.
-4. Choose practice/real metadata and push to the private tracker, or run the PowerShell script with `-DryRun` first.
-5. Missing or multiple sessions fail explicitly; manual Browse remains available.
+1. Press `Alt+Shift+E` in the main launcher, or start `runtime/Session_Tracker_End_Session.ahk`.
+2. The Review Studio detects one complete READY PMIA sender/receiver pair.
+3. Choose **Export and Pair**. The companion asks the launcher control channel to export both roles, then validates one fresh matching Markdown pair from Downloads.
+4. Enter practice/real metadata and choose **Push and Open Review Lab**, or run the PowerShell script with `-DryRun` first.
+5. The tracker push returns structured JSON, opens the local session folder and configured Review Lab only after success, and can end only the exact managed PMIA session.
+6. Missing, ambiguous, stale, malformed, duplicate, or mismatched sessions fail explicitly. The live interview remains open after a failure.
 
 ## PM shortcut map
 
@@ -49,9 +50,10 @@ CapsLock       Cycle layout presets within the visible mode
 Alt+Q          Toggle sender microphone through the provider adapter
 Alt+W          Toggle receiver scroll lock
 Alt+E          Export sender and receiver session records
+Alt+Shift+E    Open or focus the PM Session Tracker Review Studio
 ```
 
-The active runtime does not map Alt+S, Alt+A, Alt+X, Alt+1, Alt+Z, or Alt+Shift. It contains no screenshot, Greenshot, coding, code-focus, or force-forward workflow.
+The active runtime does not map Alt+S, Alt+A, Alt+X, Alt+1, or Alt+Z. It contains no screenshot, Greenshot, coding, code-focus, or force-forward workflow.
 
 ## Transport expectations
 

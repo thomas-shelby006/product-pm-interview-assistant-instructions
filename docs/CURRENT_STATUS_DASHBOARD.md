@@ -10,7 +10,7 @@ Last updated: 2026-07-30
 | Browser | Microsoft Edge Stable | Session Studio selects the registered profile and Profile Doctor verifies path/version. |
 | Launcher | Active | `runtime/Final_2_Window_Extension.ahk`; structured memory-only session setup and PM-only hotkeys. |
 | Transport | Active | Extension preview/final lanes, provider-specific boundaries, durable sequence and rendered-turn acknowledgement. |
-| Session tracker | Active companion | `runtime/Session_Tracker_End_Session.ahk`; exact PMIA pairing, `Ctrl+Shift+F8` export, automatic Markdown discovery. |
+| Session tracker | Active Review Studio | `runtime/Session_Tracker_End_Session.ahk`; exact READY pairing, control-channel export/end, strict Markdown resolver, structured tracker push result, Review Lab handoff. |
 | Tracker repository | Ready | Private `thomas-shelby006/pm-interview-session-tracker`; synthetic dry run leaves it unchanged. |
 | Legacy runtime | Preserved, inactive | Edge Beta, Tampermonkey, fixed launcher, and archives are rollback/reference material only. |
 

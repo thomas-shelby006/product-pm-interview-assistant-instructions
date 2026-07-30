@@ -116,7 +116,7 @@ No Resume, Job Description, notes, prompt, answer, session identifier, cookie, t
 
 ## Session tracker companion
 
-`runtime/Session_Tracker_End_Session.ahk` is the optional post-session companion for the active Manifest V3 runtime. It pairs one exact sender/receiver session from PMIA lifecycle titles, sends `Ctrl+Shift+F8` to both roles, locates the resulting Markdown exports in Downloads, and fills the tracker form automatically. Missing and ambiguous sessions fail with explicit codes. Manual Browse remains a recovery path.
+`runtime/Session_Tracker_End_Session.ahk` is the optional post-session Review Studio. It detects one exact READY sender/receiver pair, requests export/end through the launcher's registered Windows-message control channel, validates one fresh role-scoped Markdown pair with `resolve-pmia-session-exports.ps1`, pushes through a structured JSON result contract, and opens the configured Review Lab only after success. Missing, ambiguous, stale, malformed, duplicate, and mismatched sessions fail precisely.
 
 The push script supports `-DryRun` and a separate output path. Dry run validates inputs and creates the session package without checkout, commit, branch, merge, push, or remote deletion.
 

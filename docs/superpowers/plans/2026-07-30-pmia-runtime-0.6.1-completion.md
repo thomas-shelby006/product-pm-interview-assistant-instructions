@@ -33,11 +33,11 @@
 - [ ] Add failing launcher tests for company, target role, round, emphasis, avoid-list, answer mode, freeform notes, memory-only handling, and complete control cleanup.
 - [ ] Run `node --test runtime/extension/tests/launcher.test.js` and confirm the new contracts fail.
 - [ ] Add structured controls to Session Studio without hiding Resume, JD, layout, status, or launch actions.
-- [ ] Build the exact labels `Company`, `Target role`, `Interview round`, `Emphasis`, `Avoid mentioning`, and `Answer mode`; append optional notes under `Additional notes`.
-- [ ] Read structured values only when launching or resending; do not write them to `settings.ini`.
-- [ ] Destroy and zero every new control reference when Session Studio closes.
-- [ ] Run the focused launcher tests and AutoHotkey `--validate` path.
-- [ ] Commit the structured Studio slice.
+- [x] Build the exact labels `Company`, `Target role`, `Interview round`, `Emphasis`, `Avoid mentioning`, and `Answer mode`; append optional notes under `Additional notes`.
+- [x] Read structured values only when launching or resending; do not write them to `settings.ini`.
+- [x] Destroy and zero every new control reference when Session Studio closes.
+- [x] Run the focused launcher tests and AutoHotkey `--validate` path.
+- [x] Commit the structured Studio slice.
 
 ### Task 2: Current-runtime session tracker
 
@@ -49,16 +49,16 @@
 **Interfaces:**
 - Produces: one complete managed-session discovery result with sender/receiver HWNDs and session suffix.
 - Produces: newest sender/receiver Markdown export paths created after a known export start time.
-- Consumes: current `PMIA_*` lifecycle titles, `Ctrl+Shift+F8`, Edge Downloads directory, and existing tracker push script.
+- Consumes: current `PMIA_*` lifecycle titles, launcher `PMIA_RUNTIME_CONTROL_V1`, Edge Downloads directory, exact export resolver, and tracker push script.
 
-- [ ] Add failing tests proving legacy `VB_*` titles and `Ctrl+Shift+F9` are absent.
-- [ ] Add failing tests for exact PMIA session pairing, ambiguous-session rejection, current export shortcut, UTF-8 GUI title, and automatic export discovery.
-- [ ] Implement hidden-window-aware discovery of one complete sender/receiver pair sharing the same session suffix.
-- [ ] Export both roles with `Ctrl+Shift+F8`, poll the real Downloads directory, and fill the two Markdown file controls automatically.
-- [ ] Preserve manual Browse controls as recovery, but explain exact errors instead of reporting success blindly.
-- [ ] Add a `-DryRun` push-script path that validates and stages a synthetic session folder without Git commit, branch, merge, or remote writes.
-- [ ] Run focused tracker tests, AutoHotkey validation, and a synthetic dry-run against a temporary tracker clone/copy.
-- [ ] Commit the tracker compatibility slice.
+- [x] Add failing tests proving legacy `VB_*` titles and `Ctrl+Shift+F9` are absent.
+- [x] Add failing tests for exact PMIA session pairing, ambiguous-session rejection, current export shortcut, UTF-8 GUI title, and automatic export discovery.
+- [x] Implement hidden-window-aware discovery of one complete sender/receiver pair sharing the same session suffix.
+- [x] Request both role exports through the launcher control channel, resolve one exact fresh Markdown pair, and fill the two file controls automatically.
+- [x] Preserve manual Browse controls as recovery, but explain exact errors instead of reporting success blindly.
+- [x] Add a `-DryRun` push-script path that validates and stages a synthetic session folder without Git commit, branch, merge, or remote writes.
+- [x] Run focused tracker tests, AutoHotkey validation, and a synthetic dry-run against a temporary tracker clone/copy.
+- [x] Commit the tracker compatibility slice.
 
 ### Task 3: Documentation and stale-work resolution
 
@@ -74,10 +74,10 @@
 - Documents the active Edge Stable/Manifest V3 workflow and the completed session metadata/tracker boundaries.
 - Removes obsolete claims that structured fields or supersede are still deferred.
 
-- [ ] Update active docs with structured metadata, tracker export discovery, dry-run behavior, privacy boundary, and recovery steps.
-- [ ] Mark the old Phase 2 document as historical/completed without deleting its reference material.
-- [ ] Record synthetic verification only; exclude provider account data, Resume/JD bodies, cookies, tokens, and conversation content.
-- [ ] Run stale-reference, encoding, and secret-pattern scans.
+- [x] Update active docs with structured metadata, tracker export discovery, dry-run behavior, privacy boundary, and recovery steps.
+- [x] Mark the old Phase 2 document as historical/completed without deleting its reference material.
+- [x] Record synthetic verification only; exclude provider account data, Resume/JD bodies, cookies, tokens, and conversation content.
+- [x] Run stale-reference, encoding, and secret-pattern scans.
 - [ ] Commit the documentation slice.
 
 ### Task 4: Final verification and delivery
@@ -85,10 +85,10 @@
 **Files:**
 - Modify only release/version files if the verified change warrants `0.6.1`.
 
-- [ ] Run `npm test`, `npm run validate`, and `runtime\Validate_Extension_Runtime.ps1` once on the complete batch.
-- [ ] Run `git diff --check`, inspect the complete diff, and confirm unrelated files remain untouched.
+- [x] Run `npm test`, `npm run validate`, and `runtime\Validate_Extension_Runtime.ps1` once on the complete batch.
+- [x] Run `git diff --check`, inspect the complete diff, and confirm unrelated files remain untouched.
 - [ ] Launch Session Studio and verify structured fields reach `BuildBootPrompt()` using synthetic values without persisting them.
-- [ ] Verify tracker helper discovers a synthetic/current PMIA pair or returns a precise no-session error; verify `-DryRun` creates no Git or remote changes.
+- [x] Verify tracker helper discovers a synthetic/current PMIA pair or returns a precise no-session error; verify `-DryRun` creates no Git or remote changes.
 - [ ] Update the verification record with exact results and commit the final tree.
 - [ ] Push the feature branch and fast-forward `main` only after the exact final tree passes.
 - [ ] Tag `pmia-runtime-v0.6.1` only if `main` and the installed runtime are verified at that commit.

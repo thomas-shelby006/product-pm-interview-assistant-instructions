@@ -33,7 +33,7 @@ Session Studio keeps Resume and Job Description as the primary inputs and adds m
 
 ## Post-session tracker
 
-`runtime/Session_Tracker_End_Session.ahk` discovers exactly one active PMIA sender/receiver pair by lifecycle title, exports both role logs with `Ctrl+Shift+F8`, locates the new Markdown files automatically, and can hand them to the private tracker push script. The push script supports `-DryRun` for staging-only verification before any Git write.
+`runtime/Session_Tracker_End_Session.ahk` is the PM Session Tracker Review Studio. It detects exactly one READY PMIA pair, requests both role exports through the launcher's focus-independent control channel, pairs and validates the fresh Markdown files, pushes them to the private tracker, and opens the configured Review Lab. The push script supports `-DryRun` before any Git operation.
 
 ## PM-only shortcut surface
 
