@@ -59,5 +59,5 @@
 - [x] Commit the final candidate and reload the exact unpacked extension without opening foreground windows.
 - [x] Run ChatGPT→ChatGPT, ChatGPT→Claude, Claude→ChatGPT, and Claude→Claude live routes with retained evidence.
 - [x] Run the >60-second minimized/background route and safe Alt+Delete shutdown gate.
-- [ ] Commit verification evidence, push the feature branch, merge to main, rerun the complete gate, push main, and create `pmia-runtime-v0.6.0`.
-- [ ] Repoint the stable Edge compatibility junction to canonical main, reload, verify profile doctor, remove only task-created temporary files and the merged worktree, and confirm old files remain.
+- [x] Commit verification evidence, push the feature branch, merge to main, rerun the complete gate, push main, and create `pmia-runtime-v0.6.0`.
+- [x] Repoint the stable Edge compatibility junction to canonical main, reload, verify profile doctor, remove only task-created temporary files and the merged worktree, and confirm old files remain.

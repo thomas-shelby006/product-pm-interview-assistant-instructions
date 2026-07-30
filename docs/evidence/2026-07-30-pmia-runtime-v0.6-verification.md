@@ -90,6 +90,15 @@ The v0.6 runtime preserves the useful behavior of the legacy two-window system:
 
 The release improves the legacy design with active runtime preflight, provider-specific final boundaries, staged first-question context, bounded tracking, exactly-once sequencing, wake-and-retry delivery, path/version diagnosis, and session-scoped cleanup.
 
-## Candidate disposition
+## Release integration
 
-The verified feature candidate satisfies the v0.6 implementation and live-behavior gates. Release integration must still be recorded after the feature branch is merged into `main`, the complete gate passes on merged `main`, the canonical Edge junction is reloaded, and the release tag is pushed.
+- The feature branch was published at the verification-report commit before local integration.
+- Canonical `main` was fast-forwarded without conflicts or unrelated changes.
+- The complete merged-main gate passed: **249 tests**, **57 JavaScript files**, AutoHotkey v2 validation, clean diff, and clean status.
+- Both compatibility junctions now target canonical `main/runtime/extension` directly.
+- Edge reloaded only the PMIA card in Profile 1; Profile Doctor returned `OK`, version `0.6.0`, and an exact canonical path match.
+- **45** task-created PMIA temp files and the temporary Browser Evidence verification copy were removed.
+- The merged feature worktree and local feature branch were removed; the remote feature branch remains as release provenance.
+- Legacy launchers, session tracker, Tampermonkey fallback directories, and unrelated Edge windows remain intact.
+
+Remote `main` and tag `pmia-runtime-v0.6.0` are verified after publication to resolve to the release commit containing this record.
