@@ -368,7 +368,8 @@ test('review control messages reuse exact recovered browser-command export and s
 
 test('browser command activation includes hidden managed windows and restores detection mode', () => {
   const start = launcher.indexOf('SendBrowserCommand(shortcut, hTarget) {');
-  const block = launcher.slice(start, launcher.indexOf('\n}\n\n', start) + 2);
+  const end = launcher.indexOf('SendToWindow(msg, shortcut, hTarget) {', start);
+  const block = launcher.slice(start, end);
   assert.match(block, /DetectHiddenWindows true/);
   assert.match(block, /WinActivate "ahk_id " hTarget/);
   assert.match(block, /Send shortcut/);
