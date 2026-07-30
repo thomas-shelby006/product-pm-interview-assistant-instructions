@@ -109,13 +109,31 @@ Company, role, round, mode, PMIA session ID, Resume, Job Description, prompts, a
 
 Review Lab and the local tracker folder open only after a successful structured push result. A failed export pair or tracker push leaves the interview session open.
 
+## Merged-main and installed-runtime verification
+
+Canonical `main` was fast-forwarded from v0.6.0 through the complete 0.6.1 feature history. The full validator then passed from the canonical Windows checkout, including the CRLF-specific launcher verification that exposed and fixed one final test portability defect.
+
+The two compatibility junctions used by the installed Edge profile now resolve directly to canonical `main/runtime/extension`. Their manifest hashes match canonical main. The PMIA extension card was reloaded after the junction change, and Profile Doctor reported:
+
+- profile: `Default` (`Profile 1`);
+- extension version: `0.6.1`;
+- registered compatibility path: present;
+- resolved source: canonical `main/runtime/extension`;
+- path match: `True`;
+- issue: `OK`.
+
+No PMIA interview or Review Studio process remained after the live smoke. Temporary extension-management windows were closed and unrelated Edge tabs remained open.
+
 ## Release decision
 
-The candidate is eligible for v0.6.1 integration after:
+The exact 0.6.1 tree is approved for publication as `pmia-runtime-v0.6.1` after:
 
-1. committing the reviewed tree;
-2. verifying the exact commit from a clean worktree;
-3. reloading Edge Stable from canonical `main`;
-4. validating Profile Doctor and the Review Studio on the installed path;
-5. pushing `main` and tagging `pmia-runtime-v0.6.1`;
-6. removing only assistant-created temporary files and merged worktrees.
+- 303/303 automated tests passed;
+- 62 JavaScript files validated;
+- both active AutoHotkey programs validated;
+- the exact Review Studio export/pair/shutdown path passed live;
+- merged canonical `main` passed the complete gate;
+- canonical Edge reload and Profile Doctor passed;
+- diff, secret-pattern, redaction, and cleanup-boundary checks passed.
+
+The legacy launcher, session tracker history, Tampermonkey scripts, update support, archives, user browser profile, and unrelated tabs remain preserved.
