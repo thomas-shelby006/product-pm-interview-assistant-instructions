@@ -39,8 +39,10 @@ test('tracker documentation matches the Edge Stable extension-native workflow', 
     assert.match(doc, /Microsoft Edge Stable/);
     assert.match(doc, /Manifest V3/);
   }
-  assert.match(setup, /Ctrl\+Shift\+F8/);
-  assert.match(setup, /automatic/i);
+  assert.match(setup, /PMIA_RUNTIME_CONTROL_V1/);
+  assert.match(setup, /Export and Pair/);
+  assert.match(setup, /one fresh sender and one fresh receiver/);
+  assert.match(setup, /auto-merge/i);
   assert.doesNotMatch(setup, /## Edge Beta setup|Tampermonkey.*enabled/i);
 });
 
