@@ -16,6 +16,7 @@
 ;  ALT+Q         = Mute/unmute Win1 mic through provider DOM adapter
 ;  ALT+W         = Toggle scroll lock on Win2
 ;  ALT+E         = Export sender and receiver PM session records
+;  ALT+SHIFT+E   = Open/focus the PM Session Review Studio
 ; ============================================================
 
 global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
@@ -36,6 +37,8 @@ if (A_Args.Length >= 1 && A_Args[1] = "--validate") {
     FileAppend "AHK_VALID`n", "*"
     ExitApp 0
 }
+
+global g_controlSmokeMode := A_Args.Length >= 1 && A_Args[1] = "--control-smoke"
 
 SetCapsLockState "AlwaysOff"
 SetTitleMatchMode 2
@@ -332,6 +335,7 @@ global SETTINGS_DIR          := EnvGet("LOCALAPPDATA") "\PMInterviewAssistant"
 global SETTINGS_FILE         := SETTINGS_DIR "\settings.ini"
 global EDGE_USER_DATA_ROOT   := EnvGet("LOCALAPPDATA") "\Microsoft\Edge\User Data"
 global PROFILE_DOCTOR_SCRIPT := A_ScriptDir "\Browser_Profile_Doctor.ps1"
+global REVIEW_STUDIO_SCRIPT := A_ScriptDir "\Session_Tracker_End_Session.ahk"
 global EXPECTED_EXTENSION_PATH := A_ScriptDir "\extension"
 global LOG_DIR               := SETTINGS_DIR "\logs"
 global LOG_FILE              := LOG_DIR "\session_debug.log"
@@ -348,9 +352,18 @@ global g_repairButton        := 0
 global g_shortContextArmedUntil := 0
 global g_launchStateCode     := "PREFLIGHT"
 global g_lastLaunchFailure   := Map()
+global RUNTIME_CONTROL_MESSAGE_NAME := "PMIA_RUNTIME_CONTROL_V1"
+global RUNTIME_CONTROL_WINDOW_TITLE := "PMIA_RUNTIME_CONTROL"
+global RUNTIME_CONTROL_EXPORT := 1
+global RUNTIME_CONTROL_END := 2
+global g_runtimeControlGui := 0
+global g_runtimeControlMessageId := 0
 
-LoadStudioPreferences()
-ShowSessionLaunchGui()
+InitializeRuntimeControlBridge()
+if !g_controlSmokeMode {
+    LoadStudioPreferences()
+    ShowSessionLaunchGui()
+}
 ~LAlt::return
 
 
@@ -363,6 +376,57 @@ ShowSessionLaunchGui()
 
 !r:: {
     ShowSessionLaunchGui()
+}
+
+
+!+e::OpenSessionReviewStudio()
+
+OpenSessionReviewStudio() {
+    global REVIEW_STUDIO_SCRIPT
+    if !FileExist(REVIEW_STUDIO_SCRIPT) {
+        LogEvent("Review Studio missing: " REVIEW_STUDIO_SCRIPT)
+        return false
+    }
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try {
+        existing := WinExist("PM Session Tracker - Review Studio")
+        if existing {
+            WinShow "ahk_id " existing
+            WinActivate "ahk_id " existing
+            return true
+        }
+    } finally {
+        DetectHiddenWindows previousDetectHidden
+    }
+    Run '"' A_AhkPath '" "' REVIEW_STUDIO_SCRIPT '"'
+    return true
+}
+
+InitializeRuntimeControlBridge() {
+    global RUNTIME_CONTROL_MESSAGE_NAME, RUNTIME_CONTROL_WINDOW_TITLE
+    global g_runtimeControlGui, g_runtimeControlMessageId
+    g_runtimeControlMessageId := DllCall("RegisterWindowMessage", "Str", RUNTIME_CONTROL_MESSAGE_NAME, "UInt")
+    if !g_runtimeControlMessageId
+        throw Error("Could not register PMIA runtime control message")
+    g_runtimeControlGui := Gui("+ToolWindow -Caption", RUNTIME_CONTROL_WINDOW_TITLE)
+    g_runtimeControlGui.AddText("x0 y0 w1 h1", " ")
+    g_runtimeControlGui.Show("x-32000 y-32000 w1 h1 NA")
+    OnMessage(g_runtimeControlMessageId, HandleRuntimeControlMessage)
+    LogEvent("Runtime control bridge ready HWND=" g_runtimeControlGui.Hwnd)
+}
+
+HandleRuntimeControlMessage(wParam, lParam, msg, hwnd) {
+    global RUNTIME_CONTROL_EXPORT, RUNTIME_CONTROL_END
+    if (wParam = RUNTIME_CONTROL_EXPORT) {
+        SetTimer(() => ExportActiveSession(), -1)
+        return 1
+    }
+    if (wParam = RUNTIME_CONTROL_END) {
+        SetTimer(() => EndActiveSession(), -1)
+        return 1
+    }
+    return 0
 }
 
 LoadStudioPreferences() {
@@ -1401,9 +1465,13 @@ RestoreLayout(layout) {
         LogEvent("Alt+Esc boot/context resent directly to Win2")
 }
 
- ; Alt+Delete — Cleanly end this AHK session.
+; Alt+Delete — Cleanly end this AHK session.
 ; Resume/JD are stored only in process memory and are not saved to disk.
 !Delete:: {
+    EndActiveSession()
+}
+
+EndActiveSession() {
     global g_interviewActive, g_hWin1, g_hWin2
     if GetKeyState("Alt", "P")
         KeyWait "Alt"
@@ -1419,14 +1487,18 @@ RestoreLayout(layout) {
     ExitApp
 }
 
-; Alt+E — Export PM session from Win2
+; Alt+E — Export both role-scoped PM session records.
 !e:: {
+    ExportActiveSession()
+}
+
+ExportActiveSession() {
     global g_hWin1, g_hWin2
     if GetKeyState("Alt", "P")
         KeyWait "Alt"
     if (!IsActiveSession()) {
         LogEvent("Alt+E ignored: no active interview session")
-        return
+        return false
     }
 
     exported := false
@@ -1451,6 +1523,7 @@ RestoreLayout(layout) {
 
     if !exported
         LogEvent("Alt+E failed: no managed window accepted export")
+    return exported
 }
 
 ; Alt+Q — Mute/unmute Win1 mic through the active provider adapter.

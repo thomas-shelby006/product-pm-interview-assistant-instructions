@@ -6,13 +6,15 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $extension = Join-Path $PSScriptRoot 'extension'
 $launcher = Join-Path $PSScriptRoot 'Final_2_Window_Extension.ahk'
+$reviewCompanion = Join-Path $PSScriptRoot 'Session_Tracker_End_Session.ahk'
 
 if (-not (Test-Path $AutoHotkeyExe)) { throw "AutoHotkey v2 not found: $AutoHotkeyExe" }
 if (-not (Test-Path (Join-Path $extension 'manifest.json'))) { throw 'Extension manifest missing.' }
 if (-not (Test-Path $launcher)) { throw 'Extension launcher missing.' }
+if (-not (Test-Path $reviewCompanion)) { throw 'Session review companion missing.' }
 
 $launcherSource = Get-Content $launcher -Raw
-$requiredHotkeys = @('!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::')
+$requiredHotkeys = @('!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::', '!+e::')
 foreach ($hotkey in $requiredHotkeys) {
     if (-not $launcherSource.Contains($hotkey)) { throw "Required PM hotkey missing: $hotkey" }
 }
@@ -23,6 +25,48 @@ foreach ($hotkey in $forbiddenHotkeys) {
 if ($launcherSource -match 'promptScreenshot|keybd_event') {
     throw 'Screenshot workflow remains in the active PM launcher.'
 }
+$reviewSource = Get-Content $reviewCompanion -Raw
+foreach ($required in @('PMIA_RUNTIME_CONTROL_V1','resolve-pmia-session-exports.ps1','push-session-to-tracker.ps1')) {
+    if (-not $reviewSource.Contains($required)) {
+        throw "Session review companion requirement missing: $required"
+    }
+}
+foreach ($legacy in @('VB_SENDER','VB_RECEIVER','Ctrl+Shift+F9','^+{F9}')) {
+    if ($reviewSource.Contains($legacy)) {
+        throw "Legacy review companion assumption remains active: $legacy"
+    }
+}
+
+function Test-AutoHotkeyScript(
+    [string]$Path,
+    [string]$Label,
+    [switch]$UseEnvironmentValidation
+) {
+    $token = [IO.Path]::GetFileNameWithoutExtension($Path) -replace '[^A-Za-z0-9]+','-'
+    $stdout = Join-Path $env:TEMP "pmia-ahk-$token-out.txt"
+    $stderr = Join-Path $env:TEMP "pmia-ahk-$token-err.txt"
+    Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue
+    $previousValidation = $env:PMIA_VALIDATE
+    try {
+        if ($UseEnvironmentValidation) { $env:PMIA_VALIDATE = '1' }
+        $arguments = @('/ErrorStdOut', ('"' + $Path + '"'))
+        if (-not $UseEnvironmentValidation) { $arguments += '--validate' }
+        $process = Start-Process $AutoHotkeyExe -ArgumentList $arguments `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
+    } finally {
+        if ($null -eq $previousValidation) { Remove-Item Env:PMIA_VALIDATE -ErrorAction SilentlyContinue }
+        else { $env:PMIA_VALIDATE = $previousValidation }
+    }
+    if ($process.ExitCode -ne 0) {
+        $details = ((Get-Content $stdout, $stderr -ErrorAction SilentlyContinue) -join [Environment]::NewLine)
+        throw "$Label AutoHotkey validation failed ($($process.ExitCode)). $details"
+    }
+    $signal = (Get-Content $stdout -ErrorAction SilentlyContinue) -join ''
+    if ($signal -notmatch 'AHK_VALID') {
+        throw "$Label AutoHotkey validation did not emit AHK_VALID."
+    }
+    Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue
+}
 
 Push-Location $repo
 try {
@@ -32,22 +76,13 @@ try {
     & npm run validate
     if ($LASTEXITCODE -ne 0) { throw "Extension validation failed with exit code $LASTEXITCODE" }
 
-    $stdout = Join-Path $env:TEMP 'pmia-ahk-validation-out.txt'
-    $stderr = Join-Path $env:TEMP 'pmia-ahk-validation-err.txt'
-    Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue
-    $process = Start-Process $AutoHotkeyExe `
-        -ArgumentList @('/ErrorStdOut', ('"' + $launcher + '"'), '--validate') `
-        -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
-    if ($process.ExitCode -ne 0) {
-        $details = ((Get-Content $stdout, $stderr -ErrorAction SilentlyContinue) -join [Environment]::NewLine)
-        throw "AutoHotkey validation failed ($($process.ExitCode)). $details"
-    }
-    $signal = (Get-Content $stdout -ErrorAction SilentlyContinue) -join ''
-    if ($signal -notmatch 'AHK_VALID') { throw 'AutoHotkey validation did not emit AHK_VALID.' }
+    Test-AutoHotkeyScript -Path $launcher -Label 'Main launcher'
+    Test-AutoHotkeyScript -Path $reviewCompanion -Label 'Session review companion' -UseEnvironmentValidation
 
     Write-Host 'PMIA extension runtime validation passed.'
-    Write-Host "Extension: $extension"
-    Write-Host "Launcher:  $launcher"
+    Write-Host "Extension:        $extension"
+    Write-Host "Launcher:         $launcher"
+    Write-Host "Review companion: $reviewCompanion"
 }
 finally {
     Pop-Location

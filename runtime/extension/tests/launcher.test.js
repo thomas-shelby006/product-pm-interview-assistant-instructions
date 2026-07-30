@@ -149,7 +149,9 @@ test('closing the session studio releases every operational control reference', 
 });
 
 test('Alt+E exports sender and receiver role-scoped records', () => {
-  const exportBlock = launcher.match(/!e:: \{[\s\S]*?\n\}/)?.[0] || '';
+  const hotkeyBlock = launcher.match(/!e:: \{[\s\S]*?\n\}/)?.[0] || '';
+  const exportBlock = launcher.slice(launcher.indexOf('ExportActiveSession() {'), launcher.indexOf('; Alt+Q'));
+  assert.match(hotkeyBlock, /ExportActiveSession\(\)/);
   assert.match(exportBlock, /global g_hWin1, g_hWin2/);
   assert.match(exportBlock, /SendToWindow\("", "\^\+\{F8\}", g_hWin1\)/);
   assert.match(exportBlock, /SendToWindow\("", "\^\+\{F8\}", g_hWin2\)/);
@@ -199,7 +201,10 @@ test('launcher foregrounds each registered provider before its composer readines
 });
 
 test('Alt+Delete closes every managed PMIA lifecycle window even with stale cached state', () => {
-  const endBlock = launcher.match(/!Delete:: \{[\s\S]*?\n\}/)?.[0] || '';
+  const hotkeyBlock = launcher.match(/!Delete:: \{[\s\S]*?\n\}/)?.[0] || '';
+  const endStart = launcher.indexOf('EndActiveSession() {');
+  const endBlock = launcher.slice(endStart, launcher.indexOf('; Alt+E', endStart));
+  assert.match(hotkeyBlock, /EndActiveSession\(\)/);
   assert.match(endBlock, /CloseManagedPmiaWindows\(\)/);
   assert.match(endBlock, /g_interviewActive\s*:=\s*false/);
   assert.match(endBlock, /ExitApp/);
@@ -229,7 +234,8 @@ test('launcher sends boot context through the sender transport without local sen
 });
 
 test('Alt+Delete asks the extension to close the exact session before Win32 fallback', () => {
-  const endBlock = launcher.match(/!Delete:: \{[\s\S]*?\n\}/)?.[0] || '';
+  const endStart = launcher.indexOf('EndActiveSession() {');
+  const endBlock = launcher.slice(endStart, launcher.indexOf('; Alt+E', endStart));
   assert.match(endBlock, /SendToWindow\("", "\^\+\{F4\}"/);
   assert.match(endBlock, /CloseManagedPmiaWindows\(\)/);
   assert.ok(endBlock.indexOf('^+{F4}') < endBlock.indexOf('CloseManagedPmiaWindows()'));

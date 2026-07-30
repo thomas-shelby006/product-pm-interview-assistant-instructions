@@ -1,290 +1,432 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
-; Companion for the active Manifest V3 PMIA runtime.
-; Alt+Shift+E opens the end-session panel.
-; It discovers one exact PMIA sender/receiver pair, exports both role logs,
-; locates the generated Markdown files, and can push them to the tracker.
+global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+global PMIA_RUNTIME_CONTROL_MESSAGE := "PMIA_RUNTIME_CONTROL_V1"
+global PMIA_RUNTIME_CONTROL_WINDOW := "PMIA_RUNTIME_CONTROL"
+global PMIA_RUNTIME_CONTROL_EXPORT := 1
+global PMIA_RUNTIME_CONTROL_END := 2
+global ReviewLabDefaultUrl := "https://chatgpt.com/"
+global SettingsDir := EnvGet("LOCALAPPDATA") "\PMInterviewAssistant"
+global ReviewSettingsFile := SettingsDir "\review-settings.ini"
+global MainSettingsFile := SettingsDir "\settings.ini"
+global ResolverScript := A_ScriptDir "\scripts\resolve-pmia-session-exports.ps1"
+global PushScript := A_ScriptDir "\scripts\push-session-to-tracker.ps1"
 
-if (A_Args.Length >= 1 && A_Args[1] = "--validate") {
+if (EnvGet("PMIA_VALIDATE") = "1" || (A_Args.Length >= 1 && (A_Args[1] = "--validate" || A_Args[1] = "validate"))) {
     FileAppend "TRACKER_AHK_VALID`n", "*"
     ExitApp 0
 }
 
 SetTitleMatchMode 3
 SendMode "Input"
-SendLevel 1
 
-global RepoRoot := A_ScriptDir "\.."
-global PushScript := RepoRoot "\runtime\scripts\push-session-to-tracker.ps1"
+global g_reviewGui := 0
+global g_detectedSession := Map()
+global g_pairedExport := Map()
+global g_statusText := 0
+global g_sessionText := 0
+global g_routeText := 0
+global g_sessionTypeDdl := 0
+global g_companyEdit := 0
+global g_roleEdit := 0
+global g_roundEdit := 0
+global g_modeEdit := 0
+global g_trackerEdit := 0
+global g_downloadEdit := 0
+global g_reviewUrlEdit := 0
+global g_senderFileEdit := 0
+global g_receiverFileEdit := 0
+global g_endAfterPush := 0
 
-!+e::ShowEndSessionGui()
-ShowEndSessionGui()
+global g_trackerPath := A_MyDocuments "\pm-interview-session-tracker"
+global g_downloadDirectory := EnvGet("USERPROFILE") "\Downloads"
+global g_reviewLabUrl := ReviewLabDefaultUrl
 
-ShowEndSessionGui() {
-    global PushScript
-    g := Gui("+AlwaysOnTop", "PM Session Tracker — End Session")
-    g.SetFont("s9", "Segoe UI")
+LoadReviewPreferences()
+ShowReviewStudio()
 
-    g.AddText("x16 y16 w120", "Session type")
-    sessionType := g.AddDropDownList("x150 y12 w180", ["practice", "real"])
-    sessionType.Value := 1
-
-    g.AddText("x16 y50 w120", "Company")
-    company := g.AddEdit("x150 y46 w300", "unknown")
-    g.AddText("x16 y84 w120", "Role")
-    role := g.AddEdit("x150 y80 w300", "pm")
-    g.AddText("x16 y118 w120", "Round")
-    round := g.AddEdit("x150 y114 w300", "unknown")
-    g.AddText("x16 y152 w120", "Mode")
-    mode := g.AddEdit("x150 y148 w300", "mock")
-
-    g.AddText("x16 y190 w120", "Tracker repo")
-    tracker := g.AddEdit("x150 y186 w420", "C:\Users\Sundar\Documents\pm-interview-session-tracker")
-    g.AddButton("x580 y184 w80", "Browse").OnEvent("Click", (*) => BrowseFolder(tracker))
-
-    g.AddText("x16 y228 w120", "Sender export")
-    win1 := g.AddEdit("x150 y224 w420")
-    g.AddButton("x580 y222 w80", "Browse").OnEvent("Click", (*) => BrowseFile(win1))
-    g.AddText("x16 y266 w120", "Receiver export")
-    win2 := g.AddEdit("x150 y262 w420")
-    g.AddButton("x580 y260 w80", "Browse").OnEvent("Click", (*) => BrowseFile(win2))
-
-    closeMain := g.AddCheckBox("x16 y304 w640 Checked", "After successful push, end the active PMIA session")
-    status := g.AddText("x16 y332 w650 h36", "Ready. Export discovery requires exactly one complete PMIA session.")
-    status.SetFont("s9 c475569", "Segoe UI")
-
-    g.AddButton("x16 y378 w150", "Export Both Windows").OnEvent("Click", (*) => ExportBothWindows(win1, win2, status))
-    g.AddButton("x180 y378 w150", "Push Session").OnEvent("Click", (*) => PushSession(sessionType, company, role, round, mode, win1, win2, tracker, closeMain, status))
-    g.AddButton("x344 y378 w170", "Copy Review Prompt").OnEvent("Click", (*) => CopyReviewPrompt(sessionType, company, role, round, mode))
-    g.AddButton("x528 y378 w90", "Close").OnEvent("Click", (*) => g.Destroy())
-
-    g.AddText("x16 y418 w650", "Export discovery uses current PMIA lifecycle titles and Ctrl+Shift+F8. Browse remains available as recovery.")
-    g.Show("w690 h462")
+LoadReviewPreferences() {
+    global SettingsDir, ReviewSettingsFile
+    global g_trackerPath, g_downloadDirectory, g_reviewLabUrl, ReviewLabDefaultUrl
+    if !DirExist(SettingsDir)
+        DirCreate SettingsDir
+    g_trackerPath := IniRead(ReviewSettingsFile, "Review", "TrackerRepoPath", g_trackerPath)
+    g_downloadDirectory := IniRead(ReviewSettingsFile, "Review", "DownloadDirectory", g_downloadDirectory)
+    g_reviewLabUrl := IniRead(ReviewSettingsFile, "Review", "ReviewLabUrl", ReviewLabDefaultUrl)
+}
+SaveReviewPreferences() {
+    global SettingsDir, ReviewSettingsFile
+    global g_trackerEdit, g_downloadEdit, g_reviewUrlEdit
+    if !DirExist(SettingsDir)
+        DirCreate SettingsDir
+    IniWrite g_trackerEdit.Value, ReviewSettingsFile, "Review", "TrackerRepoPath"
+    IniWrite g_downloadEdit.Value, ReviewSettingsFile, "Review", "DownloadDirectory"
+    IniWrite g_reviewUrlEdit.Value, ReviewSettingsFile, "Review", "ReviewLabUrl"
 }
 
-BrowseFolder(ctrl) {
-    selected := DirSelect(, 3, "Select tracker repo folder")
+ShowReviewStudio() {
+    global g_reviewGui, g_statusText, g_sessionText, g_routeText
+    global g_sessionTypeDdl, g_companyEdit, g_roleEdit, g_roundEdit, g_modeEdit
+    global g_trackerEdit, g_downloadEdit, g_reviewUrlEdit
+    global g_senderFileEdit, g_receiverFileEdit, g_endAfterPush
+    global g_trackerPath, g_downloadDirectory, g_reviewLabUrl
+    if IsObject(g_reviewGui) {
+        try g_reviewGui.Show()
+        return
+    }
+
+    g_reviewGui := Gui("+AlwaysOnTop", "PM Session Tracker - Review Studio")
+    g_reviewGui.Opt("+OwnDialogs")
+    g_reviewGui.SetFont("s10", "Segoe UI")
+    g_reviewGui.AddText("x20 y16 w700", "PMIA v0.6.1 - Session Review and Learning Loop").SetFont("s15 Bold", "Segoe UI")
+    g_reviewGui.AddText("x20 y50 w700", "Export the exact managed session, add it to the private tracker, and open Review Lab without changing live transport.")
+    g_sessionText := g_reviewGui.AddText("x20 y84 w700", "Session: not detected")
+    g_routeText := g_reviewGui.AddText("x20 y108 w700", "Route: -")
+    g_reviewGui.AddButton("x620 y78 w120 h32", "Detect Session").OnEvent("Click", DetectSessionFromGui)
+    g_reviewGui.AddText("x20 y150 w110", "Session type")
+    g_sessionTypeDdl := g_reviewGui.AddDropDownList("x140 y146 w150 Choose1", ["practice", "real"])
+    g_reviewGui.AddText("x320 y150 w70", "Company")
+    g_companyEdit := g_reviewGui.AddEdit("x395 y146 w170", "unknown")
+    g_reviewGui.AddText("x580 y150 w50", "Role")
+    g_roleEdit := g_reviewGui.AddEdit("x635 y146 w105", "pm")
+
+    g_reviewGui.AddText("x20 y190 w110", "Round")
+    g_roundEdit := g_reviewGui.AddEdit("x140 y186 w150", "unknown")
+    g_reviewGui.AddText("x320 y190 w70", "Mode")
+    g_modeEdit := g_reviewGui.AddEdit("x395 y186 w170", "mock")
+
+    g_reviewGui.AddText("x20 y234 w110", "Tracker repo")
+    g_trackerEdit := g_reviewGui.AddEdit("x140 y230 w520", g_trackerPath)
+    g_reviewGui.AddButton("x672 y228 w68", "Browse").OnEvent("Click", (*) => BrowseDirectory(g_trackerEdit, "Select private tracker repository"))
+
+    g_reviewGui.AddText("x20 y274 w110", "Downloads")
+    g_downloadEdit := g_reviewGui.AddEdit("x140 y270 w520", g_downloadDirectory)
+    g_reviewGui.AddButton("x672 y268 w68", "Browse").OnEvent("Click", (*) => BrowseDirectory(g_downloadEdit, "Select browser download directory"))
+
+    g_reviewGui.AddText("x20 y314 w110", "Review Lab")
+    g_reviewUrlEdit := g_reviewGui.AddEdit("x140 y310 w600", g_reviewLabUrl)
+
+    g_reviewGui.AddText("x20 y358 w110", "Sender export")
+    g_senderFileEdit := g_reviewGui.AddEdit("x140 y354 w600 ReadOnly")
+    g_reviewGui.AddText("x20 y398 w110", "Receiver export")
+    g_receiverFileEdit := g_reviewGui.AddEdit("x140 y394 w600 ReadOnly")
+    g_endAfterPush := g_reviewGui.AddCheckBox("x20 y438 w720 Checked", "After a successful tracker push, end only this managed PMIA session")
+    g_reviewGui.AddButton("x20 y476 w140 h36", "Export and Pair").OnEvent("Click", ExportAndPair)
+    g_reviewGui.AddButton("x172 y476 w190 h36", "Push and Open Review Lab").OnEvent("Click", PushAndOpenReviewLab)
+    g_reviewGui.AddButton("x374 y476 w130 h36", "End Session").OnEvent("Click", EndDetectedSession)
+    g_reviewGui.AddButton("x620 y476 w120 h36", "Close").OnEvent("Click", CloseReviewStudio)
+    g_statusText := g_reviewGui.AddText("x20 y532 w720 h54", "Ready. Detect the active PMIA session first.")
+    g_reviewGui.OnEvent("Close", CloseReviewStudio)
+    g_reviewGui.Show("w760 h610")
+    DetectSessionFromGui()
+}
+
+CloseReviewStudio(*) {
+    global g_reviewGui, g_statusText, g_sessionText, g_routeText
+    if IsObject(g_reviewGui)
+        g_reviewGui.Destroy()
+    g_reviewGui := 0
+    g_statusText := 0
+    g_sessionText := 0
+    g_routeText := 0
+}
+
+BrowseDirectory(control, prompt) {
+    selected := DirSelect(control.Value, 3, prompt)
     if selected
-        ctrl.Value := selected
+        control.Value := selected
 }
 
-BrowseFile(ctrl) {
-    selected := FileSelect(1, A_Desktop, "Select exported Markdown file", "Markdown (*.md)")
-    if selected
-        ctrl.Value := selected
+SetReviewStatus(text, tone := "neutral") {
+    global g_statusText
+    if !IsObject(g_statusText)
+        return
+    color := tone = "ok" ? "2F6F68" : tone = "error" ? "A33A32" : tone = "warn" ? "9A641A" : "243447"
+    g_statusText.SetFont("c" color)
+    g_statusText.Text := text
+    Sleep 20
+}
+DetectSessionFromGui(*) {
+    global g_detectedSession, g_pairedExport, g_sessionText, g_routeText
+    global g_senderFileEdit, g_receiverFileEdit
+    result := DetectManagedSession()
+    if !result["ok"] {
+        g_detectedSession := Map()
+        g_pairedExport := Map()
+        g_sessionText.Text := "Session: not detected"
+        g_routeText.Text := "Route: -"
+        g_senderFileEdit.Value := ""
+        g_receiverFileEdit.Value := ""
+        SetReviewStatus(result["error"], "error")
+        return false
+    }
+    g_detectedSession := result
+    g_pairedExport := Map()
+    g_sessionText.Text := "Session: " result["sessionId"]
+    g_routeText.Text := "Route: " StrTitle(result["senderProvider"]) " -> " StrTitle(result["receiverProvider"])
+    g_senderFileEdit.Value := ""
+    g_receiverFileEdit.Value := ""
+    SetReviewStatus("Detected one complete READY sender/receiver pair.", "ok")
+    return true
 }
 
-ParsePmiaWindowTitle(title) {
-    pattern := "^PMIA_(?:BOOT_|REGISTERED_)?(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_(.+)$"
-    if !RegExMatch(title, pattern, &match)
-        return 0
-
-    phase := "READY"
-    if (InStr(title, "PMIA_BOOT_") = 1)
-        phase := "BOOT"
-    else if (InStr(title, "PMIA_REGISTERED_") = 1)
-        phase := "REGISTERED"
-    return Map(
-        "role", StrLower(match[1]),
-        "provider", StrLower(match[2]),
-        "sessionId", match[3],
-        "phase", phase,
-        "score", phase = "READY" ? 3 : phase = "REGISTERED" ? 2 : 1
-    )
-}
-
-FindActivePmiaSession() {
+DetectManagedSession() {
+    sessions := Map()
     previousDetectHidden := A_DetectHiddenWindows
     DetectHiddenWindows true
-    sessions := Map()
     try {
         for hwnd in WinGetList("ahk_exe msedge.exe") {
-            info := ParsePmiaWindowTitle(WinGetTitle("ahk_id " hwnd))
-            if !IsObject(info)
+            title := WinGetTitle("ahk_id " hwnd)
+            if !RegExMatch(title, "^PMIA_(?:BOOT_|REGISTERED_)?(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_(PMIA_[A-Z0-9_]+)$", &match)
                 continue
-            id := info["sessionId"]
-            if !sessions.Has(id) {
-                sessions[id] := Map(
-                    "sessionId", id,
-                    "senderHwnd", 0, "senderScore", 0,
-                    "receiverHwnd", 0, "receiverScore", 0
-                )
+            if InStr(title, "PMIA_BOOT_") = 1 || InStr(title, "PMIA_REGISTERED_") = 1
+                continue
+            role := StrLower(match[1])
+            provider := StrLower(match[2])
+            sessionId := StrLower(match[3])
+            if !sessions.Has(sessionId) {
+                sessions[sessionId] := Map(
+                    "sessionId", sessionId,
+                    "senderCount", 0, "receiverCount", 0,
+                    "senderHwnd", 0, "receiverHwnd", 0,
+                    "senderProvider", "", "receiverProvider", "")
             }
-            record := sessions[id]
-            role := info["role"]
-            if (info["score"] > record[role "Score"]) {
-                record[role "Hwnd"] := hwnd
-                record[role "Score"] := info["score"]
-            }
+            entry := sessions[sessionId]
+            entry[role "Count"] += 1
+            entry[role "Hwnd"] := hwnd
+            entry[role "Provider"] := provider
         }
     } finally {
         DetectHiddenWindows previousDetectHidden
     }
-
-    completeSessions := []
-    for _, record in sessions {
-        if record["senderHwnd"] && record["receiverHwnd"]
-            completeSessions.Push(record)
+    complete := []
+    ambiguous := false
+    for sessionId, entry in sessions {
+        if entry["senderCount"] > 1 || entry["receiverCount"] > 1
+            ambiguous := true
+        if entry["senderCount"] = 1 && entry["receiverCount"] = 1
+            complete.Push(entry)
     }
-    if (completeSessions.Length = 0)
-        return Map("ok", false, "code", "NO_ACTIVE_PMIA_SESSION", "message", "No complete PMIA sender/receiver session is open.")
-    if (completeSessions.Length > 1)
-        return Map("ok", false, "code", "AMBIGUOUS_PMIA_SESSIONS", "message", "More than one complete PMIA session is open. End stale sessions first.")
-    result := completeSessions[1]
+    if ambiguous
+        return Map("ok", false, "error", "Duplicate managed role windows exist. End stale PMIA sessions before review.")
+    if complete.Length = 0
+        return Map("ok", false, "error", "No complete READY PMIA sender/receiver pair is running.")
+    if complete.Length > 1
+        return Map("ok", false, "error", "More than one complete PMIA session is running. End the sessions you do not want to export.")
+    result := complete[1]
     result["ok"] := true
+    result["error"] := ""
     return result
 }
 
-SendToWindow(shortcut, hwnd) {
-    if !hwnd || !WinExist("ahk_id " hwnd)
-        return false
-    WinActivate "ahk_id " hwnd
-    if !WinWaitActive("ahk_id " hwnd, , 2)
-        return false
-    Send shortcut
-    return true
+FindRuntimeControlWindow() {
+    global PMIA_RUNTIME_CONTROL_WINDOW
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try return WinExist(PMIA_RUNTIME_CONTROL_WINDOW)
+    finally DetectHiddenWindows previousDetectHidden
 }
 
-GetDownloadsDirectory() {
-    key := "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
-    valueName := "{374DE290-123F-4565-9164-39C4925E467B}"
-    try {
-        configured := RegRead(key, valueName)
-        expanded := ComObject("WScript.Shell").ExpandEnvironmentStrings(configured)
-        if DirExist(expanded)
-            return expanded
-    } catch {
-        ; Fall through to the profile Downloads directory.
-    }
-    fallback := EnvGet("USERPROFILE") "\Downloads"
-    return DirExist(fallback) ? fallback : A_Desktop
+SendRuntimeControl(command) {
+    global PMIA_RUNTIME_CONTROL_MESSAGE
+    hwnd := FindRuntimeControlWindow()
+    if !hwnd
+        return false
+    messageId := DllCall("RegisterWindowMessage", "Str", PMIA_RUNTIME_CONTROL_MESSAGE, "UInt")
+    if !messageId
+        return false
+    return DllCall("PostMessage", "Ptr", hwnd, "UInt", messageId, "Ptr", command, "Ptr", 0) != 0
 }
 
-FindNewestRoleExport(downloadDir, sessionId, role, startedAt) {
-    newestPath := ""
-    newestTime := ""
-    needle := "pmia-session-" StrLower(sessionId) "-" StrLower(role) "-"
-    Loop Files downloadDir "\pmia-session-*.md", "F" {
-        if (A_LoopFileTimeModified < startedAt)
-            continue
-        if !InStr(StrLower(A_LoopFileName), needle)
-            continue
-        if (newestTime = "" || A_LoopFileTimeModified > newestTime) {
-            newestTime := A_LoopFileTimeModified
-            newestPath := A_LoopFileFullPath
-        }
-    }
-    return newestPath
+TemporaryResultPath(kind) {
+    return A_Temp "\pmia-review-" kind "-" A_TickCount "-" Random(1000, 9999) ".json"
 }
 
-WaitForRoleExports(downloadDir, sessionId, startedAt, timeoutMs := 15000) {
-    deadline := A_TickCount + timeoutMs
-    while (A_TickCount < deadline) {
-        sender := FindNewestRoleExport(downloadDir, sessionId, "sender", startedAt)
-        receiver := FindNewestRoleExport(downloadDir, sessionId, "receiver", startedAt)
-        if (sender != "" && receiver != "")
-            return Map("ok", true, "sender", sender, "receiver", receiver)
-        Sleep 250
-    }
-    return Map("ok", false, "code", "EXPORT_TIMEOUT", "message", "PMIA exports were not found in Downloads before the timeout.")
-}
-
-ExportBothWindows(win1, win2, status) {
-    session := FindActivePmiaSession()
-    if !session["ok"] {
-        status.Value := session["code"] ": " session["message"]
-        MsgBox status.Value
-        return false
-    }
-
-    downloadDir := GetDownloadsDirectory()
-    startedAt := A_Now
-    status.Value := "Exporting session " session["sessionId"] "..."
-    if !SendToWindow("^+{F8}", session["senderHwnd"]) {
-        status.Value := "SENDER_EXPORT_FAILED: sender window did not accept the export shortcut."
-        MsgBox status.Value
-        return false
-    }
-    Sleep 200
-    if !SendToWindow("^+{F8}", session["receiverHwnd"]) {
-        status.Value := "RECEIVER_EXPORT_FAILED: receiver window did not accept the export shortcut."
-        MsgBox status.Value
-        return false
-    }
-
-    exports := WaitForRoleExports(downloadDir, session["sessionId"], startedAt)
-    if !exports["ok"] {
-        status.Value := exports["code"] ": " exports["message"]
-        MsgBox status.Value
-        return false
-    }
-    win1.Value := exports["sender"]
-    win2.Value := exports["receiver"]
-    status.Value := "Exports ready for session " session["sessionId"] "."
-    return true
-}
-
-QuoteArg(value) {
+CommandQuote(value) {
     quote := Chr(34)
-    escaped := StrReplace(value, quote, "\" quote)
-    return quote escaped quote
+    if InStr(value, quote)
+        throw Error("A command path contains an unsupported quote character.")
+    return quote value quote
 }
 
-PushSession(sessionType, company, role, round, mode, win1, win2, tracker, closeMain, status) {
-    global PushScript
+JsonString(json, key, defaultValue := "") {
+    pattern := '"' key '"\s*:\s*"((?:\\.|[^"])*)"'
+    if !RegExMatch(json, pattern, &match)
+        return defaultValue
+    value := match[1]
+    value := StrReplace(value, '\/', '/')
+    value := StrReplace(value, '\"', '"')
+    value := StrReplace(value, '\r', '`r')
+    value := StrReplace(value, '\n', '`n')
+    value := StrReplace(value, '\t', '`t')
+    value := StrReplace(value, '\\', '\')
+    return value
+}
+
+JsonBoolean(json, key, defaultValue := false) {
+    pattern := '"' key '"\s*:\s*(true|false)'
+    if !RegExMatch(json, pattern, &match)
+        return defaultValue
+    return match[1] = "true"
+}
+
+ReadJsonResult(path) {
+    if !FileExist(path)
+        return Map("ok", false, "error", "The operation did not create a result file.")
+    json := FileRead(path, "UTF-8")
+    result := Map("ok", JsonBoolean(json, "ok", false))
+    for key in ["sessionId", "sourceSessionId", "senderFile", "receiverFile",
+        "senderProvider", "receiverProvider", "sessionFolder", "trackerRelativePath",
+        "branch", "error"]
+        result[key] := JsonString(json, key, "")
+    result["dryRun"] := JsonBoolean(json, "dryRun", false)
+    result["autoMerged"] := JsonBoolean(json, "autoMerged", false)
+    return result
+}
+
+DeleteOwnTemp(path) {
+    if FileExist(path)
+        try FileDelete path
+}
+ExportAndPair(*) {
+    global PMIA_RUNTIME_CONTROL_EXPORT, ResolverScript
+    global g_detectedSession, g_pairedExport, g_downloadEdit
+    global g_senderFileEdit, g_receiverFileEdit
+    if !g_detectedSession.Count && !DetectSessionFromGui()
+        return false
+    if !FileExist(ResolverScript) {
+        SetReviewStatus("Export resolver is missing: " ResolverScript, "error")
+        return false
+    }
+    if !DirExist(g_downloadEdit.Value) {
+        SetReviewStatus("Download directory does not exist.", "error")
+        return false
+    }
+
+    SaveReviewPreferences()
+    resultPath := TemporaryResultPath("pair")
+    sinceUtc := FormatTime(DateAdd(A_NowUTC, -2, "Seconds"), "yyyy-MM-ddTHH:mm:ssZ")
+    SetReviewStatus("Requesting sender and receiver exports...", "neutral")
+    if !SendRuntimeControl(PMIA_RUNTIME_CONTROL_EXPORT) {
+        SetReviewStatus("The PMIA launcher control channel is not available.", "error")
+        return false
+    }
+
+    command := "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " CommandQuote(ResolverScript)
+        . " -DownloadDirectory " CommandQuote(g_downloadEdit.Value)
+        . " -SessionId " CommandQuote(g_detectedSession["sessionId"])
+        . " -SinceUtc " CommandQuote(sinceUtc)
+        . " -WaitSeconds 30 -ResultJsonPath " CommandQuote(resultPath)
+    exitCode := RunWait(command, , "Hide")
+    result := ReadJsonResult(resultPath)
+    DeleteOwnTemp(resultPath)
+    if (exitCode != 0 || !result["ok"]) {
+        SetReviewStatus(result["error"] != "" ? result["error"] : "Export pairing failed.", "error")
+        return false
+    }
+    if StrLower(result["sessionId"]) != StrLower(g_detectedSession["sessionId"]) {
+        SetReviewStatus("The paired files belong to a different PMIA session.", "error")
+        return false
+    }
+    g_pairedExport := result
+    g_senderFileEdit.Value := result["senderFile"]
+    g_receiverFileEdit.Value := result["receiverFile"]
+    SetReviewStatus("Paired fresh sender and receiver Markdown exports.", "ok")
+    return true
+}
+
+NormalizeMetadata(value, fallback) {
+    value := Trim(value)
+    return value = "" ? fallback : value
+}
+
+BuildPushCommand(resultPath) {
+    global PushScript, g_sessionTypeDdl, g_companyEdit, g_roleEdit, g_roundEdit, g_modeEdit
+    global g_pairedExport, g_trackerEdit
+    return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " CommandQuote(PushScript)
+        . " -SessionType " CommandQuote(g_sessionTypeDdl.Text)
+        . " -Company " CommandQuote(NormalizeMetadata(g_companyEdit.Value, "unknown"))
+        . " -Role " CommandQuote(NormalizeMetadata(g_roleEdit.Value, "pm"))
+        . " -Round " CommandQuote(NormalizeMetadata(g_roundEdit.Value, "unknown"))
+        . " -Mode " CommandQuote(NormalizeMetadata(g_modeEdit.Value, "mock"))
+        . " -Win1File " CommandQuote(g_pairedExport["senderFile"])
+        . " -Win2File " CommandQuote(g_pairedExport["receiverFile"])
+        . " -TrackerRepoPath " CommandQuote(g_trackerEdit.Value)
+        . " -ResultJsonPath " CommandQuote(resultPath)
+}
+
+BuildReviewPrompt(result) {
+    senderPath := result["sessionFolder"] "\win1_sender.md"
+    receiverPath := result["sessionFolder"] "\win2_receiver.md"
+    return "Review this PM interview session using exactly the two files below.`n`n"
+        . "Tracker session: " result["trackerRelativePath"] "`n"
+        . "Sender record: " senderPath "`n"
+        . "Receiver record: " receiverPath "`n`n"
+        . "Give a scorecard, truth risks, weak answers, transcript/transport issues, recurring-pattern candidates, and the top three actions before the next interview. Classify changes as session-only coaching, repeated-pattern candidate, or urgent system fix."
+}
+PushAndOpenReviewLab(*) {
+    global PushScript, g_pairedExport, g_trackerEdit, g_reviewUrlEdit, g_endAfterPush
+    global PMIA_RUNTIME_CONTROL_END
+    if !g_pairedExport.Count && !ExportAndPair()
+        return false
     if !FileExist(PushScript) {
-        status.Value := "PUSH_SCRIPT_MISSING: " PushScript
-        MsgBox status.Value
-        return
+        SetReviewStatus("Tracker push script is missing: " PushScript, "error")
+        return false
     }
-    if !FileExist(win1.Value) || !FileExist(win2.Value) {
-        status.Value := "EXPORT_FILES_MISSING: export both PMIA roles or browse to both Markdown files."
-        MsgBox status.Value
-        return
+    if !DirExist(g_trackerEdit.Value) {
+        SetReviewStatus("Tracker repository does not exist.", "error")
+        return false
     }
 
-    cmd := "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " QuoteArg(PushScript)
-        . " -SessionType " QuoteArg(sessionType.Text)
-        . " -Company " QuoteArg(company.Value)
-        . " -Role " QuoteArg(role.Value)
-        . " -Round " QuoteArg(round.Value)
-        . " -Mode " QuoteArg(mode.Value)
-        . " -Win1File " QuoteArg(win1.Value)
-        . " -Win2File " QuoteArg(win2.Value)
-        . " -TrackerRepoPath " QuoteArg(tracker.Value)
-
-    status.Value := "Pushing session to the tracker..."
-    exitCode := RunWait(cmd, , "Hide")
-    if (exitCode != 0) {
-        status.Value := "PUSH_FAILED: script exited with code " exitCode ". The PMIA session remains open."
-        MsgBox status.Value
-        return
+    SaveReviewPreferences()
+    resultPath := TemporaryResultPath("push")
+    SetReviewStatus("Validating and pushing the session to the private tracker...", "neutral")
+    exitCode := RunWait(BuildPushCommand(resultPath), , "Hide")
+    result := ReadJsonResult(resultPath)
+    DeleteOwnTemp(resultPath)
+    if (exitCode != 0 || !result["ok"]) {
+        SetReviewStatus(result["error"] != "" ? result["error"] : "Tracker push failed. The interview session remains open.", "error")
+        return false
     }
 
-    status.Value := "Session pushed successfully."
-    if closeMain.Value
-        CloseMainRuntime()
-    MsgBox(closeMain.Value
-        ? "Session pushed. The active PMIA session close signal was sent."
-        : "Session pushed. The active PMIA session remains open.")
+    A_Clipboard := BuildReviewPrompt(result)
+    Run 'explorer.exe ' CommandQuote(result["sessionFolder"])
+    if !OpenReviewLab(g_reviewUrlEdit.Value) {
+        SetReviewStatus("Session pushed, but Review Lab could not be opened. The review prompt is on the clipboard.", "warn")
+        return true
+    }
+
+    SetReviewStatus("Session pushed. Review Lab and the local session folder are open; the review prompt is copied.", "ok")
+    if g_endAfterPush.Value {
+        Sleep 250
+        if SendRuntimeControl(PMIA_RUNTIME_CONTROL_END)
+            SetReviewStatus("Session pushed and the exact managed PMIA session was asked to close.", "ok")
+        else
+            SetReviewStatus("Session pushed, but the PMIA launcher control channel was unavailable. Close the session with Alt+Delete.", "warn")
+    }
+    return true
 }
 
-CloseMainRuntime() {
-    session := FindActivePmiaSession()
-    if IsObject(session) && session["ok"]
-        SendToWindow("!{Delete}", session["senderHwnd"])
+OpenReviewLab(url) {
+    global BrowserExe, MainSettingsFile
+    url := Trim(url)
+    if !FileExist(BrowserExe) || !RegExMatch(url, "^https://chatgpt\.com/")
+        return false
+    profile := IniRead(MainSettingsFile, "Studio", "ProfileDirectory", "Default")
+    Run CommandQuote(BrowserExe) " --profile-directory=" CommandQuote(profile) " " CommandQuote(url)
+    return true
 }
-
-CopyReviewPrompt(sessionType, company, role, round, mode) {
-    prompt := "Review the latest PM interview session from the tracker repo.`n`n"
-        . "Session type: " sessionType.Text "`n"
-        . "Company: " company.Value "`n"
-        . "Role: " role.Value "`n"
-        . "Round: " round.Value "`n"
-        . "Mode: " mode.Value "`n`n"
-        . "Use exactly two files: win1_sender.md and win2_receiver.md.`n"
-        . "Give scorecard, what went well, what went badly, weak answers, truth risks, blocked transcript issues, sender/receiver mismatches, recurring-pattern candidates, and top 3 actions before the next session."
-    A_Clipboard := prompt
-    MsgBox "Review prompt copied to clipboard."
+EndDetectedSession(*) {
+    global PMIA_RUNTIME_CONTROL_END, g_detectedSession, g_pairedExport
+    if !g_detectedSession.Count && !DetectSessionFromGui()
+        return false
+    if !SendRuntimeControl(PMIA_RUNTIME_CONTROL_END) {
+        SetReviewStatus("The PMIA launcher control channel is unavailable. Use Alt+Delete in the main runtime.", "error")
+        return false
+    }
+    g_detectedSession := Map()
+    g_pairedExport := Map()
+    SetReviewStatus("Exact managed PMIA session close requested.", "ok")
+    return true
 }
