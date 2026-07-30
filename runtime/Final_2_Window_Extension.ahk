@@ -211,25 +211,43 @@ global promptWin2Reset := ""
     . "Use the current Resume/JD context only if relevant.`n"
     . "Return only the improved answer.`n"
 
+BuildSessionMetadataBlock() {
+    global g_sessionCompany, g_sessionRole, g_sessionRound
+    global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode, g_sessionMeta
+
+    meta := ""
+    if (Trim(g_sessionCompany) != "")
+        meta .= "Company: " Trim(g_sessionCompany) "`n"
+    if (Trim(g_sessionRole) != "")
+        meta .= "Target role: " Trim(g_sessionRole) "`n"
+    if (Trim(g_sessionRound) != "")
+        meta .= "Interview round: " Trim(g_sessionRound) "`n"
+    if (Trim(g_sessionEmphasis) != "")
+        meta .= "Emphasis: " Trim(g_sessionEmphasis) "`n"
+    if (Trim(g_sessionAvoid) != "")
+        meta .= "Avoid mentioning: " Trim(g_sessionAvoid) "`n"
+    if (Trim(g_sessionAnswerMode) != "")
+        meta .= "Answer mode: " Trim(g_sessionAnswerMode) "`n"
+    if (Trim(g_sessionMeta) != "")
+        meta .= "Additional notes:`n" Trim(g_sessionMeta) "`n"
+
+    return meta = "" ? "" : "Session context:`n" meta "`n"
+}
+
 BuildBootPrompt() {
-    global PM_BOOT_PROMPT_TEXT, g_sessionResume, g_sessionJD, g_sessionMeta
+    global PM_BOOT_PROMPT_TEXT, g_sessionResume, g_sessionJD
 
     resume := Trim(g_sessionResume)
     jd := Trim(g_sessionJD)
-    meta := Trim(g_sessionMeta)
 
     if (resume = "")
         resume := "[Resume not provided in launch window.]"
     if (jd = "")
         jd := "[Job description not provided in launch window.]"
 
-    metaBlock := ""
-    if (meta != "")
-        metaBlock := "Session context:`n" . meta . "`n`n"
-
     return PM_BOOT_PROMPT_TEXT
         . "`n`n---`n`nSESSION CONTEXT`n`n"
-        . metaBlock
+        . BuildSessionMetadataBlock()
         . "Resume:`n" . resume . "`n`n"
         . "Job Description:`n" . jd . "`n"
 }
@@ -285,6 +303,12 @@ global g_launchGui           := 0
 global g_resumeEdit          := 0
 global g_jdEdit              := 0
 global g_metaEdit            := 0
+global g_companyEdit         := 0
+global g_roleEdit            := 0
+global g_roundDdl            := 0
+global g_emphasisDdl         := 0
+global g_avoidEdit           := 0
+global g_answerModeDdl       := 0
 global g_senderProviderDdl   := 0
 global g_receiverProviderDdl := 0
 global g_routeSummary        := 0
@@ -294,6 +318,12 @@ global g_launchButton        := 0
 global g_sessionResume       := ""
 global g_sessionJD           := ""
 global g_sessionMeta         := ""
+global g_sessionCompany      := ""
+global g_sessionRole         := ""
+global g_sessionRound        := ""
+global g_sessionEmphasis     := ""
+global g_sessionAvoid        := ""
+global g_sessionAnswerMode   := "normal"
 global g_senderProvider      := "chatgpt"
 global g_receiverProvider    := "chatgpt"
 global g_sessionId           := ""
@@ -461,9 +491,23 @@ NormalizeLayoutMode(value) {
     return (normalized = "SenderOnly" || normalized = "ReceiverOnly") ? normalized : "TwoWindow"
 }
 
+ChooseOptionIndex(value, options, defaultIndex := 1) {
+    normalized := StrLower(Trim(value))
+    if (normalized = "")
+        return defaultIndex
+    for index, option in options {
+        if (StrLower(option) = normalized)
+            return index
+    }
+    return defaultIndex
+}
+
 ShowSessionLaunchGui() {
     global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit
+    global g_companyEdit, g_roleEdit, g_roundDdl, g_emphasisDdl, g_avoidEdit, g_answerModeDdl
     global g_sessionResume, g_sessionJD, g_sessionMeta
+    global g_sessionCompany, g_sessionRole, g_sessionRound
+    global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode
     global g_senderProviderDdl, g_receiverProviderDdl, g_senderProvider, g_receiverProvider
     global g_profileDdl, g_layoutDdl, g_layoutMode
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
@@ -481,7 +525,7 @@ ShowSessionLaunchGui() {
 
     RefreshRuntimeDoctor(false)
     choices := BuildProfileChoices()
-    g_launchGui := Gui("+AlwaysOnTop -MaximizeBox +MinSize960x780", "PM Interview Assistant — Session Studio")
+    g_launchGui := Gui("+AlwaysOnTop -MaximizeBox +MinSize960x900", "PM Interview Assistant — Session Studio")
     g_launchGui.BackColor := "F4F7FB"
     g_launchGui.SetFont("s10 c334155", "Segoe UI")
 
@@ -513,26 +557,48 @@ ShowSessionLaunchGui() {
     g_receiverProviderDdl.Choose(g_receiverProvider = "claude" ? 2 : 1)
     g_routeSummary := g_launchGui.Add("Text", "x52 y315 w830 h24", "")
     g_routeSummary.SetFont("s9 w600 c0F766E", "Segoe UI")
-    contextBox := g_launchGui.Add("GroupBox", "x30 y367 w900 h300", "Interview context")
+    setupBox := g_launchGui.Add("GroupBox", "x30 y367 w900 h145", "Session setup (optional)")
+    setupBox.SetFont("s10 w600 c334155", "Segoe UI")
+    g_launchGui.Add("Text", "x52 y393 w238 h20", "Target company")
+    g_companyEdit := g_launchGui.Add("Edit", "x52 y415 w238 h28", g_sessionCompany)
+    g_launchGui.Add("Text", "x306 y393 w238 h20", "Target role")
+    g_roleEdit := g_launchGui.Add("Edit", "x306 y415 w238 h28", g_sessionRole)
+    roundOptions := ["Infer from JD", "Recruiter", "Hiring manager", "Product sense", "Metrics", "Behavioral", "Technical PM", "Product owner"]
+    g_launchGui.Add("Text", "x560 y393 w156 h20", "Interview round")
+    g_roundDdl := g_launchGui.Add("DropDownList", "x560 y415 w156", roundOptions)
+    g_roundDdl.Choose(ChooseOptionIndex(g_sessionRound, roundOptions, 1))
+    answerModeOptions := ["Concise", "Normal", "Deep"]
+    g_launchGui.Add("Text", "x732 y393 w156 h20", "Answer mode")
+    g_answerModeDdl := g_launchGui.Add("DropDownList", "x732 y415 w156", answerModeOptions)
+    g_answerModeDdl.Choose(ChooseOptionIndex(g_sessionAnswerMode, answerModeOptions, 2))
+
+    emphasisOptions := ["Infer from JD", "Fintech", "AI", "Analytics", "Enterprise", "Operations / internal tools", "Product owner"]
+    g_launchGui.Add("Text", "x52 y451 w238 h20", "Emphasis")
+    g_emphasisDdl := g_launchGui.Add("DropDownList", "x52 y473 w238", emphasisOptions)
+    g_emphasisDdl.Choose(ChooseOptionIndex(g_sessionEmphasis, emphasisOptions, 1))
+    g_launchGui.Add("Text", "x306 y451 w582 h20", "Avoid mentioning")
+    g_avoidEdit := g_launchGui.Add("Edit", "x306 y473 w582 h28", g_sessionAvoid)
+
+    contextBox := g_launchGui.Add("GroupBox", "x30 y525 w900 h260", "Interview context")
     contextBox.SetFont("s10 w600 c334155", "Segoe UI")
-    g_launchGui.Add("Text", "x52 y396 w410 h20", "Resume")
-    g_resumeEdit := g_launchGui.Add("Edit", "x52 y419 w412 h154 -Wrap WantTab", g_sessionResume)
-    g_launchGui.Add("Text", "x478 y396 w410 h20", "Job description")
-    g_jdEdit := g_launchGui.Add("Edit", "x478 y419 w412 h154 -Wrap WantTab", g_sessionJD)
-    g_launchGui.Add("Text", "x52 y586 w610 h20", "Session notes (optional)")
-    g_metaEdit := g_launchGui.Add("Edit", "x52 y609 w610 h38 -Wrap WantTab", g_sessionMeta)
-    g_launchGui.Add("Text", "x678 y586 w210 h20", "Initial layout")
-    g_layoutDdl := g_launchGui.Add("DropDownList", "x678 y609 w212", ["Two windows", "Sender only", "Receiver only"])
+    g_launchGui.Add("Text", "x52 y552 w410 h20", "Resume")
+    g_resumeEdit := g_launchGui.Add("Edit", "x52 y575 w412 h116 -Wrap WantTab", g_sessionResume)
+    g_launchGui.Add("Text", "x478 y552 w410 h20", "Job description")
+    g_jdEdit := g_launchGui.Add("Edit", "x478 y575 w412 h116 -Wrap WantTab", g_sessionJD)
+    g_launchGui.Add("Text", "x52 y704 w610 h20", "Additional notes (optional)")
+    g_metaEdit := g_launchGui.Add("Edit", "x52 y727 w610 h38 -Wrap WantTab", g_sessionMeta)
+    g_launchGui.Add("Text", "x678 y704 w210 h20", "Initial layout")
+    g_layoutDdl := g_launchGui.Add("DropDownList", "x678 y727 w212", ["Two windows", "Sender only", "Receiver only"])
     g_layoutDdl.Choose(g_layoutMode = "SenderOnly" ? 2 : g_layoutMode = "ReceiverOnly" ? 3 : 1)
-    g_contextStatus := g_launchGui.Add("Text", "x52 y650 w838 h18", "")
+    g_contextStatus := g_launchGui.Add("Text", "x52 y768 w838 h18", "")
     g_contextStatus.SetFont("s9 c475569", "Segoe UI")
 
-    privacy := g_launchGui.Add("Text", "x30 y687 w430 h22", "Resume, JD, and notes stay in memory.")
+    privacy := g_launchGui.Add("Text", "x30 y802 w500 h22", "Resume, JD, and notes stay in memory. Structured metadata is not saved.")
     privacy.SetFont("s9 c64748B", "Segoe UI")
-    g_launchStatus := g_launchGui.Add("Text", "x30 y716 w555 h34", "PREFLIGHT  •  Ready to verify the selected browser profile")
+    g_launchStatus := g_launchGui.Add("Text", "x30 y831 w555 h34", "PREFLIGHT  •  Ready to verify the selected browser profile")
     g_launchStatus.SetFont("s9 w600 c0F766E", "Segoe UI")
-    closeBtn := g_launchGui.Add("Button", "x648 y705 w92 h38", "Close")
-    g_launchButton := g_launchGui.Add("Button", "x750 y705 w180 h38 Default", "Launch Interview")
+    closeBtn := g_launchGui.Add("Button", "x648 y840 w92 h38", "Close")
+    g_launchButton := g_launchGui.Add("Button", "x750 y840 w180 h38 Default", "Launch Interview")
     g_launchButton.SetFont("s10 w600", "Segoe UI")
     g_profileDdl.OnEvent("Change", HandleProfileChange)
     g_senderProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
@@ -551,7 +617,7 @@ ShowSessionLaunchGui() {
     RenderDoctorStatus()
     UpdateLaunchRouteSummary()
     UpdateLaunchContextStatus()
-    g_launchGui.Show("w960 h780")
+    g_launchGui.Show("w960 h900")
 }
 
 BuildProfileChoices() {
@@ -669,7 +735,10 @@ ResetShortContextConfirmation(*) {
 
 StartLaunchFromGui(*) {
     global g_resumeEdit, g_jdEdit, g_metaEdit
+    global g_companyEdit, g_roleEdit, g_roundDdl, g_emphasisDdl, g_avoidEdit, g_answerModeDdl
     global g_sessionResume, g_sessionJD, g_sessionMeta
+    global g_sessionCompany, g_sessionRole, g_sessionRound
+    global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode
     global g_senderProviderDdl, g_receiverProviderDdl, g_senderProvider, g_receiverProvider
     global g_shortContextArmedUntil
 
@@ -679,6 +748,18 @@ StartLaunchFromGui(*) {
         g_sessionJD := g_jdEdit.Value
     if IsObject(g_metaEdit)
         g_sessionMeta := g_metaEdit.Value
+    if IsObject(g_companyEdit)
+        g_sessionCompany := g_companyEdit.Value
+    if IsObject(g_roleEdit)
+        g_sessionRole := g_roleEdit.Value
+    if IsObject(g_roundDdl)
+        g_sessionRound := g_roundDdl.Text = "Infer from JD" ? "" : g_roundDdl.Text
+    if IsObject(g_emphasisDdl)
+        g_sessionEmphasis := g_emphasisDdl.Text = "Infer from JD" ? "" : g_emphasisDdl.Text
+    if IsObject(g_avoidEdit)
+        g_sessionAvoid := g_avoidEdit.Value
+    if IsObject(g_answerModeDdl)
+        g_sessionAnswerMode := StrLower(g_answerModeDdl.Text)
     if IsObject(g_senderProviderDdl)
         g_senderProvider := NormalizeProvider(g_senderProviderDdl.Text)
     if IsObject(g_receiverProviderDdl)
@@ -695,6 +776,7 @@ StartLaunchFromGui(*) {
 }
 CloseSessionLaunchGui(*) {
     global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit
+    global g_companyEdit, g_roleEdit, g_roundDdl, g_emphasisDdl, g_avoidEdit, g_answerModeDdl
     global g_senderProviderDdl, g_receiverProviderDdl, g_profileDdl, g_layoutDdl
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
     global g_runtimeHealth, g_preflightButton, g_repairButton
@@ -706,6 +788,12 @@ CloseSessionLaunchGui(*) {
     g_resumeEdit := 0
     g_jdEdit := 0
     g_metaEdit := 0
+    g_companyEdit := 0
+    g_roleEdit := 0
+    g_roundDdl := 0
+    g_emphasisDdl := 0
+    g_avoidEdit := 0
+    g_answerModeDdl := 0
     g_senderProviderDdl := 0
     g_receiverProviderDdl := 0
     g_profileDdl := 0

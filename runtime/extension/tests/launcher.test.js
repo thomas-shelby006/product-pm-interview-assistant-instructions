@@ -86,7 +86,7 @@ test('session studio exposes browser health and operational actions', () => {
   assert.match(launcher, /Repair Launch/);
   assert.match(launcher, /Swap route/);
   assert.match(launcher, /Launch Interview/);
-  assert.match(launcher, /Show\("w960 h780"\)/);
+  assert.match(launcher, /Show\("w960 h900"\)/);
 });
 
 test('session studio provides route and context feedback', () => {
@@ -266,4 +266,36 @@ test('runtime boot and registration use event-driven long watchdogs without fixe
     launcher.indexOf('DiagnoseLaunchFailure', launcher.indexOf('WaitForLifecycleTitle(role, provider, sessionId, phase, timeoutMs)'))
   );
   assert.match(waitBlock, /Sleep 100/);
+});
+test('session studio captures structured PM metadata without persisting it', () => {
+  for (const label of [
+    'Target company', 'Target role', 'Interview round',
+    'Emphasis', 'Avoid mentioning', 'Answer mode', 'Additional notes'
+  ]) assert.match(launcher, new RegExp(label));
+  for (const globalName of [
+    'g_sessionCompany', 'g_sessionRole', 'g_sessionRound',
+    'g_sessionEmphasis', 'g_sessionAvoid', 'g_sessionAnswerMode'
+  ]) assert.match(launcher, new RegExp(globalName));
+  assert.match(launcher, /BuildSessionMetadataBlock\(\)/);
+  assert.match(launcher, /Company:\s*"/);
+  assert.match(launcher, /Target role:\s*"/);
+  assert.match(launcher, /Interview round:\s*"/);
+  assert.match(launcher, /Emphasis:\s*"/);
+  assert.match(launcher, /Avoid mentioning:\s*"/);
+  assert.match(launcher, /Answer mode:\s*"/);
+  const saveBlock = block('SaveStudioPreferences()', 'RunProfileDoctor(');
+  assert.doesNotMatch(saveBlock, /Company|Role|Round|Emphasis|Avoid|AnswerMode|Notes/);
+});
+
+test('structured metadata controls are read for launch and released on close', () => {
+  const launchBlock = block('StartLaunchFromGui(*)', 'CloseSessionLaunchGui(*)');
+  const closeBlock = block('CloseSessionLaunchGui(*)', 'AutoStartup() {');
+  for (const control of [
+    'g_companyEdit', 'g_roleEdit', 'g_roundDdl', 'g_emphasisDdl',
+    'g_avoidEdit', 'g_answerModeDdl', 'g_metaEdit'
+  ]) {
+    assert.match(launchBlock, new RegExp(control));
+    assert.match(closeBlock, new RegExp(`${control}\\s*:=\\s*0`));
+  }
+  assert.match(launcher, /Show\("w960 h900"\)/);
 });
