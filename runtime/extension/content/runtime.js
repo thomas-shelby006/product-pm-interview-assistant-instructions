@@ -18,18 +18,32 @@ export function snapshotUserTurnIds(adapter) {
 }
 
 function normalizedTurnText(value) {
-  return String(value ?? '').replace(/\s+/g, ' ').trim();
+  return String(value ?? '')
+    .normalize('NFKC')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-export function hasNewSubmittedUserTurn(adapter, text, baselineUserIds) {
+function matchesSubmittedTurn(renderedText, submittedText, confirmationText = submittedText) {
+  const rendered = normalizedTurnText(renderedText);
+  const submitted = normalizedTurnText(submittedText);
+  if (!rendered || !submitted) return false;
+  if (rendered === submitted) return true;
+  const confirmation = normalizedTurnText(confirmationText);
+  return Boolean(confirmation && confirmation !== submitted && rendered.endsWith(confirmation));
+}
+
+export function hasNewSubmittedUserTurn(adapter, text, baselineUserIds, confirmationText = text) {
   if (!(baselineUserIds instanceof Set) || typeof adapter.getConversationMessages !== 'function') {
     return false;
   }
-  const expected = normalizedTurnText(text);
   return adapter.getConversationMessages().some(message => (
     message.role === 'user'
     && !baselineUserIds.has(String(message.id || ''))
-    && normalizedTurnText(message.text) === expected
+    && matchesSubmittedTurn(message.text, text, confirmationText)
   ));
 }
 
@@ -45,6 +59,7 @@ export async function submitComposerWhenReady({
   maxChecks = 320,
   maxConfirmChecks = 640,
   baselineUserIds = snapshotUserTurnIds(adapter),
+  confirmationText = text,
   isCurrent = () => true
 }) {
   const normalized = String(text ?? '').trim();
@@ -66,7 +81,7 @@ export async function submitComposerWhenReady({
   if (!(baselineUserIds instanceof Set)) return true;
   for (let check = 0; check <= maxConfirmChecks; check += 1) {
     if (!isCurrent()) return false;
-    if (hasNewSubmittedUserTurn(adapter, normalized, baselineUserIds)) {
+    if (hasNewSubmittedUserTurn(adapter, normalized, baselineUserIds, confirmationText)) {
       clearSubmittedComposer(adapter, normalized);
       return true;
     }
@@ -188,7 +203,7 @@ ${normalizedQuestion}`;
           boundedSet(submissionBaselines, envelopeKey, baselineUserIds, 16);
         }
       }
-      if (hasNewSubmittedUserTurn(adapter, deliveryText, baselineUserIds)) {
+      if (hasNewSubmittedUserTurn(adapter, deliveryText, baselineUserIds, text)) {
         clearSubmittedComposer(adapter, deliveryText);
         submissionBaselines.delete(envelopeKey);
         stagedContext = '';
@@ -203,6 +218,7 @@ ${normalizedQuestion}`;
         maxChecks: maxSubmitChecks,
         maxConfirmChecks,
         baselineUserIds,
+        confirmationText: text,
         isCurrent: () => deliveryId === latestDeliveryId
       });
       if (!submitted) {

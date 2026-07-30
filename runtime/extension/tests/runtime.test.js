@@ -551,3 +551,35 @@ test('receiver retains staged context when first-question submission fails', asy
   assert.equal(await controller.deliver({ id: 'q1', kind: 'question', text: 'Question?' }), false);
   assert.equal(controller.hasStagedContext(), true);
 });
+
+test('staged first-question confirmation tolerates provider normalization without resubmission', async () => {
+  const question = 'PMIA staged question?';
+  const submitted = `Context with → arrows and smart “quotes”.\n\n---\n\nLIVE INTERVIEWER QUESTION:\n${question}`;
+  const messages = [];
+  let submitCalls = 0;
+  const adapter = {
+    isGenerating: () => false,
+    setComposerText: () => true,
+    composerContains: () => true,
+    canSubmit: () => true,
+    submit() { submitCalls += 1; return true; },
+    getConversationMessages: () => messages,
+    findComposer: () => ({})
+  };
+  const controller = runtimeModule.createReceiverController({
+    adapter,
+    sleep: async () => {},
+    yieldFn: async () => {
+      if (!messages.length) messages.push({
+        id: 'rendered-staged-turn',
+        role: 'user',
+        text: `Context with -> arrows and smart "quotes".\n\n---\n\nLIVE INTERVIEWER QUESTION:\n${question}`
+      });
+    },
+    maxSubmitChecks: 1,
+    maxConfirmChecks: 2
+  });
+  assert.equal(await controller.deliver({ id: 'boot', kind: 'boot', text: submitted.split('\n\n---')[0] }), true);
+  assert.equal(await controller.deliver({ id: 'q1', kind: 'question', text: question }), true);
+  assert.equal(submitCalls, 1);
+});
