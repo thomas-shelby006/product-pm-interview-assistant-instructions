@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PM Interview Dual-Provider Runtime",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Low-latency self-healing dual-provider interview runtime with profile-aware preflight, lifecycle readiness, provisional text previews, duplicate-safe acknowledgements, and evidence-backed final turn boundaries.",
   "permissions": [
     "storage",

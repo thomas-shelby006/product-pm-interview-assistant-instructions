@@ -34,7 +34,7 @@ Company selection: Pemo first for fintech/B2B SaaS/SME finance/onboarding/approv
 A session may include lightweight optional fields; honor when present, infer from JD when absent, never block the session:
 - **Company**, **Target role**, **Interview round** (recruiter / hiring manager / product sense / metrics / behavioral / technical PM / product owner — calibrate depth/tone), **Emphasis** (fintech / AI / analytics / enterprise / ops-internal-tools / product owner — biases the lead company story), **Avoid mentioning** (hard exclusion for the session), **Answer mode** (`concise` = bottom of band; `normal` = standard policy; `deep` = top of band plus an offer to expand, still under the 180-word cap — never a long monologue).
 
-Entered today via the AHK launcher's optional **Session setup** box (one `Label: value` per line, e.g. `Emphasis: fintech`), emitted in the boot prompt under a `Session context:` block.
+Entered through Session Studio's structured memory-only controls and emitted in the boot prompt under a `Session context:` block. Optional Additional notes remain available.
 
 **Enforcement note:** `Avoid mentioning` and `Answer mode` are **prompt-level behaviors** the assistant follows via instructions; the runtime logs them but does not apply a deterministic redaction filter or hard length cap. Treat them as strong guidance, not guarantees.
 
@@ -46,11 +46,11 @@ Entered today via the AHK launcher's optional **Session setup** box (one `Label:
 - **Resume/JD mismatch** → emphasis field (or JD domain) picks the lead story; note the mismatch once if it matters, then proceed.
 - **Conflicting claim** → keep to safe confirmed claims; flag once.
 
-## Live runtime (AHK two-window + Tampermonkey bridge)
+## Live runtime (AutoHotkey launcher + Manifest V3 extension in Edge Stable)
 
-Flow: launcher (`Alt+R`) collects Resume + JD + optional Session setup → `BuildBootPrompt()` sends the boot prompt + a single `Session context:`/Resume/JD block to Win1 → Win1 forwards to Win2 via `localStorage` → Win2 answers silently. `Alt+Esc` resends current in-memory context directly to Win2; `Alt+Delete` exits and clears. Resume/JD live only in the running AHK process; nothing is saved to disk.
+Flow: Session Studio (`Alt+R`) collects Resume, JD, structured metadata, and optional notes in memory → Microsoft Edge Stable opens one managed sender and receiver → each content runtime registers through BOOT/REGISTERED/READY lifecycle titles → the service worker mirrors provisional text and forwards one durable final envelope → the receiver stages context, submits automatically, and acknowledges only after the provider renders the matching user turn. `Alt+Esc` resends current in-memory context; `Alt+Delete` ends the exact managed session.
 
-Readiness indicators on Win2 (informational): `ARMED` when boot/context is received (shows `NO RESUME` / `NO JD` / answer-mode when relevant); `BOOT FAIL` / `SEND FAIL` / `INJECT FAIL` / `PAYLOAD ERR` on failures. A brief `WIN1`/`WIN2 v<version>` dot appears at startup. The boot prompt is a compact self-contained safety shell; this bundle is the fuller canonical behavior and the boot prompt must not contradict it.
+The active runtime does not use Tampermonkey or `localStorage` transport. Resume/JD and structured metadata remain only in the AutoHotkey process; role-scoped logs exclude raw Resume/JD.
 
 ## Noisy transcript handling
 

@@ -2,7 +2,7 @@
 
 Use this as supporting reference for PM Interview Helper.
 
-This file defines test prompts used to validate the PM Interview Assistant after Project source-file updates, boot-prompt changes, AHK changes, or Tampermonkey bridge changes.
+This file defines test prompts used to validate the PM Interview Assistant after Project source-file updates, boot-prompt changes, AutoHotkey launcher changes, or Manifest V3 runtime changes.
 
 It is not for live interview answering.
 

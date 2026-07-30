@@ -1,5 +1,7 @@
 # Architecture — First-Principles Review (PM Interview Copilot)
 
+> **Current implementation note (0.6.1):** Structured session setup is implemented in the active Edge Stable launcher. Interrupt/latest-question supersede is implemented in the Manifest V3 runtime. Sections that describe these as deferred are historical planning context, not open work.
+
 Purpose: define how the PM Interview Helper should behave as a **live interview copilot**, from the user's perspective, under pressure. This is the design-of-record. Where a change is implemented in this pass, it says **[implemented]**. Where it is specified for a tested follow-up, it says **[spec only]**.
 
 The real goal is not cleaner files. It is: **fast, speakable, truthful, role-tuned answers, with strong follow-up handling and reliable session context** — without drifting into frontend/SWE framing and without inventing claims.
@@ -83,7 +85,7 @@ Job Description                    [large text box]   ← primary
 
 **"Deep" ≠ long.** In a spoken interview, deep = "top of the existing length band + explicitly offer to expand," still under the 180-word hard cap. `concise` = bottom of band / hard short caps; `normal` = current policy.
 
-These fields flow into the boot prompt **and** the bridge's existing session-log slots. The bridge already parses `Target role:`, `Company:`, `Interview round:`, `Mode:`; this pass extends it to also parse `Emphasis:`, `Avoid mentioning:`, and `Answer mode:` **[implemented]**. An optional freeform **Session setup** box in the AHK GUI now emits these as a `Session context:` block **[implemented]**. The polished **dropdown** version of the fields is specified in `AHK_PHASE_2_IMPLEMENTATION_PLAN.md` **[spec only]**, deferred because the launcher is safety-critical and AHK cannot be linted/run in this environment.
+These fields flow into the boot prompt and the active runtime's session context. PMIA 0.6.1 implements structured controls for Target company, Target role, Interview round, Emphasis, Avoid mentioning, and Answer mode, while retaining Additional notes. The values remain process-memory only and are emitted as a `Session context:` block.
 
 ---
 
@@ -171,7 +173,7 @@ Loss / duplication points and the fix:
 
 What shipped in this pass [implemented]: the bridge session-metadata parser (`Emphasis`, `Avoid mentioning`, `Answer mode`) and an optional freeform **Session setup** box in the AHK GUI that emits a `Session context:` block. This delivers end-to-end metadata flow.
 
-What is deferred [spec only]: the polished structured **dropdown** fields and the bridge **interrupt/supersede** behavior. The exact, ready-to-apply code for both lives in **`AHK_PHASE_2_IMPLEMENTATION_PLAN.md`** (kept in one place to avoid drift). Deferred only because AHK cannot be linted/run in the authoring environment and the launcher is safety-critical, so it must be smoke-tested on a Windows machine.
+What is now implemented: the structured Session Studio fields and runtime interrupt/latest-question supersede behavior. `AHK_PHASE_2_IMPLEMENTATION_PLAN.md` is retained only as historical design reference; it is not an open implementation plan.
 
 ## 10. Implementation phases & what not to change
 

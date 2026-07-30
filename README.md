@@ -2,6 +2,8 @@
 
 This repository contains Sundar's Product Management Interview Assistant instructions, source material, and Manifest V3 dual-provider runtime.
 
+**Current release: PMIA runtime 0.6.1.**
+
 ## Active architecture
 
 - A ChatGPT Project and its source bundle define answer behavior, truth constraints, story selection, and PM interview framing.
@@ -11,7 +13,7 @@ This repository contains Sundar's Product Management Interview Assistant instruc
 - The extension service worker owns registration, authorization, durable final ordering, latest-only recovery, and role-scoped logs.
 - Content scripts own disposable transcript previews, authoritative final commits, receiver staging/submission, answer capture, health status, and export.
 
-Tampermonkey scripts, the older fixed AutoHotkey launcher, the session-tracker helper, archives, and rollback assets are retained for history and recovery. They are not part of the active architecture and should not be enabled alongside the extension runtime.
+Tampermonkey scripts, the older fixed AutoHotkey launcher, archives, and rollback assets are retained for history and recovery. They are not part of the active architecture and should not be enabled alongside the extension runtime. `runtime/Session_Tracker_End_Session.ahk` is the active optional post-session companion.
 
 ## Question transport
 
@@ -24,6 +26,14 @@ If ChatGPT replaces a submitted message ID during project-to-conversation naviga
 ### Claude
 
 Each distinct `transcript_interim` value updates the same preview. `user_input_end` is a processing hint. `server_interrupt` preserves the current utterance. `transcript_empty` clears it. Only a human `message_complete` commits the question.
+
+## Structured session setup
+
+Session Studio keeps Resume and Job Description as the primary inputs and adds memory-only controls for **Target company**, **Target role**, **Interview round**, **Emphasis**, **Avoid mentioning**, and **Answer mode**. Optional freeform notes remain available. These values are assembled into the in-memory `Session context:` block used by the boot prompt; they are not persisted to `settings.ini`.
+
+## Post-session tracker
+
+`runtime/Session_Tracker_End_Session.ahk` discovers exactly one active PMIA sender/receiver pair by lifecycle title, exports both role logs with `Ctrl+Shift+F8`, locates the new Markdown files automatically, and can hand them to the private tracker push script. The push script supports `-DryRun` for staging-only verification before any Git write.
 
 ## PM-only shortcut surface
 
@@ -45,7 +55,7 @@ There is no screenshot/Greenshot workflow, coding shortcut, code-focus overlay, 
 - `project_upload_bundle/`: recommended five-file Project upload set.
 - `project_source_files/`: detailed editable source material.
 - `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`: product and interaction design background.
-- `runtime/extension/README.md`: runtime 0.6 architecture and operational boundaries.
+- `runtime/extension/README.md`: runtime 0.6.1 architecture and operational boundaries.
 - `runtime/README_INSTALL_TEST.md`: installation and verification procedure.
 - `docs/superpowers/specs/2026-07-30-pmia-final-architecture-design.md`: final migration design.
 

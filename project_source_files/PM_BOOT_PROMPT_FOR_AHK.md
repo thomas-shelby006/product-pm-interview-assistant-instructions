@@ -1,19 +1,19 @@
 # PM Boot Prompt for AHK — Final AI/Tech PM Version
 
-Use this file as the source for the boot prompt embedded in `Final_2_Window_Fixed.ahk`.
+Use this file as the content reference for the boot prompt embedded in the active `runtime/Final_2_Window_Extension.ahk`.
 
 Actual flow:
 
-1. User double-clicks `Final_2_Window_Fixed.ahk`.
-2. User presses `Alt+R`.
-3. AHK opens a two-field GUI: Resume and Job Description.
-4. AHK warns if either field is under 100 characters and asks whether to continue.
-5. AHK sends this boot prompt + Resume + JD to Win1.
-6. Win1 forwards it to Win2 through the Tampermonkey bridge.
-7. Win2 uses Resume/JD as silent session context.
+1. The user starts the active AutoHotkey launcher and opens Session Studio with `Alt+R`.
+2. Session Studio collects Resume, Job Description, structured session metadata, and optional notes in process memory.
+3. Microsoft Edge Stable opens one managed sender and one managed receiver window.
+4. The launcher waits for both Manifest V3 content runtimes to progress through BOOT, REGISTERED, and READY lifecycle titles.
+5. The boot/context block is delivered through the extension keyboard bridge; the receiver stages it with the first actionable question.
+6. The extension service worker transports preview and durable final envelopes between the two managed roles.
+7. The receiver submits automatically and confirms success only after the provider renders the matching user turn.
 
 Do not require `session_context.md`.
-Do not persist Resume/JD after the AHK process exits.
+Do not persist Resume/JD, structured metadata, notes, prompts, or answers after the AHK process exits.
 
 ## Boot prompt text
 
@@ -191,9 +191,9 @@ Safe to deduplicate over time (canonical version lives in Project source files):
 
 ## Phase 2 additions
 
-### 1. Optional session-metadata block — implemented (freeform); structured fields pending
+### 1. Structured session-metadata block — implemented in 0.6.1
 
-The AHK launch GUI now has an optional **Session setup** box. Whatever is typed there is emitted verbatim as a `Session context:` block above the Resume/JD, and the bridge parses recognized labels into the session log. Supported labels:
+Session Studio now exposes structured controls for Target company, Target role, Interview round, Emphasis, Avoid mentioning, and Answer mode, plus an Additional notes field. Nonblank values are emitted as a `Session context:` block above the Resume/JD. Supported labels:
 
 ```text
 Session context:
@@ -207,7 +207,7 @@ Answer mode: <concise | normal | deep>
 
 Behavior: honor these when present; infer from the JD when absent; never block the session. `Avoid mentioning` is a hard exclusion for the session. `Answer mode` maps to length (`concise` = bottom of band, `normal` = current policy, `deep` = top of band plus an offer to expand, still under the 180-word hard cap; `deep` is not a long monologue).
 
-The structured **dropdown** version of these fields (instead of the freeform box) is specified, with exact AHK code, in `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`. It is deferred only because AHK cannot be linted/run in the authoring environment and the launcher is safety-critical.
+The structured controls are implemented in the active launcher and validated by the AutoHotkey v2 and Node release gates.
 
 ### 2. Source precedence reminder
 
@@ -215,5 +215,4 @@ Resume, JD, and session metadata set emphasis and vocabulary only — never new 
 
 ### 3. Follow-up / interrupt reminder
 
-Answer the latest actionable interviewer question; use earlier transcript only as context. If a new question arrives while a previous answer is still being produced, treat it as an interrupt and answer only the latest, shorter. Do not restart the framework on follow-ups. (Now embedded in the AHK boot prompt and the boot body above; the bridge-level stop-and-supersede remains a runtime follow-up — see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`. Keep the AHK copy and this doc in sync.)
-
+Answer the latest actionable interviewer question; use earlier transcript only as context. If a new question arrives while a previous answer is still being produced, treat it as an interrupt and answer only the latest, shorter. Do not restart the framework on follow-ups. (Now embedded in the AHK boot prompt and the boot body above; the Manifest V3 runtime implements stop-and-supersede with latest-question-wins sequencing. Keep the AHK copy and this doc in sync.)

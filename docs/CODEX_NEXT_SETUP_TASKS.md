@@ -1,88 +1,39 @@
-# Codex Next Setup Tasks
+# Next PMIA Setup Tasks
 
-Use this file when Codex takes over local setup. Do not redesign the system.
+Last updated: 2026-07-30
+
+This file tracks only current Edge Stable / Manifest V3 work. Edge Beta, Tampermonkey, the fixed launcher, and project-URL patch tasks are complete historical migration work and must not be reapplied.
 
 ## Read first
 
 1. `docs/CURRENT_STATUS_DASHBOARD.md`
 2. `docs/CURRENT_SETUP_HANDOFF_AND_REQUIREMENTS.md`
-3. `runtime/patches/APPLY_PROJECT_URL_DEFAULT.md`
-4. `review_lab_project/README.md`
+3. `runtime/README_INSTALL_TEST.md`
+4. `docs/SESSION_TRACKER_SETUP.md`
+5. Latest verification record under `docs/evidence/`
 
-## Task 1 — Apply PM Helper Project URL default patch
+## Current release sequence
 
-From repo root:
+1. Run the complete Node, extension, main AutoHotkey, and tracker-helper validators.
+2. Smoke-test Session Studio structured fields with synthetic values; do not launch or persist real interview context.
+3. Run the tracker push script with synthetic exports and `-DryRun`; confirm the private tracker repository is unchanged.
+4. Inspect the exact diff and verify legacy files and unrelated Edge state are untouched.
+5. Publish the feature branch, fast-forward `main`, rerun the complete merged-main gate, push `main`, and tag the verified release.
+6. Reload only the PMIA unpacked extension card in the selected Edge Stable profile and verify Profile Doctor path/version.
+7. Close obsolete GitHub issue #7 with the Edge Stable/Manifest V3 resolution.
+8. Remove only the merged worktree and task-created temporary files.
 
-```powershell
-git checkout main
-git pull --ff-only origin main
-git apply --check runtime\patches\project-url-default.patch
-git apply runtime\patches\project-url-default.patch
-git diff -- runtime\Final_2_Window_Fixed.ahk
-```
+## Current operational checks
 
-Expected behavior after patch:
+- Session Studio shows Target company, Target role, Interview round, Emphasis, Avoid mentioning, Answer mode, Resume, Job Description, Additional notes, and launch controls.
+- Session metadata remains memory-only; `settings.ini` stores only profile, route, and layout.
+- Tracker helper discovers one complete PMIA lifecycle-title pair and exports both roles with `Ctrl+Shift+F8`.
+- Missing or multiple sessions produce explicit errors.
+- Dry run creates only `README.md`, `win1_sender.md`, and `win2_receiver.md` under the supplied dry-run path and performs no Git write.
 
-- `PM_HELPER_PROJECT_URL` is hardcoded to the PM Interview Helper Project URL.
-- `REVIEW_LAB_PROJECT_URL` remains blank.
-- `AutoStartup()` opens Win1 and Win2 using PM Helper Project URL plus `vb_role=sender` / `vb_role=receiver`.
+## Do not do
 
-Commit:
-
-```powershell
-git add runtime\Final_2_Window_Fixed.ahk runtime\patches\project-url-default.patch runtime\patches\APPLY_PROJECT_URL_DEFAULT.md
-git commit -m "feat: open PM Helper Project URL by default"
-git push origin main
-```
-
-Do not run full smoke test in this task unless Sundar asks.
-
-## Task 2 — Create ChatGPT Review Lab Project
-
-Project name:
-
-`PM Interview Review Lab`
-
-Use instructions from:
-
-`docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md`
-
-Optional source/prompt file:
-
-`templates/session-tracker/review_lab_prompt.md`
-
-Rules:
-
-- Do not upload runtime scripts.
-- Do not upload archives.
-- Do not upload main PM Interview Helper bundle files.
-- Do not upload tracker session logs as permanent Project source.
-- Session files should be attached/pasted per review session.
-
-## Task 3 — Fix Edge Beta ChatGPT Project access
-
-Edge Beta must use the account/workspace that can open:
-
-`https://chatgpt.com/g/g-p-6a07471553dc8191a30e48a421c843aa-pm-interview-helper/project`
-
-Do not touch Vivaldi unless needed to copy the working Project URL.
-
-## Stop conditions
-
-Stop and report if:
-
-- patch does not apply cleanly,
-- Edge Beta cannot access the PM Interview Helper Project after account switch,
-- Review Lab Project creation is blocked by account/project limits,
-- any UI step asks for payment, workspace switch, or irreversible changes.
-
-## Final report format
-
-Report:
-
-1. whether patch was applied and pushed,
-2. commit SHA,
-3. whether Review Lab Project was created,
-4. whether Edge Beta account/project access is fixed,
-5. what was intentionally not tested,
-6. remaining next step.
+- Do not enable Edge Beta or Tampermonkey beside the active runtime.
+- Do not reapply legacy project-URL patches.
+- Do not push synthetic or real session evidence to the tracker during release verification.
+- Do not delete rollback files, archives, or unrelated browser state.

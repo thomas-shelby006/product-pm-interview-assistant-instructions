@@ -1,5 +1,7 @@
 # Session Tracker MVP
 
+> **Implementation status:** The tracker MVP now uses extension-native role exports, the current PMIA lifecycle titles, automatic Markdown discovery, and a Windows PowerShell 5.1-compatible dry-run path. Tampermonkey references below are historical design context.
+
 Purpose: keep interview practice/live session evidence in a separate private GitHub repo so ChatGPT can review performance over time.
 
 ## Decision

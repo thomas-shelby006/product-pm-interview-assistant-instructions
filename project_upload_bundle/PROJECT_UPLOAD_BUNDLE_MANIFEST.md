@@ -17,7 +17,7 @@ That's **1 pasted field + 5 uploaded files**.
 ## What NOT to upload
 
 - Anything in `../drafts/` — unconfirmed story scaffolds, claim-safety checklist, story-bank completion workflow. These contain placeholders and must never enter the Project.
-- `../runtime/` — AHK script, Tampermonkey scripts, install/test docs (local automation only).
+- `../runtime/` — AutoHotkey launcher, Manifest V3 extension, tracker companion, and install/test docs (local automation only).
 - `../ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`, `../AHK_PHASE_2_IMPLEMENTATION_PLAN.md`, `../AI_SYSTEM_CONTEXT.md`, `../FILE_MAP.md`, `../README.md` — repo orientation/design docs, not Project behavior.
 - The individual `../project_source_files/*` files — these remain as **source/reference** (the bundle is derived from them) but are **not** the preferred upload set. Upload the bundle instead, not both, to avoid duplication.
 
@@ -26,7 +26,7 @@ That's **1 pasted field + 5 uploaded files**.
 - **Canonical detailed behavior:** this bundle (`00`–`04`).
 - **Always-on compact contract:** the pasted custom instructions. It defers to the bundle for detail; its truth/safety rules always hold.
 - **Reference/source:** `project_source_files/*` (the bundle was condensed from these; keep for history/editing, do not upload alongside the bundle).
-- **Local automation safety shell:** the AHK boot prompt (`project_source_files/PM_BOOT_PROMPT_FOR_AHK.md` + the copy embedded in `runtime/Final_2_Window_Fixed.ahk`) is a compact, self-contained safety shell so a live session stays safe even if Project retrieval is imperfect. The bundle is the fuller canonical behavior; the boot prompt must not contradict it.
+- **Local automation safety shell:** the AHK boot prompt (`project_source_files/PM_BOOT_PROMPT_FOR_AHK.md` + the copy embedded in `runtime/Final_2_Window_Extension.ahk`) is a compact, self-contained safety shell so a live session stays safe even if Project retrieval is imperfect. The bundle is the fuller canonical behavior; the boot prompt must not contradict it.
 - **Draft-only (never uploaded):** `drafts/*`.
 
 ## Consistency rules baked into this bundle

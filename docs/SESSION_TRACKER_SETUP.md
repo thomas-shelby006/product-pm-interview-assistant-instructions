@@ -1,158 +1,65 @@
-# Session Tracker Setup
+# Session Tracker Setup — PMIA 0.6.1
 
-Use this after the PM Interview Helper two-window runtime is working. This tracker is a separate private repo for session evidence and ChatGPT Review Lab outputs.
+The tracker is an optional post-session companion for the active **Microsoft Edge Stable + Manifest V3** PMIA runtime. It does not use Edge Beta or Tampermonkey.
 
-## Repos
+## Repositories
 
-Instruction repo:
+- System source: `thomas-shelby006/product-pm-interview-assistant-instructions`
+- Private session tracker: `thomas-shelby006/pm-interview-session-tracker`
+- Suggested local tracker path: `C:\Users\Sundar\Documents\pm-interview-session-tracker`
 
-`product-pm-interview-assistant-instructions`
+Keep system behavior and session evidence separate. A single session review must not modify the main PMIA system automatically.
 
-Session tracker repo:
-
-`pm-interview-session-tracker`
-
-Suggested local tracker path:
-
-`C:\Users\Sundar\Documents\pm-interview-session-tracker`
-
-Keep these separate. The instruction repo stores the system. The tracker repo stores practice/real session logs.
-
-## Required files in the instruction repo
+## Active files
 
 ```text
-runtime/tm_scripts/session-tracker-export.user.js
 runtime/Session_Tracker_End_Session.ahk
-runtime/scripts/init-session-tracker-repo.ps1
 runtime/scripts/push-session-to-tracker.ps1
+runtime/scripts/init-session-tracker-repo.ps1
 templates/session-tracker/review_lab_prompt.md
 ```
 
-## Tracker repo structure
-
-```text
-practice/
-real/
-reviews/
-patterns/
-```
-
-Each session contains exactly two raw files in the MVP:
-
-```text
-practice/<session_id>/win1_sender.md
-practice/<session_id>/win2_receiver.md
-
-real/<session_id>/win1_sender.md
-real/<session_id>/win2_receiver.md
-```
-
-Session ID format:
-
-`0001_YYYY-MM-DD_company_role_round_mode`
-
-Practice and real sessions are numbered separately.
-
-## One-time setup
-
-1. Create a private GitHub repo named `pm-interview-session-tracker`.
-2. Clone it to:
-   `C:\Users\Sundar\Documents\pm-interview-session-tracker`
-3. From the instruction repo, run:
-
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File "runtime\scripts\init-session-tracker-repo.ps1" -TrackerRepoPath "C:\Users\Sundar\Documents\pm-interview-session-tracker"
-```
-
-4. In the tracker repo, commit and push the initial folders:
-
-```powershell
-cd "C:\Users\Sundar\Documents\pm-interview-session-tracker"
-git add .
-git commit -m "chore: initialize session tracker"
-git push origin main
-```
-
-The push script expects the tracker repo to be clean before adding a new session.
-
-## Edge Beta setup
-
-Install or enable this companion userscript in Edge Beta Tampermonkey:
-
-```text
-runtime/tm_scripts/session-tracker-export.user.js
-```
-
-Keep the existing scripts enabled:
-
-```text
-ChatGPT PM Interview Bridge (2-Window)
-ChatGPT Virtual Scroll (PWA Scroll-Relative Fix)
-ChatGPT PM Session Tracker Export
-```
-
-There should still be exactly one active bridge script and one active virtual-scroll script. The tracker exporter is an additional companion script.
+The Manifest V3 extension already owns role-scoped JSON/Markdown export. No companion userscript is required.
 
 ## End-session flow
 
-1. Run the normal two-window AHK runtime.
-2. Run the companion helper:
+1. Complete the interview in one managed PMIA sender/receiver session.
+2. Start `runtime/Session_Tracker_End_Session.ahk` or press `Alt+Shift+E` while it is running.
+3. Choose **Export Both Windows**.
+4. The helper discovers exactly one complete PMIA lifecycle-title pair, sends `Ctrl+Shift+F8` to both roles, and automatically locates the new sender/receiver Markdown files in Downloads.
+5. Fill practice/real, company, role, round, and mode.
+6. Choose **Push Session**. The tracker repository must be clean.
+7. On success, optionally end the managed PMIA session and copy the Review Lab prompt.
 
-```text
-runtime/Session_Tracker_End_Session.ahk
+Manual Browse remains available if Edge downloads to a nonstandard location.
+
+## Safe dry run
+
+Use synthetic files before enabling a real push:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File runtime\scripts\push-session-to-tracker.ps1 `
+  -SessionType practice -Company synthetic -Role pm -Round mock -Mode verification `
+  -Win1File <sender.md> -Win2File <receiver.md> `
+  -TrackerRepoPath C:\Users\Sundar\Documents\pm-interview-session-tracker `
+  -DryRun -DryRunOutputPath $env:TEMP\PMInterviewAssistant\tracker-dry-run
 ```
 
-3. Press `Alt + Shift + E`.
-4. Click `Export Both Windows`.
-5. Confirm two Markdown files downloaded:
-   - one with `win1_sender`
-   - one with `win2_receiver`
-6. Select those two files in the helper.
-7. Choose session type:
-   - `practice` for solo practice or friend mocks
-   - `real` for real interviews / serious external interview sessions
-8. Fill company, role, round, and mode.
-9. Click `Push Session`.
-10. After push succeeds, click `Copy Review Prompt` and use it in the `PM Interview Review Lab` Project.
-
-## Smoke test
-
-Use a fake practice session first:
-
-```text
-Session type: practice
-Company: test
-Role: pm
-Round: smoke
-Mode: mock
-```
-
-Expected result in tracker repo:
-
-```text
-practice/0001_<date>_test_pm_smoke_mock/win1_sender.md
-practice/0001_<date>_test_pm_smoke_mock/win2_receiver.md
-```
+Dry run validates inputs and creates `README.md`, `win1_sender.md`, and `win2_receiver.md` under the dry-run output. It performs no checkout, commit, branch, merge, push, or remote deletion.
 
 ## Failure handling
 
-If export does not download files:
+- `NO_ACTIVE_PMIA_SESSION`: no complete sender/receiver pair exists.
+- `AMBIGUOUS_PMIA_SESSIONS`: more than one complete PMIA session is open; close stale sessions.
+- `SENDER_EXPORT_FAILED` / `RECEIVER_EXPORT_FAILED`: the matching managed window did not accept `Ctrl+Shift+F8`.
+- `EXPORT_TIMEOUT`: matching role exports were not found in Downloads before the bounded timeout.
+- `EXPORT_FILES_MISSING`: export again or use Browse for both Markdown files.
+- `PUSH_FAILED`: inspect the tracker repository, Git authentication, and PowerShell output. The interview session remains open.
 
-- Confirm the tracker exporter userscript is enabled in Edge Beta.
-- Confirm the window title is `VB_SENDER` / `VB_RECEIVER`.
-- Try `Ctrl + Shift + F9` inside each window manually.
+## Privacy and repository rules
 
-If push fails:
-
-- Confirm the tracker repo path is correct.
-- Confirm the tracker repo has a remote named `origin`.
-- Confirm the tracker repo is clean: `git status`.
-- Confirm GitHub auth is still using the correct account.
-
-## Rules
-
-- Keep the tracker repo private.
-- Do not store tokens or credentials in any repo file.
-- Auto-merge is acceptable only for the tracker repo.
-- Do not auto-update the PM Interview Helper instruction repo from a single session review.
-- Let Review Lab find patterns across multiple sessions before changing the main PM Interview Helper system.
+- Keep the tracker repository private.
+- Never store credentials, cookies, Resume/JD bodies, or provider account data.
+- Use synthetic data for release tests.
+- Auto-merge is permitted only in the tracker repository after a successful non-dry-run push.
+- Review recurring patterns across sessions before changing PMIA behavior.

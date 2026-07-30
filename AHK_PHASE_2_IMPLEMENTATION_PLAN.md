@@ -1,5 +1,7 @@
 # AHK / Bridge Phase 2 Implementation Plan
 
+> **Status: completed in PMIA runtime 0.6.1.** The active `Final_2_Window_Extension.ahk` now provides structured session metadata, and the Manifest V3 runtime already implements latest-question supersede. The code below is retained as historical design reference and must not be applied to the legacy launcher.
+
 Exact, ready-to-apply runtime changes that were **deliberately deferred** from the architecture pass because AHK cannot be linted or run in the authoring environment and the launcher is safety-critical. Apply these on a Windows machine with AutoHotkey v2 and **smoke-test before any real interview**. The previous working version is preserved in git history as a fallback.
 
 ## What already shipped (do not redo)

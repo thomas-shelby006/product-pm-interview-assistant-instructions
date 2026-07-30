@@ -1,4 +1,4 @@
-# PM Interview Dual-Provider Runtime 0.6.0
+# PM Interview Dual-Provider Runtime 0.6.1
 
 Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
 
@@ -76,6 +76,8 @@ Binary microphone and playback frames are ignored.
 - **Run Preflight** validates the selected profile, extension path, and extension version before launch.
 - The route, selected profile directory, and initial layout are persisted. Resume, Job Description, session notes, session IDs, prompts, and answers are never persisted by the Studio.
 - Resume, Job Description, and optional session notes remain only in the current AutoHotkey process memory.
+- Session Studio also exposes **Target company**, **Target role**, **Interview round**, **Emphasis**, **Avoid mentioning**, and **Answer mode** as structured memory-only controls; freeform notes remain available.
+- Structured metadata is assembled into the boot prompt but is not persisted to `settings.ini`.
 - Short context uses an inline two-step action: the first click arms **Launch Anyway** for ten seconds; the second click proceeds. No modal confirmation is used.
 - Launch progress is explicit: `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `READY`, or `ERROR`.
 - **Repair Launch** opens the selected profile's PMIA extension page for registration/path/version failures, or retries the same session route after a partial lifecycle failure.
@@ -112,6 +114,12 @@ No Resume, Job Description, notes, prompt, answer, session identifier, cookie, t
 - `Ctrl+Shift+F11`: actively ping the opposite managed runtime and report `LINK OK`, a missing role, `FINAL QUEUED`, `RUNTIME UNREACHABLE`, or `COMPOSER NOT READY`.
 - `Ctrl+Alt+0`: pause or resume the managed tab.
 
+## Session tracker companion
+
+`runtime/Session_Tracker_End_Session.ahk` is the optional post-session companion for the active Manifest V3 runtime. It pairs one exact sender/receiver session from PMIA lifecycle titles, sends `Ctrl+Shift+F8` to both roles, locates the resulting Markdown exports in Downloads, and fills the tracker form automatically. Missing and ambiguous sessions fail with explicit codes. Manual Browse remains a recovery path.
+
+The push script supports `-DryRun` and a separate output path. Dry run validates inputs and creates the session package without checkout, commit, branch, merge, push, or remote deletion.
+
 ## Load in Edge
 
 1. Open `edge://extensions` in the same Edge Stable profile selected in Session Studio.
@@ -136,4 +144,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_R
 
 Manual release checks should cover all four sender/receiver provider combinations, both native-voice senders, long-question growth, interruption, receiver reload, missing receiver recovery, preflight status, and a long-session soak.
 
-The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.6 runtime.
+The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.6.1 runtime.

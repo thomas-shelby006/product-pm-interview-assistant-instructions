@@ -1,4 +1,4 @@
-# PM Interview Assistant 0.6 - Install and Verify
+# PM Interview Assistant 0.6.1 - Install and Verify
 
 ## Active files
 
@@ -12,7 +12,7 @@ extension/
   shared/
 ```
 
-The older `Final_2_Window_Fixed.ahk`, Tampermonkey folders, session-tracker helper, archives, and rollback assets are retained but inactive. Do not enable an old bridge or userscript beside the Manifest V3 runtime.
+The older `Final_2_Window_Fixed.ahk`, Tampermonkey folders, archives, and rollback assets are retained but inactive. Do not enable an old bridge or userscript beside the Manifest V3 runtime. `Session_Tracker_End_Session.ahk` is the active optional post-session companion.
 
 ## Install the extension
 
@@ -24,6 +24,18 @@ The older `Final_2_Window_Fixed.ahk`, Tampermonkey folders, session-tracker help
 6. Launch only after the profile doctor reports the expected path and version.
 
 Resume, Job Description, notes, prompts, answers, and session identifiers are not persisted by Session Studio. Only safe profile, route, and layout preferences are stored in `%LOCALAPPDATA%\PMInterviewAssistant\settings.ini`.
+
+## Structured session setup
+
+Session Studio exposes memory-only fields for **Target company**, **Target role**, **Interview round**, **Emphasis**, **Avoid mentioning**, **Answer mode**, and **Additional notes** beside Resume and Job Description. Blank dropdowns infer from the JD. These fields are not persisted; only profile, route, and layout preferences are stored.
+
+## End-session tracker
+
+1. Start `runtime/Session_Tracker_End_Session.ahk` after a managed interview session is complete.
+2. Choose **Export Both Windows**. The helper finds one complete PMIA lifecycle-title pair and sends `Ctrl+Shift+F8` to each role.
+3. The newest matching sender and receiver Markdown exports are discovered automatically in Downloads.
+4. Choose practice/real metadata and push to the private tracker, or run the PowerShell script with `-DryRun` first.
+5. Missing or multiple sessions fail explicitly; manual Browse remains available.
 
 ## PM shortcut map
 
