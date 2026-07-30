@@ -589,3 +589,82 @@ test('transcript filter ignores translating placeholders until exact provider te
   assert.equal(filterModule.isActionableTranscript('Translating?'), false);
   assert.equal(filterModule.isActionableTranscript('How would you improve activation?'), true);
 });
+
+
+test('voice transcript boundary removes Unicode and composite provider placeholders', () => {
+  assert.equal(filterModule.sanitizeTranscriptCandidate('Transcribing…'), '');
+  assert.equal(
+    filterModule.sanitizeTranscriptCandidate('Transcribing…\nHow would you measure onboarding activation?'),
+    'How would you measure onboarding activation?'
+  );
+  assert.equal(
+    filterModule.sanitizeTranscriptCandidate('How would you measure onboarding activation?\nListening...'),
+    'How would you measure onboarding activation?'
+  );
+  let now = 1000;
+  const cache = filterModule.createRecentTranscriptCache({ nowFn: () => now, ttlMs: 30000 });
+  const question = 'How would you measure onboarding activation?';
+  assert.equal(cache.accept(question, 'preview'), true);
+  assert.equal(cache.accept(question, 'preview'), false);
+  assert.equal(cache.accept(question, 'final'), true);
+  assert.equal(cache.accept(question, 'final'), false);
+  assert.equal(cache.accept(question, 'final', 'turn-1'), true);
+  assert.equal(cache.accept(question, 'final', 'turn-1'), false);
+  assert.equal(cache.accept('How would you measure onboarding activation differently?', 'final', 'turn-1'), false);
+  assert.equal(cache.accept(question, 'final', 'turn-2'), true);
+  assert.equal(cache.accept(question, 'preview', 'turn-1'), true);
+  assert.equal(cache.accept(question, 'preview', 'turn-1'), false);
+  assert.equal(cache.accept(question, 'preview', 'turn-2'), true);
+  now += 30001;
+  assert.equal(cache.accept(question, 'final'), true);
+});
+
+test('receiver ignores transient voice preview without overwriting its composer', () => {
+  const calls = [];
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      setComposerText: text => { calls.push(text); return true; },
+      submit: () => true
+    },
+    sleep: async () => {},
+    onStatus: () => {}
+  });
+  assert.equal(controller.preview({
+    streamId: 'voice', turnKey: 'u1', text: 'Transcribing…', revision: 1, seq: 1
+  }), false);
+  assert.deepEqual(calls, []);
+});
+
+test('receiver retries one swallowed provider submit and confirms the rendered turn', async () => {
+  let composer = '';
+  let submitCalls = 0;
+  const messages = [];
+  const question = 'How would you improve activation for this onboarding flow?';
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      setComposerText(text) { composer = text; return true; },
+      composerContains: text => composer === text,
+      canSubmit: () => true,
+      submit() {
+        submitCalls += 1;
+        if (submitCalls === 2) {
+          messages.push({ id: 'u2', role: 'user', text: composer });
+          composer = '';
+        }
+        return true;
+      },
+      getConversationMessages: () => messages,
+      findComposer: () => ({})
+    },
+    sleep: async () => {},
+    yieldFn: async () => {},
+    maxSubmitChecks: 1,
+    maxConfirmChecks: 50,
+    onStatus: () => {}
+  });
+  assert.equal(await controller.deliver({ id: 'voice-final', kind: 'question', text: question }), true);
+  assert.equal(submitCalls, 2);
+  assert.equal(messages.at(-1).text, question);
+});

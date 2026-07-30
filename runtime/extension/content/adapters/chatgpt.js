@@ -60,6 +60,7 @@ export function createChatGptAdapter(doc = document) {
 
   return {
     provider: 'chatgpt',
+    dismissBlockingUi() { return false; },
     findComposer,
     setComposerText(text) { return setEditableText(findComposer(), text); },
     composerContains(text) {

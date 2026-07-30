@@ -101,3 +101,15 @@ test('README documents the 0.6 operational release boundaries', async () => {
   assert.match(readme, /ProfileDirectory/);
   assert.doesNotMatch(readme, /not modified by the 0\.5 runtime/i);
 });
+
+
+
+
+
+test('manifest registers a browser-level exact-session export command', async () => {
+  const manifest = await readManifest();
+  const command = manifest.commands?.['export-active-pmia-session'];
+  assert.ok(command);
+  assert.equal(command.suggested_key?.default, 'Ctrl+Shift+8');
+  assert.match(command.description, /export/i);
+});

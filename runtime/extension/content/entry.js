@@ -16,6 +16,7 @@ import { createClaudeSignalBridge } from './signals/claude-isolated.js';
 import { createClaudeSignalHandler } from './signals/claude-runtime.js';
 import { createProviderObserver } from './observation/provider-observer.js';
 import { createProviderSender } from './senders/provider-sender.js';
+import { createChatGptTurnTracker } from './senders/chatgpt-turn-tracker.js';
 import { createAnswerTracker, createWakeSignal } from './answer-tracker.js';
 import { createLatestPreviewScheduler } from './preview-scheduler.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
@@ -23,7 +24,7 @@ import { SequenceGate, nextSequence } from '../shared/sequence.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 import { describeRuntimeStatus } from '../shared/session-status.js';
 import { renderRuntimeFatal } from './runtime-fatal.js';
-import { isActionableTranscript, isTransientTranscriptStatus } from '../shared/transcript-filter.js';
+import { createRecentTranscriptCache, isActionableTranscript, sanitizeTranscriptCandidate } from '../shared/transcript-filter.js';
 import { createPreflightResponder } from './preflight-responder.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
@@ -113,6 +114,7 @@ async function startRuntime(runtimeConfig) {
   const receiverSequenceGate = new SequenceGate(
     Number(sessionStorage.getItem(receiverSequenceKey) || 0)
   );
+  const outboundTranscriptCache = createRecentTranscriptCache();
 
   const message = async payload => {
     try {
@@ -177,28 +179,35 @@ async function startRuntime(runtimeConfig) {
 
   async function forwardPreview(candidate) {
     if (runtimeConfig.role !== 'sender' || paused) return false;
-    if (isTransientTranscriptStatus(candidate?.text)) return false;
+    const phase = String(candidate?.phase || 'interim');
+    const text = phase === 'clear' ? '' : sanitizeTranscriptCandidate(candidate?.text);
+    if (phase !== 'clear' && !text) return true;
+    const transcriptIdentity = String(candidate?.turnKey || '').trim();
+    if (phase !== 'clear' && !outboundTranscriptCache.accept(text, 'preview', transcriptIdentity)) return true;
     const nextPreviewSequence = nextSequence(previewSequence);
     let preview;
     try {
       preview = makePreview({
         sessionId: runtimeConfig.sessionId,
         sourceProvider: runtimeConfig.provider,
-        text: String(candidate?.text ?? ''),
+        text,
         turnKey: String(candidate?.turnKey || ''),
         revision: Number(candidate?.revision || 0),
-        phase: String(candidate?.phase || 'interim'),
+        phase,
         seq: nextPreviewSequence,
         streamId: previewStreamId
       });
     } catch {
+      if (phase !== 'clear') outboundTranscriptCache.forget(text, 'preview', transcriptIdentity);
       return false;
     }
     previewSequence = nextPreviewSequence;
     try {
       const response = await chrome.runtime.sendMessage({ type: 'PMIA_PREVIEW', preview });
+      if (!response?.ok && phase !== 'clear') outboundTranscriptCache.forget(text, 'preview', transcriptIdentity);
       return Boolean(response?.ok);
     } catch {
+      if (phase !== 'clear') outboundTranscriptCache.forget(text, 'preview', transcriptIdentity);
       return false;
     }
   }
@@ -206,9 +215,14 @@ async function startRuntime(runtimeConfig) {
   const previewScheduler = createLatestPreviewScheduler({ send: forwardPreview });
 
   async function forwardText(text, kind = 'question', metadata = {}) {
-    const normalized = String(text || '').trim();
+    const normalized = kind === 'question'
+      ? sanitizeTranscriptCandidate(text)
+      : String(text || '').trim();
     if (!normalized || paused) return false;
     if (kind === 'question' && !isActionableTranscript(normalized)) return false;
+    const transcriptPhase = kind === 'question' ? 'final' : '';
+    const transcriptIdentity = String(metadata.turnKey || metadata.messageId || '').trim();
+    if (transcriptPhase && !outboundTranscriptCache.accept(normalized, transcriptPhase, transcriptIdentity)) return true;
     let envelope;
     const nextSenderSequence = nextSequence(senderSequence);
     senderSequence = nextSenderSequence;
@@ -223,9 +237,11 @@ async function startRuntime(runtimeConfig) {
         metadata: { ...metadata, previewStreamId }
       });
     } catch {
+      if (transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
       return false;
     }
     const response = await message({ type: 'PMIA_FORWARD', envelope });
+    if (!response?.ok && transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
     if (response?.terminal) {
       runtimeRegistered = false;
       refreshLifecycleTitle();
@@ -251,6 +267,7 @@ async function startRuntime(runtimeConfig) {
   }
 
 
+
   const isCombinedVoiceActive = () => Boolean(
     adapter.isVoiceActive?.() ||
     (runtimeConfig.provider === 'claude' && claudeProtocolVoiceActive)
@@ -259,9 +276,13 @@ async function startRuntime(runtimeConfig) {
   if (runtimeConfig.role === 'sender') {
     senderController = createProviderSender({
       adapter,
+      tracker: runtimeConfig.provider === 'chatgpt'
+        ? createChatGptTurnTracker({ fallbackMs: 900 })
+        : undefined,
       isVoiceActive: isCombinedVoiceActive,
       isComposerEmpty: () => adapter.isComposerEmpty?.() ?? true,
-      allowFallbackFinalization: false,
+      allowFallbackFinalization: runtimeConfig.provider === 'chatgpt',
+      allowVoiceFallback: runtimeConfig.provider === 'chatgpt',
       onPreview(preview) {
         if (runtimeConfig.provider === 'claude' && isCombinedVoiceActive()) return false;
         return previewScheduler.push(preview);
@@ -463,6 +484,15 @@ async function startRuntime(runtimeConfig) {
       sendResponse({ ok: true });
       return false;
     }
+    if (
+      incoming?.type === 'PMIA_EXPORT_SESSION' &&
+      incoming.sessionId === runtimeConfig.sessionId
+    ) {
+      exportSession()
+        .then(ok => sendResponse(ok ? { ok: true } : { ok: false, error: 'export_failed' }))
+        .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
+      return true;
+    }
     if (incoming?.type === 'PMIA_ROLE_REVOKED') {
       registrationActive = false;
       paused = true;
@@ -535,7 +565,7 @@ async function startRuntime(runtimeConfig) {
     const response = await message({ type: 'PMIA_GET_LOG', sessionId: runtimeConfig.sessionId });
     if (!response?.ok) {
       overlay.setStatus('EXPORT FAIL', 'error', 2500);
-      return;
+      return false;
     }
     const exportedAt = new Date().toISOString();
     const payload = buildSessionExport({
@@ -552,6 +582,7 @@ async function startRuntime(runtimeConfig) {
       'text/markdown;charset=utf-8'
     );
     overlay.setStatus('EXPORTED', 'ok', 1800);
+    return true;
   }
 
   async function readClipboard() {

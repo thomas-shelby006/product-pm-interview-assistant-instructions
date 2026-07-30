@@ -1,4 +1,4 @@
-import { isActionableTranscript, isStrongFinalTranscript, isTransientTranscriptStatus, normalizeTranscript } from '../../shared/transcript-filter.js';
+import { isActionableTranscript, isStrongFinalTranscript, isTransientTranscriptStatus, normalizeTranscript, sanitizeTranscriptCandidate } from '../../shared/transcript-filter.js';
 
 const FINAL_FILLER = new Set([
   'ok', 'okay', 'yes', 'yeah', 'yep', 'fine', 'good', 'correct', 'right',
@@ -14,7 +14,7 @@ function normalizeMessages(messages, limit = Infinity) {
       id: String(message?.id || '').trim(),
       turnId: String(message?.turnId || '').trim(),
       role: String(message?.role || '').trim().toLowerCase(),
-      text: String(message?.text || '').trim()
+      text: sanitizeTranscriptCandidate(message?.text)
     }))
     .filter(message => message.id && message.text && ['user', 'assistant'].includes(message.role));
 }

@@ -6,6 +6,7 @@ import { roleLogKey, appendBoundedLog } from './shared/session-log.js';
 import { buildSessionStatus } from './shared/session-status.js';
 import { runCounterpartPreflight } from './shared/preflight.js';
 import { closeOwnedSessionTabs } from './shared/end-session.js';
+import { exportManagedSessionForTab } from './shared/session-control.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -213,6 +214,26 @@ async function broadcastLinkStatus(sessionId, registry) {
   await Promise.allSettled(deliveries);
   return status;
 }
+
+
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== 'export-active-pmia-session') return;
+  loadRegistry()
+    .then(registry => exportManagedSessionForTab({
+      registry,
+      tabId: tab?.id,
+      sendToTab: (targetTabId, outgoing) => chrome.tabs.sendMessage(targetTabId, outgoing)
+    }))
+    .then(result => {
+      if (!result?.ok || !result.sessionId) return;
+      return appendLog(result.sessionId, 'sender', {
+        type: 'control_export',
+        source: 'browser_command',
+        exportedTabIds: result.exportedTabIds
+      });
+    })
+    .catch(() => {});
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab?.id;

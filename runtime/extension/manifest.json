@@ -63,5 +63,13 @@
         "https://claude.ai/*"
       ]
     }
-  ]
+  ],
+  "commands": {
+    "export-active-pmia-session": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+8"
+      },
+      "description": "Export the active managed PMIA session"
+    }
+  }
 }

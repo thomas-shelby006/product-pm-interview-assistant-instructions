@@ -14,6 +14,9 @@ global ResolverScript := A_ScriptDir "\scripts\resolve-pmia-session-exports.ps1"
 global PushScript := A_ScriptDir "\scripts\push-session-to-tracker.ps1"
 
 if (EnvGet("PMIA_VALIDATE") = "1" || (A_Args.Length >= 1 && (A_Args[1] = "--validate" || A_Args[1] = "validate"))) {
+    sampleJson := '{"path":"C:\\temp\\pmia"}'
+    if JsonString(sampleJson, "path") != "C:\temp\pmia"
+        throw Error("Review Studio JSON path decoder validation failed.")
     FileAppend "TRACKER_AHK_VALID`n", "*"
     ExitApp 0
 }
@@ -254,14 +257,60 @@ JsonString(json, key, defaultValue := "") {
     pattern := '"' key '"\s*:\s*"((?:\\.|[^"])*)"'
     if !RegExMatch(json, pattern, &match)
         return defaultValue
-    value := match[1]
-    value := StrReplace(value, '\/', '/')
-    value := StrReplace(value, '\"', '"')
-    value := StrReplace(value, '\r', '`r')
-    value := StrReplace(value, '\n', '`n')
-    value := StrReplace(value, '\t', '`t')
-    value := StrReplace(value, '\\', '\')
-    return value
+    return DecodeJsonString(match[1])
+}
+
+DecodeJsonString(value) {
+    decoded := ""
+    slash := Chr(92)
+    length := StrLen(value)
+    index := 1
+    while index <= length {
+        char := SubStr(value, index, 1)
+        if char != slash {
+            decoded .= char
+            index += 1
+            continue
+        }
+        if index = length {
+            decoded .= slash
+            break
+        }
+        escaped := SubStr(value, index + 1, 1)
+        switch escaped {
+            case '"', slash, '/':
+                decoded .= escaped
+                index += 2
+            case 'b':
+                decoded .= Chr(8)
+                index += 2
+            case 'f':
+                decoded .= Chr(12)
+                index += 2
+            case 'n':
+                decoded .= "`n"
+                index += 2
+            case 'r':
+                decoded .= "`r"
+                index += 2
+            case 't':
+                decoded .= "`t"
+                index += 2
+            case 'u':
+                hex := SubStr(value, index + 2, 4)
+                if StrLen(hex) = 4 && RegExMatch(hex, "^[0-9A-Fa-f]{4}$") {
+                    decoded .= Chr("0x" hex)
+                    index += 6
+                } else {
+                    decoded .= slash escaped
+                    index += 2
+                }
+            default:
+                decoded .= slash escaped
+                index += 2
+        }
+    }
+    return decoded
 }
 
 JsonBoolean(json, key, defaultValue := false) {

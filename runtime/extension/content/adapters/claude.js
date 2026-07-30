@@ -71,6 +71,44 @@ const ASSISTANT_SELECTORS = [
   '.font-claude-message'
 ];
 const MESSAGE_SELECTOR = '[data-testid="user-message"],[data-testid="assistant-message"],[data-author="user"],[data-author="assistant"],[data-message-author-role="user"],[data-message-author-role="assistant"],[role="article"]';
+const SAFE_BLOCKING_DIALOG_PATTERNS = [
+  /create files and artifacts/i,
+  /claude can do more than answer questions/i
+];
+const DIALOG_CLOSE_SELECTORS = [
+  'button[aria-label="Close"]',
+  'button[title="Close"]',
+  'button[data-testid="modal-close"]'
+];
+
+function dismissKnownBlockingDialog(doc) {
+  const dialogs = Array.from(doc.querySelectorAll?.('[role="dialog"]') || []);
+  for (const dialog of dialogs) {
+    const text = composerText(dialog);
+    if (!SAFE_BLOCKING_DIALOG_PATTERNS.some(pattern => pattern.test(text))) continue;
+    let close = null;
+    for (const selector of DIALOG_CLOSE_SELECTORS) {
+      close = dialog.querySelector?.(selector) || null;
+      if (close) break;
+    }
+    if (!close) {
+      close = Array.from(dialog.querySelectorAll?.('button') || []).find(button => {
+        const label = String(
+          button.getAttribute?.('aria-label')
+          || button.getAttribute?.('title')
+          || composerText(button)
+          || ''
+        ).trim();
+        return /^close$/i.test(label);
+      }) || null;
+    }
+    if (!close || close.disabled) return false;
+    close.click?.();
+    return true;
+  }
+  return false;
+}
+
 const STREAMING_SELECTORS = [
   '[data-testid="assistant-message"][data-is-streaming="true"]',
   '[data-testid*="assistant-message"][data-is-streaming="true"]',
@@ -122,7 +160,11 @@ function hasCapturedStopControl(doc) {
 }
 
 export function createClaudeAdapter(doc = document) {
-  const findComposer = () => firstInteractiveMatch(doc, COMPOSER_SELECTORS);
+  const dismissBlockingUi = () => dismissKnownBlockingDialog(doc);
+  const findComposer = () => {
+    dismissBlockingUi();
+    return firstInteractiveMatch(doc, COMPOSER_SELECTORS);
+  };
   const findSendButton = () => firstVisibleMatch(doc, SEND_SELECTORS);
   const getComposerCandidate = () => firstNonEmptyCandidate(doc, COMPOSER_SELECTORS);
   const getConversationMessages = createConversationMessageReader(doc, {
@@ -149,6 +191,7 @@ export function createClaudeAdapter(doc = document) {
 
   return {
     provider: 'claude',
+    dismissBlockingUi,
     findComposer,
     setComposerText(text) { return setEditableText(findComposer(), text); },
     composerContains(text) {

@@ -73,3 +73,11 @@ test('tracker validates one v0.6 sender and receiver before writing state', () =
   assert.match(pushScript, /PMIA session mismatch/);
   assert.match(pushScript, /ResultJsonPath/);
 });
+
+test('review studio executes its JSON path decoder during validation', () => {
+  assert.match(helper, /DecodeJsonString\(match\[1\]\)/);
+  assert.match(helper, /sampleJson :=/);
+  assert.match(helper, /Review Studio JSON path decoder validation failed/);
+  assert.match(helper, /slash := Chr\(92\)/);
+  assert.match(helper, /switch escaped/);
+});

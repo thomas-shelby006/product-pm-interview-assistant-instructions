@@ -148,13 +148,11 @@ test('closing the session studio releases every operational control reference', 
   ]) assert.match(closeBlock, new RegExp(`${control}\\s*:=\\s*0`));
 });
 
-test('Alt+E exports sender and receiver role-scoped records', () => {
-  const hotkeyBlock = launcher.match(/!e:: \{[\s\S]*?\n\}/)?.[0] || '';
+test('Alt+E triggers the browser-level PMIA export command on the recovered sender window', () => {
   const exportBlock = launcher.slice(launcher.indexOf('ExportActiveSession() {'), launcher.indexOf('; Alt+Q'));
-  assert.match(hotkeyBlock, /ExportActiveSession\(\)/);
-  assert.match(exportBlock, /global g_hWin1, g_hWin2/);
-  assert.match(exportBlock, /SendToWindow\("", "\^\+\{F8\}", g_hWin1\)/);
-  assert.match(exportBlock, /SendToWindow\("", "\^\+\{F8\}", g_hWin2\)/);
+  assert.match(exportBlock, /IsActiveSession\(\)/);
+  assert.match(exportBlock, /SendBrowserCommand\("\^\+8", g_hWin1\)/);
+  assert.doesNotMatch(exportBlock, /\^\+\{F8\}/);
 });
 
 test('operational checks reacquire exact managed window handles after Edge replaces them', () => {
@@ -205,10 +203,11 @@ test('Alt+Delete closes every managed PMIA lifecycle window even with stale cach
   const endStart = launcher.indexOf('EndActiveSession() {');
   const endBlock = launcher.slice(endStart, launcher.indexOf('; Alt+E', endStart));
   assert.match(hotkeyBlock, /EndActiveSession\(\)/);
-  assert.match(endBlock, /CloseManagedPmiaWindows\(\)/);
-  assert.match(endBlock, /g_interviewActive\s*:=\s*false/);
+  assert.match(endBlock, /IsActiveSession\(\)/);
+  assert.match(endBlock, /sessionId := g_sessionId/);
+  assert.match(endBlock, /CloseManagedPmiaWindows\(sessionId\)/);
   assert.match(endBlock, /ExitApp/);
-  assert.doesNotMatch(endBlock, /if IsAlive\(g_hWin1\)/);
+  assert.doesNotMatch(endBlock, /RunExtensionControlAction/);
 });
 
 test('launcher confirms sender readiness before opening the receiver window', () => {
@@ -233,12 +232,13 @@ test('launcher sends boot context through the sender transport without local sen
   assert.doesNotMatch(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F7\}", g_hWin2\)/);
 });
 
-test('Alt+Delete asks the extension to close the exact session before Win32 fallback', () => {
+test('Alt+Delete uses the recovered session suffix as the exact shutdown boundary', () => {
   const endStart = launcher.indexOf('EndActiveSession() {');
   const endBlock = launcher.slice(endStart, launcher.indexOf('; Alt+E', endStart));
-  assert.match(endBlock, /SendToWindow\("", "\^\+\{F4\}"/);
-  assert.match(endBlock, /CloseManagedPmiaWindows\(\)/);
-  assert.ok(endBlock.indexOf('^+{F4}') < endBlock.indexOf('CloseManagedPmiaWindows()'));
+  assert.ok(endBlock.indexOf('IsActiveSession()') < endBlock.indexOf('sessionId := g_sessionId'));
+  assert.ok(endBlock.indexOf('sessionId := g_sessionId') < endBlock.indexOf('CloseManagedPmiaWindows(sessionId)'));
+  assert.doesNotMatch(endBlock, /CloseManagedPmiaWindows\(\)/);
+  assert.doesNotMatch(endBlock, /chrome-extension:\/\//);
 });
 
 test('composer readiness uses a long watchdog without slowing successful launches', () => {
@@ -327,4 +327,50 @@ test('handle refresh falls back to unambiguous lifecycle recovery after cached l
   const block = launcher.slice(start, end);
   assert.match(block, /RecoverUnambiguousManagedSession\(\)/);
   assert.match(block, /return true/);
+});
+
+test('lifecycle lookup includes hidden Edge app windows and restores detection mode', () => {
+  const start = launcher.indexOf('FindLifecycleWindow(role, provider, sessionId, minimumPhase := "boot") {');
+  const end = launcher.indexOf('\n}\n\nWaitForLifecycleTitle(', start);
+  const block = launcher.slice(start, end);
+  assert.match(block, /previousDetectHidden := A_DetectHiddenWindows/);
+  assert.match(block, /DetectHiddenWindows true/);
+  assert.match(block, /finally/);
+  assert.match(block, /DetectHiddenWindows previousDetectHidden/);
+});
+
+test('managed window liveness is independent of hidden-window detection', () => {
+  const start = launcher.indexOf('IsAlive(hWnd) {');
+  const end = launcher.indexOf('\n}\n\nSendToWindow(', start);
+  const block = launcher.slice(start, end);
+  assert.match(block, /DllCall\("IsWindow", "Ptr", hWnd, "Int"\)/);
+  assert.doesNotMatch(block, /WinExist/);
+});
+
+test('focus-dependent window actions include hidden managed windows and restore detection mode', () => {
+  const start = launcher.indexOf('SendToWindow(msg, shortcut, hTarget) {');
+  const block = launcher.slice(start);
+  assert.match(block, /previousDetectHidden := A_DetectHiddenWindows/);
+  assert.match(block, /DetectHiddenWindows true/);
+  assert.match(block, /DetectHiddenWindows previousDetectHidden/);
+  assert.match(block, /WinActivate "ahk_id " hTarget/);
+});
+
+
+test('review control messages reuse exact recovered browser-command export and shutdown operations', () => {
+  const exportBlock = launcher.slice(launcher.indexOf('ExportActiveSession() {'), launcher.indexOf('; Alt+Q'));
+  assert.match(exportBlock, /SendBrowserCommand\("\^\+8", g_hWin1\)/);
+  const endStart = launcher.indexOf('EndActiveSession() {');
+  const endBlock = launcher.slice(endStart, launcher.indexOf('; Alt+E', endStart));
+  assert.match(endBlock, /CloseManagedPmiaWindows\(sessionId\)/);
+});
+
+
+test('browser command activation includes hidden managed windows and restores detection mode', () => {
+  const start = launcher.indexOf('SendBrowserCommand(shortcut, hTarget) {');
+  const block = launcher.slice(start, launcher.indexOf('\n}\n\n', start) + 2);
+  assert.match(block, /DetectHiddenWindows true/);
+  assert.match(block, /WinActivate "ahk_id " hTarget/);
+  assert.match(block, /Send shortcut/);
+  assert.match(block, /DetectHiddenWindows previousDetectHidden/);
 });

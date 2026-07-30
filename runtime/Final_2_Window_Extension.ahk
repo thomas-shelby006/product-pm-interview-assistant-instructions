@@ -907,13 +907,19 @@ FindLifecycleWindow(role, provider, sessionId, minimumPhase := "boot") {
     phases := minimumPhase = "ready" ? ["ready"]
         : minimumPhase = "registered" ? ["ready", "registered"]
         : ["ready", "registered", "boot"]
-    for phase in phases {
-        title := RuntimeLifecycleTitle(role, provider, sessionId, phase)
-        hwnd := WinExist(title)
-        if hwnd
-            return Map("hwnd", hwnd, "phase", phase, "title", title)
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try {
+        for phase in phases {
+            title := RuntimeLifecycleTitle(role, provider, sessionId, phase)
+            hwnd := WinExist(title)
+            if hwnd
+                return Map("hwnd", hwnd, "phase", phase, "title", title)
+        }
+        return Map()
+    } finally {
+        DetectHiddenWindows previousDetectHidden
     }
-    return Map()
 }
 
 WaitForLifecycleTitle(role, provider, sessionId, phase, timeoutMs) {
@@ -1472,18 +1478,15 @@ RestoreLayout(layout) {
 }
 
 EndActiveSession() {
-    global g_interviewActive, g_hWin1, g_hWin2
+    global g_interviewActive, g_sessionId
     if GetKeyState("Alt", "P")
         KeyWait "Alt"
     LogEvent("Alt+Delete exit requested")
-    if IsActiveSession() {
-        target := IsAlive(g_hWin1) ? g_hWin1 : g_hWin2
-        if IsAlive(target)
-            SendToWindow("", "^+{F4}", target)
-        Sleep 500
-    }
+    sessionId := ""
+    if IsActiveSession()
+        sessionId := g_sessionId
     g_interviewActive := false
-    CloseManagedPmiaWindows()
+    CloseManagedPmiaWindows(sessionId)
     ExitApp
 }
 
@@ -1493,37 +1496,19 @@ EndActiveSession() {
 }
 
 ExportActiveSession() {
-    global g_hWin1, g_hWin2
+    global g_hWin1
     if GetKeyState("Alt", "P")
         KeyWait "Alt"
     if (!IsActiveSession()) {
         LogEvent("Alt+E ignored: no active interview session")
         return false
     }
-
-    exported := false
-    if IsAlive(g_hWin1) {
-        if SendToWindow("", "^+{F8}", g_hWin1) {
-            LogEvent("Alt+E sender export triggered")
-            exported := true
-        }
-    } else {
-        LogEvent("Alt+E sender export skipped: Win1 not alive")
+    if !SendBrowserCommand("^+8", g_hWin1) {
+        LogEvent("Alt+E failed: browser export command was not sent")
+        return false
     }
-
-    Sleep 180
-    if IsAlive(g_hWin2) {
-        if SendToWindow("", "^+{F8}", g_hWin2) {
-            LogEvent("Alt+E receiver export triggered")
-            exported := true
-        }
-    } else {
-        LogEvent("Alt+E receiver export skipped: Win2 not alive")
-    }
-
-    if !exported
-        LogEvent("Alt+E failed: no managed window accepted export")
-    return exported
+    LogEvent("Alt+E browser export command triggered")
+    return true
 }
 
 ; Alt+Q — Mute/unmute Win1 mic through the active provider adapter.
@@ -1670,7 +1655,26 @@ RecoverUnambiguousManagedSession() {
 }
 
 IsAlive(hWnd) {
-    return (hWnd != 0 && WinExist("ahk_id " hWnd))
+    return hWnd != 0 && DllCall("IsWindow", "Ptr", hWnd, "Int")
+}
+
+SendBrowserCommand(shortcut, hTarget) {
+    if !IsAlive(hTarget)
+        return false
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try {
+        WinActivate "ahk_id " hTarget
+        if !WinWaitActive("ahk_id " hTarget, , 3)
+            return false
+        Send shortcut
+        return true
+    } catch as err {
+        LogEvent("Browser command failed: " err.Message)
+        return false
+    } finally {
+        DetectHiddenWindows previousDetectHidden
+    }
 }
 
 SendToWindow(msg, shortcut, hTarget) {
@@ -1683,6 +1687,8 @@ SendToWindow(msg, shortcut, hTarget) {
     g_suppressClipMonitor := true
     savedClip := ""
     clipSaved := false
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
 
     try {
         if (msg != "") {
@@ -1718,5 +1724,6 @@ SendToWindow(msg, shortcut, hTarget) {
             }
         }
         g_suppressClipMonitor := false
+        DetectHiddenWindows previousDetectHidden
     }
 }

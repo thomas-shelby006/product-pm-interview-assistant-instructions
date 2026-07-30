@@ -1,6 +1,6 @@
 # PMIA Runtime v0.6.1 Verification
 
-Date: 2026-07-30
+Final verification date: 2026-07-31
 Branch under test: `feature/runtime-0.6.1-completion`
 Base release: `pmia-runtime-v0.6.0`
 
@@ -17,8 +17,8 @@ The Review Studio is consolidated into `runtime/Session_Tracker_End_Session.ahk`
 
 The complete candidate tree passed:
 
-- Node test suite: **280 passed, 0 failed**;
-- JavaScript validation: **60 files checked**;
+- Node test suite: **303 passed, 0 failed**;
+- JavaScript validation: **62 files checked**;
 - main launcher AutoHotkey validation: passed;
 - Review Studio AutoHotkey validation: passed;
 - `runtime/Validate_Extension_Runtime.ps1`: passed;
@@ -26,6 +26,16 @@ The complete candidate tree passed:
 - focused secret-pattern scan: no hits.
 
 The runtime validator ran the full Node suite and JavaScript validation again before validating both active AutoHotkey programs.
+
+## Additional release defects found and fixed
+
+The final review found three issues beyond the original 0.6.1 checklist:
+
+1. two validation tests described an unimplemented direct extension-control protocol instead of the approved Review Studio -> launcher -> browser-command path; the tests now verify the maintained end-to-end architecture and the export command remains outside durable serialization;
+2. the outbound transcript cache keyed final questions only by normalized text for 30 seconds, which could suppress a legitimate repeated interviewer question; finals are now keyed by provider turn identity while duplicate copies of the same turn remain suppressed;
+3. Claude's first-run `Create files and artifacts` promotional dialog could cover the composer and hold lifecycle at REGISTERED until timeout; the Claude adapter now dismisses only that strict allow-listed onboarding dialog and refuses unknown dialogs.
+
+Two incomplete cache rollback call sites were also corrected to preserve turn identity after failed preview/final delivery.
 
 ## Structured session setup
 
@@ -45,22 +55,23 @@ Commands share the production implementations:
 
 ### Live smoke
 
-The launcher was started with `--control-smoke` from the candidate worktree.
+A fresh ChatGPT sender -> Claude receiver session was launched from the exact 0.6.1 worktree after reloading the unpacked extension.
 
 Observed:
 
-- hidden control HWND existed;
-- a registered export command posted successfully;
-- launcher log recorded `Alt+E ignored: no active interview session`, proving dispatch reached the shared production function;
-- Session Studio did not open in control-smoke mode.
+- Profile Doctor reported version `0.6.1`, exact path match, and `OK` for Edge Stable profile `Default`;
+- sender reached READY, then the receiver moved from REGISTERED to READY in six seconds;
+- Review Studio detected exactly one complete READY pair: `pmia_20260731_033400_9576`;
+- Review Studio remained foregrounded while **Export and Pair** posted through the hidden launcher control window;
+- launcher log recorded `Alt+E browser export command triggered`;
+- one fresh sender Markdown and one fresh receiver Markdown were created and paired automatically;
+- both files carried the same PMIA session ID and the correct `sender / chatgpt` and `receiver / claude` headers;
+- neither export contained Resume or Job Description markers, and neither contained a Unicode replacement character;
+- Review Studio reported `Paired fresh sender and receiver Markdown exports.`;
+- **End Session** posted through the same control channel, the launcher logged `Alt+Delete exit requested`, both managed PMIA tabs closed, and the launcher exited;
+- unrelated Edge tabs remained open.
 
-The Review Studio was then opened without any managed PMIA browser session. Its native controls showed:
-
-- title: `PM Session Tracker - Review Studio`;
-- full Detect / Export and Pair / Push and Open Review Lab / End Session surface;
-- precise status: `No complete READY PMIA sender/receiver pair is running.`
-
-Only the two smoke-test AutoHotkey processes were terminated afterward.
+The prior no-session control-smoke case also remains covered by automated and manual validation: the hidden control bridge starts without Session Studio and reports the precise no-active-session outcome.
 
 ## Exact export resolver
 

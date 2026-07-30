@@ -1,3 +1,5 @@
+import { sanitizeTranscriptCandidate } from '../shared/transcript-filter.js';
+
 function yieldToProvider() {
   return new Promise(resolve => {
     if (typeof globalThis.requestAnimationFrame === 'function') {
@@ -58,37 +60,53 @@ export async function submitComposerWhenReady({
   yieldFn = yieldToProvider,
   maxChecks = 320,
   maxConfirmChecks = 640,
+  maxSubmitAttempts = 2,
   baselineUserIds = snapshotUserTurnIds(adapter),
   confirmationText = text,
   isCurrent = () => true
 }) {
   const normalized = String(text ?? '').trim();
   if (!normalized || !isCurrent()) return false;
+  const attempts = Math.max(1, Number(maxSubmitAttempts) || 1);
   let composerWritten = false;
-  let submitTriggered = false;
-  for (let check = 0; check <= maxChecks; check += 1) {
-    if (!isCurrent()) return false;
-    if (!composerWritten) composerWritten = Boolean(adapter.setComposerText(normalized));
-    const composerReady = composerWritten && (adapter.composerContains?.(normalized) ?? true);
-    const submitReady = composerReady && (adapter.canSubmit?.() ?? true);
-    if (submitReady && adapter.submit()) {
-      submitTriggered = true;
-      break;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    let submitTriggered = false;
+    for (let check = 0; check <= maxChecks; check += 1) {
+      if (!isCurrent()) return false;
+      if (!composerWritten || !(adapter.composerContains?.(normalized) ?? false)) {
+        composerWritten = Boolean(adapter.setComposerText(normalized));
+      }
+      const textReady = composerWritten && (adapter.composerContains?.(normalized) ?? true);
+      const submitReady = textReady && (adapter.canSubmit?.() ?? true);
+      if (submitReady && adapter.submit()) {
+        submitTriggered = true;
+        break;
+      }
+      if (check < maxChecks) await yieldFn();
     }
-    if (check < maxChecks) await yieldFn();
-  }
-  if (!submitTriggered) return false;
-  if (!(baselineUserIds instanceof Set)) return true;
-  for (let check = 0; check <= maxConfirmChecks; check += 1) {
-    if (!isCurrent()) return false;
-    if (hasNewSubmittedUserTurn(adapter, normalized, baselineUserIds, confirmationText)) {
-      clearSubmittedComposer(adapter, normalized);
-      return true;
+    if (!submitTriggered) return false;
+    if (!(baselineUserIds instanceof Set)) return true;
+
+    let retryAllowed = false;
+    for (let check = 0; check <= maxConfirmChecks; check += 1) {
+      if (!isCurrent()) return false;
+      if (hasNewSubmittedUserTurn(adapter, normalized, baselineUserIds, confirmationText)) {
+        clearSubmittedComposer(adapter, normalized);
+        return true;
+      }
+      retryAllowed = attempt + 1 < attempts
+        && check >= 48
+        && (adapter.composerContains?.(normalized) ?? false)
+        && !(adapter.isGenerating?.() ?? false);
+      if (retryAllowed) break;
+      if (check < maxConfirmChecks) await yieldFn();
     }
-    if (check < maxConfirmChecks) await yieldFn();
+    if (!retryAllowed) return false;
   }
   return false;
 }
+
 
 export function createReceiverController({
   adapter,
@@ -151,8 +169,8 @@ ${normalizedQuestion}`;
     },
     preview(preview) {
       const turnKey = String(preview?.turnKey || '').trim();
-      const text = String(preview?.text ?? '').trim();
       const phase = String(preview?.phase || 'interim');
+      const text = phase === 'clear' ? '' : sanitizeTranscriptCandidate(preview?.text);
       const revision = Number(preview?.revision || 0);
       const seq = Number(preview?.seq || 0);
       const streamId = String(preview?.streamId || 'legacy').trim() || 'legacy';
@@ -170,9 +188,12 @@ ${normalizedQuestion}`;
       return true;
     },
     async deliver(envelope) {
-      const text = String(envelope?.text ?? '').trim();
+      const kind = String(envelope?.kind || 'question');
+      const text = kind === 'question'
+        ? sanitizeTranscriptCandidate(envelope?.text)
+        : String(envelope?.text ?? '').trim();
       if (!text) return false;
-      if (envelope?.kind === 'boot') {
+      if (kind === 'boot') {
         stagedContext = text;
         clearCommittedPreview(envelope);
         onStatus('ARMED');

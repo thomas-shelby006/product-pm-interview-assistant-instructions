@@ -363,12 +363,13 @@ test('content runtime exposes an exact managed-session end command', async () =>
   assert.match(background, /closeOwnedSessionTabs/);
 });
 
-test('production sender stages provider text but disables guessed stable-tail finals', async () => {
+test('production sender uses bounded fallback only for ChatGPT', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
-  assert.match(entry, /allowFallbackFinalization:\s*false/);
-  assert.doesNotMatch(entry, /allowVoiceFallback:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
+  assert.match(entry, /allowFallbackFinalization:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
+  assert.match(entry, /allowVoiceFallback:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
+  assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 900 \}\)/);
 });
 
 test('Claude MAIN-world observer preserves interruption and resets only an empty transcript', async () => {
@@ -400,4 +401,57 @@ test('active sender has no force-forward bypass around authoritative finalizatio
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const source = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
   assert.doesNotMatch(source, /key === 'F12'|forced_flush/);
+});
+
+
+test('focus-independent review control reaches the extension through the launcher-owned browser command', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const entry = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
+  const launcher = await readFile(resolve(extensionRoot, '..', 'Final_2_Window_Extension.ahk'), 'utf8');
+  const companion = await readFile(resolve(extensionRoot, '..', 'Session_Tracker_End_Session.ahk'), 'utf8');
+  assert.match(companion, /SendRuntimeControl\(PMIA_RUNTIME_CONTROL_EXPORT\)/);
+  assert.match(launcher, /RUNTIME_CONTROL_MESSAGE_NAME\s*:=\s*"PMIA_RUNTIME_CONTROL_V1"/);
+  assert.match(launcher, /SetTimer\(\(\) => ExportActiveSession\(\), -1\)/);
+  assert.match(launcher, /SendBrowserCommand\("\^\+8", g_hWin1\)/);
+  assert.match(background, /chrome\.commands\.onCommand\.addListener/);
+  assert.match(background, /exportManagedSessionForTab/);
+  assert.match(entry, /PMIA_EXPORT_SESSION/);
+  assert.match(entry, /exportSession\(\)/);
+});
+
+
+test('browser-command export runs outside durable serialization to permit log reentry', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const commandIndex = background.indexOf('chrome.commands.onCommand.addListener');
+  const listenerIndex = background.indexOf('chrome.runtime.onMessage.addListener');
+  const serializeIndex = background.indexOf('serialize(async () => {', listenerIndex);
+  assert.ok(commandIndex >= 0 && commandIndex < listenerIndex);
+  assert.ok(listenerIndex >= 0 && listenerIndex < serializeIndex);
+  const commandBlock = background.slice(commandIndex, listenerIndex);
+  assert.match(commandBlock, /exportManagedSessionForTab/);
+  assert.doesNotMatch(commandBlock, /serialize\(/);
+});
+
+
+test('service worker handles browser-level export commands without content focus', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  assert.match(background, /chrome\.commands\.onCommand\.addListener/);
+  assert.match(background, /export-active-pmia-session/);
+  assert.match(background, /exportManagedSessionForTab/);
+});
+
+
+test('ChatGPT transport enables bounded stable finalization while Claude keeps protocol authority', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
+  assert.match(entry, /allowFallbackFinalization: runtimeConfig\.provider === 'chatgpt'/);
+  assert.match(entry, /allowVoiceFallback: runtimeConfig\.provider === 'chatgpt'/);
+  assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 900 \}\)/);
 });

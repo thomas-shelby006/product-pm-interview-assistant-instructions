@@ -1,4 +1,5 @@
 import { PROVIDERS } from './protocol.js';
+import { sanitizeTranscriptCandidate } from './transcript-filter.js';
 
 export function makePreview({
   sessionId,
@@ -11,9 +12,9 @@ export function makePreview({
   phase = 'interim',
   now = Date.now()
 }) {
-  const normalizedText = String(text ?? '').trim();
-  const normalizedTurnKey = String(turnKey ?? '').trim();
   const normalizedPhase = String(phase ?? '').trim() || 'interim';
+  const normalizedText = normalizedPhase === 'clear' ? '' : sanitizeTranscriptCandidate(text);
+  const normalizedTurnKey = String(turnKey ?? '').trim();
   const normalizedStreamId = String(streamId ?? '').trim();
   const hasStreamId = streamId !== undefined;
   const permitsEmptyText = normalizedPhase === 'clear';
@@ -60,7 +61,13 @@ export function routePreview(registry, preview, senderTabId) {
 }
 
 export async function deliverPreview({ registry, preview, senderTabId, sendToTab }) {
-  const route = routePreview(registry, preview, senderTabId);
+  const phase = String(preview?.phase || 'interim');
+  const text = phase === 'clear' ? '' : sanitizeTranscriptCandidate(preview?.text);
+  if (phase !== 'clear' && !text) {
+    return { ok: true, delivered: false, dropped: true, reason: 'transient_preview' };
+  }
+  const sanitizedPreview = { ...preview, text };
+  const route = routePreview(registry, sanitizedPreview, senderTabId);
   if (!route.accepted) {
     return { ok: false, delivered: false, dropped: true, reason: route.reason };
   }
@@ -70,7 +77,7 @@ export async function deliverPreview({ registry, preview, senderTabId, sendToTab
   try {
     const response = await sendToTab(route.tabId, {
       type: 'PMIA_PREVIEW_DELIVER',
-      preview
+      preview: sanitizedPreview
     });
     if (response?.ok === false) {
       return { ok: true, delivered: false, dropped: true, reason: 'receiver_rejected' };

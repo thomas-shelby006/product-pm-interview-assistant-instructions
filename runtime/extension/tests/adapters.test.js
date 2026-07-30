@@ -69,6 +69,50 @@ test('ChatGPT adapter detects and stops generation', () => {
   assert.equal(stop.clicked, true);
 });
 
+test('Claude dismisses only the known file-creation onboarding dialog before readiness', () => {
+  assert.ok(claudeModule, 'Claude adapter module must exist');
+  const close = fakeElement({ tagName: 'BUTTON' });
+  const safeDialog = fakeElement({
+    innerText: 'Create files and artifacts Claude can do more than answer questions.',
+    querySelector(selector) {
+      return selector === 'button[aria-label="Close"]' ? close : null;
+    },
+    querySelectorAll(selector) {
+      const match = this.querySelector(selector);
+      return match ? [match] : [];
+    }
+  });
+  const unsafeClose = fakeElement({ tagName: 'BUTTON' });
+  const unsafeDialog = fakeElement({
+    innerText: 'Delete your account permanently',
+    querySelector() { return unsafeClose; },
+    querySelectorAll() { return [unsafeClose]; }
+  });
+  const doc = fakeDocument({}, {
+    '[role="dialog"]': [unsafeDialog, safeDialog]
+  });
+  const adapter = claudeModule.createClaudeAdapter(doc);
+  assert.equal(adapter.dismissBlockingUi(), true);
+  assert.equal(close.clicked, true);
+  assert.equal(unsafeClose.clicked, false);
+});
+
+
+test('Claude refuses unknown dialogs during readiness preparation', () => {
+  const close = fakeElement({ tagName: 'BUTTON' });
+  const dialog = fakeElement({
+    innerText: 'Confirm purchase',
+    querySelector() { return close; },
+    querySelectorAll() { return [close]; }
+  });
+  const adapter = claudeModule.createClaudeAdapter(fakeDocument({}, {
+    '[role="dialog"]': [dialog]
+  }));
+  assert.equal(adapter.dismissBlockingUi(), false);
+  assert.equal(close.clicked, false);
+});
+
+
 test('Claude adapter supports contenteditable composer and voice-mode evidence', () => {
   assert.ok(claudeModule, 'Claude adapter module must exist');
   const composer = fakeElement({ tagName: 'DIV' });
@@ -106,7 +150,8 @@ test('provider adapters expose the same contract', () => {
   const required = [
     'findComposer', 'setComposerText', 'submit', 'isGenerating',
     'stopGenerating', 'getLatestUserText', 'getLatestAssistantText',
-    'getSenderCandidate', 'findVoiceButton', 'getObservationTargets', 'isVoiceActive'
+    'getSenderCandidate', 'findVoiceButton', 'getObservationTargets', 'isVoiceActive',
+    'dismissBlockingUi'
   ];
   for (const factory of [chatgptModule.createChatGptAdapter, claudeModule.createClaudeAdapter]) {
     const adapter = factory(fakeDocument());
