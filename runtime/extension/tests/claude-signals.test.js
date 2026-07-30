@@ -226,7 +226,7 @@ test('Claude protocol activity remains active through boundary and clears on fin
   assert.deepEqual(states, [true, false]);
 });
 
-test('Claude reset and error clear protocol voice activity', async () => {
+test('Claude interruption preserves protocol voice activity until final reset or error', async () => {
   const states = [];
   const handler = createClaudeSignalHandler({
     role: 'sender',
@@ -237,8 +237,7 @@ test('Claude reset and error clear protocol voice activity', async () => {
     onVoiceStateChange: active => states.push(active)
   });
   await handler({ type: 'voice_active' });
-  await handler({ type: 'voice_reset', reason: 'server_interrupt' });
-  await handler({ type: 'voice_active' });
+  await handler({ type: 'voice_interrupt' });
   await handler({ type: 'voice_error', reason: 'idle_timeout' });
-  assert.deepEqual(states, [true, false, true, false]);
+  assert.deepEqual(states, [true, false]);
 });

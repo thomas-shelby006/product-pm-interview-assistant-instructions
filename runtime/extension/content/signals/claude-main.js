@@ -48,8 +48,13 @@
       return;
     }
 
-    if (payload.type === 'server_interrupt' || payload.type === 'transcript_empty') {
-      emit({ type: 'voice_reset', reason: payload.type });
+    if (payload.type === 'server_interrupt') {
+      emit({ type: 'voice_interrupt' });
+      return;
+    }
+
+    if (payload.type === 'transcript_empty') {
+      emit({ type: 'voice_reset', reason: 'transcript_empty' });
       return;
     }
 

@@ -11,6 +11,19 @@ if (-not (Test-Path $AutoHotkeyExe)) { throw "AutoHotkey v2 not found: $AutoHotk
 if (-not (Test-Path (Join-Path $extension 'manifest.json'))) { throw 'Extension manifest missing.' }
 if (-not (Test-Path $launcher)) { throw 'Extension launcher missing.' }
 
+$launcherSource = Get-Content $launcher -Raw
+$requiredHotkeys = @('!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::')
+foreach ($hotkey in $requiredHotkeys) {
+    if (-not $launcherSource.Contains($hotkey)) { throw "Required PM hotkey missing: $hotkey" }
+}
+$forbiddenHotkeys = @('!s::', '!a::', '!x::', '!1::', '!z::', '!Shift::')
+foreach ($hotkey in $forbiddenHotkeys) {
+    if ($launcherSource.Contains($hotkey)) { throw "Non-PM hotkey remains active: $hotkey" }
+}
+if ($launcherSource -match 'promptScreenshot|keybd_event') {
+    throw 'Screenshot workflow remains in the active PM launcher.'
+}
+
 Push-Location $repo
 try {
     & npm test

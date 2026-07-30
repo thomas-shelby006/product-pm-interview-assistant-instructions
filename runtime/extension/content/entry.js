@@ -261,7 +261,7 @@ async function startRuntime(runtimeConfig) {
       adapter,
       isVoiceActive: isCombinedVoiceActive,
       isComposerEmpty: () => adapter.isComposerEmpty?.() ?? true,
-      allowVoiceFallback: runtimeConfig.provider === 'chatgpt',
+      allowFallbackFinalization: false,
       onPreview(preview) {
         if (runtimeConfig.provider === 'claude' && isCombinedVoiceActive()) return false;
         return previewScheduler.push(preview);
@@ -664,17 +664,6 @@ async function startRuntime(runtimeConfig) {
       );
       overlay.setStatus(status.text, status.tone, 2400);
       return;
-    }
-    if (key === 'F12' && runtimeConfig.role === 'sender') {
-      event.preventDefault();
-      const candidate = adapter.getSenderCandidateInfo();
-      if (candidate.text) {
-        senderController?.markExternalFinal({ text: candidate.text });
-        await forwardText(candidate.text, 'question', {
-          source: candidate.source,
-          trigger: 'forced_flush'
-        });
-      }
     }
   }, true);
 

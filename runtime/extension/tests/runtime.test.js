@@ -583,3 +583,9 @@ test('staged first-question confirmation tolerates provider normalization withou
   assert.equal(await controller.deliver({ id: 'q1', kind: 'question', text: question }), true);
   assert.equal(submitCalls, 1);
 });
+
+test('transcript filter ignores translating placeholders until exact provider text arrives', () => {
+  assert.equal(filterModule.isTransientTranscriptStatus('Translating...'), true);
+  assert.equal(filterModule.isActionableTranscript('Translating?'), false);
+  assert.equal(filterModule.isActionableTranscript('How would you improve activation?'), true);
+});

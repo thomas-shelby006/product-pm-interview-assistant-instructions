@@ -4,7 +4,7 @@ Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
 
 ## Architecture
 
-- AutoHotkey owns provider selection, exact managed windows, layout, screenshots, and global hotkeys.
+- AutoHotkey owns provider selection, exact managed windows, layout, and the PM-only global hotkeys.
 - The service worker owns role registration, sender authorization, durable final ordering, latest-only recovery, acknowledgements, and role-scoped logs.
 - Content scripts own provisional transcript previews, provider-specific finalization, receiver prefill/submission, answer capture, recovery events, status UI, and export.
 - Provider adapters own semantic composer discovery, message extraction, submit readiness, generation controls, and microphone controls.
@@ -29,7 +29,7 @@ Provisional text and final questions use separate paths.
 - ChatGPT remains DOM-first because the supplied voice export did not expose a dependable per-turn transcript protocol.
 - Distinct growth of the latest rendered user message is mirrored immediately to the receiver composer.
 - The following assistant turn is the preferred final boundary.
-- A 650-millisecond stable-tail fallback is allowed only when voice is inactive and the sender composer is empty.
+- Transient or growing user text is preview-only. Production never timer-finalizes a ChatGPT question; the following assistant turn is the authoritative commit boundary.
 - Existing submitted messages are baselined on startup and composer drafts are never auto-forwarded.
 
 ### Claude
@@ -110,7 +110,6 @@ No Resume, Job Description, notes, prompt, answer, session identifier, cookie, t
 - `Ctrl+Shift+F9`: focus the receiver composer.
 - `Ctrl+Shift+F10`: toggle receiver auto-scroll.
 - `Ctrl+Shift+F11`: actively ping the opposite managed runtime and report `LINK OK`, a missing role, `FINAL QUEUED`, `RUNTIME UNREACHABLE`, or `COMPOSER NOT READY`.
-- `Ctrl+Shift+F12`: force-forward the current sender candidate.
 - `Ctrl+Alt+0`: pause or resume the managed tab.
 
 ## Load in Edge

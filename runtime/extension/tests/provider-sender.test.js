@@ -206,3 +206,39 @@ test('provider sender keeps unpunctuated active voice text provisional', () => {
   assert.deepEqual(timers, []);
   sender.disconnect();
 });
+
+test('provider sender can disable every stable-tail finalization path while preserving previews', () => {
+  let messages = [];
+  const timers = [];
+  const previews = [];
+  const finals = [];
+  const adapter = {
+    getConversationMessages: () => messages,
+    isVoiceActive: () => false,
+    isComposerEmpty: () => true
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    allowFallbackFinalization: false,
+    onPreview: value => previews.push(value),
+    onFinal: value => finals.push(value),
+    setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeoutFn: () => {}
+  });
+  messages = [message('u-final-authoritative', 'user', 'How would you improve activation?')];
+  sender.observe(100);
+  assert.deepEqual(previews, [{
+    turnKey: 'u-final-authoritative',
+    text: 'How would you improve activation?',
+    revision: 1,
+    phase: 'interim'
+  }]);
+  assert.deepEqual(timers, []);
+  assert.deepEqual(sender.flushFallback(10000), []);
+  assert.deepEqual(finals, []);
+  messages = [...messages, message('a-final-authoritative', 'assistant', 'I would start with the activation funnel.')];
+  sender.observe(10100);
+  assert.equal(finals.length, 1);
+  assert.equal(finals[0].boundary, 'assistant_successor');
+  sender.disconnect();
+});

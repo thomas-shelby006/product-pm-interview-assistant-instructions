@@ -15,12 +15,7 @@
 ;  CAPSLOCK      = Cycle layout presets within current mode
 ;  ALT+Q         = Mute/unmute Win1 mic through provider DOM adapter
 ;  ALT+W         = Toggle scroll lock on Win2
-;  ALT+S         = Screenshot + PM context prompt to Win2
 ;  ALT+E         = Export sender and receiver PM session records
-;  ALT+A         = Disabled in PM mode (code explanation not used)
-;  ALT+Z         = Disabled in PM mode (mute moved to Alt+Q)
-;  ALT+1         = Disabled in PM mode (code focus overlay not used)
-;  ALT+SHIFT     = Disabled in PM mode (scroll lock moved to Alt+W)
 ; ============================================================
 
 global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
@@ -215,8 +210,6 @@ global promptWin2Reset := ""
     . "`n"
     . "Use the current Resume/JD context only if relevant.`n"
     . "Return only the improved answer.`n"
-
-global promptScreenshot := "[CONTEXT SYNC] For PM interview context, briefly identify what is visible and how it affects the latest product, TPM, execution, metrics, or strategy answer. Do not switch into coding interview mode."
 
 BuildBootPrompt() {
     global PM_BOOT_PROMPT_TEXT, g_sessionResume, g_sessionJD, g_sessionMeta
@@ -1377,48 +1370,6 @@ RestoreLayout(layout) {
     ToggleWin1Mute()
 }
 
-; Alt+A — Disabled for PM-only runtime.
-;  Code explanation is not part of the PM interview workflow.
-!a:: {
-    if GetKeyState("Alt", "P")
-        KeyWait "Alt"
-    return
-}
-
-; Alt+S — Screenshot + context prompt to Win2
-!s:: {
-    global g_hWin2, g_suppressClipMonitor, promptScreenshot
-    if GetKeyState("Alt", "P")
-        KeyWait "Alt"
-    if (!IsActiveSession()) {
-        LogEvent("Alt+S ignored: no active interview session")
-        return
-    }
-    if !IsAlive(g_hWin2) {
-        LogEvent("Alt+S failed: Win2 not alive")
-        return
-    }
-    g_suppressClipMonitor := true
-    A_Clipboard := ""
-    DllCall("keybd_event", "int", 0x2C, "int", 0, "int", 0, "int", 0)
-    DllCall("keybd_event", "int", 0x2C, "int", 0, "int", 2, "int", 0)
-    if !ClipWait(2, 1) {
-        g_suppressClipMonitor := false
-        return
-    }
-    WinActivate "ahk_id " g_hWin2
-    WinWaitActive "ahk_id " g_hWin2, , 2
-    Sleep 100
-    Send "^+{F9}"
-    Sleep 200
-    Send "^v"
-    Sleep 1000
-    Send "{Text}" promptScreenshot
-    Sleep 200
-    Send "{Enter}"
-    g_suppressClipMonitor := false
-}
-
 ; Alt+W — Toggle scroll lock on Win2
 !w:: {
     global g_hWin2
@@ -1434,37 +1385,6 @@ RestoreLayout(layout) {
     } else {
         LogEvent("Alt+W failed: Win2 not alive")
     }
-}
-
-; Alt+Shift — Disabled in PM mode.
-;  Scroll lock moved to Alt+W.
-!Shift:: {
-    if GetKeyState("Alt", "P")
-        KeyWait "Alt"
-    return
-}
-
-; Alt+X — Disabled for PM-only simplicity.
-!x:: {
-    if GetKeyState("Alt", "P")
-        KeyWait "Alt"
-    return
-}
-
-; Alt+1 — Disabled for PM-only simplicity.
-;  Code focus overlay is not part of the default PM interview workflow.
-!1:: {
-    if GetKeyState("Alt", "P")
-        KeyWait "Alt"
-    return
-}
-
-; Alt+Z — Disabled in PM mode.
-;  Mute/unmute moved to Alt+Q.
-!z:: {
-    if GetKeyState("Alt", "P")
-        KeyWait "Alt"
-    return
 }
 
 ; Mute/unmute Win1 mic through the extension adapter.

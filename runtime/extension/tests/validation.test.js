@@ -258,7 +258,8 @@ test('runtime uses an active counterpart preflight and automatic link status', a
   assert.match(entry, /createPreflightResponder/);
   assert.match(entry, /PMIA_PREFLIGHT_PING/);
   assert.match(entry, /PMIA_LINK_STATUS/);
-  const f11 = entry.slice(entry.indexOf("if (key === 'F11')"), entry.indexOf("if (key === 'F12'"));
+  const f11Start = entry.indexOf("if (key === 'F11')");
+  const f11 = entry.slice(f11Start, entry.indexOf("  }, true);", f11Start));
   assert.match(f11, /PMIA_RUN_PREFLIGHT/);
   assert.match(f11, /response\.counterpart/);
   assert.doesNotMatch(f11, /PMIA_GET_STATUS/);
@@ -360,4 +361,43 @@ test('content runtime exposes an exact managed-session end command', async () =>
   const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
   assert.match(background, /message\?\.type === 'PMIA_END_SESSION'/);
   assert.match(background, /closeOwnedSessionTabs/);
+});
+
+test('production sender stages provider text but disables guessed stable-tail finals', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  assert.match(entry, /allowFallbackFinalization:\s*false/);
+  assert.doesNotMatch(entry, /allowVoiceFallback:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
+});
+
+test('Claude MAIN-world observer preserves interruption and resets only an empty transcript', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'content/signals/claude-main.js'), 'utf8');
+  assert.match(source, /payload\.type === 'server_interrupt'[\s\S]*voice_interrupt/);
+  assert.match(source, /payload\.type === 'transcript_empty'[\s\S]*voice_reset[\s\S]*transcript_empty/);
+  assert.doesNotMatch(source, /server_interrupt'\s*\|\|\s*payload\.type === 'transcript_empty'/);
+});
+
+test('active AutoHotkey runtime exposes PM interview shortcuts without screenshot or coding handlers', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, '..', 'Final_2_Window_Extension.ahk'), 'utf8');
+  for (const required of ['!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::']) {
+    assert.match(source, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  for (const forbidden of ['!s::', '!a::', '!x::', '!1::', '!z::', '!Shift::']) {
+    assert.doesNotMatch(source, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  assert.doesNotMatch(source, /promptScreenshot|keybd_event|Screenshot \+ PM context/i);
+  assert.match(source, /A_Args\[1\]\s*=\s*"--validate"[\s\S]*AHK_VALID[\s\S]*ExitApp 0/);
+});
+
+
+test('active sender has no force-forward bypass around authoritative finalization', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  assert.doesNotMatch(source, /key === 'F12'|forced_flush/);
 });

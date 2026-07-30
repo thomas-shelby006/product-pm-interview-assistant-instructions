@@ -94,15 +94,12 @@ export class DomTurnTracker {
     return true;
   }
 
-  emissionFingerprint(message, boundary, assistantText = '') {
-    const user = normalizeTranscript(message?.text);
-    if (!user) return '';
-    if (boundary !== 'assistant_successor') return `tail\u0000${user}`;
-    return `pair\u0000${user}\u0000${normalizeTranscript(assistantText)}`;
+  emissionFingerprint(message) {
+    return canonicalTranscript(message?.text);
   }
 
-  wasRecentlyEmitted(message, boundary, assistantText, now) {
-    const fingerprint = this.emissionFingerprint(message, boundary, assistantText);
+  wasRecentlyEmitted(message, now) {
+    const fingerprint = this.emissionFingerprint(message);
     if (!fingerprint) return false;
     for (const [candidate, emittedAt] of this.recentEmissionFingerprints) {
       if (now - emittedAt > this.duplicateTextWindowMs) {
@@ -112,8 +109,8 @@ export class DomTurnTracker {
     return this.recentEmissionFingerprints.has(fingerprint);
   }
 
-  rememberEmission(message, boundary, assistantText, now) {
-    const fingerprint = this.emissionFingerprint(message, boundary, assistantText);
+  rememberEmission(message, now) {
+    const fingerprint = this.emissionFingerprint(message);
     if (!fingerprint) return;
     if (this.recentEmissionFingerprints.has(fingerprint)) {
       this.recentEmissionFingerprints.delete(fingerprint);
@@ -122,6 +119,17 @@ export class DomTurnTracker {
     while (this.recentEmissionFingerprints.size > 64) {
       this.recentEmissionFingerprints.delete(this.recentEmissionFingerprints.keys().next().value);
     }
+  }
+
+  hasEarlierEmittedMatchingTurn(ordered, index, message) {
+    const fingerprint = this.emissionFingerprint(message);
+    if (!fingerprint) return false;
+    return ordered.slice(0, index).some(candidate => (
+      candidate.role === 'user'
+      && candidate.id !== message.id
+      && this.emittedIds.has(candidate.id)
+      && this.emissionFingerprint(candidate) === fingerprint
+    ));
   }
 
   prime(messages) {
@@ -173,14 +181,14 @@ export class DomTurnTracker {
     return preview;
   }
 
-  emit(message, boundary, now = Date.now(), assistantText = '') {
+  emit(message, boundary, now = Date.now(), { allowRecentRepeat = false } = {}) {
     if (!isMeaningfulFinal(message.text) || this.isSuppressed(message, now)) return null;
-    if (this.wasRecentlyEmitted(message, boundary, assistantText, now)) {
+    if (!allowRecentRepeat && this.wasRecentlyEmitted(message, now)) {
       this.rememberSet(this.emittedIds, message.id);
       return null;
     }
     this.rememberSet(this.emittedIds, message.id);
-    this.rememberEmission(message, boundary, assistantText, now);
+    this.rememberEmission(message, now);
     if (this.pending?.id === message.id) this.pending = null;
     if (this.queuedPreview?.turnKey === message.id) this.queuedPreview = null;
     return { id: message.id, text: message.text, boundary };
@@ -196,15 +204,20 @@ export class DomTurnTracker {
       if (message.role !== 'user' || this.isSuppressed(message, now)) continue;
       const hasAssistantSuccessor = ordered[index + 1]?.role === 'assistant';
       if (!hasAssistantSuccessor) continue;
-      const final = this.emit(message, 'assistant_successor', now, ordered[index + 1]?.text || '');
+      const allowRecentRepeat = this.hasEarlierEmittedMatchingTurn(ordered, index, message);
+      const final = this.emit(message, 'assistant_successor', now, { allowRecentRepeat });
       if (final) emitted.push(final);
     }
 
-    const tailUser = [...ordered].reverse().find((message, reverseIndex) => {
-      if (message.role !== 'user' || this.isSuppressed(message, now)) return false;
-      const index = ordered.length - 1 - reverseIndex;
-      return !ordered.slice(index + 1).some(candidate => candidate.role === 'assistant');
-    });
+    let tailIndex = -1;
+    for (let index = ordered.length - 1; index >= 0; index -= 1) {
+      const message = ordered[index];
+      if (message.role !== 'user' || this.isSuppressed(message, now)) continue;
+      if (ordered.slice(index + 1).some(candidate => candidate.role === 'assistant')) continue;
+      tailIndex = index;
+      break;
+    }
+    const tailUser = tailIndex >= 0 ? ordered[tailIndex] : null;
 
     if (!tailUser) {
       if (this.pending && this.emittedIds.has(this.pending.id)) this.pending = null;
@@ -212,7 +225,11 @@ export class DomTurnTracker {
     }
 
     if (!this.pending || this.pending.id !== tailUser.id || this.pending.text !== tailUser.text) {
-      this.pending = { ...tailUser, lastChangedAt: now };
+      this.pending = {
+        ...tailUser,
+        lastChangedAt: now,
+        allowRecentRepeat: this.hasEarlierEmittedMatchingTurn(ordered, tailIndex, tailUser)
+      };
       this.queuePreview(tailUser);
     }
     return emitted;
@@ -231,7 +248,9 @@ export class DomTurnTracker {
     if (!allowFallback || !this.pending) return [];
     if (now - this.pending.lastChangedAt < this.fallbackMs) return [];
     if (!isActionableTranscript(this.pending.text)) return [];
-    const final = this.emit(this.pending, 'stable_tail_fallback', now);
+    const final = this.emit(this.pending, 'stable_tail_fallback', now, {
+      allowRecentRepeat: Boolean(this.pending.allowRecentRepeat)
+    });
     return final ? [final] : [];
   }
 }

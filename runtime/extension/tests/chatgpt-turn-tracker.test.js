@@ -141,28 +141,51 @@ test('turn tracking stays bounded across a 2000-turn session', () => {
   assert.ok(tracker.lastScanSize <= 128);
 });
 
-test('rendered turn fingerprint suppresses a rerender but permits an immediate genuine repeat', () => {
+test('rendered turn fingerprint suppresses replacement IDs but permits a genuine repeated turn', () => {
   const tracker = createTracker({ fallbackMs: 5000, duplicateTextWindowMs: 30000 });
   tracker.prime([]);
-  const first = tracker.update([
-    message('dom-user-1', 'user', 'What is the product strategy?'),
-    message('dom-assistant-1', 'assistant', 'I would start with the target outcome.')
-  ], 1000);
+  const firstUser = message('dom-user-1', 'user', 'What is the product strategy?');
+  const firstAssistant = message('dom-assistant-1', 'assistant', 'I would start with the target outcome.');
+  const first = tracker.update([firstUser, firstAssistant], 1000);
   assert.equal(first.length, 1);
 
   const rerendered = tracker.update([
     message('dom-user-99', 'user', 'What is the product strategy?'),
-    message('dom-assistant-99', 'assistant', 'I would start with the target outcome.')
+    message('dom-assistant-99', 'assistant', 'A changing assistant copy must not make this a new question.')
   ], 4000);
   assert.deepEqual(rerendered, []);
 
   const laterRepeat = tracker.update([
+    firstUser,
+    firstAssistant,
     message('dom-user-100', 'user', 'What is the product strategy?'),
     message('dom-assistant-100', 'assistant', 'Here is a later answer.')
   ], 5000);
   assert.equal(laterRepeat.length, 1);
 });
 
+test('stable tail fallback survives ChatGPT navigation and assistant streaming without duplicate finals', () => {
+  const tracker = createTracker({ fallbackMs: 300, duplicateTextWindowMs: 30000 });
+  tracker.prime([]);
+  const text = 'PMIA_060_CGCG_TEST. Reply exactly PMIA_060_CGCG_OK.';
+
+  tracker.update([message('project-home-user', 'user', text)], 0);
+  assert.deepEqual(tracker.poll(350, { allowFallback: true }), [{
+    id: 'project-home-user',
+    text,
+    boundary: 'stable_tail_fallback'
+  }]);
+
+  assert.deepEqual(tracker.update([
+    message('conversation-user-partial', 'user', text),
+    message('conversation-assistant-partial', 'assistant', 'PMIA_060')
+  ], 700), []);
+
+  assert.deepEqual(tracker.update([
+    message('conversation-user-final', 'user', text),
+    message('conversation-assistant-final', 'assistant', 'PMIA_060_CGCG_OK')
+  ], 1100), []);
+});
 
 test('authoritative Claude final suppresses one altered DOM shadow from captured evidence', () => {
   const tracker = createTracker({ externalShadowMs: 8000 });

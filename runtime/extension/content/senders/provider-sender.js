@@ -10,7 +10,8 @@ export function createProviderSender({
   nowFn = Date.now,
   setTimeoutFn = globalThis.setTimeout,
   clearTimeoutFn = globalThis.clearTimeout,
-  allowVoiceFallback = false
+  allowVoiceFallback = false,
+  allowFallbackFinalization = true
 }) {
   let timer = null;
   let stopped = false;
@@ -31,6 +32,7 @@ export function createProviderSender({
 
   const scheduleFallback = now => {
     clearTimer();
+    if (!allowFallbackFinalization) return;
     const voiceActive = isVoiceActive();
     const voiceFallbackAllowed = voiceActive && allowVoiceFallback && tracker.canFinalizeStrongTail?.();
     if (stopped || !isComposerEmpty() || (voiceActive && !voiceFallbackAllowed)) return;
@@ -62,7 +64,7 @@ export function createProviderSender({
       scheduleFallback(nowFn());
     },
     flushFallback(now = nowFn()) {
-      if (stopped || isVoiceActive() || !isComposerEmpty()) return [];
+      if (!allowFallbackFinalization || stopped || isVoiceActive() || !isComposerEmpty()) return [];
       const finals = tracker.poll(now, { allowFallback: true });
       for (const final of finals) emitFinal(final);
       return finals;

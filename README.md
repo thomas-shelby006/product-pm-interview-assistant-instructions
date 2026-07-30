@@ -1,49 +1,62 @@
-# Product PM Interview Assistant Instructions
+# Product PM Interview Assistant
 
-This repository contains the clean instruction and runtime package for Sundar’s PM Interview Assistant.
+This repository contains Sundar's Product Management Interview Assistant instructions, source material, and Manifest V3 dual-provider runtime.
 
-It is designed for a ChatGPT Plus workflow using:
+## Active architecture
 
-- a ChatGPT Project for PM interview answer generation,
-- AutoHotkey for the two-window local runtime,
-- Microsoft Edge Beta PWA windows,
-- Tampermonkey userscripts,
-- Win1 as the ChatGPT Voice/transcription sender,
-- Win2 as the ChatGPT text-answer receiver.
+- A ChatGPT Project and its source bundle define answer behavior, truth constraints, story selection, and PM interview framing.
+- `runtime/extension/` is the authoritative provider runtime for ChatGPT and Claude.
+- `runtime/Final_2_Window_Extension.ahk` is the active Windows launcher, layout manager, and PM-only hotkey host.
+- Microsoft Edge Stable supplies the two managed provider windows.
+- The extension service worker owns registration, authorization, durable final ordering, latest-only recovery, and role-scoped logs.
+- Content scripts own disposable transcript previews, authoritative final commits, receiver staging/submission, answer capture, health status, and export.
 
-## What this repo contains
+Tampermonkey scripts, the older fixed AutoHotkey launcher, the session-tracker helper, archives, and rollback assets are retained for history and recovery. They are not part of the active architecture and should not be enabled alongside the extension runtime.
 
-- Project custom instructions to paste into the ChatGPT Project.
-- A condensed upload bundle (`project_upload_bundle/`, 5 files) — the recommended set to upload into the ChatGPT Project.
-- Detailed source files (`project_source_files/`) the bundle was condensed from, kept for reference/editing.
-- Runtime files for the AHK + Tampermonkey two-window setup.
-- One system context file for AI review.
+## Question transport
 
-## What this repo does not contain
+### ChatGPT
 
-- External AI reviewer prompts.
-- Old review notes or change-history artifacts.
-- Unused archived scripts.
-- Previous ZIP packages.
-- Coding-interview or frontend-interview material.
+Placeholder or growing text is mirrored through the disposable preview lane. Values such as listening, transcribing, translating, processing, and recording are ignored. A question is committed once when ChatGPT renders the following assistant turn. Timer-based and force-forward finalization are disabled.
+
+If ChatGPT replaces a submitted message ID during project-to-conversation navigation, canonical user text prevents a duplicate commit. An intentional repeated question remains possible when the earlier turn is still present earlier in the ordered conversation.
+
+### Claude
+
+Each distinct `transcript_interim` value updates the same preview. `user_input_end` is a processing hint. `server_interrupt` preserves the current utterance. `transcript_empty` clears it. Only a human `message_complete` commits the question.
+
+## PM-only shortcut surface
+
+- `Alt+R`: open Session Studio and launch or relaunch the selected route.
+- `Alt+Esc`: resend current in-memory PM context.
+- `Alt+Delete`: end the exact managed session and exit the launcher.
+- `Alt+Tab`: hide or restore the managed interview windows.
+- `Alt+CapsLock`: cycle two-window, sender-only, and receiver-only modes.
+- `CapsLock`: cycle layout presets in the current visible mode.
+- `Alt+Q`: toggle the sender microphone through the provider adapter.
+- `Alt+W`: toggle receiver scroll lock.
+- `Alt+E`: export sender and receiver session records.
+
+There is no screenshot/Greenshot workflow, coding shortcut, code-focus overlay, or force-forward shortcut in the active runtime.
 
 ## Main files
 
-- `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md` — paste this into the ChatGPT Project custom instructions.
-- `project_upload_bundle/` — **recommended ChatGPT Project upload set**: after pasting the custom instructions, upload the 5 files `00`–`04` here. See `project_upload_bundle/PROJECT_UPLOAD_BUNDLE_MANIFEST.md` for exact setup (1 pasted field + 5 uploaded files).
-- `project_source_files/` — reference/source the bundle was condensed from; keep for editing. Upload the bundle instead of these to avoid duplication.
-- `AI_SYSTEM_CONTEXT.md` — full system context for an AI reviewer.
-- `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md` — design-of-record for the system as a live interview copilot: context layers, precedence rules, session setup, fast follow-up protocol, and the runtime spec for the AHK/bridge follow-up phases.
-- `runtime/Final_2_Window_Fixed.ahk` — main local AutoHotkey runtime.
-- `runtime/tm_scripts/bridge.user.js` — active ChatGPT bridge userscript.
-- `runtime/tm_scripts/virtual-scroll.user.js` — active virtual-scroll userscript.
-- `drafts/` — working notes for story capture and claim review (story-bank completion workflow, claim-safety checklist, unfinished story templates). **Not** uploaded to the ChatGPT Project and **not** loaded by the runtime; used to prepare real, confirmed content before it is promoted into the Project source files.
+- `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md`: ChatGPT Project instructions.
+- `project_upload_bundle/`: recommended five-file Project upload set.
+- `project_source_files/`: detailed editable source material.
+- `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`: product and interaction design background.
+- `runtime/extension/README.md`: runtime 0.6 architecture and operational boundaries.
+- `runtime/README_INSTALL_TEST.md`: installation and verification procedure.
+- `docs/superpowers/specs/2026-07-30-pmia-final-architecture-design.md`: final migration design.
 
-## First test rule
+## Verification
 
-Before testing, open Tampermonkey and confirm exactly two active scripts:
+From the repository root:
 
-1. `bridge.user.js`
-2. `virtual-scroll.user.js`
+```powershell
+npm test
+npm run validate
+powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
+```
 
-Disable all old duplicate scripts. Duplicate bridge scripts are the most likely first-run failure.
+The AutoHotkey validator uses `--validate`, which exits before showing Session Studio or opening browser windows. Browser evidence checks must target only managed PMIA tabs and must not alter unrelated Edge windows.
