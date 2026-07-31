@@ -256,3 +256,20 @@
 ## Completion Test
 
 The work is complete only when the isolated worktree contains the full dashboard and parity implementation, the original checkout is unchanged, every retained legacy capability is routed through the new architecture, rejected mechanisms remain absent, all final automated and browser gates pass, and the final report identifies changes, evidence, remaining provider-owned risks and the exact commit.
+
+### Task 13: Ten recursive improvement cycles
+
+**Method:** Run exactly ten bounded cycles after Tasks 1–12 implementation work is code-complete but before the final executable gate. Each cycle must inspect the current implementation, identify one or more concrete bugs or high-value user-facing/efficiency improvements, implement them at the owning boundary, add or update coverage without executing it, and record the decision in `docs/ITERATIVE_IMPROVEMENT_LOG.md`.
+
+- [ ] Cycle 1: launch and setup friction
+- [ ] Cycle 2: dashboard clarity and operator speed
+- [ ] Cycle 3: queue correctness and stale-question handling
+- [ ] Cycle 4: sender capture latency and silence diagnostics
+- [ ] Cycle 5: receiver submission/proof robustness
+- [ ] Cycle 6: recovery and service-worker restart behavior
+- [ ] Cycle 7: privacy, cleanup and export boundaries
+- [ ] Cycle 8: provider-adapter resilience and selector risks
+- [ ] Cycle 9: long-session performance and memory bounds
+- [ ] Cycle 10: end-to-end usability, documentation and final polish
+
+For every cycle, log: evidence inspected, issue/opportunity, classification, implementation, files changed, coverage added, source review result, and why the change is superior to alternatives. Do not manufacture changes merely to satisfy a cycle; if a category is already sound, document the strongest verified conclusion and implement the next highest-value issue found in that cycle’s scope.
