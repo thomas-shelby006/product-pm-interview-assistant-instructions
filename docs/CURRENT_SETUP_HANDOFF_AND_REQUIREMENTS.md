@@ -1,73 +1,88 @@
 # Current Setup Handoff and Requirements Ledger
 
-Last updated: 2026-07-30
+Last updated: 2026-08-01
 
 ## Objective
 
-Operate a low-latency, exactly-once Product Management interview assistant with one managed sender provider, one managed receiver provider, structured session context, and optional post-session review tracking.
+Operate a low-latency, exactly-once Product Management mock-interview assistant with one managed sender, one managed receiver, structured in-memory session context, fast operational recovery, and an explicit post-session review loop.
 
 ## Active architecture
 
 - **Browser:** Microsoft Edge Stable, one selected profile verified by Profile Doctor.
 - **Launcher:** `runtime/Final_2_Window_Extension.ahk`.
-- **Provider runtime:** `runtime/extension/`, Manifest V3.
-- **Transport:** disposable preview lane plus durable sequenced final lane through the extension service worker.
+- **Provider runtime:** `runtime/extension/`, Manifest V3 version 0.7.0.
+- **Transport:** disposable latest-only preview plus durable sequenced final through the extension service worker.
 - **Providers:** ChatGPT and Claude independently selectable as sender or receiver.
 - **Session setup:** Resume, Job Description, Target company, Target role, Interview round, Emphasis, Avoid mentioning, Answer mode, and Additional notes.
-- **Tracker companion:** `runtime/Session_Tracker_End_Session.ahk` plus `runtime/scripts/push-session-to-tracker.ps1`.
+- **Review companion:** `runtime/Session_Tracker_End_Session.ahk` plus exact resolver and private tracker push scripts.
 
-Edge Beta, Tampermonkey, `Final_2_Window_Fixed.ahk`, archived scripts, and the old localStorage bridge are preserved rollback/reference assets. They are not active requirements.
+The old Edge Beta/Tampermonkey runtime, fixed launcher, and archives are preserved but inactive.
 
 ## Data and privacy boundaries
 
-- Resume, JD, structured metadata, notes, prompts, answers, and session IDs remain in the running process/runtime only.
-- Session Studio persists only profile directory, sender provider, receiver provider, and layout mode.
-- The extension does not read cookies, authorization headers, provider APIs, or raw audio.
-- Release testing uses synthetic content.
-- Tracker pushes are explicit and target the separate private tracker repository.
+- Session Studio stores sensitive context only in the running AutoHotkey process.
+- `settings.ini` contains only profile directory, sender provider, receiver provider, and layout mode.
+- Extension registry and transcript logs use `chrome.storage.session`.
+- No transcript or answer log falls back to `chrome.storage.local`.
+- Service-worker startup removes legacy `pmia_log_*` local records.
+- Boot/setup event text is fully replaced by a redaction placeholder before logging.
+- Review metadata permits only company, target role, interview round, emphasis, answer mode, and missing Resume/JD flags.
+- Explicit export is the only action that writes role-scoped transcript/answer material to files.
+- End-session and final-tab cleanup remove registry, pending final, sequence state, and both role logs.
 
 ## Runtime lifecycle
 
-1. Session Studio validates Edge Stable profile, unpacked extension path, and version.
-2. Managed tabs progress through `PMIA_BOOT_*`, `PMIA_REGISTERED_*`, and final `PMIA_*` READY titles.
-3. Boot context is sent only after both roles are ready.
-4. Sender previews are disposable and latest-only.
-5. Provider-specific final boundaries create one sequenced envelope.
-6. Receiver submission is acknowledged only after a matching provider user turn renders.
-7. Replays are duplicate-acknowledged; stale sequences are discarded; only the latest unavailable final is retained.
-8. Page lifecycle, reconnect, wake, and heartbeat paths restore runtime registration.
+1. Session Studio verifies Edge Stable profile, unpacked extension path, and version.
+2. Sender progresses through BOOT, REGISTERED, and READY.
+3. Receiver opens only after sender READY and progresses through the same phases.
+4. Boot context is sent only after both roles are READY.
+5. Preview updates are disposable and never submit.
+6. Provider-specific final boundaries create one sequence-gated envelope.
+7. Receiver success requires a newly rendered matching provider user turn.
+8. Replays are duplicate-acknowledged; stale sequences are discarded; only the latest unavailable final is retained.
+9. Restore events and heartbeats re-register managed tabs.
+10. A role conflict probes the current owner; only a missing or non-responsive owner is replaced.
+
+## Recovery and health
+
+- Delivery recovery keeps the managed tab in the background. It disables discard, reloads only an actually discarded tab, and never activates/focuses Edge.
+- `Check Live` / `Alt+H` verifies the exact READY pair and requests the authorized counterpart preflight in both managed windows.
+- `Fast Repair` / `Alt+Shift+R` uses the current in-memory session context and existing route; it does not create a parallel repair mechanism.
+- A healthy competing role remains a terminal `ROLE CONFLICT`; a dead owner is replaced immediately and recorded as `registration_recovered` without transcript data.
 
 ## Operational controls
 
-- `Alt+R`: Session Studio / launch or relaunch.
+- `Alt+R`: Session Studio.
+- `Alt+H`: live link check.
+- `Alt+Shift+R`: fast repair.
 - `Alt+Esc`: resend current in-memory context.
-- `Alt+Delete`: end the exact managed session and exit launcher.
-- `Alt+Tab`: hide or restore managed windows.
-- `Alt+CapsLock`: sender/receiver/two-window visibility mode.
+- `Alt+Delete`: end exact managed session and exit.
+- `Alt+Tab`: hide/restore.
+- `Alt+CapsLock`: visibility mode.
 - `CapsLock`: layout preset.
 - `Alt+Q`: sender microphone.
 - `Alt+W`: receiver scroll lock.
 - `Alt+E`: export both role records.
-- `Alt+Shift+E`: open the optional tracker companion.
+- `Alt+Shift+E`: Review Studio.
 
-## Repositories
+## Export and review contract
 
-- System: `thomas-shelby006/product-pm-interview-assistant-instructions`
-- Private evidence tracker: `thomas-shelby006/pm-interview-session-tracker`
-- Local tracker: `C:\Users\Sundar\Documents\pm-interview-session-tracker`
+Schema 2.1 preserves the existing Markdown `Session:` and `Window:` headers. Each role export includes safe context, arm state, question/answer counts, answer-length statistics, receiver delivery timing, queued finals, ignored duplicate/stale deliveries, answer timeouts, and bounded role events. Full setup text, Resume, JD, avoid text, and freeform notes are not exported as event text.
 
-The tracker repository stores session evidence and review output. It must not automatically modify the system repository from one session.
+Review Studio detects one exact READY pair, exports both roles through `PMIA_RUNTIME_CONTROL_V1`, validates one fresh matching Markdown pair, and pushes to the private tracker only after explicit user action.
 
-## Verification commands
+## Repositories and paths
+
+- System repository: `thomas-shelby006/product-pm-interview-assistant-instructions`.
+- Active isolated candidate: `C:\Users\Sundar\Documents\product-pm-interview-assistant-improvement`.
+- Original checkout: `C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions`.
+- Private tracker: `thomas-shelby006/pm-interview-session-tracker`.
+- Local tracker: `C:\Users\Sundar\Documents\pm-interview-session-tracker`.
+
+## Verification
 
 ```powershell
-npm test
-npm run validate
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-Also validate `Session_Tracker_End_Session.ahk --validate` and run the tracker push script with synthetic files and `-DryRun` before a live tracker push.
-
-## Current release work
-
-PMIA 0.6.1 completes structured Session Studio controls and migrates the tracker helper to the current Edge Stable/Manifest V3 lifecycle and export contract. Release only after exact feature-tree and merged-main gates pass, the canonical unpacked extension is reloaded, and GitHub issue #7 is closed as obsolete/completed.
+The exact candidate tree must pass Node tests, JavaScript validation, main-launcher validation, Review Studio validation, diff/encoding review, and any required browser-evidence smoke before publication. Do not push, merge, tag, or alter canonical main as part of this candidate unless separately authorized.

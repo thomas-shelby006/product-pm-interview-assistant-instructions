@@ -2,16 +2,23 @@ import { SessionRegistry } from './shared/session-registry.js';
 import { isEnvelope } from './shared/protocol.js';
 import { deliverPreview } from './shared/preview.js';
 import { deliverWithWakeRetry } from './shared/delivery.js';
-import { roleLogKey, appendBoundedLog } from './shared/session-log.js';
+import { createSessionLogStore } from './shared/session-log-store.js';
 import { buildSessionStatus } from './shared/session-status.js';
 import { runCounterpartPreflight } from './shared/preflight.js';
 import { closeOwnedSessionTabs } from './shared/end-session.js';
 import { exportManagedSessionForTab } from './shared/session-control.js';
+import { probeRegistrationOwner } from './shared/registration-health.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
 const STALE_AFTER_MS = 45_000;
-const registryStorage = chrome.storage.session || chrome.storage.local;
+const registryStorage = chrome.storage.session;
+const logStore = createSessionLogStore({
+  sessionArea: chrome.storage.session,
+  legacyLocalArea: chrome.storage.local,
+  maxEvents: MAX_LOG_EVENTS
+});
+void logStore.purgeLegacyLocalLogs().catch(() => {});
 let operationQueue = Promise.resolve();
 let registryPromise = null;
 
@@ -46,26 +53,20 @@ async function saveRegistry(registry) {
 
 async function appendLog(sessionId, role, event) {
   if (!sessionId || !role || !event) return;
-  const key = roleLogKey(sessionId, role);
-  const stored = await chrome.storage.local.get(key);
-  const events = appendBoundedLog(
-    Array.isArray(stored[key]) ? stored[key] : [],
-    event,
-    MAX_LOG_EVENTS
-  );
-  await chrome.storage.local.set({ [key]: events });
+  await logStore.append(sessionId, role, event);
 }
 
 async function wakeManagedTab(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
-    await chrome.tabs.update(tabId, { active: true, autoDiscardable: false });
-    if (Number.isInteger(tab?.windowId)) {
-      await chrome.windows.update(tab.windowId, { focused: true });
+    await chrome.tabs.update(tabId, { autoDiscardable: false });
+    if (tab?.discarded) {
+      await chrome.tabs.reload(tabId);
+      return;
     }
     await chrome.tabs.sendMessage(tabId, { type: 'PMIA_RUNTIME_RESUME' }).catch(() => {});
   } catch {
-    // The final remains queued if the managed receiver cannot be woken.
+    // The final remains queued if the managed receiver cannot be resumed in place.
   }
 }
 
@@ -83,11 +84,30 @@ async function deliver(route, registry) {
 }
 
 async function handleRegistration(message, tabId, registry) {
-  const result = registry.register(
-    { ...message.registration, tabId },
+  const registration = { ...message.registration, tabId };
+  let result = registry.register(
+    registration,
     { now: Date.now(), staleAfterMs: STALE_AFTER_MS }
   );
-  await saveRegistry(registry);
+  let recoveryReason = '';
+  let displacedTabId = null;
+
+  if (!result.accepted && result.conflict && result.registration) {
+    const health = await probeRegistrationOwner({
+      registration: result.registration,
+      getTab: existingTabId => chrome.tabs.get(existingTabId),
+      sendToTab: (existingTabId, outgoing) => chrome.tabs.sendMessage(existingTabId, outgoing)
+    });
+    if (!health.responsive) {
+      displacedTabId = result.registration.tabId;
+      registry.unregister(displacedTabId);
+      result = registry.register(
+        registration,
+        { now: Date.now(), staleAfterMs: STALE_AFTER_MS }
+      );
+      recoveryReason = health.reason;
+    }
+  }
 
   if (!result.accepted) {
     return {
@@ -97,6 +117,7 @@ async function handleRegistration(message, tabId, registry) {
       ownerTabId: result.registration?.tabId || null
     };
   }
+  await saveRegistry(registry);
 
   try {
     await chrome.tabs.update(tabId, { autoDiscardable: false });
@@ -104,8 +125,9 @@ async function handleRegistration(message, tabId, registry) {
     // Registration remains valid even if this browser cannot change discard policy.
   }
 
-  if (result.replacedTabId) {
-    chrome.tabs.sendMessage(result.replacedTabId, {
+  const replacedTabId = result.replacedTabId || displacedTabId;
+  if (replacedTabId) {
+    chrome.tabs.sendMessage(replacedTabId, {
       type: 'PMIA_ROLE_REVOKED',
       sessionId: message.registration.sessionId,
       role: message.registration.role
@@ -121,12 +143,14 @@ async function handleRegistration(message, tabId, registry) {
       message.registration.sessionId,
       message.registration.role,
       {
-      type: 'registration',
-      role: message.registration.role,
-      provider: message.registration.provider,
-      tabId,
-      replacedTabId: result.replacedTabId || null
-    });
+        type: recoveryReason ? 'registration_recovered' : 'registration',
+        role: message.registration.role,
+        provider: message.registration.provider,
+        tabId,
+        replacedTabId: replacedTabId || null,
+        ...(recoveryReason ? { reason: recoveryReason } : {})
+      }
+    );
   }
 
   const status = await broadcastLinkStatus(
@@ -136,6 +160,7 @@ async function handleRegistration(message, tabId, registry) {
   return {
     ok: true,
     changed: result.changed,
+    recovered: Boolean(recoveryReason),
     pendingDelivered: Boolean(pendingOutcome?.delivered),
     pendingQueued: Boolean(pendingOutcome?.queued),
     status
@@ -280,9 +305,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       const role = registry.roleForTab(message.sessionId, tabId);
-      const key = roleLogKey(message.sessionId, role);
-      const stored = await chrome.storage.local.get(key);
-      sendResponse({ ok: true, role, events: stored[key] || [] });
+      const events = await logStore.read(message.sessionId, role);
+      sendResponse({ ok: true, role, events });
       return;
     }
 
@@ -292,7 +316,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       const role = registry.roleForTab(message.sessionId, tabId);
-      await chrome.storage.local.remove(roleLogKey(message.sessionId, role));
+      await logStore.clearRole(message.sessionId, role);
       sendResponse({ ok: true });
       return;
     }
@@ -320,6 +344,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }, 40);
         }
       });
+      if (result.ok) {
+        registry.removeSession(message.sessionId);
+        await saveRegistry(registry);
+        await logStore.clearSession(message.sessionId);
+      }
       sendResponse(result);
       return;
     }
@@ -368,15 +397,21 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 chrome.tabs.onRemoved.addListener(tabId => {
   serialize(async () => {
     const registry = await loadRegistry();
-    const affectedSessionIds = registry.exportState()
-      .filter(session => (
-        session.sender?.tabId === tabId ||
-        session.receiver?.tabId === tabId
-      ))
-      .map(session => session.sessionId);
-    registry.unregister(tabId);
-    await saveRegistry(registry);
+    const affectedSessionIds = registry.unregister(tabId);
+    const orphanedSessionIds = [];
+    const survivingSessionIds = [];
     for (const sessionId of affectedSessionIds) {
+      const session = registry.getSession(sessionId);
+      if (!session?.sender && !session?.receiver) {
+        registry.removeSession(sessionId);
+        orphanedSessionIds.push(sessionId);
+      } else {
+        survivingSessionIds.push(sessionId);
+      }
+    }
+    await saveRegistry(registry);
+    await Promise.all(orphanedSessionIds.map(sessionId => logStore.clearSession(sessionId)));
+    for (const sessionId of survivingSessionIds) {
       await broadcastLinkStatus(sessionId, registry);
     }
   });

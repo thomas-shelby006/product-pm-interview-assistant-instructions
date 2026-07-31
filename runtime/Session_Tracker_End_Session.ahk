@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 #SingleInstance Force
 
 global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
@@ -82,7 +82,7 @@ ShowReviewStudio() {
     g_reviewGui := Gui("+AlwaysOnTop", "PM Session Tracker - Review Studio")
     g_reviewGui.Opt("+OwnDialogs")
     g_reviewGui.SetFont("s10", "Segoe UI")
-    g_reviewGui.AddText("x20 y16 w700", "PMIA v0.6.1 - Session Review and Learning Loop").SetFont("s15 Bold", "Segoe UI")
+    g_reviewGui.AddText("x20 y16 w700", "PMIA v0.7.0 - Session Review and Learning Loop").SetFont("s15 Bold", "Segoe UI")
     g_reviewGui.AddText("x20 y50 w700", "Export the exact managed session, add it to the private tracker, and open Review Lab without changing live transport.")
     g_sessionText := g_reviewGui.AddText("x20 y84 w700", "Session: not detected")
     g_routeText := g_reviewGui.AddText("x20 y108 w700", "Route: -")

@@ -7,7 +7,7 @@ test('preflight responder reports runtime identity and reads composer availabili
   assert.ok(responderModule, 'preflight responder module must exist');
   const calls = [];
   const respond = responderModule.createPreflightResponder({
-    runtimeConfig: { role: 'receiver', provider: 'claude' },
+    runtimeConfig: { sessionId: 's1', role: 'receiver', provider: 'claude' },
     version: '0.5.1',
     adapter: {
       findComposer() { calls.push('findComposer'); return { focus() {} }; },
@@ -17,7 +17,7 @@ test('preflight responder reports runtime identity and reads composer availabili
     }
   });
   assert.deepEqual(respond(), {
-    ok: true, role: 'receiver', provider: 'claude',
+    ok: true, sessionId: 's1', role: 'receiver', provider: 'claude',
     version: '0.5.1', composerAvailable: true
   });
   assert.deepEqual(calls, ['findComposer']);
@@ -26,7 +26,7 @@ test('preflight responder reports runtime identity and reads composer availabili
 test('preflight responder tolerates a missing provider composer', () => {
   assert.ok(responderModule, 'preflight responder module must exist');
   const respond = responderModule.createPreflightResponder({
-    runtimeConfig: { role: 'sender', provider: 'chatgpt' },
+    runtimeConfig: { sessionId: 's2', role: 'sender', provider: 'chatgpt' },
     version: '0.5.1',
     adapter: { findComposer: () => null }
   });

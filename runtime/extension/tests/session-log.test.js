@@ -4,7 +4,8 @@ import {
   roleLogKey,
   appendBoundedLog,
   renderSessionMarkdown,
-  buildSessionExport
+  buildSessionExport,
+  summarizeSessionEvents
 } from '../shared/session-log.js';
 
 test('role log keys separate sender and receiver records', () => {
@@ -51,16 +52,45 @@ test('Markdown export uses valid UTF-8 punctuation and redacted text', () => {
   assert.match(markdown, /Window: sender \/ claude/);
 });
 
-test('session export is role-scoped and stable', () => {
+test('session export includes safe context and derived mock-review summary', () => {
+  const events = [
+    { type: 'session_armed', sessionContext: { company: 'Acme', answerMode: 'concise' } },
+    { type: 'received_text', kind: 'question', deliveryElapsedMs: 40 },
+    { type: 'answer', text: 'A concise answer', wordCount: 3 }
+  ];
   const payload = buildSessionExport({
     session: { sessionId: 's1', role: 'receiver', provider: 'chatgpt' },
-    events: [{ type: 'answer' }],
+    events,
     exportedAt: '2026-07-28T01:00:00Z'
   });
-  assert.deepEqual(payload, {
-    schemaVersion: '2.0',
-    exportedAt: '2026-07-28T01:00:00Z',
-    session: { sessionId: 's1', role: 'receiver', provider: 'chatgpt' },
-    events: [{ type: 'answer' }]
-  });
+  assert.equal(payload.schemaVersion, '2.1');
+  assert.deepEqual(payload.sessionContext, { company: 'Acme', answerMode: 'concise' });
+  assert.equal(payload.summary.sessionArmed, true);
+  assert.equal(payload.summary.questionCount, 1);
+  assert.equal(payload.summary.answerCount, 1);
+  assert.equal(payload.summary.averageAnswerWords, 3);
+  assert.equal(payload.summary.averageDeliveryMs, 40);
+  assert.deepEqual(payload.events, events);
+});
+
+test('session summary highlights long answers, queueing, duplicates, and timeouts', () => {
+  const summary = summarizeSessionEvents([
+    { type: 'answer', wordCount: 181 },
+    { type: 'answer', wordCount: 99 },
+    { type: 'forward', queued: true },
+    { type: 'delivery_ignored' },
+    { type: 'answer_timeout' }
+  ]);
+  assert.equal(summary.averageAnswerWords, 140);
+  assert.equal(summary.maxAnswerWords, 181);
+  assert.equal(summary.answersOver180, 1);
+  assert.equal(summary.queuedFinalCount, 1);
+  assert.equal(summary.ignoredDeliveryCount, 1);
+  assert.equal(summary.answerTimeoutCount, 1);
+});
+test('sender boot forwarding counts as an armed session summary', () => {
+  const summary = summarizeSessionEvents([
+    { type: 'sender_text', kind: 'boot', delivered: true }
+  ]);
+  assert.equal(summary.sessionArmed, true);
 });

@@ -1,8 +1,8 @@
 # Next PMIA Setup Tasks
 
-Last updated: 2026-07-30
+Last updated: 2026-08-01
 
-This file tracks only current Edge Stable / Manifest V3 work. Edge Beta, Tampermonkey, the fixed launcher, and project-URL patch tasks are complete historical migration work and must not be reapplied.
+This file tracks the isolated PMIA 0.7.0 runtime candidate only. The original checkout, canonical `main`, legacy runtime, and private session tracker must remain unchanged unless a later instruction explicitly authorizes publication or tracker writes.
 
 ## Read first
 
@@ -10,30 +10,33 @@ This file tracks only current Edge Stable / Manifest V3 work. Edge Beta, Tamperm
 2. `docs/CURRENT_SETUP_HANDOFF_AND_REQUIREMENTS.md`
 3. `runtime/README_INSTALL_TEST.md`
 4. `docs/SESSION_TRACKER_SETUP.md`
-5. Latest verification record under `docs/evidence/`
+5. `docs/superpowers/specs/2026-08-01-pmia-0.7-reliability-coherence-design.md`
 
-## Current release sequence
+## Candidate completion sequence
 
-1. Run the complete Node, extension, main AutoHotkey, and tracker-helper validators.
-2. Smoke-test Session Studio structured fields with synthetic values; do not launch or persist real interview context.
-3. Run the tracker push script with synthetic exports and `-DryRun`; confirm the private tracker repository is unchanged.
-4. Inspect the exact diff and verify legacy files and unrelated Edge state are untouched.
-5. Publish the feature branch, fast-forward `main`, rerun the complete merged-main gate, push `main`, and tag the verified release.
-6. Reload only the PMIA unpacked extension card in the selected Edge Stable profile and verify Profile Doctor path/version.
-7. Close obsolete GitHub issue #7 with the Edge Stable/Manifest V3 resolution.
-8. Remove only the merged worktree and task-created temporary files.
+1. Finish source, test, and active-documentation changes without intermediate test runs.
+2. Inspect the exact worktree diff, encoding, and unrelated-file boundary.
+3. Run the single complete validator from `product-pm-interview-assistant-improvement`.
+4. Resolve any failure from exact output and rerun the same complete gate.
+5. Use synthetic browser evidence for material live-runtime claims where the candidate can be loaded without altering unrelated browser state.
+6. Verify the original checkout remains clean and still points to canonical `main`.
+7. Commit the verified candidate branch locally. Do not push, merge, tag, retarget the installed extension, close issues, or delete worktrees without a separate instruction.
 
-## Current operational checks
+## Operational checks
 
-- Session Studio shows Target company, Target role, Interview round, Emphasis, Avoid mentioning, Answer mode, Resume, Job Description, Additional notes, and launch controls.
-- Session metadata remains memory-only; `settings.ini` stores only profile, route, and layout.
-- Tracker Review Studio discovers one complete PMIA lifecycle-title pair and requests export/end through `PMIA_RUNTIME_CONTROL_V1`; no focus-injected review hotkey is required.
-- Missing or multiple sessions produce explicit errors.
-- Dry run creates only `README.md`, `win1_sender.md`, and `win2_receiver.md` under the supplied dry-run path and performs no Git write.
+- Session Studio shows the selected Edge profile, route, live runtime health, Check Live, Run Preflight, Fast Repair, structured session fields, Resume, Job Description, notes, layout, and launch controls.
+- Check Live uses the production F11 counterpart preflight in both exact managed windows.
+- Fast Repair uses the current in-memory context and existing `RepairLaunch()` / `RunManagedLaunch(true)` path.
+- Registry and role logs use `chrome.storage.session`; no transcript or answer log falls back to local storage.
+- Startup purges only legacy `pmia_log_*` local records.
+- End-session and final-tab closure clear registry, pending final, sequence state, and both role logs.
+- Dead registrations are replaced only after an active owner probe fails.
+- Receiver wake recovery never activates a tab or focuses Edge.
+- Schema 2.1 exports preserve tracker headers and include safe review summaries with the full setup event redacted.
 
 ## Do not do
 
-- Do not enable Edge Beta or Tampermonkey beside the active runtime.
-- Do not reapply legacy project-URL patches.
-- Do not push synthetic or real session evidence to the tracker during release verification.
-- Do not delete rollback files, archives, or unrelated browser state.
+- Do not enable Edge Beta, Tampermonkey, or the fixed launcher beside the active runtime.
+- Do not persist real interview context during release verification.
+- Do not push synthetic or real evidence to the private tracker.
+- Do not change browser preference files, unrelated Edge tabs, rollback assets, canonical main, or the original checkout.

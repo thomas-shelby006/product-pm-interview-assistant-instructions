@@ -1,4 +1,4 @@
-# PM Interview Dual-Provider Runtime 0.6.1
+# PM Interview Dual-Provider Runtime 0.7.0
 
 Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
 
@@ -11,6 +11,15 @@ Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
 - Provider APIs, cookies, authorization headers, and raw audio are never used by the runtime.
 
 Normal ChatGPT and Claude tabs without PMIA runtime configuration are untouched.
+
+## PMIA 0.7 state, recovery, and operator controls
+
+- Registry and role-scoped transcript logs use `chrome.storage.session`. Transcript and answer events are never written to disk-backed extension local storage.
+- Startup removes legacy `pmia_log_*` local-storage records. Explicit end-session and final-tab closure remove the complete session registry, pending final, sequence state, and both role logs.
+- A fresh registration probes a conflicting owner. Missing or non-responsive owners are replaced immediately; healthy duplicate roles remain blocked.
+- Receiver wake recovery is background-safe: it disables discard and reloads only a discarded tab without activating the tab or focusing Edge.
+- Session Studio exposes **Check Live** (`Alt+H`) and **Fast Repair** (`Alt+Shift+R`). Check Live uses the authorized counterpart preflight in both managed windows; Fast Repair reuses the current in-memory route and context.
+- Exports use schema 2.1 with safe session metadata and mock-review summaries. Full setup text, Resume, JD, avoid text, and notes are redacted from event text.
 
 ## Preview and commit lanes
 
@@ -80,7 +89,7 @@ Binary microphone and playback frames are ignored.
 - Structured metadata is assembled into the boot prompt but is not persisted to `settings.ini`.
 - Short context uses an inline two-step action: the first click arms **Launch Anyway** for ten seconds; the second click proceeds. No modal confirmation is used.
 - Launch progress is explicit: `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `READY`, or `ERROR`.
-- **Repair Launch** opens the selected profile's PMIA extension page for registration/path/version failures, or retries the same session route after a partial lifecycle failure.
+- **Fast Repair** opens the selected profile's PMIA extension page for registration/path/version failures, or retries the same session route after a partial lifecycle failure.
 - Diagnostics are written under `%LOCALAPPDATA%\PMInterviewAssistant\logs`, never into the repository.
 
 ### Lifecycle readiness
@@ -94,6 +103,8 @@ Managed tabs expose title phases that the launcher treats as a deterministic han
 Boot context is sent only after both sender and receiver reach the final ready title. Polling is condition-driven at 100 milliseconds; the launcher no longer treats a browser window merely opening as runtime readiness.
 
 ### Persistence boundary
+
+The extension registry and role logs use browser-session-only `chrome.storage.session`. Ending the session or closing its final managed tab clears the complete session state. Explicit export is the only path that writes transcript or answer material to files.
 
 `%LOCALAPPDATA%\PMInterviewAssistant\settings.ini` contains only:
 
@@ -144,4 +155,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_R
 
 Manual release checks should cover all four sender/receiver provider combinations, both native-voice senders, long-question growth, interruption, receiver reload, missing receiver recovery, preflight status, and a long-session soak.
 
-The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.6.1 runtime.
+The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.7.0 runtime.

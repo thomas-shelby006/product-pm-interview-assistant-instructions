@@ -23,6 +23,7 @@ import { createRuntimeRecovery } from './runtime-recovery.js';
 import { SequenceGate, nextSequence } from '../shared/sequence.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 import { describeRuntimeStatus } from '../shared/session-status.js';
+import { extractSafeSessionContext } from '../shared/session-context.js';
 import { renderRuntimeFatal } from './runtime-fatal.js';
 import { createRecentTranscriptCache, isActionableTranscript, sanitizeTranscriptCandidate } from '../shared/transcript-filter.js';
 import { createPreflightResponder } from './preflight-responder.js';
@@ -259,6 +260,7 @@ async function startRuntime(runtimeConfig) {
       envelopeId: envelope.id,
       kind,
       text: normalized,
+      ...(kind === 'boot' ? { sessionContext: extractSafeSessionContext(normalized) } : {}),
       delivered: Boolean(response?.delivered),
       queued: Boolean(response?.queued),
       reason: response?.reason || response?.error || ''
@@ -451,12 +453,18 @@ async function startRuntime(runtimeConfig) {
       kind: envelope.kind,
       sourceProvider: envelope.sourceProvider,
       text: envelope.text,
+      ...(envelope.kind === 'boot' ? {
+        sessionContext: extractSafeSessionContext(envelope.text)
+      } : {}),
       deliveryElapsedMs
     });
     scrollToLatest();
     if (envelope.kind === 'boot') {
       overlay.setStatus('ARMED', 'ok', 3500);
-      void logEvent('session_armed', { envelopeId: envelope.id });
+      void logEvent('session_armed', {
+        envelopeId: envelope.id,
+        sessionContext: extractSafeSessionContext(envelope.text)
+      });
     } else {
       captureAnswer(envelope, beforeText, token, hintVersionAtStart);
     }

@@ -299,11 +299,12 @@ export function defendTitle(doc, target, Observer = globalThis.MutationObserver)
 
 export function redactSensitiveSessionText(text) {
   const value = String(text ?? '');
-  if (!/\bResume:\s*/i.test(value) && !/\bJob Description:\s*/i.test(value)) return value;
-  return value.replace(
-    /\n?Resume:\s*\n?[\s\S]*$/i,
-    '\n[Resume and Job Description redacted from session log]'
-  );
+  const isSessionSetup = /\bSESSION CONTEXT\b/i.test(value)
+    || /\bResume:\s*/i.test(value)
+    || /\bJob Description:\s*/i.test(value);
+  return isSessionSetup
+    ? '[Session setup redacted from session log]'
+    : value;
 }
 
 export function sleep(ms) {

@@ -238,3 +238,22 @@ test('end-session helper rejects a tab that does not own the PMIA session', asyn
   assert.deepEqual(result, { ok: false, error: 'session_not_owned' });
   assert.equal(called, false);
 });
+
+test('session registry removes an entire session including pending and sequence state', () => {
+  const registry = new registryModule.SessionRegistry();
+  registry.register({ sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 1 });
+  registry.queueLatest('s1', { id: 'pending', text: 'latest' });
+  registry.acceptSequence('s1', 7);
+  assert.equal(registry.removeSession('s1'), true);
+  assert.equal(registry.getSession('s1'), null);
+  assert.equal(registry.removeSession('s1'), false);
+});
+
+test('unregister reports affected sessions for lifecycle cleanup', () => {
+  const registry = new registryModule.SessionRegistry();
+  registry.register({ sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 1 });
+  registry.register({ sessionId: 's1', role: 'receiver', provider: 'claude', tabId: 2 });
+  registry.register({ sessionId: 's2', role: 'sender', provider: 'chatgpt', tabId: 3 });
+  assert.deepEqual(registry.unregister(1), ['s1']);
+  assert.deepEqual(registry.unregister(999), []);
+});

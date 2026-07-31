@@ -12,6 +12,7 @@ export function createPreflightResponder({
     }
     return {
       ok: true,
+      sessionId: String(runtimeConfig?.sessionId || ''),
       role: String(runtimeConfig?.role || ''),
       provider: String(runtimeConfig?.provider || ''),
       version: String(version || ''),

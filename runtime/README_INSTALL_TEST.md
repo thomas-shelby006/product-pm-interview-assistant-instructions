@@ -1,100 +1,116 @@
-# PM Interview Assistant 0.6.1 - Install and Verify
+# PM Interview Assistant 0.7.0 — Install and Verify
 
 ## Active files
 
 ```text
 Final_2_Window_Extension.ahk
+Browser_Profile_Doctor.ps1
 Validate_Extension_Runtime.ps1
+Session_Tracker_End_Session.ahk
 extension/
   manifest.json
   background.js
   content/
   shared/
+  tests/
+scripts/
 ```
 
-The older `Final_2_Window_Fixed.ahk`, Tampermonkey folders, archives, and rollback assets are retained but inactive. Do not enable an old bridge or userscript beside the Manifest V3 runtime. `Session_Tracker_End_Session.ahk` is the active optional post-session companion.
+The older fixed launcher, Tampermonkey folders, archives, and rollback assets are inactive. Do not enable an old runtime beside the Manifest V3 extension.
 
-## Install the extension
+## Install or update
 
-1. Open Microsoft Edge Stable with the profile used for interviews.
-2. Open `edge://extensions` and enable Developer mode.
-3. Choose **Load unpacked** and select `runtime/extension`.
+1. Open Microsoft Edge Stable with the interview profile.
+2. Open `edge://extensions`, enable Developer mode, and load `runtime/extension` as unpacked.
+3. After any source update, reload the PMIA extension card and reload already-open managed PMIA tabs.
 4. Start `runtime/Final_2_Window_Extension.ahk`.
-5. Press `Alt+R`, select the same Edge profile, and run **Preflight**.
-6. Launch only after the profile doctor reports the expected path and version.
+5. Press `Alt+R`, select the same Edge profile, and choose **Run Preflight**.
+6. Launch only when Profile Doctor reports the expected source path and version `0.7.0`.
 
-Resume, Job Description, notes, prompts, answers, and session identifiers are not persisted by Session Studio. Only safe profile, route, and layout preferences are stored in `%LOCALAPPDATA%\PMInterviewAssistant\settings.ini`.
+Session Studio persists only profile, route, and layout preferences. Resume, JD, structured session fields, notes, prompts, answers, and session IDs remain in process/runtime memory.
 
-## Structured session setup
+## Live setup workflow
 
-Session Studio exposes memory-only fields for **Target company**, **Target role**, **Interview round**, **Emphasis**, **Avoid mentioning**, **Answer mode**, and **Additional notes** beside Resume and Job Description. Blank dropdowns infer from the JD. These fields are not persisted; only profile, route, and layout preferences are stored.
+1. Select question-source and answer-workspace providers.
+2. Enter Resume, Job Description, and optional session metadata.
+3. Choose the initial layout.
+4. Launch. The sender must reach READY before the receiver opens; both must reach READY before boot context is sent.
+5. During a session, press `Alt+H` or choose **Check Live** to run the real counterpart preflight in both managed windows.
+6. Press `Alt+Shift+R` or choose **Fast Repair** to relaunch the same route with current in-memory context.
 
-## End-session Review Studio
-
-1. Press `Alt+Shift+E` in the main launcher, or start `runtime/Session_Tracker_End_Session.ahk`.
-2. The Review Studio detects one complete READY PMIA sender/receiver pair.
-3. Choose **Export and Pair**. The companion asks the launcher control channel to export both roles, then validates one fresh matching Markdown pair from Downloads.
-4. Enter practice/real metadata and choose **Push and Open Review Lab**, or run the PowerShell script with `-DryRun` first.
-5. The tracker push returns structured JSON, opens the local session folder and configured Review Lab only after success, and can end only the exact managed PMIA session.
-6. Missing, ambiguous, stale, malformed, duplicate, or mismatched sessions fail explicitly. The live interview remains open after a failure.
-
-## PM shortcut map
+## Shortcut map
 
 ```text
-Alt+R          Open Session Studio; launch or relaunch the selected route
-Alt+Esc        Resend current in-memory PM context
-Alt+Delete     End the exact managed session and exit AutoHotkey
-Alt+Tab        Hide or restore managed interview windows
+Alt+R          Open Session Studio
+Alt+H          Check the live sender/receiver link
+Alt+Shift+R    Fast-repair the current route and context
+Alt+Esc        Resend current in-memory context
+Alt+Delete     End the exact managed session and exit
+Alt+Tab        Hide or restore managed windows
 Alt+CapsLock   Cycle two-window, sender-only, receiver-only modes
-CapsLock       Cycle layout presets within the visible mode
-Alt+Q          Toggle sender microphone through the provider adapter
+CapsLock       Cycle layouts within the visible mode
+Alt+Q          Toggle sender microphone
 Alt+W          Toggle receiver scroll lock
-Alt+E          Export sender and receiver session records
-Alt+Shift+E    Open or focus the PM Session Tracker Review Studio
+Alt+E          Export sender and receiver records
+Alt+Shift+E    Open or focus Review Studio
 ```
 
-The active runtime does not map Alt+S, Alt+A, Alt+X, Alt+1, or Alt+Z. It contains no screenshot, Greenshot, coding, code-focus, or force-forward workflow.
+## Runtime expectations
 
-## Transport expectations
+- Preview updates are disposable, coalesced, and never submit.
+- ChatGPT and Claude use provider-specific authoritative final boundaries.
+- Finals are sequenced and accepted once; only the latest unavailable final is retained.
+- Receiver acknowledgement requires a newly rendered matching user turn.
+- A newer question supersedes older generating receiver work.
+- Dead role registrations are replaced only after an active probe fails.
+- Discard recovery does not activate a tab or focus an Edge window.
+- Closing the final managed tab removes complete session registry/log state.
 
-- Preview growth updates the receiver composer without submitting.
-- Listening, transcribing, translating, processing, and recording placeholders are ignored.
-- ChatGPT commits only when the following assistant turn appears.
-- Claude commits only on a human `message_complete` event.
-- Claude interruption does not clear or advance the current turn; transcript-empty does.
-- The receiver submits a staged final once and acknowledges success only after a matching provider user turn renders.
-- A replayed final is acknowledged without another composer write or submit.
-- When the receiver is unavailable, only the latest final is retained.
+## Privacy and export
 
-## Silent automated verification
+Active role logs use `chrome.storage.session`; they disappear with browser-session cleanup and are explicitly removed when the PMIA session ends. Service-worker startup purges legacy `pmia_log_*` records from local storage. Full setup text is never retained in role events.
 
-Run from the repository root:
+`Alt+E` exports schema 2.1 JSON and Markdown for both roles. The summary includes safe session metadata, answer length, receiver delivery timing, queue/duplicate/stale counts, and timeouts. The setup event remains redacted.
+
+## Review Studio
+
+1. Press `Alt+Shift+E`.
+2. Detect one exact READY pair.
+3. Choose **Export and Pair**.
+4. Verify one fresh sender and one fresh receiver Markdown file with the same session ID.
+5. Use `-DryRun` before any real tracker push when validating setup changes.
+6. Push/open Review Lab only after structured success.
+7. End Session closes only the exact managed pair.
+
+## One final automated gate
+
+From the repository root:
 
 ```powershell
-npm test
-npm run validate
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-The validator invokes AutoHotkey with `--validate`. This path emits `AHK_VALID` and exits before any GUI or browser launch, so it does not steal focus.
+This runs the Node suite, extension JavaScript validation, main-launcher silent validation, and Review Studio silent validation. It must be run from the exact candidate tree.
 
-## Manual release matrix
+## Browser release evidence
 
-Use uniquely named managed PMIA sessions and retain browser evidence for:
+For material browser claims, use Browser Evidence Capture with synthetic context. Verify:
 
-- ChatGPT -> ChatGPT
-- ChatGPT -> Claude
-- Claude -> ChatGPT
-- Claude -> Claude
-- one session minimized for more than 60 seconds before a second turn
-- Alt+Delete shutdown while unrelated Edge tabs remain open
+- all four provider routes as applicable;
+- Check Live reports the linked pair;
+- Fast Repair reuses context and returns both roles to READY;
+- receiver recovery does not steal foreground focus;
+- export files contain schema 2.1 summary and no raw setup content;
+- end-session removes only task-created PMIA windows;
+- unrelated Edge tabs and the original checkout remain untouched.
 
-For every route, verify one sender user turn, one receiver user turn, one answer, no queued duplicate, no generating state after completion, and an empty receiver composer. Close only the task-created managed PMIA tabs.
+## Recovery states
 
-## Recovery
+- `LINK OK`: both roles registered and reachable.
+- `FINAL QUEUED`: latest final retained for recovery.
+- `RUNTIME UNREACHABLE`: registered counterpart did not respond.
+- `COMPOSER NOT READY`: runtime responds but provider composer is unavailable.
+- `ROLE CONFLICT`: a healthy owner already holds the role.
+- `registration_recovered`: a missing/unresponsive prior owner was safely replaced.
 
-- `LINK OK`: both managed roles are registered and reachable.
-- `FINAL QUEUED`: the latest final is retained for receiver recovery.
-- `RUNTIME UNREACHABLE` or `COMPOSER NOT READY`: use Preflight and repair the selected profile registration.
-- After updating an unpacked build, reload the extension and any already-open managed PMIA tabs.
-- Do not edit Edge profile preference files directly and do not remove legacy files during routine updates.
+Use **Check Live** first. Use **Fast Repair** when a role is missing or not ready. Use extension settings only when Profile Doctor reports a path, version, or registration problem.

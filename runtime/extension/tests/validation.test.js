@@ -67,13 +67,12 @@ test('runtime stores and exports logs per managed window role', async () => {
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
   const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
-  assert.match(background, /roleLogKey/);
+  assert.match(background, /createSessionLogStore/);
   assert.match(background, /registry\.roleForTab/);
-  assert.match(background, /appendBoundedLog/);
+  assert.match(background, /logStore\.(?:append|read|clearRole)/);
   assert.match(entry, /buildSessionExport/);
   assert.match(entry, /renderSessionMarkdown/);
   assert.match(entry, /role: runtimeConfig\.role/);
-  assert.doesNotMatch(entry, /ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â/);
 });
 
 test('entry runtime primes historical sender turns before observation starts', async () => {
@@ -385,7 +384,7 @@ test('active AutoHotkey runtime exposes PM interview shortcuts without screensho
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const source = await readFile(resolve(extensionRoot, '..', 'Final_2_Window_Extension.ahk'), 'utf8');
-  for (const required of ['!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::']) {
+  for (const required of ['!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::', '!h::', '!+r::']) {
     assert.match(source, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
   for (const forbidden of ['!s::', '!a::', '!x::', '!1::', '!z::', '!Shift::']) {
@@ -454,4 +453,73 @@ test('ChatGPT transport enables bounded stable finalization while Claude keeps p
   assert.match(entry, /allowFallbackFinalization: runtimeConfig\.provider === 'chatgpt'/);
   assert.match(entry, /allowVoiceFallback: runtimeConfig\.provider === 'chatgpt'/);
   assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 900 \}\)/);
+});
+
+test('service worker keeps transcript logs in session storage and purges legacy local logs', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const store = await readFile(resolve(extensionRoot, 'shared/session-log-store.js'), 'utf8');
+  assert.match(background, /createSessionLogStore/);
+  assert.match(background, /sessionArea:\s*chrome\.storage\.session/);
+  assert.match(background, /purgeLegacyLocalLogs/);
+  assert.match(store, /legacyLocalArea\.get\(null\)/);
+  assert.match(store, /startsWith\('pmia_log_'\)/);
+  assert.doesNotMatch(background, /chrome\.storage\.local\.(?:get|set)\(/);
+});
+
+test('receiver wake recovery never activates a tab or focuses an Edge window', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const wake = background.slice(
+    background.indexOf('async function wakeManagedTab'),
+    background.indexOf('async function deliver', background.indexOf('async function wakeManagedTab'))
+  );
+  assert.match(wake, /autoDiscardable:\s*false/);
+  assert.match(wake, /tab\?\.discarded/);
+  assert.match(wake, /chrome\.tabs\.reload/);
+  assert.doesNotMatch(wake, /active:\s*true|focused:\s*true|chrome\.windows\.update/);
+});
+
+test('registration conflict recovery probes and replaces only dead PMIA owners', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const registration = background.slice(
+    background.indexOf('async function handleRegistration'),
+    background.indexOf('async function handleForward')
+  );
+  assert.match(registration, /probeRegistrationOwner/);
+  assert.match(registration, /if \(!health\.responsive\)/);
+  assert.match(registration, /registry\.unregister\(displacedTabId\)/);
+  assert.match(registration, /registration_recovered/);
+  assert.match(registration, /role_conflict/);
+});
+
+test('ending or orphaning a session clears registry and role logs', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const end = background.slice(
+    background.indexOf("message?.type === 'PMIA_END_SESSION'"),
+    background.indexOf("message?.type === 'PMIA_GET_STATUS'")
+  );
+  assert.match(end, /registry\.removeSession\(message\.sessionId\)/);
+  assert.match(end, /logStore\.clearSession\(message\.sessionId\)/);
+  const removed = background.slice(background.indexOf('chrome.tabs.onRemoved.addListener'));
+  assert.match(removed, /orphanedSessionIds/);
+  assert.match(removed, /registry\.removeSession\(sessionId\)/);
+  assert.match(removed, /logStore\.clearSession\(sessionId\)/);
+});
+
+test('boot telemetry exports safe metadata but never raw setup text', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const runtime = await readFile(resolve(extensionRoot, 'content/runtime.js'), 'utf8');
+  assert.match(entry, /extractSafeSessionContext/);
+  assert.match(entry, /sessionContext:/);
+  assert.match(runtime, /\[Session setup redacted from session log\]/);
+  assert.doesNotMatch(runtime, /Resume and Job Description redacted/);
 });

@@ -1,4 +1,4 @@
-# Session Tracker Setup — PMIA 0.6.1
+﻿# Session Tracker Setup — PMIA 0.7.0
 
 The tracker is an optional post-session learning companion for the active **Microsoft Edge Stable + Manifest V3** PMIA runtime. It does not use Edge Beta, Tampermonkey, or focus-injected review hotkeys.
 
@@ -20,7 +20,9 @@ runtime/scripts/init-session-tracker-repo.ps1
 templates/session-tracker/review_lab_prompt.md
 ```
 
-The Manifest V3 extension owns role-scoped JSON/Markdown export. The launcher owns a hidden `PMIA_RUNTIME_CONTROL_V1` Windows-message bridge so the Review Studio can request export or exact-session shutdown without changing browser focus.
+The Manifest V3 extension owns role-scoped schema 2.1 JSON/Markdown export. The launcher owns a hidden `PMIA_RUNTIME_CONTROL_V1` Windows-message bridge so the Review Studio can request export or exact-session shutdown without changing browser focus.
+
+Schema 2.1 keeps the existing `Session:` and `Window:` headers used by the resolver. The added Summary and Session context sections are review data only; Resume, JD, avoid text, notes, and full setup content are not retained as event text.
 
 ## End-session and review flow
 
@@ -32,14 +34,14 @@ The Manifest V3 extension owns role-scoped JSON/Markdown export. The launcher ow
 6. Fill practice/real, company, role, round, and mode. These values are not persisted by the companion.
 7. Confirm the tracker path, Downloads path, and Review Lab URL. Only these operational paths/URL are saved in `%LOCALAPPDATA%\PMInterviewAssistant\review-settings.ini`.
 8. Choose **Push and Open Review Lab**. The tracker repository must be clean.
-9. The push script validates the v0.6 pair before writing state, pulls current `main`, allocates the next numeric session ID, creates the session branch, pushes it, and auto-merges by default.
+9. The push script validates the PMIA role pair before writing state, pulls current `main`, allocates the next numeric session ID, creates the session branch, pushes it, and auto-merges by default.
 10. After success, the companion opens the local tracker folder, copies the review prompt, opens the configured ChatGPT Review Lab URL, and can ask the launcher to close only the exact managed PMIA session.
 
 A manual path field remains available when Edge downloads to a nonstandard directory.
 
 ## Safe dry run
 
-Use synthetic v0.6 Markdown exports before enabling a real tracker push:
+Use synthetic schema 2.1-compatible Markdown exports before enabling a real tracker push:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime\scripts\push-session-to-tracker.ps1 `

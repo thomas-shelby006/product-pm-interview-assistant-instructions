@@ -63,13 +63,12 @@ test('runtime title uses role and provider and is restored after mutation', () =
   assert.equal(doc.title, target);
 });
 
-test('session export redacts Resume and Job Description bodies', () => {
+test('session export redacts the complete setup prompt', () => {
   assert.ok(runtimeModule, 'runtime module must exist');
-  const input = 'Session context:\nCompany: Acme\nResume:\nprivate resume\n\nJob Description:\nprivate jd';
+  const input = 'Session context:\nCompany: Acme\nAvoid mentioning: private topic\nAdditional notes:\nprivate note\nResume:\nprivate resume\n\nJob Description:\nprivate jd';
   const result = runtimeModule.redactSensitiveSessionText(input);
-  assert.match(result, /Company: Acme/);
-  assert.doesNotMatch(result, /private resume|private jd/);
-  assert.match(result, /redacted/i);
+  assert.equal(result, '[Session setup redacted from session log]');
+  assert.doesNotMatch(result, /Acme|private topic|private note|private resume|private jd/);
 });
 
 

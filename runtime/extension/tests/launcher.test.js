@@ -83,7 +83,7 @@ test('session studio exposes browser health and operational actions', () => {
   assert.match(launcher, /PM Interview Assistant — Session Studio/);
   assert.match(launcher, /Microsoft Edge Stable/);
   assert.match(launcher, /Run Preflight/);
-  assert.match(launcher, /Repair Launch/);
+  assert.match(launcher, /Fast Repair/);
   assert.match(launcher, /Swap route/);
   assert.match(launcher, /Launch Interview/);
   assert.match(launcher, /Show\("w960 h900"\)/);
@@ -144,7 +144,7 @@ test('closing the session studio releases every operational control reference', 
     'g_launchGui', 'g_resumeEdit', 'g_jdEdit', 'g_metaEdit',
     'g_senderProviderDdl', 'g_receiverProviderDdl', 'g_profileDdl',
     'g_routeSummary', 'g_contextStatus', 'g_launchStatus',
-    'g_runtimeHealth', 'g_preflightButton', 'g_repairButton', 'g_launchButton'
+    'g_runtimeHealth', 'g_preflightButton', 'g_repairButton', 'g_liveCheckButton', 'g_launchButton'
   ]) assert.match(closeBlock, new RegExp(`${control}\\s*:=\\s*0`));
 });
 
@@ -374,4 +374,32 @@ test('browser command activation includes hidden managed windows and restores de
   assert.match(block, /WinActivate "ahk_id " hTarget/);
   assert.match(block, /Send shortcut/);
   assert.match(block, /DetectHiddenWindows previousDetectHidden/);
+});
+
+test('launcher exposes one-key live health and fast repair controls', () => {
+  assert.match(launcher, /!h::/);
+  assert.match(launcher, /!\+r::/);
+  assert.match(launcher, /Check Live/);
+  assert.match(launcher, /Fast Repair/);
+  assert.match(launcher, /CheckLiveSessionHealth\(/);
+  assert.match(launcher, /FastRepairActiveSession\(/);
+});
+
+test('live health check uses the authoritative runtime preflight in both managed windows', () => {
+  const start = launcher.indexOf('CheckLiveSessionHealth(*) {');
+  const end = launcher.indexOf('FastRepairActiveSession(*) {', start);
+  const health = launcher.slice(start, end);
+  assert.match(health, /IsActiveSession\(\)/);
+  assert.match(health, /SendToWindow\("", "\^\+\{F11\}", g_hWin1\)/);
+  assert.match(health, /SendToWindow\("", "\^\+\{F11\}", g_hWin2\)/);
+  assert.match(health, /SetLaunchState\("READY"/);
+});
+
+test('fast repair reuses the current in-memory route and session implementation', () => {
+  const start = launcher.indexOf('FastRepairActiveSession(*) {');
+  const end = launcher.indexOf('; Alt+Delete', start);
+  const repair = launcher.slice(start, end);
+  assert.match(repair, /ShowSessionLaunchGui\(\)/);
+  assert.match(repair, /RepairLaunch\(\)/);
+  assert.doesNotMatch(repair, /CreateSessionId|BuildBootPrompt|Run BrowserExe/);
 });

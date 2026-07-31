@@ -1,72 +1,80 @@
 # Product PM Interview Assistant
 
-This repository contains Sundar's Product Management Interview Assistant instructions, source material, and Manifest V3 dual-provider runtime.
+This repository contains Sundar's live Product Management mock-interview system: a structured Session Studio, a Manifest V3 dual-provider runtime, and an optional post-session review loop.
 
-**Current release: PMIA runtime 0.6.1.**
+**Current release: PMIA runtime 0.7.0.**
 
 ## Active architecture
 
-- A ChatGPT Project and its source bundle define answer behavior, truth constraints, story selection, and PM interview framing.
-- `runtime/extension/` is the authoritative provider runtime for ChatGPT and Claude.
-- `runtime/Final_2_Window_Extension.ahk` is the active Windows launcher, layout manager, and PM-only hotkey host.
-- Microsoft Edge Stable supplies the two managed provider windows.
-- The extension service worker owns registration, authorization, durable final ordering, latest-only recovery, and role-scoped logs.
-- Content scripts own disposable transcript previews, authoritative final commits, receiver staging/submission, answer capture, health status, and export.
+- `runtime/Final_2_Window_Extension.ahk` owns Session Studio, provider selection, exact managed Edge windows, layouts, and PM-only hotkeys.
+- `runtime/extension/` is the authoritative provider runtime for ChatGPT and Claude in Microsoft Edge Stable.
+- The extension service worker owns role registration, durable final ordering, latest-only recovery, ephemeral role logs, and deterministic session cleanup.
+- Content scripts own transcript previews, provider-specific final commits, receiver submission, answer capture, status overlays, health checks, and export.
+- `runtime/Session_Tracker_End_Session.ahk` optionally exports the exact session pair and sends it to the private review tracker.
 
-Tampermonkey scripts, the older fixed AutoHotkey launcher, archives, and rollback assets are retained for history and recovery. They are not part of the active architecture and should not be enabled alongside the extension runtime. `runtime/Session_Tracker_End_Session.ahk` is the active optional post-session companion.
+The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retained only for rollback and history. Do not enable them beside the active runtime.
 
-## Question transport
+## PMIA 0.7 improvements
 
-### ChatGPT
+- Transcript and answer logs use `chrome.storage.session`; they are no longer written to disk-backed extension local storage.
+- Startup removes legacy `pmia_log_*` local-storage records without exposing their contents.
+- Ending a session or closing its final managed tab clears registrations, pending work, sequence state, and both role logs.
+- A new managed tab can immediately replace a closed or unreachable stale owner instead of waiting for the 45-second heartbeat window.
+- Receiver recovery no longer activates a tab or focuses an Edge window.
+- **Check Live** / `Alt+H` runs the real sender-receiver preflight in both managed windows.
+- **Fast Repair** / `Alt+Shift+R` relaunches the current route using the existing in-memory context.
+- Exports use schema 2.1 and include safe session metadata plus answer-length, delivery-latency, queue, duplicate/stale, and timeout summaries.
 
-Placeholder or growing text is mirrored through the disposable preview lane. Values such as listening, transcribing, translating, processing, and recording are ignored. A question is committed once when ChatGPT renders the following assistant turn. Timer-based and force-forward finalization are disabled.
+## Session flow
 
-If ChatGPT replaces a submitted message ID during project-to-conversation navigation, canonical user text prevents a duplicate commit. An intentional repeated question remains possible when the earlier turn is still present earlier in the ordered conversation.
+1. Press `Alt+R` and select the verified Edge Stable profile and provider route.
+2. Enter Resume, Job Description, and optional session fields. These remain in AutoHotkey process memory.
+3. Session Studio waits for sender BOOT, REGISTERED, and READY before opening and waiting for the receiver.
+4. Boot context is delivered only after both provider composers are ready.
+5. Provisional transcript growth uses the disposable preview lane; one authoritative final uses the sequenced durable lane.
+6. The receiver acknowledges success only after the matching provider user turn renders.
+7. Use `Alt+H` to check the live link or `Alt+Shift+R` to repair the current session without re-entering context.
 
-### Claude
+## Privacy boundary
 
-Each distinct `transcript_interim` value updates the same preview. `user_input_end` is a processing hint. `server_interrupt` preserves the current utterance. `transcript_empty` clears it. Only a human `message_complete` commits the question.
+- Session Studio persists only Edge profile directory, sender provider, receiver provider, and layout mode.
+- Resume, JD, notes, prompts, answers, and session IDs are not persisted by Session Studio.
+- Extension transcript logs exist only in browser-session memory and are deleted at session cleanup.
+- Export is the explicit user action that writes role-scoped JSON and Markdown files.
+- Setup text is fully redacted from event logs. Only company, target role, round, emphasis, answer mode, and missing-context flags may appear in the review summary.
 
-## Structured session setup
+## Shortcut surface
 
-Session Studio keeps Resume and Job Description as the primary inputs and adds memory-only controls for **Target company**, **Target role**, **Interview round**, **Emphasis**, **Avoid mentioning**, and **Answer mode**. Optional freeform notes remain available. These values are assembled into the in-memory `Session context:` block used by the boot prompt; they are not persisted to `settings.ini`.
-
-## Post-session tracker
-
-`runtime/Session_Tracker_End_Session.ahk` is the PM Session Tracker Review Studio. It detects exactly one READY PMIA pair, requests both role exports through the launcher's focus-independent control channel, pairs and validates the fresh Markdown files, pushes them to the private tracker, and opens the configured Review Lab. The push script supports `-DryRun` before any Git operation.
-
-## PM-only shortcut surface
-
-- `Alt+R`: open Session Studio and launch or relaunch the selected route.
-- `Alt+Esc`: resend current in-memory PM context.
-- `Alt+Delete`: end the exact managed session and exit the launcher.
-- `Alt+Tab`: hide or restore the managed interview windows.
+- `Alt+R`: open Session Studio.
+- `Alt+H`: check the live sender/receiver link.
+- `Alt+Shift+R`: fast-repair the current route and context.
+- `Alt+Esc`: resend current in-memory context.
+- `Alt+Delete`: end the exact managed session and exit.
+- `Alt+Tab`: hide or restore managed windows.
 - `Alt+CapsLock`: cycle two-window, sender-only, and receiver-only modes.
-- `CapsLock`: cycle layout presets in the current visible mode.
-- `Alt+Q`: toggle the sender microphone through the provider adapter.
+- `CapsLock`: cycle layouts.
+- `Alt+Q`: toggle the sender microphone.
 - `Alt+W`: toggle receiver scroll lock.
-- `Alt+E`: export sender and receiver session records.
-
-There is no screenshot/Greenshot workflow, coding shortcut, code-focus overlay, or force-forward shortcut in the active runtime.
+- `Alt+E`: export both role records.
+- `Alt+Shift+E`: open the Review Studio.
 
 ## Main files
 
-- `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md`: ChatGPT Project instructions.
-- `project_upload_bundle/`: recommended five-file Project upload set.
-- `project_source_files/`: detailed editable source material.
-- `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`: product and interaction design background.
-- `runtime/extension/README.md`: runtime 0.6.1 architecture and operational boundaries.
-- `runtime/README_INSTALL_TEST.md`: installation and verification procedure.
-- `docs/superpowers/specs/2026-07-30-pmia-final-architecture-design.md`: final migration design.
+- `runtime/Final_2_Window_Extension.ahk`: active launcher and Session Studio.
+- `runtime/extension/`: active Manifest V3 runtime.
+- `runtime/README_INSTALL_TEST.md`: installation, operation, recovery, and verification.
+- `runtime/Session_Tracker_End_Session.ahk`: optional Review Studio.
+- `project_upload_bundle/`: recommended ChatGPT Project upload bundle.
+- `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md`: compact Project contract.
+- `docs/CURRENT_SETUP_HANDOFF_AND_REQUIREMENTS.md`: current operational ledger.
+- `docs/superpowers/specs/2026-08-01-pmia-0.7-reliability-coherence-design.md`: 0.7 design record.
 
 ## Verification
 
-From the repository root:
+Run one complete gate from the repository root:
 
 ```powershell
-npm test
-npm run validate
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-The AutoHotkey validator uses `--validate`, which exits before showing Session Studio or opening browser windows. Browser evidence checks must target only managed PMIA tabs and must not alter unrelated Edge windows.
+The validator runs the Node suite, JavaScript syntax/security validation, and silent validation for both active AutoHotkey programs. Browser evidence is required for final release claims about real provider rendering, focus behavior, or live interaction.

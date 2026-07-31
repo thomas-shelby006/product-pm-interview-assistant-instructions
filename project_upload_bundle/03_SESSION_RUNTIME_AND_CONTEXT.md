@@ -50,7 +50,7 @@ Entered through Session Studio's structured memory-only controls and emitted in 
 
 Flow: Session Studio (`Alt+R`) collects Resume, JD, structured metadata, and optional notes in memory → Microsoft Edge Stable opens one managed sender and receiver → each content runtime registers through BOOT/REGISTERED/READY lifecycle titles → the service worker mirrors provisional text and forwards one durable final envelope → the receiver stages context, submits automatically, and acknowledges only after the provider renders the matching user turn. `Alt+Esc` resends current in-memory context; `Alt+Delete` ends the exact managed session.
 
-The active runtime does not use Tampermonkey or `localStorage` transport. Resume/JD and structured metadata remain only in the AutoHotkey process; role-scoped logs exclude raw Resume/JD.
+The active runtime does not use Tampermonkey or `localStorage` transport. Resume/JD and structured metadata remain only in the AutoHotkey process. Role-scoped runtime logs use browser-session-only storage, are cleared when the managed session ends, and replace the full setup event with a redaction placeholder. Only allow-listed company/role/round/emphasis/answer-mode and missing-context flags may appear in review metadata.
 
 ## Noisy transcript handling
 
@@ -69,4 +69,4 @@ Wrapper the runtime may send: `Prior context (reference only): [last Q + 1-line 
 
 ## Export / post-session review behavior
 
-`Alt+E` exports the session as JSON + Markdown for review (see `04`). Privacy: raw Resume/JD are **redacted** from the session log/export (the boot/setup prompt is stored with Resume/JD removed; the full prompt is still injected live). The setup prompt is excluded from Q&A pairs. The export includes session metadata, whether `ARMED` fired, per-answer word counts, and route/company guesses — never raw Resume/JD.
+`Alt+E` exports role-scoped JSON + Markdown schema 2.1 for review (see `04`). Privacy: the full boot/setup event is replaced by a redaction placeholder; Resume, JD, avoid text, and freeform notes are not retained as event text. The export includes safe session metadata, arm state, question/answer counts, answer-length statistics, receiver delivery timing, queue/duplicate/stale counts, and timeouts. The setup prompt is not treated as an interviewer question.

@@ -166,11 +166,27 @@ export class SessionRegistry {
   }
 
   unregister(tabId) {
+    const affectedSessionIds = [];
     for (const [sessionId, session] of this.#sessions) {
-      if (session.sender?.tabId === tabId) session.sender = null;
-      if (session.receiver?.tabId === tabId) session.receiver = null;
+      let changed = false;
+      if (session.sender?.tabId === tabId) {
+        session.sender = null;
+        changed = true;
+      }
+      if (session.receiver?.tabId === tabId) {
+        session.receiver = null;
+        changed = true;
+      }
+      if (changed) affectedSessionIds.push(sessionId);
       if (!session.sender && !session.receiver && !session.pending) this.#sessions.delete(sessionId);
     }
+    return affectedSessionIds;
+  }
+
+  removeSession(sessionId) {
+    const normalized = String(sessionId || '').trim();
+    if (!normalized) return false;
+    return this.#sessions.delete(normalized);
   }
 
   pruneStale(now = Date.now(), staleAfterMs = DEFAULT_STALE_AFTER_MS) {

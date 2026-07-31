@@ -1,8 +1,8 @@
 # PM Interview Export Schema — Source File
 
-> **Current runtime note (0.6.1):** This long schema documents the historical Tampermonkey export format. The active Manifest V3 runtime exports role-scoped JSON and Markdown through `runtime/extension/shared/session-log.js` and `Ctrl+Shift+F8`. Do not use legacy `VB_*`, Edge Beta, or Tampermonkey setup instructions for the current system.
+> **Current runtime note (0.7.0):** The active Manifest V3 runtime exports role-scoped JSON and Markdown schema 2.1 through `runtime/extension/shared/session-log.js`. Runtime logs are browser-session-only, complete setup text is redacted, and exports include allow-listed session metadata plus answer-length, receiver-delivery, queue, duplicate/stale, and timeout summaries. The long format below remains historical design reference for the retired Tampermonkey implementation; do not use its `VB_*`, Edge Beta, `localStorage`, or userscript setup instructions for the current system.
 
-Use this as supporting reference for PM Interview Helper and the local Tampermonkey bridge.
+Use the current runtime code and `project_upload_bundle/03_SESSION_RUNTIME_AND_CONTEXT.md` as the operational contract. Treat the remainder of this file as historical reference unless a section explicitly says Manifest V3 schema 2.1.
 
 This file defines what the session export should capture when Sundar presses `Alt+E`.
 

@@ -1,195 +1,135 @@
 # AI System Context — PM Interview Assistant
 
-This file gives the full context for reviewing Sundar’s PM Interview Assistant system.
+This file is the active technical context for reviewing Sundar's Product Management mock-interview system. It describes PMIA runtime 0.7.0, not the preserved legacy implementation.
 
-The goal is not to redesign the architecture. The goal is to improve reliability, live interview usability, answer quality, and source-file consistency while staying inside ChatGPT Project limitations.
+## Product objective
 
-## User goal
+The system converts a live interviewer question into a fast, speakable PM answer while keeping session setup, transport, recovery, and post-session review reliable under interview pressure.
 
-Sundar is preparing for Product Manager interviews. The system should help him answer live interview questions in a natural, first-person PM voice.
+The engineering priority order is:
 
-Target roles:
+1. do not lose or duplicate the latest actionable question;
+2. do not submit stale or partial transcript text;
+3. keep the managed sender and receiver recoverable without disturbing unrelated browser windows;
+4. keep Resume, JD, notes, prompts, answers, and session identifiers out of persistent runtime storage;
+5. make operational failure visible and repairable in one action;
+6. produce useful explicit exports for mock review.
 
-- Product Manager
-- Technical Product Manager
-- Product Owner
-- AI Product Manager
-- B2B SaaS PM
-- Fintech PM
-- Analytics PM
-- Workflow Automation PM
+## Active local architecture
 
-The assistant must not behave like a frontend/software-engineering interview helper unless Sundar explicitly asks.
+- **Browser:** Microsoft Edge Stable, one profile selected and verified by Profile Doctor.
+- **Launcher:** `runtime/Final_2_Window_Extension.ahk`, AutoHotkey v2.
+- **Provider runtime:** `runtime/extension/`, Manifest V3.
+- **Providers:** ChatGPT and Claude independently selectable as sender or receiver.
+- **Windows:** exactly one managed sender and one managed receiver.
+- **Transport:** disposable preview lane plus durable sequenced final lane through the extension service worker.
+- **Review:** `runtime/Session_Tracker_End_Session.ahk` plus exact Markdown pairing and private tracker push scripts.
 
-## Target positioning
+Edge Beta, Tampermonkey, `Final_2_Window_Fixed.ahk`, and archives are inactive rollback/reference assets.
 
-Sundar should be framed as:
+## Ownership boundaries
 
-> Product Manager with experience across internal manufacturing technology, fintech workflow automation, B2B SaaS, enterprise workflow products, dashboards, analytics, ERP-adjacent workflows, and AI-assisted decision support.
+### AutoHotkey launcher
 
-Company anchors:
+Owns Session Studio, profile/route/layout preferences, managed Edge process launch, exact lifecycle-window discovery, layout/hide controls, boot-context delivery, and global PM hotkeys. Sensitive session context remains only in the current AutoHotkey process.
 
-1. **TPI Composites**
-   - Product Manager
-   - Manufacturing operations and quality systems
-   - Production visibility, defect tracking, inspection workflows, operational analytics, internal tools, decision-support systems
+### Extension service worker
 
-2. **Pemo**
-   - Product Manager
-   - Fintech workflow automation
-   - SME onboarding, corporate cards, expense automation, receipt capture, transaction categorization, approval flows, spend controls, risk/anomaly signals, finance dashboards
+Owns role registration, ownership conflict resolution, durable sequence admission, final routing, latest-only queueing, counterpart status, ephemeral role logs, export control, and deterministic cleanup.
 
-3. **DataCaliper**
-   - Product Manager
-   - B2B SaaS and enterprise workflow products
-   - Dashboards, ERP/NetSuite/Odoo-adjacent workflows, role-based access, reporting, workflow automation, BI, analytics, AI-assisted decision support
+### Content runtime
 
-## Actual local architecture
+Owns provider observation, provisional transcript preview, authoritative finalization, receiver composer staging/submission, generation supersede, answer capture, status overlay, health preflight response, and role-scoped export.
 
-The local interview assistant uses a two-window setup:
+### Provider adapters
 
-- **Win1**: ChatGPT Voice / transcription sender.
-- **Win2**: ChatGPT text answer receiver.
-- **Transport**: Tampermonkey bridge using `localStorage`.
-- **Browser**: Microsoft Edge Beta PWA windows.
-- **Automation**: AutoHotkey v2.
-- **Userscripts**: Tampermonkey.
+Own semantic DOM discovery and provider-specific operations: composer reads/writes, send readiness, submitted-turn confirmation, generation stop, assistant text, microphone control, and provider onboarding-dialog handling.
 
-Installed/used components from the current workflow:
+## Lifecycle and readiness
 
-- ChatGPT Plus account
-- Microsoft Edge Beta
-- AutoHotkey v2
-- Tampermonkey
-- InvisiWind / offscreen hiding behavior
-- FXSound / Windows audio output routing as part of the broader machine setup
-- Optional local Tampermonkey update server script
+Managed tabs progress through deterministic titles:
 
-The repo should not add new windows, mic switching, extension fallbacks, or extra browser extensions unless a serious live-use issue requires it.
+- `PMIA_BOOT_<ROLE>_<PROVIDER>_<SESSION>` — content runtime loaded;
+- `PMIA_REGISTERED_<ROLE>_<PROVIDER>_<SESSION>` — service-worker ownership accepted;
+- `PMIA_<ROLE>_<PROVIDER>_<SESSION>` — provider composer available and role ready.
 
-## Context layering and precedence
+The launcher opens the sender first and waits for READY before opening the receiver. Boot context is sent only after both roles are READY.
 
-The system is organized as four layers plus a safety floor (full design in `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`):
+Each registration heartbeat refreshes ownership. A competing fresh role is normally rejected. PMIA 0.7 probes the current owner first; a missing or non-responsive runtime is replaced immediately, while a healthy duplicate remains blocked.
 
-1. **Permanent brain** — Project custom instructions + uploaded source files (canonical PM profile, story bank, metrics, router, delivery rules). Stable.
-2. **Session context** — per-interview Resume + JD + optional metadata (company, target role, interview round, emphasis, avoid, answer mode). Re-weights emphasis only.
-3. **Live transcript state** — latest actionable question + short prior-context tail; latest-actionable-question-wins.
-4. **Spoken-answer contract** — front-loaded, length-capped, follow-ups shorter.
+## Question transport
 
-Precedence when sources disagree: truth constraints win on claims/safety; the Project story bank is canonical on facts; Resume/JD/emphasis only re-weight emphasis and framing; the JD never becomes claimed work history; a live correction wins for the session but not over the safety floor. Do not bake a single resume into the Project as the only truth — bake the canonical profile/story bank and paste the role-specific resume per session.
+### Preview lane
 
-## Current shortcut model
+Provisional transcript growth is disposable, in-memory, coalesced, and never queued. Each page has its own preview stream identity. Preview state may prefill the receiver composer but cannot submit.
 
-- `Alt+R`: Resume/JD GUI + launch/relaunch Win1/Win2
-- `Alt+Esc`: resend PM boot prompt + current in-memory Resume/JD
-- `Alt+Delete`: exit AHK session; do not save Resume/JD
-- `Alt+Tab`: hide/unhide current assistant windows
-- `Alt+CapsLock`: cycle visible modes
-- `CapsLock`: cycle layouts inside current visible mode
-- `Alt+Q`: mute/unmute Win1
-- `Alt+W`: scroll lock/unlock Win2
-- `Alt+S`: screenshot/context feature
-- `Alt+E`: export session
+### Final lane
 
-No live tooltips should appear. The only allowed visible dialog is the pre-launch Resume/JD warning when one field looks too short.
+Authoritative provider boundaries create a sequenced envelope. The background accepts each increasing sequence once, routes it to the registered receiver, and retains only the latest final when delivery is unavailable. A replay is duplicate-acknowledged; stale work is discarded.
 
-## ChatGPT Project setup
+### ChatGPT boundary
 
-The ChatGPT Project should use:
+Rendered user-turn growth is preview-only. The following assistant turn is the preferred final boundary; bounded ChatGPT-specific fallback exists for provider behavior where the authoritative boundary is delayed. Message-ID replacement during navigation is suppressed by turn identity and canonical text.
 
-- `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md` as the custom instructions.
-- The files inside `project_source_files/` as uploaded source/reference files.
+### Claude boundary
 
-The Project custom instructions must remain compact. A safe target is below 8,000 characters. Detailed behavior should live in the uploaded source files, not only in custom instructions.
+`transcript_interim` is preview-only. `user_input_end` is a hint. `server_interrupt` preserves the utterance. `transcript_empty` clears it. A human `message_complete` is the authoritative voice final.
 
-## Answer behavior requirements
+## Receiver behavior
 
-Live answers must be:
+The receiver stages boot context without submitting it. For a question, it stops an older generating answer when possible, waits for the provider to become idle, writes/submits the latest question, and acknowledges only after a new matching user turn renders. A newer delivery invalidates older receiver work.
 
-- first person
-- PM-focused
-- spoken, not written
-- concise but complete
-- front-loaded
-- direct in the first sentence
-- useful by sentence 2
-- free of route labels and coaching notes unless asked
+Delivery recovery is background-safe. The service worker disables tab discard and reloads only an actually discarded managed tab; it does not activate the tab or focus the Edge window.
 
-Use 127–130 WPM as the safe reading baseline.
+## Runtime privacy
 
-Length targets:
+- Session Studio persists only profile directory, sender provider, receiver provider, and layout mode.
+- Role logs use `chrome.storage.session`, not `chrome.storage.local`.
+- Legacy `pmia_log_*` local records are removed at service-worker startup.
+- Setup events are replaced by `[Session setup redacted from session log]`.
+- Only company, target role, interview round, emphasis, answer mode, and missing Resume/JD flags are allowed into review metadata.
+- Ending the session or closing its final managed tab removes registrations, pending final, sequence state, and both role logs.
+- Explicit export is the only supported path that writes transcript or answer material to files.
 
-- Filler/pause: `— [pause] —` only
-- No actionable question: `No action needed.` only
-- Follow-up/clarification: 30–55 words
-- Simple conceptual PM answer: 55–75 words
-- Comparison/tradeoff: 75–100 words
-- Standard metrics/execution/prioritization: 90–130 words
-- Product sense/strategy setup: 130–180 words
-- Estimation/market sizing: 130–160 words (deeper only if asked)
-- Behavioral story: 120–150 words
-- Full deeper walkthrough: 150–180 words hard cap unless explicitly requested
+## User-facing operations
 
-## Story selection rules
+- `Alt+R` opens Session Studio.
+- `Alt+H` opens Session Studio, verifies the exact READY pair, and requests the authorized F11 counterpart preflight in both managed windows.
+- `Alt+Shift+R` runs Fast Repair using the current in-memory context and existing route.
+- `Alt+Esc` resends current context.
+- `Alt+Delete` closes the exact managed session and exits the launcher.
+- `Alt+Tab`, `Alt+CapsLock`, and `CapsLock` control visibility and layout.
+- `Alt+Q` controls sender microphone; `Alt+W` controls receiver auto-scroll.
+- `Alt+E` exports both role records; `Alt+Shift+E` opens Review Studio.
 
-When an example is requested:
+Normal health states include `LINK OK`, missing sender/receiver, `FINAL QUEUED`, `RUNTIME UNREACHABLE`, and `COMPOSER NOT READY`. Session Studio launch states include `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `READY`, and `ERROR`.
 
-- Fintech / B2B SaaS / onboarding / expense / approvals → Pemo
-- Operations / manufacturing / quality / internal tools → TPI Composites
-- Analytics / dashboards / data trust / decision support / enterprise workflows → DataCaliper
-- Generic PM / cross-domain → unified career story
+## Export and review
 
-Do not invent new company stories. Do not invent metrics or ownership.
+Each role exports JSON and Markdown schema 2.1. The existing `Session:` and `Window:` Markdown headers remain compatible with the exact-pair resolver. Exports include:
 
-## Truth constraints
+- safe session metadata;
+- whether the session armed;
+- observed question and captured-answer counts;
+- average/maximum answer word count and answers over 180 words;
+- average/maximum receiver delivery time;
+- queued final, duplicate/stale, and answer-timeout counts;
+- bounded role events with full setup text redacted.
 
-Never invent:
+Review Studio detects exactly one complete READY pair, requests both role exports through the launcher control channel, validates fresh matching files, and pushes only after explicit user action.
 
-- exact metric improvements
-- revenue impact
-- customer names
-- team size
-- roadmap ownership
-- company-wide strategy ownership
-- pricing ownership
-- compliance ownership
-- A/B tests
-- user-research counts
-- ML model ownership
+## Main failure modes to review
 
-Safe phrasing:
+1. Provider DOM or voice protocol changes break semantic observation.
+2. A provider composer remains mounted but not actually submit-ready.
+3. A discarded or invalidated tab fails to recover.
+4. Duplicate ownership is accepted or a healthy owner is incorrectly replaced.
+5. A final is acknowledged before the provider renders the user turn.
+6. Setup text or transcript data reaches persistent extension storage.
+7. Ending or manually closing a session leaves orphaned registry/log state.
+8. Health or repair controls use a separate workaround rather than the production lifecycle.
+9. Launcher actions affect unrelated Edge windows.
 
-- “I worked on…”
-- “My product area was…”
-- “I helped define…”
-- “I partnered with…”
-- “I would measure this through…”
-- “The qualitative signal was…”
+## Verification contract
 
-## Runtime reliability concerns
-
-The most serious operational risks are:
-
-1. Duplicate Tampermonkey bridge scripts enabled.
-2. Win1 voice session dying silently.
-3. Hidden/offscreen shortcuts sending keystrokes to the wrong target.
-4. ChatGPT DOM changes breaking textbox injection or answer capture.
-5. Partial voice transcripts creating garbage answers.
-6. Wrong company-story selection.
-7. Answer length becoming too long under pressure.
-
-The system already has several safeguards: no live tooltips, silent debug logging, localStorage write guards, export logging, answer word-count indicator, silence detector, scroll lock, auto-scroll, and compact Project instructions.
-
-## What to review
-
-When reviewing this repo, focus on:
-
-1. Whether the Project custom instructions are compact and sufficient.
-2. Whether source files contradict each other.
-3. Whether the boot prompt and AHK embedded prompt are aligned.
-4. Whether the story bank and role profiles support the target roles.
-5. Whether runtime scripts are safe for live use.
-6. Whether the answer quality sounds like a real PM, not a scripted AI.
-7. Whether any file is unnecessary or creates confusion.
-
-Do not recommend broad architecture changes unless there is a serious live-use risk.
+Automated verification must run the complete Node suite, JavaScript validator, and silent validation of both active AutoHotkey programs from the exact worktree. Browser evidence is required before claiming real-provider rendering, focus behavior, downloads, storage behavior, or action timing. Use synthetic interview content for release checks and preserve unrelated browser state.

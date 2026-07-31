@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 #SingleInstance Force
 
 ; ============================================================
@@ -16,6 +16,8 @@
 ;  ALT+Q         = Mute/unmute Win1 mic through provider DOM adapter
 ;  ALT+W         = Toggle scroll lock on Win2
 ;  ALT+E         = Export sender and receiver PM session records
+;  ALT+H         = Check the live sender/receiver runtime link
+;  ALT+SHIFT+R   = Fast-repair the current route with in-memory context
 ;  ALT+SHIFT+E   = Open/focus the PM Session Review Studio
 ; ============================================================
 
@@ -349,6 +351,7 @@ global g_layoutDdl           := 0
 global g_runtimeHealth       := 0
 global g_preflightButton     := 0
 global g_repairButton        := 0
+global g_liveCheckButton     := 0
 global g_shortContextArmedUntil := 0
 global g_launchStateCode     := "PREFLIGHT"
 global g_lastLaunchFailure   := Map()
@@ -378,6 +381,8 @@ if !g_controlSmokeMode {
     ShowSessionLaunchGui()
 }
 
+!h::CheckLiveSessionHealth()
+!+r::FastRepairActiveSession()
 
 !+e::OpenSessionReviewStudio()
 
@@ -575,7 +580,7 @@ ShowSessionLaunchGui() {
     global g_senderProviderDdl, g_receiverProviderDdl, g_senderProvider, g_receiverProvider
     global g_profileDdl, g_layoutDdl, g_layoutMode
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
-    global g_runtimeHealth, g_preflightButton, g_repairButton
+    global g_runtimeHealth, g_preflightButton, g_repairButton, g_liveCheckButton
 
     try {
         if IsObject(g_launchGui) {
@@ -601,13 +606,14 @@ ShowSessionLaunchGui() {
     healthBox.SetFont("s10 w600 c334155", "Segoe UI")
     edgeLabel := g_launchGui.Add("Text", "x52 y121 w215 h20", "Microsoft Edge Stable")
     edgeLabel.SetFont("s10 w600 c0F172A", "Segoe UI")
-    g_profileDdl := g_launchGui.Add("DropDownList", "x270 y116 w300", choices.labels)
+    g_profileDdl := g_launchGui.Add("DropDownList", "x270 y116 w280", choices.labels)
     if (choices.selectedIndex > 0)
         g_profileDdl.Choose(choices.selectedIndex)
-    g_runtimeHealth := g_launchGui.Add("Text", "x52 y154 w605 h28", "Checking PMIA runtime registration...")
+    g_runtimeHealth := g_launchGui.Add("Text", "x52 y154 w836 h28", "Checking PMIA runtime registration...")
     g_runtimeHealth.SetFont("s9 c64748B", "Segoe UI")
-    g_preflightButton := g_launchGui.Add("Button", "x676 y118 w108 h32", "Run Preflight")
-    g_repairButton := g_launchGui.Add("Button", "x792 y118 w112 h32", "Repair Launch")
+    g_liveCheckButton := g_launchGui.Add("Button", "x586 y118 w100 h32", "Check Live")
+    g_preflightButton := g_launchGui.Add("Button", "x694 y118 w100 h32", "Run Preflight")
+    g_repairButton := g_launchGui.Add("Button", "x802 y118 w102 h32", "Fast Repair")
 
     routeBox := g_launchGui.Add("GroupBox", "x30 y216 w900 h138", "Conversation route")
     routeBox.SetFont("s10 w600 c334155", "Segoe UI")
@@ -671,6 +677,7 @@ ShowSessionLaunchGui() {
     g_resumeEdit.OnEvent("Change", UpdateLaunchContextStatus)
     g_jdEdit.OnEvent("Change", UpdateLaunchContextStatus)
     swapBtn.OnEvent("Click", SwapLaunchProviders)
+    g_liveCheckButton.OnEvent("Click", CheckLiveSessionHealth)
     g_preflightButton.OnEvent("Click", RunStudioPreflight)
     g_repairButton.OnEvent("Click", RepairLaunch)
     g_launchButton.OnEvent("Click", StartLaunchFromGui)
@@ -843,7 +850,7 @@ CloseSessionLaunchGui(*) {
     global g_companyEdit, g_roleEdit, g_roundDdl, g_emphasisDdl, g_avoidEdit, g_answerModeDdl
     global g_senderProviderDdl, g_receiverProviderDdl, g_profileDdl, g_layoutDdl
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
-    global g_runtimeHealth, g_preflightButton, g_repairButton
+    global g_runtimeHealth, g_preflightButton, g_repairButton, g_liveCheckButton
     try {
         if IsObject(g_launchGui)
             g_launchGui.Destroy()
@@ -868,6 +875,7 @@ CloseSessionLaunchGui(*) {
     g_runtimeHealth := 0
     g_preflightButton := 0
     g_repairButton := 0
+    g_liveCheckButton := 0
     g_launchButton := 0
     ResetShortContextConfirmation()
 }
@@ -1108,6 +1116,61 @@ RepairLaunch(*) {
     }
     SetLaunchState("LAUNCHING", "Retrying the current route with the same session context...", "info")
     return RunManagedLaunch(true)
+}
+
+CheckLiveSessionHealth(*) {
+    global g_hWin1, g_hWin2, g_launchGui, g_runtimeHealth
+    global g_senderProvider, g_receiverProvider, g_sessionId
+
+    if GetKeyState("Alt", "P")
+        KeyWait "Alt"
+    ShowSessionLaunchGui()
+
+    if !IsActiveSession() {
+        sender := g_sessionId != "" ? FindLifecycleWindow("sender", g_senderProvider, g_sessionId, "boot") : Map()
+        receiver := g_sessionId != "" ? FindLifecycleWindow("receiver", g_receiverProvider, g_sessionId, "boot") : Map()
+        senderPhase := sender.Count ? StrUpper(sender["phase"]) : "MISSING"
+        receiverPhase := receiver.Count ? StrUpper(receiver["phase"]) : "MISSING"
+        message := "Live link incomplete. Sender: " senderPhase " ? Receiver: " receiverPhase ". Use Fast Repair."
+        if IsObject(g_runtimeHealth) {
+            g_runtimeHealth.Text := message
+            g_runtimeHealth.SetFont("s9 cB91C1C", "Segoe UI")
+        }
+        SetLaunchState("ERROR", message, "error")
+        return false
+    }
+
+    senderChecked := SendToWindow("", "^+{F11}", g_hWin1)
+    receiverChecked := SendToWindow("", "^+{F11}", g_hWin2)
+    if IsObject(g_launchGui)
+        try WinActivate "ahk_id " g_launchGui.Hwnd
+
+    route := StrTitle(g_senderProvider) " ? " StrTitle(g_receiverProvider)
+    if senderChecked && receiverChecked {
+        message := "Live session READY (" route "). Runtime preflight requested in both managed windows."
+        if IsObject(g_runtimeHealth) {
+            g_runtimeHealth.Text := message
+            g_runtimeHealth.SetFont("s9 c15803D", "Segoe UI")
+        }
+        SetLaunchState("READY", message, "ok")
+        return true
+    }
+
+    message := "Managed windows are present, but one runtime preflight command could not be sent. Use Fast Repair."
+    if IsObject(g_runtimeHealth) {
+        g_runtimeHealth.Text := message
+        g_runtimeHealth.SetFont("s9 cB45309", "Segoe UI")
+    }
+    SetLaunchState("ERROR", message, "warn")
+    return false
+}
+
+FastRepairActiveSession(*) {
+    if GetKeyState("Alt", "P")
+        KeyWait "Alt"
+    ShowSessionLaunchGui()
+    SetLaunchState("LAUNCHING", "Fast repair requested for the current in-memory route and context...", "info")
+    return RepairLaunch()
 }
 
 CloseManagedPmiaWindows(sessionId := "") {

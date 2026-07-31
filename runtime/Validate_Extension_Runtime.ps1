@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$AutoHotkeyExe = "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe"
 )
 
@@ -14,7 +14,7 @@ if (-not (Test-Path $launcher)) { throw 'Extension launcher missing.' }
 if (-not (Test-Path $reviewCompanion)) { throw 'Session review companion missing.' }
 
 $launcherSource = Get-Content $launcher -Raw
-$requiredHotkeys = @('!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::', '!+e::')
+$requiredHotkeys = @('!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::', '!h::', '!+r::', '!+e::')
 foreach ($hotkey in $requiredHotkeys) {
     if (-not $launcherSource.Contains($hotkey)) { throw "Required PM hotkey missing: $hotkey" }
 }
