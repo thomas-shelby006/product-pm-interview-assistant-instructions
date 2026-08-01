@@ -1,4 +1,5 @@
-import { BatchPlanner, matchesRenderedBatch } from '../shared/batch-planner.js';
+import { BatchPlanner } from '../shared/batch-planner.js';
+import { buildRenderedProofIndex } from '../shared/proof-reconciliation-index.js';
 import { BatchTransaction } from '../shared/batch-transaction.js';
 import { deriveProviderBatchBudget } from '../shared/provider-batch-budget.js';
 import { deriveBatchSchedulingDecision } from '../shared/batch-scheduling-policy.js';
@@ -264,11 +265,10 @@ export function createReceiverBatchRuntime({
 
     async reconcile({ batches = [], pending = [] } = {}) {
       const messages = adapter.getConversationMessages?.() || [];
-      const renderedUsers = messages.filter(message => message.role === 'user');
+      const proofIndex = buildRenderedProofIndex(messages);
       const proven = [];
       for (const batch of Array.isArray(batches) ? batches : []) {
-        const matched = renderedUsers.some(message => matchesRenderedBatch(message.text, batch.prompt));
-        if (!matched) continue;
+        if (!proofIndex.matches(batch.prompt)) continue;
         proven.push(String(batch.id));
         emit('batch_reconciled', {
           batchId: String(batch.id),
