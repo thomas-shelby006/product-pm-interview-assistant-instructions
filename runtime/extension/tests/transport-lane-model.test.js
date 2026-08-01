@@ -7,7 +7,7 @@ test('transport lane model reports direct fallback and open circuit states', () 
     sender: { transportLane: { state: 'closed', lastRttMs: 21, lastMode: 'direct' } },
     receiver: { transportLane: { state: 'open', lastRttMs: 0, lastMode: 'fallback', nextProbeAt: 5000, lastFailureReason: 'port_request_timeout' } }
   }, 3000);
-  assert.equal(value.sender.label, 'Direct');
+  assert.equal(value.sender.label, 'Direct preferred');
   assert.equal(value.receiver.label, 'Open circuit');
   assert.equal(value.receiver.retryInMs, 2000);
 });

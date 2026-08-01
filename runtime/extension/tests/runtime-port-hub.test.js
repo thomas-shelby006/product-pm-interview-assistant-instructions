@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRuntimePortHub, parseRolePortName, rolePortName } from '../shared/runtime-port-hub.js';
 

@@ -293,7 +293,7 @@ test('runtime fallback diagnostics contain no replacement-character mojibake', a
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const main = await readFile(resolve(extensionRoot, 'content/main.js'), 'utf8');
-  assert.doesNotMatch(main, /\uFFFD|Aï¿½|Ãƒ|Ã¢â‚¬â„¢|Ã¢â‚¬â€œ/);
+  assert.doesNotMatch(main, /\uFFFD|A\uFFFD|\u00C3|\u00E2\u20AC\u2122|\u00E2\u20AC\u201C/);
 });
 
 

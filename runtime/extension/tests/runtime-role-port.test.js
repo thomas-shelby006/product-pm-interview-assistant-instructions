@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRuntimeRolePort } from '../content/runtime-role-port.js';
 import { createTransportHandshake } from '../shared/transport-protocol.js';
