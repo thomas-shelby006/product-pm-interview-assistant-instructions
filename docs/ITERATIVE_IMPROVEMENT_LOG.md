@@ -506,3 +506,31 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** one receiver-local hysteresis owner wraps every credit response without changing selective ACK/NACK identity.
 
 **Block B verification:** 116/116 focused integration tests passed across ledger indexes, proof reconciliation, batch planning, deadlines, sequence buffering, burst safety, flow control, and production validation. HTML atlas remains deferred.
+
+
+## Cycle 81 - Canonical Semantic Fingerprints
+- **Bug fixes:** object key order and nested volatile heartbeat fields no longer create false semantic changes.
+- **New features:** deterministic Unicode-safe fingerprints, recursive omission rules, array-order preservation, and explicit cycle rejection.
+- **Implementation:** snapshot deltas and telemetry coalescing now share one canonical fingerprint owner.
+
+## Cycle 82 - Structural Snapshot Section Cache
+- **Bug fixes:** Runtime Pilot no longer reclones every top-level section on every semantic update.
+- **New features:** per-session section fingerprints, unchanged-reference reuse, changed/removed key evidence, and clean reset.
+- **Implementation:** the controller caches immutable section clones at the broadcast boundary and clears them on both session-end paths.
+
+## Cycle 83 - Cached Ledger Views
+- **Bug fixes:** unresolved, pending, proven, archived, and failed views no longer refilter and resort the ledger on every read.
+- **New features:** ordered clone-safe view caches, hit/miss/invalidations metrics, and transition-scoped invalidation.
+- **Implementation:** cached ID lists are maintained by the existing ledger index and resolved through exact indexed entries.
+
+## Cycle 84 - Persistence Urgency Policy
+- **Bug fixes:** independent preview and batch timers no longer compete or create duplicate safe writes.
+- **New features:** immediate/coalesced/heartbeat classification, one timer per session, merged commit reasons, flush, and cancel.
+- **Implementation:** preview and batch checkpoints share one mutation-coordinated lane; final ownership, proof, storage pressure, commands, and shutdown remain immediate.
+
+## Cycle 85 - Runtime Performance Budget
+- **Bug fixes:** performance regressions can now be identified by deterministic operation and payload budgets instead of anecdotal timing.
+- **New features:** operation counts, payload bytes, cache efficiency, commit reasons, bounded violations, Pilot card, and Safe Health Report data.
+- **Implementation:** commit metrics persist in session state while snapshot-cache counters remain controller-local and are injected without mutating state during broadcast.
+
+**Block C verification:** 97/97 focused integration tests passed across canonical fingerprints, snapshot deltas, telemetry, section reuse, cached ledger views, persistence lanes, Pilot state/controller, dashboard, health report, and performance budgets. HTML atlas remains deferred.
