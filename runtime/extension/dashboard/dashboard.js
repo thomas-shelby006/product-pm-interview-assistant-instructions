@@ -153,9 +153,6 @@ function renderWarnings(snapshot) {
   const container = byId('warningList');
   container.replaceChildren();
   const warnings = [...(snapshot?.warnings || [])];
-  if (snapshot?.sender?.sourceSilent) {
-    warnings.push({ code: 'sender_source_silent', severity: 'warn' });
-  }
   if (!warnings.length) {
     const item = document.createElement('p');
     item.className = 'empty';
@@ -167,9 +164,7 @@ function renderWarnings(snapshot) {
   for (const warning of warnings) {
     const item = document.createElement('div');
     item.className = `warning-item ${warning.severity === 'error' ? 'error' : ''}`;
-    item.textContent = warning.code === 'sender_source_silent'
-      ? 'No actionable sender transcript has been observed for 90 seconds.'
-      : warningLabel(warning);
+    item.textContent = warningLabel(warning);
     container.append(item);
   }
   const errors = warnings.filter(item => item.severity === 'error').length;

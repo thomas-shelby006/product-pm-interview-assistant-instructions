@@ -1,3 +1,28 @@
+export function classifySourceSilence({
+  role,
+  voiceActive,
+  lastSourceActivityAt,
+  now = Date.now(),
+  idleWarningMs = 90000,
+  voiceSlowMs = 6000,
+  voiceStalledMs = 15000
+} = {}) {
+  if (role !== 'sender' || !Number(lastSourceActivityAt)) {
+    return { state: 'not_applicable', ageMs: 0, thresholdMs: 0 };
+  }
+  const ageMs = Math.max(0, Number(now) - Number(lastSourceActivityAt));
+  if (voiceActive && ageMs >= voiceStalledMs) {
+    return { state: 'voice_stalled', ageMs, thresholdMs: voiceStalledMs };
+  }
+  if (voiceActive && ageMs >= voiceSlowMs) {
+    return { state: 'voice_slow', ageMs, thresholdMs: voiceSlowMs };
+  }
+  if (!voiceActive && ageMs >= idleWarningMs) {
+    return { state: 'idle_silent', ageMs, thresholdMs: idleWarningMs };
+  }
+  return { state: 'healthy', ageMs, thresholdMs: voiceActive ? voiceSlowMs : idleWarningMs };
+}
+
 function cleanText(value, max = 1200) {
   const text = String(value || '').trim();
   if (!text) return '';
@@ -33,9 +58,14 @@ export function createRuntimeTelemetry({
 
   function snapshot(event = null) {
     const current = now();
-    const sourceSilenceMs = lastSourceActivityAt
-      ? Math.max(0, current - lastSourceActivityAt)
-      : 0;
+    const sourceSilence = classifySourceSilence({
+      role: runtimeConfig?.role,
+      voiceActive: Boolean(getVoiceActive()),
+      lastSourceActivityAt,
+      now: current,
+      idleWarningMs: silenceWarningMs
+    });
+    const sourceSilenceMs = sourceSilence.ageMs;
     return {
       role: runtimeConfig?.role || '',
       provider: runtimeConfig?.provider || '',
@@ -52,7 +82,9 @@ export function createRuntimeTelemetry({
       lastActivityAt,
       lastSourceActivityAt,
       sourceSilenceMs,
-      sourceSilent: runtimeConfig?.role === 'sender' && sourceSilenceMs >= silenceWarningMs,
+      sourceSilent: ['idle_silent', 'voice_slow', 'voice_stalled'].includes(sourceSilence.state),
+      sourceSilenceState: sourceSilence.state,
+      sourceSilenceThresholdMs: sourceSilence.thresholdMs,
       heartbeatAt: current,
       pageUrl: String(globalThis.location?.href || ''),
       ...(event ? { event } : {})

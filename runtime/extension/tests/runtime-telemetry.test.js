@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRuntimeTelemetry } from '../content/runtime-telemetry.js';
+import { classifySourceSilence, createRuntimeTelemetry } from '../content/runtime-telemetry.js';
 
 function adapter() {
   return {
@@ -42,4 +42,17 @@ test('boot setup is redacted while live questions remain visible', () => {
   assert.equal(telemetry.snapshot().latestFinal.text, '[Session setup redacted]');
   telemetry.final({ id: 'q1', kind: 'question', text: 'How do you prioritize?', createdAt: 2 });
   assert.equal(telemetry.snapshot().latestFinal.text, 'How do you prioritize?');
+});
+
+
+test('source silence classifier distinguishes active voice stalls from ordinary idle silence', () => {
+  assert.equal(classifySourceSilence({
+    role: 'sender', voiceActive: true, lastSourceActivityAt: 1000, now: 8000
+  }).state, 'voice_slow');
+  assert.equal(classifySourceSilence({
+    role: 'sender', voiceActive: true, lastSourceActivityAt: 1000, now: 17000
+  }).state, 'voice_stalled');
+  assert.equal(classifySourceSilence({
+    role: 'sender', voiceActive: false, lastSourceActivityAt: 1000, now: 92000
+  }).state, 'idle_silent');
 });

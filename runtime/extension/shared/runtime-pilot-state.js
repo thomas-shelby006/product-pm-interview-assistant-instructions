@@ -322,6 +322,25 @@ export class RuntimePilotState {
         warnings.push({ code: `${role}_composer_missing`, role, severity: 'warn' });
       }
     }
+    if (session.sender.sourceSilenceState === 'voice_stalled') {
+      warnings.push({
+        code: 'sender_voice_transcript_stalled',
+        severity: 'error',
+        ageMs: session.sender.sourceSilenceMs || 0
+      });
+    } else if (session.sender.sourceSilenceState === 'voice_slow') {
+      warnings.push({
+        code: 'sender_voice_transcript_slow',
+        severity: 'warn',
+        ageMs: session.sender.sourceSilenceMs || 0
+      });
+    } else if (session.sender.sourceSilenceState === 'idle_silent') {
+      warnings.push({
+        code: 'sender_source_silent',
+        severity: 'warn',
+        ageMs: session.sender.sourceSilenceMs || 0
+      });
+    }
     if (session.queue.size) warnings.push({ code: 'queue_waiting', severity: 'warn', count: session.queue.size });
     const actionableQueue = session.queue.list().filter(item => item.status !== 'superseded');
     const oldestQueuedAt = actionableQueue.length

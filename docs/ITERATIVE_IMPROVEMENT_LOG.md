@@ -55,3 +55,21 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** Queue age is derived from session timestamps, not recurring storage writes. Cleanup never touches actionable items or provider conversations.
 
 **Why this is superior:** It keeps audit history available when useful, removes it in one safe action, and surfaces when queued context is likely stale before submission.
+
+## Cycle 4 - Sender capture latency and silence diagnostics
+
+**Evidence inspected:** Five-second telemetry heartbeat, 90-second source-silence marker, provider voice state, and dashboard warning ownership.
+
+**Issue/opportunity:** A fixed 90-second warning is appropriate for ordinary interview silence but far too slow when voice mode is active and transcript events have stopped.
+
+**Classification:** Live capture diagnostics and response-time improvement.
+
+**Implementation:** Added a pure adaptive silence classifier: active voice becomes slow after six seconds and stalled after fifteen seconds; inactive sessions keep the 90-second warning. Warning derivation moved into the authoritative pilot snapshot.
+
+**Files changed:** runtime telemetry, pilot state, dashboard model/controller rendering, and telemetry/state tests.
+
+**Coverage added:** Classifier thresholds and critical voice-stall warning checks.
+
+**Source review:** No extra polling or storage writes were added. Existing five-second heartbeat and meaningful preview events feed the classifier.
+
+**Why this is superior:** It distinguishes an actual capture failure from normal interviewer silence and surfaces the failure up to 75 seconds earlier.

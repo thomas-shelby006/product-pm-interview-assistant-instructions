@@ -55,3 +55,18 @@ test('pilot state warns when the oldest actionable queue item exceeds two minute
   const snapshot = state.snapshot('pmia_session', 122000);
   assert.ok(snapshot.warnings.some(item => item.code === 'queue_oldest_stale'));
 });
+
+
+test('pilot warnings escalate an active voice transcript stall', () => {
+  const state = new RuntimePilotState();
+  state.updateRole('pmia_session', 'sender', {
+    provider: 'chatgpt', composerReady: true, heartbeatAt: 1000,
+    sourceSilenceState: 'voice_stalled', sourceSilenceMs: 16000
+  }, 1000);
+  state.updateRole('pmia_session', 'receiver', {
+    provider: 'chatgpt', composerReady: true, heartbeatAt: 1000
+  }, 1000);
+  assert.ok(state.snapshot('pmia_session', 2000).warnings.some(
+    item => item.code === 'sender_voice_transcript_stalled' && item.severity === 'error'
+  ));
+});
