@@ -97,3 +97,24 @@ test('batch planner restores the exported next-batch wrapper without losing entr
   assert.equal(restored.nextSize, 2);
   assert.deepEqual(restored.next().prompt.memberIds, ['q1', 'q2']);
 });
+
+
+test('batch planner freezes only the first safe partition and preserves the rest', () => {
+  const planner = new BatchPlanner({}, { maxBatchMembers: 3, maxBatchChars: 10000 });
+  for (let seq = 1; seq <= 8; seq += 1) planner.add(envelope(`q${seq}`, seq));
+  const before = planner.next();
+  assert.equal(before.partitionCount, 3);
+  assert.equal(before.firstPartitionCount, 3);
+  assert.equal(before.remainingCount, 5);
+  const first = planner.freezeNext();
+  assert.deepEqual(first.prompt.memberIds, ['q1', 'q2', 'q3']);
+  assert.deepEqual(planner.next().entries.map(item => item.id), ['q4', 'q5', 'q6', 'q7', 'q8']);
+});
+
+test('failed partition returns ahead of every later protected partition', () => {
+  const planner = new BatchPlanner({}, { maxBatchMembers: 2 });
+  for (let seq = 1; seq <= 5; seq += 1) planner.add(envelope(`q${seq}`, seq));
+  planner.freezeNext();
+  planner.failActive();
+  assert.deepEqual(planner.next().entries.map(item => item.id), ['q1', 'q2', 'q3', 'q4', 'q5']);
+});

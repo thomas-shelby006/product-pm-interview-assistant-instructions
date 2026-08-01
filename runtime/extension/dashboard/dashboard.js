@@ -21,6 +21,7 @@ import { applySnapshotDelta } from '../shared/snapshot-delta.js';
 import { deriveRecoveryProgress } from './recovery-progress-model.js';
 import { buildSafeHealthReport } from './health-report-model.js';
 import { deriveTransportLanes } from './transport-lane-model.js';
+import { deriveBatchPlan } from './batch-plan-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -343,6 +344,9 @@ function renderLiveCommandCenter(snapshot, now) {
     text('receiverTransportLane', 'Unknown');
     text('senderTransportDetail', 'No direct-port evidence.');
     text('receiverTransportDetail', 'No direct-port evidence.');
+    text('batchPlanState', '--');
+    text('batchPlanTitle', 'Waiting for protected batch state');
+    text('batchPlanDetail', 'No partition plan is available yet.');
     text('oldestInboxAge', '--');
     renderLatencyRail(null);
     return;
@@ -450,6 +454,15 @@ function renderLiveCommandCenter(snapshot, now) {
       : inbox.storage.level === 'high'
         ? 'Proven history is compacting; unresolved finals are untouched.'
         : 'Critical pressure. Unresolved finals remain protected; export or end the session soon.');
+  const batchPlan = deriveBatchPlan(snapshot);
+  text('batchPlanState', batchPlan.partitionCount ? `${batchPlan.partitionCount} batch${batchPlan.partitionCount === 1 ? '' : 'es'}` : 'No batches');
+  text('batchPlanTitle', batchPlan.protectedCount
+    ? `${batchPlan.protectedCount} protected question${batchPlan.protectedCount === 1 ? '' : 's'}`
+    : 'Nothing waiting');
+  text('batchPlanDetail', batchPlan.protectedCount
+    ? `${batchPlan.currentCount} in the next provider-safe batch; ${batchPlan.remainingCount} preserved for later sequential submission.`
+    : 'Accumulated finals will be partitioned only when provider limits require it.');
+
   const lanes = deriveTransportLanes(snapshot, now);
   text('transportLaneState', lanes.sender.state === 'closed' && lanes.receiver.state === 'closed' ? 'Direct' : 'Guarded');
   for (const [role, value] of Object.entries(lanes)) {

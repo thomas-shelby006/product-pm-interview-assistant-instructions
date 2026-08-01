@@ -434,6 +434,10 @@ export class RuntimePilotState {
       session.batchState.next = {
         memberIds,
         questionCount: Number(event.questionCount || memberIds.length),
+        protectedCount: Number(event.protectedCount || event.questionCount || memberIds.length),
+        partitionCount: Math.max(0, Number(event.partitionCount || 0)),
+        firstPartitionCount: Number(event.firstPartitionCount || event.questionCount || memberIds.length),
+        remainingCount: Math.max(0, Number(event.remainingCount || 0)),
         written: event.written !== false
       };
     } else if (type === 'batch_answer_complete' || type === 'batch_answer_timeout') {

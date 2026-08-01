@@ -198,3 +198,10 @@ test('Runtime Pilot exposes direct-port circuit and fallback state', () => {
   assert.match(dashboard, /deriveTransportLanes\(snapshot, now\)/);
   assert.match(styles, /\.transport-lane-list/);
 });
+
+
+test('Runtime Pilot exposes protected batch partition plan', () => {
+  assert.match(markup, /id="batchPlanState"/);
+  assert.match(markup, /id="batchPlanDetail"/);
+  assert.match(dashboard, /deriveBatchPlan\(snapshot\)/);
+});

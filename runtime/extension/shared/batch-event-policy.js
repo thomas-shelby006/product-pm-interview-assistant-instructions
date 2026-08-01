@@ -1,4 +1,4 @@
-﻿const TRANSIENT_EVENTS = new Set(['batch_accumulated', 'next_batch_draft']);
+const TRANSIENT_EVENTS = new Set(['batch_accumulated', 'next_batch_draft']);
 
 export function shouldPersistBatchEvent(event) {
   const type = String(event?.type || '');
@@ -31,7 +31,11 @@ export function safeBatchTelemetry(state = null) {
           : [],
         questionCount: Number(value.next.prompt?.questionCount || value.next.count || 0),
         focusId: String(value.next.prompt?.focusId || ''),
-        fingerprint: String(value.next.prompt?.fingerprint || '')
+        fingerprint: String(value.next.prompt?.fingerprint || ''),
+        protectedCount: Number(value.next.protectedCount || value.next.count || 0),
+        partitionCount: Number(value.next.partitionCount || 0),
+        firstPartitionCount: Number(value.next.firstPartitionCount || value.next.prompt?.questionCount || 0),
+        remainingCount: Number(value.next.remainingCount || 0)
       }
     : null;
   return {

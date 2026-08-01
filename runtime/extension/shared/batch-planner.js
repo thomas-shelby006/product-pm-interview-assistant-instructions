@@ -1,3 +1,5 @@
+import { partitionEntries } from './batch-partitioner.js';
+
 function cloneEntry(entry) {
   return {
     id: String(entry?.id || entry?.envelope?.id || ''),
@@ -85,9 +87,13 @@ export class BatchPlanner {
   #hold = false;
   #autoSubmit = true;
   #known = new Set();
+  #maxBatchMembers;
+  #maxBatchChars;
 
-  constructor(state = {}) {
+  constructor(state = {}, { maxBatchMembers = 8, maxBatchChars = 12000 } = {}) {
     this.#hold = Boolean(state?.hold);
+    this.#maxBatchMembers = Math.max(1, Number(maxBatchMembers) || 8);
+    this.#maxBatchChars = Math.max(256, Number(maxBatchChars) || 12000);
     this.#autoSubmit = state?.autoSubmit !== false;
     this.#active = state?.active ? this.#normalizeBatch(state.active) : null;
     const nextEntries = Array.isArray(state?.next)
@@ -112,8 +118,10 @@ export class BatchPlanner {
 
   freezeNext(now = Date.now()) {
     if (this.#active || !this.#next.length) return null;
-    const entries = this.#next.map(cloneEntry);
-    this.#next = [];
+    const entries = this.#partitionNext()[0] || [];
+    if (!entries.length) return null;
+    const selected = new Set(entries.map(entry => entry.id));
+    this.#next = this.#next.filter(entry => !selected.has(entry.id));
     const prompt = composeBatchPrompt({ entries });
     this.#active = {
       id: batchId(entries),
@@ -183,10 +191,20 @@ export class BatchPlanner {
 
   next() {
     const entries = this.#next.map(cloneEntry);
+    const partitions = this.#partitionNext();
+    const first = partitions[0] || [];
     return {
       entries,
-      prompt: composeBatchPrompt({ entries }),
-      count: entries.length
+      prompt: composeBatchPrompt({ entries: first }),
+      count: entries.length,
+      partitionCount: partitions.length,
+      firstPartitionCount: first.length,
+      remainingCount: Math.max(0, entries.length - first.length),
+      partitions: partitions.map((group, index) => ({
+        index,
+        memberIds: group.map(entry => entry.id),
+        count: group.length
+      }))
     };
   }
 
@@ -201,6 +219,14 @@ export class BatchPlanner {
 
   exportState() {
     return this.snapshot();
+  }
+
+  #partitionNext() {
+    return partitionEntries(this.#next, {
+      maxMembers: this.#maxBatchMembers,
+      maxChars: this.#maxBatchChars,
+      measure: entries => composeBatchPrompt({ entries }).text.length
+    });
   }
 
   #normalizeBatch(batch) {

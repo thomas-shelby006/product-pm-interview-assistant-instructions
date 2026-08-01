@@ -195,3 +195,19 @@ test('unverified submit action remains staged until rendered proof arrives', asy
   assert.equal(result.reason, 'proof_pending');
   assert.equal(events.find(event => event.type === 'batch_submitted').verified, false);
 });
+
+
+test('receiver runtime submits partitioned batches sequentially without losing later finals', async () => {
+  const submitted = [];
+  const planner = new BatchPlanner({}, { maxBatchMembers: 2 });
+  const runtime = createReceiverBatchRuntime({
+    adapter: { isGenerating: () => false, setComposerText: () => true, getConversationMessages: () => [] },
+    planner,
+    submitBatch: async batch => { submitted.push(batch.prompt.memberIds); return { ok: true, proof: { verified: true } }; }
+  });
+  for (let seq = 1; seq <= 5; seq += 1) planner.add(envelope(`q${seq}`, seq));
+  await runtime.submitNext();
+  await runtime.answerComplete(planner.active().id);
+  await runtime.answerComplete(planner.active().id);
+  assert.deepEqual(submitted, [['q1', 'q2'], ['q3', 'q4'], ['q5']]);
+});

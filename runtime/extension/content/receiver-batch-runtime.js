@@ -34,6 +34,10 @@ export function createReceiverBatchRuntime({
       questionCount: next.prompt.questionCount,
       focusId: next.prompt.focusId,
       fingerprint: next.prompt.fingerprint,
+      protectedCount: next.count,
+      partitionCount: next.partitionCount,
+      firstPartitionCount: next.firstPartitionCount,
+      remainingCount: next.remainingCount,
       written
     });
     return written;
@@ -171,7 +175,8 @@ export function createReceiverBatchRuntime({
       emit('batch_accumulated', {
         envelopeId: envelope.id,
         seq: envelope.seq || 0,
-        nextCount: planner.nextSize
+        nextCount: planner.nextSize,
+        partitionCount: planner.next().partitionCount
       });
       if (adapter.isGenerating?.() || planner.active()) {
         mirrorNext();
@@ -182,7 +187,9 @@ export function createReceiverBatchRuntime({
           staged: true,
           reason: 'receiver_busy',
           batchId: 'next',
-          memberIds: next.prompt.memberIds
+          memberIds: [String(envelope.id)],
+          protectedCount: next.count,
+          partitionCount: next.partitionCount
         };
       }
       return submitNext();
@@ -253,7 +260,7 @@ export function createReceiverBatchRuntime({
         interruptedBatchId: selected.interrupted?.id || '',
         batchId: selected.batch.id,
         memberIds: selected.batch.prompt.memberIds,
-        preservedNextIds: planner.next().prompt.memberIds
+        preservedNextIds: planner.next().entries.map(entry => String(entry.id))
       });
       return executeBatch(selected.batch, 'operator_interrupt_latest');
     },
