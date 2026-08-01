@@ -116,3 +116,23 @@ test('accepted receiver delivery never carries sender-terminal semantics', () =>
   assert.equal(outcome.delivered, true);
   assert.equal('terminal' in outcome, false);
 });
+
+
+test('accepted gap buffering stops transport retry without marking rendered delivery', () => {
+  const outcome = classifyDelivery({ route: { tabId: 1 }, response: {
+    ok: true, buffered: true, reason: 'buffered_gap', expectedSeq: 2, bufferedCount: 1
+  }});
+  assert.deepEqual(outcome, {
+    delivered: false, queued: true, buffered: true, reason: 'buffered_gap',
+    expectedSeq: 2, bufferedCount: 1, duplicate: false
+  });
+});
+
+
+test('duplicate acknowledgement is idempotent and not a fresh rendered delivery', () => {
+  assert.deepEqual(classifyDelivery({ route: { tabId: 1 }, response: {
+    ok: true, duplicate: true, reason: 'duplicate_ack'
+  }}), {
+    delivered: false, queued: false, duplicate: true, reason: 'duplicate_ack'
+  });
+});

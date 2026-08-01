@@ -12,6 +12,7 @@ import {
 import { catchUpLabel, deriveLatencyRail, deriveLiveInbox } from './live-inbox-model.js';
 import { derivePaceGuard, paceLabel } from './pace-guard-model.js';
 import { diagnosticTone, groupRuntimeWarnings } from './diagnostics-model.js';
+import { deriveGapWatch } from './gap-watch-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -260,6 +261,9 @@ function renderLiveCommandCenter(snapshot, now) {
     text('paceState', '--');
     text('paceRates', '--');
     text('paceForecast', 'Waiting for delivery-rate evidence.');
+    text('gapState', '--');
+    text('gapTitle', 'Waiting for sequence state');
+    text('gapDetail', 'No receiver sequence evidence is available yet.');
     text('storagePressureBadge', '--');
     text('storagePressureValue', '--');
     text('storagePressureDetail', 'Session memory status is not available yet.');
@@ -316,6 +320,15 @@ function renderLiveCommandCenter(snapshot, now) {
       : pace.state === 'falling_behind'
         ? `${pace.unresolved} unresolved - intake is exceeding rendered proof.`
         : `${pace.unresolved} unresolved - waiting for a positive recovery rate.`);
+
+  const gap = deriveGapWatch(snapshot, now);
+  const gapPanel = document.querySelector('.gap-panel');
+  if (gapPanel) gapPanel.dataset.gap = gap.state;
+  text('gapState', gap.label);
+  text('gapTitle', gap.state === 'clear' ? 'Sequences are contiguous' : `Waiting for sequence ${gap.expectedSeq}`);
+  text('gapDetail', gap.state === 'clear'
+    ? 'No out-of-order finals are waiting.'
+    : `${gap.bufferedCount} later final(s) remain protected${gap.highestBufferedSeq ? ` through #${gap.highestBufferedSeq}` : ''}.`);
 
   const storagePanel = document.querySelector('.storage-panel');
   if (storagePanel) storagePanel.dataset.pressure = inbox.storage.level || 'normal';

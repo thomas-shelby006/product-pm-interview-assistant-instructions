@@ -40,11 +40,9 @@ test('receiver admits a sequence only after the batch runtime accepts ownership'
     entry.indexOf('async function receiveEnvelope'),
     entry.indexOf('async function handleRuntimeCommand')
   );
-  const batchIndex = receive.indexOf('await receiverBatchRuntime.accept(envelope)');
-  const acceptIndex = receive.indexOf('receiverSequenceGate.accept(envelope.seq)');
-  const persistIndex = receive.indexOf('sessionStorage.setItem');
-  assert.ok(batchIndex >= 0 && batchIndex < acceptIndex);
-  assert.ok(acceptIndex >= 0 && acceptIndex < persistIndex);
+  const offerIndex = receive.indexOf('receiverSequenceBuffer.offer(envelope)');
+  const drainIndex = receive.indexOf('await drainReceiverSequenceBuffer(envelope.id)');
+  assert.ok(offerIndex >= 0 && offerIndex < drainIndex);
 });
 
 

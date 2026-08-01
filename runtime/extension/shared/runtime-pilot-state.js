@@ -318,10 +318,12 @@ export class RuntimePilotState {
 
   recordDelivery(sessionId, outcome = {}, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    if (!outcome.delivered && !outcome.queued && !outcome.staged) session.metrics.failed += 1;
+    if (!outcome.delivered && !outcome.queued && !outcome.staged && !outcome.duplicate && !outcome.buffered) {
+      session.metrics.failed += 1;
+    }
     if (outcome.duplicate) session.metrics.duplicateAcks += 1;
     const elapsed = Number(outcome.deliveryProofMs);
-    if (Number.isFinite(elapsed)) {
+    if (Number.isFinite(elapsed) && !outcome.duplicate) {
       session.metrics.deliveryProofMs.push(elapsed);
       session.metrics.deliveryProofMs = session.metrics.deliveryProofMs.slice(-MAX_METRIC_SAMPLES);
     }

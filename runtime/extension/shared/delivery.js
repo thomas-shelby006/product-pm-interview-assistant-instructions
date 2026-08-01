@@ -5,6 +5,25 @@ export function classifyDelivery({ route, response, error } = {}) {
   if (error) {
     return { delivered: false, queued: true, reason: 'transport_error' };
   }
+  if (response?.ok === true && response?.buffered === true) {
+    return {
+      delivered: false,
+      queued: true,
+      buffered: true,
+      reason: String(response.reason || 'buffered_gap'),
+      expectedSeq: Number(response.expectedSeq || 0),
+      bufferedCount: Number(response.bufferedCount || 0),
+      duplicate: Boolean(response.duplicate)
+    };
+  }
+  if (response?.ok === true && response?.duplicate === true) {
+    return {
+      delivered: false,
+      queued: false,
+      duplicate: true,
+      reason: String(response.reason || 'duplicate_ack')
+    };
+  }
   if (response?.ok === true && response?.staged === true) {
     return {
       delivered: false,
@@ -69,12 +88,12 @@ export async function deliverWithWakeRetry({
   };
 
   let outcome = await attempt();
-  if (outcome.delivered || outcome.staged) return outcome;
+  if (outcome.delivered || outcome.staged || outcome.buffered) return outcome;
   await wakeTab(route.tabId);
   for (const delay of retryDelaysMs) {
     await wait(Math.max(0, Number(delay) || 0));
     outcome = await attempt();
-    if (outcome.delivered || outcome.staged) return outcome;
+    if (outcome.delivered || outcome.staged || outcome.buffered) return outcome;
   }
   return outcome;
 }

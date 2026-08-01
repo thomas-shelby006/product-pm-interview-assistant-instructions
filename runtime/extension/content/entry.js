@@ -21,7 +21,8 @@ import { createChatGptTurnTracker } from './senders/chatgpt-turn-tracker.js';
 import { createAnswerTracker, createWakeSignal } from './answer-tracker.js';
 import { createLatestPreviewScheduler } from './preview-scheduler.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
-import { SequenceGate, nextSequence } from '../shared/sequence.js';
+import { nextSequence } from '../shared/sequence.js';
+import { ContiguousSequenceBuffer } from '../shared/contiguous-sequence-buffer.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 import { describeRuntimeStatus } from '../shared/session-status.js';
 import { extractSafeSessionContext } from '../shared/session-context.js';
@@ -126,13 +127,29 @@ async function startRuntime(runtimeConfig) {
   const answerWake = createWakeSignal();
   const senderSequenceKey = `pmia_sender_seq_${runtimeConfig.sessionId}`;
   const receiverSequenceKey = `pmia_receiver_seq_${runtimeConfig.sessionId}`;
+  const receiverSequenceBufferKey = `pmia_receiver_sequence_buffer_${runtimeConfig.sessionId}`;
   let senderSequence = Number(sessionStorage.getItem(senderSequenceKey) || 0);
   let previewSequence = 0;
   const previewStreamId = globalThis.crypto?.randomUUID?.()
     || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const receiverSequenceGate = new SequenceGate(
-    Number(sessionStorage.getItem(receiverSequenceKey) || 0)
-  );
+  let receiverSequenceSnapshot = {};
+  try {
+    receiverSequenceSnapshot = JSON.parse(sessionStorage.getItem(receiverSequenceBufferKey) || '{}');
+  } catch {
+    receiverSequenceSnapshot = {};
+  }
+  const receiverSequenceBuffer = new ContiguousSequenceBuffer({
+    ...receiverSequenceSnapshot,
+    lastAcceptedSeq: Number(
+      receiverSequenceSnapshot.lastAcceptedSeq
+      || sessionStorage.getItem(receiverSequenceKey)
+      || 0
+    )
+  });
+  let sequenceGapActive = receiverSequenceBuffer.status().hasGap;
+  let lastSequenceGapSignature = '';
+  let sequenceDrainTimer = null;
+  let sequenceDrainAttempt = 0;
   const outboundTranscriptCache = createRecentTranscriptCache();
 
   function isCombinedVoiceActive() {
@@ -576,6 +593,75 @@ async function startRuntime(runtimeConfig) {
     });
   }
 
+  function persistReceiverSequenceBuffer() {
+    const snapshot = receiverSequenceBuffer.snapshot();
+    sessionStorage.setItem(receiverSequenceBufferKey, JSON.stringify(snapshot));
+    sessionStorage.setItem(receiverSequenceKey, String(receiverSequenceBuffer.lastAcceptedSeq));
+  }
+
+  function publishSequenceGap({ blocked = false, reason = '' } = {}) {
+    const gap = receiverSequenceBuffer.status();
+    if (gap.hasGap || blocked) {
+      const value = { ...gap, blocked, timedOut: blocked || gap.timedOut, reason };
+      const signature = `${value.expectedSeq}:${value.bufferedCount}:${value.highestBufferedSeq}:${value.timedOut}:${reason}`;
+      if (signature !== lastSequenceGapSignature) telemetry.event('sequence_gap', value);
+      lastSequenceGapSignature = signature;
+      sequenceGapActive = true;
+      overlay.setStatus(`WAITING FOR #${gap.expectedSeq}`, blocked ? 'error' : 'warn', 1800);
+    } else if (sequenceGapActive) {
+      telemetry.event('sequence_gap_cleared', { expectedSeq: gap.expectedSeq });
+      sequenceGapActive = false;
+      lastSequenceGapSignature = '';
+    }
+    return gap;
+  }
+
+  function scheduleSequenceDrain() {
+    if (sequenceDrainTimer) return false;
+    const delay = Math.min(2000, 100 * (2 ** Math.min(sequenceDrainAttempt, 4)));
+    sequenceDrainAttempt += 1;
+    sequenceDrainTimer = setTimeout(() => {
+      sequenceDrainTimer = null;
+      void drainReceiverSequenceBuffer();
+    }, delay);
+    return true;
+  }
+
+  async function drainReceiverSequenceBuffer(targetEnvelopeId = '') {
+    let targetResult = null;
+    let failure = null;
+    let progressed = false;
+    while (receiverSequenceBuffer.peekReady()) {
+      const readyEnvelope = receiverSequenceBuffer.peekReady();
+      const result = await receiverBatchRuntime.accept(readyEnvelope);
+      if (!result?.ok) {
+        failure = { envelope: readyEnvelope, result: result || { ok: false, error: 'batch_rejected' } };
+        break;
+      }
+      receiverSequenceBuffer.confirm(readyEnvelope.seq);
+      progressed = true;
+      if (readyEnvelope.id === targetEnvelopeId) targetResult = result;
+      void logEvent('received_text', {
+        envelopeId: readyEnvelope.id,
+        kind: readyEnvelope.kind,
+        sourceProvider: readyEnvelope.sourceProvider,
+        text: readyEnvelope.text,
+        staged: Boolean(result.staged),
+        batchId: result.batchId || '',
+        memberIds: result.memberIds || [readyEnvelope.id]
+      });
+    }
+    persistReceiverSequenceBuffer();
+    if (progressed) sequenceDrainAttempt = 0;
+    if (failure) {
+      publishSequenceGap({ blocked: true, reason: failure.result?.error || 'batch_rejected' });
+      scheduleSequenceDrain();
+    } else {
+      publishSequenceGap();
+    }
+    return { targetResult, failure, gap: receiverSequenceBuffer.status() };
+  }
+
   async function receiveEnvelope(envelope) {
     if (runtimeConfig.role !== 'receiver') {
       return { ok: false, error: 'receiver_role_mismatch' };
@@ -595,39 +681,61 @@ async function startRuntime(runtimeConfig) {
       return { ok: true, reason: 'accepted', duplicate: false };
     }
 
-    const sequenceDecision = receiverSequenceGate.admit(envelope?.seq);
+    const sequenceDecision = receiverSequenceBuffer.offer(envelope);
     if (sequenceDecision.duplicate) {
       overlay.setStatus('DUPLICATE ACK', 'warn', 1400);
-      return { ok: true, reason: 'duplicate_ack', duplicate: true };
+      return {
+        ok: true,
+        reason: sequenceDecision.reason,
+        duplicate: true,
+        buffered: Boolean(sequenceDecision.buffered),
+        expectedSeq: sequenceDecision.expectedSeq
+      };
     }
     if (!sequenceDecision.accepted) {
-      overlay.setStatus('STALE RETAINED', 'warn', 1400);
-      return { ok: false, staged: true, error: 'sequence_gap_or_stale' };
+      overlay.setStatus('SEQUENCE BUFFER FULL', 'error', 1800);
+      return {
+        ok: false,
+        buffered: false,
+        error: sequenceDecision.reason,
+        expectedSeq: sequenceDecision.expectedSeq
+      };
     }
 
-    const result = await receiverBatchRuntime.accept(envelope);
-    if (!result?.ok) return result || { ok: false, error: 'batch_rejected' };
-    receiverSequenceGate.accept(envelope.seq);
-    sessionStorage.setItem(receiverSequenceKey, String(receiverSequenceGate.lastAcceptedSeq));
-    void logEvent('received_text', {
-      envelopeId: envelope.id,
-      kind: envelope.kind,
-      sourceProvider: envelope.sourceProvider,
-      text: envelope.text,
-      staged: Boolean(result.staged),
-      batchId: result.batchId || '',
-      memberIds: result.memberIds || [envelope.id]
-    });
+    if (sequenceDecision.unsequenced) {
+      const result = await receiverBatchRuntime.accept(envelope);
+      return result?.ok ? { ...result, reason: result.staged ? 'staged' : 'accepted' } : result;
+    }
+
+    const drain = await drainReceiverSequenceBuffer(envelope.id);
+    const originalResult = drain.targetResult;
+    const gap = drain.gap;
     scrollToLatest();
+
+    if (drain.failure?.envelope?.id === envelope.id) {
+      return drain.failure.result || { ok: false, error: 'batch_rejected' };
+    }
+
+    if (originalResult) {
+      return {
+        ok: true,
+        reason: originalResult.staged ? 'staged' : 'accepted',
+        duplicate: Boolean(originalResult.duplicate),
+        staged: Boolean(originalResult.staged),
+        delivered: Boolean(originalResult.delivered),
+        batchId: originalResult.batchId || '',
+        memberIds: originalResult.memberIds || [envelope.id],
+        proof: originalResult.proof || null
+      };
+    }
     return {
       ok: true,
-      reason: result.staged ? 'staged' : 'accepted',
-      duplicate: Boolean(result.duplicate),
-      staged: Boolean(result.staged),
-      delivered: Boolean(result.delivered),
-      batchId: result.batchId || '',
-      memberIds: result.memberIds || [envelope.id],
-      proof: result.proof || null
+      buffered: true,
+      delivered: false,
+      staged: false,
+      reason: 'buffered_gap',
+      expectedSeq: gap.expectedSeq,
+      bufferedCount: gap.bufferedCount
     };
   }
 

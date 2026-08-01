@@ -238,7 +238,7 @@ export function createRuntimePilotController({
   }
 
   function applyDeliveryOutcome(pilot, envelope, outcome) {
-    if (envelope.kind === 'boot') return;
+    if (envelope.kind === 'boot' || outcome?.buffered || outcome?.duplicate) return;
     const memberIds = outcome?.memberIds?.length ? outcome.memberIds : [envelope.id];
     const batchId = outcome?.batchId || (outcome?.staged ? 'next' : `single-${envelope.id}`);
     if (outcome?.staged || outcome?.delivered) {

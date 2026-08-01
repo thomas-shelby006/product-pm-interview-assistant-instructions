@@ -113,3 +113,10 @@ test('Pilot exposes an operation guard for in-flight commands', () => {
   assert.match(markup, /id="operationGuard"/);
   assert.match(markup, /id="operationActivity">Idle/);
 });
+
+
+test('Pilot exposes Gap Watch for protected out-of-order finals', () => {
+  assert.match(markup, /class="live-panel gap-panel"/);
+  assert.match(markup, /id="gapState"/);
+  assert.match(markup, /id="gapDetail"/);
+});

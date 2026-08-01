@@ -56,8 +56,8 @@ test('runtime applies lossless sender persistence and receiver sequence idempote
   const registry = await readFile(resolve(extensionRoot, 'shared/session-registry.js'), 'utf8');
   assert.match(entry, /createSenderOutbox/);
   assert.match(entry, /senderOutbox\.enqueue\(envelope\)/);
-  assert.match(entry, /receiverSequenceGate\.admit/);
-  assert.match(entry, /receiverSequenceGate\.accept/);
+  assert.match(entry, /receiverSequenceBuffer\.admit/);
+  assert.match(entry, /receiverSequenceBuffer\.accept/);
   assert.match(controller, /pilot\.persistFinal\(envelope\.sessionId, envelope\)/);
   assert.doesNotMatch(registry, /acceptSequence|lastAcceptedSeq|queueLatest|pending/);
 });
