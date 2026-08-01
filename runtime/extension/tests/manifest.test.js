@@ -144,3 +144,8 @@ test('dashboard fails pending commands immediately when its runtime port disconn
   const disconnect = source.slice(source.indexOf('port.onDisconnect.addListener'), source.indexOf('function scheduleReconnect'));
   assert.match(disconnect, /failPendingCommands\(/);
 });
+
+
+test('manifest grants alarms for durable recovery scheduling', () => {
+  assert.ok(manifest.permissions.includes('alarms'));
+});

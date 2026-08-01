@@ -317,6 +317,10 @@ async function broadcastLinkStatus(sessionId, registry) {
 }
 
 
+chrome.alarms.onAlarm.addListener(alarm => {
+  void pilotController.handleAlarm(alarm).catch(() => {});
+});
+
 chrome.runtime.onConnect.addListener(port => {
   if (rolePortHub.connect(port)) return;
   pilotController.connectPort(port);

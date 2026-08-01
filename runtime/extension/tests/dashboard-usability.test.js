@@ -220,3 +220,10 @@ test('Runtime Pilot exposes Delivery SLA escalation state', () => {
   assert.match(markup, /id="deliverySlaDetail"/);
   assert.match(dashboard, /deriveDeliverySlaView\(snapshot\)/);
 });
+
+
+test('Runtime Pilot exposes durable recovery deadline and source', () => {
+  assert.match(markup, /id="recoveryScheduleState"/);
+  assert.match(markup, /id="recoveryScheduleDetail"/);
+  assert.match(dashboard, /deriveRecoverySchedule\(snapshot, now\)/);
+});

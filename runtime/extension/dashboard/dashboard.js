@@ -24,6 +24,7 @@ import { deriveTransportLanes } from './transport-lane-model.js';
 import { deriveBatchPlan } from './batch-plan-model.js';
 import { deriveDraftConflict } from './draft-conflict-model.js';
 import { deriveDeliverySlaView } from './delivery-sla-model.js';
+import { deriveRecoverySchedule } from './recovery-schedule-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -332,6 +333,8 @@ function renderLiveCommandCenter(snapshot, now) {
     text('recoveryTitle', 'Waiting for recovery state');
     byId('recoveryChecks')?.replaceChildren();
     text('recoveryError', '');
+    text('recoveryScheduleState', 'No durable check scheduled');
+    text('recoveryScheduleDetail', 'Recovery alarms appear here.');
     text('storagePressureBadge', '--');
     text('storagePressureValue', '--');
     text('storagePressureDetail', 'Session memory status is not available yet.');
@@ -406,6 +409,14 @@ function renderLiveCommandCenter(snapshot, now) {
       : pace.state === 'falling_behind'
         ? `${pace.unresolved} unresolved - intake is exceeding rendered proof.`
         : `${pace.unresolved} unresolved - waiting for a positive recovery rate.`);
+
+  const recoverySchedule = deriveRecoverySchedule(snapshot, now);
+  text('recoveryScheduleState', recoverySchedule.scheduled
+    ? `${recoverySchedule.kind === 'verify' ? 'Verification' : 'Timeout'} in ${formatDuration(recoverySchedule.dueInMs)}`
+    : 'No durable check scheduled');
+  text('recoveryScheduleDetail', recoverySchedule.scheduled
+    ? `${recoverySchedule.count} alarm(s) persisted - source ${recoverySchedule.source.replaceAll('_', ' ')} - attempt ${recoverySchedule.attempt}.`
+    : 'Recovery alarms appear here.');
 
   const recovery = deriveRecoveryProgress(snapshot);
   const recoveryPanel = document.querySelector('.recovery-panel');

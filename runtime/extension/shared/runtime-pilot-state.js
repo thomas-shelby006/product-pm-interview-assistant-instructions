@@ -123,7 +123,8 @@ function normalizeSession(item) {
     proofArchive: item.proofArchive || { count: 0, lastProvenAt: 0 },
     contextArmed: Boolean(item.contextArmed),
     contextArmedAt: Number(item.contextArmedAt || 0),
-    deliverySla: item.deliverySla && typeof item.deliverySla === 'object' ? { ...item.deliverySla } : { state: 'clear', action: '', nextAction: '', oldestAgeMs: 0, targetMs: 20000, evaluatedAt: 0, lastAction: '', lastActionAt: 0, lastResult: null }
+    deliverySla: item.deliverySla && typeof item.deliverySla === 'object' ? { ...item.deliverySla } : { state: 'clear', action: '', nextAction: '', oldestAgeMs: 0, targetMs: 20000, evaluatedAt: 0, lastAction: '', lastActionAt: 0, lastResult: null },
+    recoverySchedules: Array.isArray(item.recoverySchedules) ? item.recoverySchedules.filter(value => value?.alarmName && value?.dueAt).map(value => ({ ...value })) : []
   };
 }
 
@@ -182,6 +183,33 @@ export class RuntimePilotState {
     };
     session.updatedAt = now;
     return { ...session[role] };
+  }
+
+  upsertRecoverySchedule(sessionId, schedule = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const alarmName = String(schedule.alarmName || '').trim();
+    if (!alarmName) return null;
+    session.recoverySchedules = (session.recoverySchedules || []).filter(value => value.alarmName !== alarmName && value.kind !== schedule.kind);
+    session.recoverySchedules.push({ ...schedule, alarmName, updatedAt: Number(schedule.updatedAt || now) });
+    session.recoverySchedules.sort((a, b) => Number(a.dueAt || 0) - Number(b.dueAt || 0));
+    session.updatedAt = now;
+    return { ...schedule, alarmName };
+  }
+
+  removeRecoverySchedule(sessionId, alarmName, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const before = session.recoverySchedules?.length || 0;
+    session.recoverySchedules = (session.recoverySchedules || []).filter(value => value.alarmName !== String(alarmName || ''));
+    session.updatedAt = now;
+    return before !== session.recoverySchedules.length;
+  }
+
+  clearRecoverySchedules(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const removed = [...(session.recoverySchedules || [])];
+    session.recoverySchedules = [];
+    session.updatedAt = now;
+    return removed;
   }
 
   setDeliverySla(sessionId, value = {}, now = Date.now()) {
@@ -659,6 +687,7 @@ export class RuntimePilotState {
       timeline: session.timeline.map(event => ({ ...event, data: { ...event.data } })),
       commandJournal: session.commandJournal.recent(5),
       deliverySla: { ...(session.deliverySla || {}) },
+      recoverySchedules: (session.recoverySchedules || []).map(value => ({ ...value })),
       metrics: {
         ...session.metrics,
         deliverySuccessRate: session.metrics.delivered + session.metrics.failed
@@ -675,7 +704,8 @@ export class RuntimePilotState {
       proofArchive: { ...session.proofArchive },
       contextArmed: session.contextArmed,
       contextArmedAt: session.contextArmedAt,
-      deliverySla: session.deliverySla
+      deliverySla: session.deliverySla,
+      recoverySchedules: session.recoverySchedules
     };
   }
 

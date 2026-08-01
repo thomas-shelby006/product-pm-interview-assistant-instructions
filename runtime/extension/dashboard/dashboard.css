@@ -245,3 +245,6 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 
 .delivery-sla-panel[data-state="repair_due"], .delivery-sla-panel[data-state="action_failed"] { border-color: color-mix(in srgb, var(--danger) 65%, var(--line)); }
 .delivery-sla-panel[data-state="check_due"], .delivery-sla-panel[data-state="catch_up_due"] { border-color: color-mix(in srgb, var(--amber) 60%, var(--line)); }
+
+.recovery-schedule { display: grid; gap: .2rem; margin-top: .55rem; padding-top: .55rem; border-top: 1px solid var(--line); }
+.recovery-schedule span { color: var(--muted); font-size: .76rem; }

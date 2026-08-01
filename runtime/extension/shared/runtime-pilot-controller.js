@@ -7,6 +7,7 @@ import { buildReconciliationPayload } from './delivery-reconciler.js';
 import { shouldPersistBatchEvent } from './batch-event-policy.js';
 import { utf8Bytes } from './storage-accounting.js';
 import { deriveDeliverySla } from './delivery-sla-policy.js';
+import { clearRecoveryAlarms, parseRecoveryAlarmName, scheduleRecoveryAlarm } from './recovery-schedule.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
 import { transitionRecovery } from './recovery-state-machine.js';
@@ -675,27 +676,43 @@ export function createRuntimePilotController({
         storageCritical: pilot.snapshot(sessionId)?.storagePressure?.level === 'critical'
       });
       recovery = applyRecoveryTransition(pilot, sessionId, { type: 'verify' });
+      if (recovery?.phase !== 'repairing' && recovery?.phase !== 'blocked') {
+        await cancelRecoverySchedules(sessionId, pilot);
+      }
     }
     pilot.record(sessionId, 'live_check', { ok, roles, recoveryPhase: recovery?.phase || '' });
     return { ok, roles, recovery };
   }
 
-  function scheduleRecoveryVerification(sessionId, attempt = 0) {
+  async function scheduleRecoveryVerification(sessionId, pilot, attempt = 0) {
     if (attempt >= 4) return false;
-    const delay = Math.min(8000, 1200 * (2 ** attempt));
-    setTimeout(() => {
-      void mutationCoordinator.run(sessionId, async () => {
-        const current = await state();
-        if (current.snapshot(sessionId)?.lastRepair?.phase !== 'repairing') return;
-        const registry = await registryProvider();
-        await liveCheck(sessionId, registry, current);
-        await commit(sessionId, current);
-        if (current.snapshot(sessionId)?.lastRepair?.phase === 'repairing') {
-          scheduleRecoveryVerification(sessionId, attempt + 1);
-        }
-      });
-    }, delay);
+    const schedule = await scheduleRecoveryAlarm(chromeApi, {
+      sessionId,
+      kind: 'verify',
+      attempt,
+      delayMs: Math.min(8000, 1200 * (2 ** attempt)),
+      source: 'repair_verification'
+    });
+    pilot.upsertRecoverySchedule(sessionId, schedule);
     return true;
+  }
+
+  async function scheduleRecoveryTimeout(sessionId, pilot) {
+    const schedule = await scheduleRecoveryAlarm(chromeApi, {
+      sessionId,
+      kind: 'timeout',
+      attempt: 0,
+      delayMs: 30000,
+      source: 'repair_timeout'
+    });
+    pilot.upsertRecoverySchedule(sessionId, schedule);
+    return schedule;
+  }
+
+  async function cancelRecoverySchedules(sessionId, pilot) {
+    const schedules = pilot.clearRecoverySchedules(sessionId);
+    await clearRecoveryAlarms(chromeApi, schedules);
+    return schedules.length;
   }
 
   async function repair(sessionId, registry, pilot) {
@@ -759,18 +776,37 @@ export function createRuntimePilotController({
         type: 'failure', error: report.unresolved[0]?.reason || 'repair_not_started'
       });
     } else {
-      scheduleRecoveryVerification(sessionId);
-      setTimeout(() => {
-        void mutationCoordinator.run(sessionId, async () => {
-          const current = await state();
-          const snapshot = current.snapshot(sessionId);
-          if (snapshot?.lastRepair?.phase !== 'repairing') return;
-          applyRecoveryTransition(current, sessionId, { type: 'timeout', error: 'verification_timeout' });
-          await commit(sessionId, current);
-        });
-      }, 30000);
+      await scheduleRecoveryVerification(sessionId, pilot, 0);
+      await scheduleRecoveryTimeout(sessionId, pilot);
     }
     return finalReport;
+  }
+
+  async function handleRecoveryAlarm(alarm) {
+    const identity = parseRecoveryAlarmName(alarm?.name);
+    if (!identity) return { ok: false, ignored: true, error: 'unrelated_alarm' };
+    const current = await state();
+    const snapshot = current.snapshot(identity.sessionId);
+    const scheduled = snapshot?.recoverySchedules?.find(value => value.alarmName === identity.alarmName);
+    if (!scheduled) return { ok: true, ignored: true, reason: 'stale_alarm' };
+    current.removeRecoverySchedule(identity.sessionId, identity.alarmName);
+    if (!['repairing', 'blocked'].includes(snapshot?.lastRepair?.phase)) {
+      await commit(identity.sessionId, current);
+      return { ok: true, ignored: true, reason: 'recovery_complete' };
+    }
+    if (identity.kind === 'timeout') {
+      applyRecoveryTransition(current, identity.sessionId, { type: 'timeout', error: 'verification_timeout' });
+      await cancelRecoverySchedules(identity.sessionId, current);
+      await commit(identity.sessionId, current);
+      return { ok: true, timedOut: true };
+    }
+    const registry = await registryProvider();
+    await liveCheck(identity.sessionId, registry, current);
+    if (current.snapshot(identity.sessionId)?.lastRepair?.phase === 'repairing') {
+      await scheduleRecoveryVerification(identity.sessionId, current, identity.attempt + 1);
+    }
+    await commit(identity.sessionId, current);
+    return { ok: true, verified: current.snapshot(identity.sessionId)?.lastRepair?.phase !== 'repairing' };
   }
 
   async function managedWindowIds(sessionId, registry) {
@@ -1093,6 +1129,7 @@ export function createRuntimePilotController({
       .map(entry => entry.tabId)
       .filter(Number.isInteger);
     const pilot = await state();
+    await cancelRecoverySchedules(sessionId, pilot);
     pilot.remove(sessionId);
     await store.save(pilot);
     await broadcast(sessionId, pilot);
@@ -1138,6 +1175,11 @@ export function createRuntimePilotController({
     disconnectTab,
     removeSession: sessionId => mutationCoordinator.run(sessionId, () => removeSession(sessionId)),
     snapshot,
+    handleAlarm: alarm => {
+      const identity = parseRecoveryAlarmName(alarm?.name);
+      if (!identity) return Promise.resolve({ ok: false, ignored: true, error: 'unrelated_alarm' });
+      return mutationCoordinator.run(identity.sessionId, () => handleRecoveryAlarm(alarm));
+    },
     handleCommand: raw => {
       const command = normalizeDashboardCommand(raw);
       if (!command) return Promise.resolve({ ok: false, error: 'invalid_dashboard_command' });
