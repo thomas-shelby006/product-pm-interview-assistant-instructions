@@ -213,3 +213,10 @@ test('Runtime Pilot exposes explicit receiver draft conflict resolutions', () =>
   assert.match(markup, /data-command="resolve_draft_merge"/);
   assert.match(dashboard, /deriveDraftConflict\(snapshot\)/);
 });
+
+
+test('Runtime Pilot exposes Delivery SLA escalation state', () => {
+  assert.match(markup, /id="deliverySlaState"/);
+  assert.match(markup, /id="deliverySlaDetail"/);
+  assert.match(dashboard, /deriveDeliverySlaView\(snapshot\)/);
+});

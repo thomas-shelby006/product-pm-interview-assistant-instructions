@@ -122,7 +122,8 @@ function normalizeSession(item) {
     storagePressure: item.storagePressure || { bytes: 0, quotaBytes: 10485760, percent: 0, level: 'normal' },
     proofArchive: item.proofArchive || { count: 0, lastProvenAt: 0 },
     contextArmed: Boolean(item.contextArmed),
-    contextArmedAt: Number(item.contextArmedAt || 0)
+    contextArmedAt: Number(item.contextArmedAt || 0),
+    deliverySla: item.deliverySla && typeof item.deliverySla === 'object' ? { ...item.deliverySla } : { state: 'clear', action: '', nextAction: '', oldestAgeMs: 0, targetMs: 20000, evaluatedAt: 0, lastAction: '', lastActionAt: 0, lastResult: null }
   };
 }
 
@@ -181,6 +182,17 @@ export class RuntimePilotState {
     };
     session.updatedAt = now;
     return { ...session[role] };
+  }
+
+  setDeliverySla(sessionId, value = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.deliverySla = {
+      ...(session.deliverySla || {}),
+      ...(value && typeof value === 'object' ? value : {}),
+      evaluatedAt: Number(value?.evaluatedAt || now)
+    };
+    session.updatedAt = now;
+    return { ...session.deliverySla };
   }
 
   updateTransportLane(sessionId, role, value = {}, now = Date.now()) {
@@ -646,6 +658,7 @@ export class RuntimePilotState {
       warnings,
       timeline: session.timeline.map(event => ({ ...event, data: { ...event.data } })),
       commandJournal: session.commandJournal.recent(5),
+      deliverySla: { ...(session.deliverySla || {}) },
       metrics: {
         ...session.metrics,
         deliverySuccessRate: session.metrics.delivered + session.metrics.failed
@@ -661,7 +674,8 @@ export class RuntimePilotState {
       storagePressure: { ...session.storagePressure },
       proofArchive: { ...session.proofArchive },
       contextArmed: session.contextArmed,
-      contextArmedAt: session.contextArmedAt
+      contextArmedAt: session.contextArmedAt,
+      deliverySla: session.deliverySla
     };
   }
 

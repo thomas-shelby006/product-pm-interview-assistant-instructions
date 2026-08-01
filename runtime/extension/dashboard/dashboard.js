@@ -23,6 +23,7 @@ import { buildSafeHealthReport } from './health-report-model.js';
 import { deriveTransportLanes } from './transport-lane-model.js';
 import { deriveBatchPlan } from './batch-plan-model.js';
 import { deriveDraftConflict } from './draft-conflict-model.js';
+import { deriveDeliverySlaView } from './delivery-sla-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -349,6 +350,9 @@ function renderLiveCommandCenter(snapshot, now) {
     text('batchPlanTitle', 'Waiting for protected batch state');
     text('batchPlanDetail', 'No partition plan is available yet.');
     document.querySelector('.draft-conflict-panel')?.setAttribute('hidden', '');
+    text('deliverySlaState', '--');
+    text('deliverySlaTitle', 'Waiting for delivery age');
+    text('deliverySlaDetail', 'No delivery SLA evidence is available yet.');
     text('oldestInboxAge', '--');
     renderLatencyRail(null);
     return;
@@ -456,6 +460,17 @@ function renderLiveCommandCenter(snapshot, now) {
       : inbox.storage.level === 'high'
         ? 'Proven history is compacting; unresolved finals are untouched.'
         : 'Critical pressure. Unresolved finals remain protected; export or end the session soon.');
+  const deliverySla = deriveDeliverySlaView(snapshot, now);
+  const slaPanel = document.querySelector('.delivery-sla-panel');
+  if (slaPanel) slaPanel.dataset.state = deliverySla.state;
+  text('deliverySlaState', deliverySla.label);
+  text('deliverySlaTitle', deliverySla.oldestAgeMs
+    ? `Oldest unresolved ${formatDuration(deliverySla.oldestAgeMs)} - target ${formatDuration(deliverySla.targetMs)}`
+    : 'No unresolved final');
+  text('deliverySlaDetail', deliverySla.oldestAgeMs
+    ? `Next action: ${deliverySla.nextAction}${deliverySla.reason ? ` - ${deliverySla.reason.replaceAll('_', ' ')}` : ''}.`
+    : 'Automatic escalation begins only when a protected final exceeds its delivery window.');
+
   const draftConflict = deriveDraftConflict(snapshot);
   const conflictPanel = document.querySelector('.draft-conflict-panel');
   if (conflictPanel) {

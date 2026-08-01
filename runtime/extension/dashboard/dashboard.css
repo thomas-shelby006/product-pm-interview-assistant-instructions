@@ -242,3 +242,6 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 .draft-conflict-panel[data-state="unresolved"] { border-color: color-mix(in srgb, var(--amber) 65%, var(--line)); }
 .draft-conflict-actions { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .7rem; }
 .draft-conflict-actions button { flex: 1 1 9rem; }
+
+.delivery-sla-panel[data-state="repair_due"], .delivery-sla-panel[data-state="action_failed"] { border-color: color-mix(in srgb, var(--danger) 65%, var(--line)); }
+.delivery-sla-panel[data-state="check_due"], .delivery-sla-panel[data-state="catch_up_due"] { border-color: color-mix(in srgb, var(--amber) 60%, var(--line)); }

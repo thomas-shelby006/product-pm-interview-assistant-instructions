@@ -6,6 +6,7 @@ import { classifyStoragePressure, DEFAULT_SESSION_QUOTA_BYTES } from './storage-
 import { buildReconciliationPayload } from './delivery-reconciler.js';
 import { shouldPersistBatchEvent } from './batch-event-policy.js';
 import { utf8Bytes } from './storage-accounting.js';
+import { deriveDeliverySla } from './delivery-sla-policy.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
 import { transitionRecovery } from './recovery-state-machine.js';
@@ -492,12 +493,60 @@ export function createRuntimePilotController({
     } else if (event?.type) {
       pilot.record(sessionId, event.type, event);
     }
-    if (!meaningful) {
+    const registry = await registryProvider();
+    const sla = await evaluateDeliverySla(sessionId, registry, pilot);
+    if (!meaningful && !sla.action && !sla.changed) {
       broadcastHeartbeat(sessionId, role, updatedRole);
       return { ok: true, coalesced: true };
     }
     await commit(sessionId, pilot);
     return { ok: true, coalesced: false };
+  }
+
+  async function evaluateDeliverySla(sessionId, registry, pilot) {
+    const snapshot = pilot.snapshot(sessionId);
+    const decision = deriveDeliverySla(snapshot, Date.now());
+    const previousActionAt = Number(snapshot?.deliverySla?.lastActionAt || 0);
+    if (!decision.action) {
+      const previous = snapshot?.deliverySla || {};
+      const changed = [
+        'state', 'reason', 'nextAction', 'oldestId', 'oldestAt', 'targetMs'
+      ].some(key => String(previous[key] ?? '') !== String(decision[key] ?? ''));
+      pilot.setDeliverySla(sessionId, {
+        ...decision,
+        lastAction: previous.lastAction || '',
+        lastActionAt: previousActionAt,
+        lastResult: previous.lastResult || null
+      });
+      return { ...decision, changed };
+    }
+    let result;
+    if (decision.action === 'catch_up') {
+      pilot.setMode(sessionId, 'active');
+      const roles = await sendToRoles(registry, sessionId, 'resume');
+      const catchUp = await reconcileSession(sessionId, { registry, pilot, commitResult: false });
+      result = { ok: catchUp?.ok !== false, roles, catchUp };
+    } else if (decision.action === 'check_live') {
+      result = await liveCheck(sessionId, registry, pilot);
+    } else {
+      result = await repair(sessionId, registry, pilot);
+    }
+    const at = Date.now();
+    pilot.setDeliverySla(sessionId, {
+      ...decision,
+      state: result?.ok === false ? 'action_failed' : 'action_started',
+      lastAction: decision.action,
+      lastActionAt: at,
+      lastResult: { ok: result?.ok !== false, error: result?.error || '' },
+      evaluatedAt: at
+    }, at);
+    pilot.record(sessionId, 'delivery_sla_action', {
+      action: decision.action,
+      oldestAgeMs: decision.oldestAgeMs,
+      ok: result?.ok !== false,
+      error: result?.error || ''
+    }, at);
+    return { ...decision, result };
   }
 
   async function sendRuntimeCommand(registry, sessionId, role, command, payload = {}) {
