@@ -9,7 +9,9 @@ const launcherPath = resolve(extensionRoot, '..', 'Final_2_Window_Extension.ahk'
 const launcher = await readFile(launcherPath, 'utf8');
 
 function block(start, end) {
-  return launcher.slice(launcher.indexOf(start), launcher.indexOf(end));
+  const startIndex = launcher.indexOf(start);
+  const endIndex = launcher.indexOf(end, startIndex + start.length);
+  return startIndex >= 0 && endIndex > startIndex ? launcher.slice(startIndex, endIndex) : '';
 }
 
 test('launcher standardizes on Edge Stable and the selected profile', () => {
@@ -188,7 +190,7 @@ test('active session derives from exact lifecycle windows rather than a mutable 
 test('launcher foregrounds each registered provider before its composer readiness wait', () => {
   const launch = launcher.slice(
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
-    launcher.indexOf('ApplyConfiguredInitialLayout()')
+    launcher.indexOf('ApplyConfiguredInitialLayout() {', launcher.indexOf('RunManagedLaunch(reuseSession := false)'))
   );
   const senderRegistered = launch.indexOf('senderRegistered :=');
   const senderReady = launch.indexOf('senderReady :=');
@@ -213,7 +215,7 @@ test('Alt+Delete closes every managed PMIA lifecycle window even with stale cach
 test('launcher confirms sender readiness before opening the receiver window', () => {
   const launch = launcher.slice(
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
-    launcher.indexOf('ApplyConfiguredInitialLayout()')
+    launcher.indexOf('ApplyConfiguredInitialLayout() {', launcher.indexOf('RunManagedLaunch(reuseSession := false)'))
   );
   const senderRun = launch.indexOf("Run BrowserExe ' --new-window");
   const senderReady = launch.indexOf('WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "ready"');
@@ -250,7 +252,7 @@ test('composer readiness uses a long watchdog without slowing successful launche
   assert.match(waitBlock, /Sleep 100/);
   const launch = launcher.slice(
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
-    launcher.indexOf('ApplyConfiguredInitialLayout()')
+    launcher.indexOf('ApplyConfiguredInitialLayout() {', launcher.indexOf('RunManagedLaunch(reuseSession := false)'))
   );
   assert.match(launch, /"ready", COMPOSER_READY_TIMEOUT_MS/);
   assert.doesNotMatch(launch, /"ready", 30000/);
@@ -260,7 +262,7 @@ test('runtime boot and registration use event-driven long watchdogs without fixe
   assert.match(launcher, /RUNTIME_LIFECYCLE_TIMEOUT_MS\s*:=\s*60000/);
   const launch = launcher.slice(
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
-    launcher.indexOf('ApplyConfiguredInitialLayout()')
+    launcher.indexOf('ApplyConfiguredInitialLayout() {', launcher.indexOf('RunManagedLaunch(reuseSession := false)'))
   );
   for (const role of ['sender', 'receiver']) {
     assert.match(launch, new RegExp(`WaitForLifecycleTitle\\("${role}", g_${role}Provider, g_sessionId, "boot", RUNTIME_LIFECYCLE_TIMEOUT_MS\\)`));
@@ -397,7 +399,7 @@ test('live health check uses the authoritative runtime preflight in both managed
 
 test('fast repair reuses the current in-memory route and session implementation', () => {
   const start = launcher.indexOf('FastRepairActiveSession(*) {');
-  const end = launcher.indexOf('; Alt+Delete', start);
+  const end = launcher.indexOf('FocusRuntimeDashboard(*) {', start);
   const repair = launcher.slice(start, end);
   assert.match(repair, /ShowSessionLaunchGui\(\)/);
   assert.match(repair, /RepairLaunch\(\)/);
@@ -408,7 +410,7 @@ test('fast repair reuses the current in-memory route and session implementation'
 test('launcher opens the Runtime Pilot Dashboard only after both provider roles are ready', () => {
   const launch = launcher.slice(
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
-    launcher.indexOf('ApplyConfiguredInitialLayout()')
+    launcher.indexOf('ApplyConfiguredInitialLayout() {', launcher.indexOf('RunManagedLaunch(reuseSession := false)'))
   );
   const senderReady = launch.indexOf('senderReady :=');
   const receiverReady = launch.indexOf('receiverReady :=');
@@ -448,7 +450,7 @@ test('launcher manages dashboard layout, hide, restore and exact cleanup', () =>
 test('Alt+D focuses or reopens the current session dashboard without relaunching providers', () => {
   assert.match(launcher, /!d::FocusRuntimeDashboard\(\)/);
   const focus = block('FocusRuntimeDashboard(*) {', 'CloseManagedPmiaWindows(');
-  assert.match(focus, /FindDashboardWindow/);
+  assert.match(focus, /IsActiveSession\(\)/);
   assert.match(focus, /DashboardUrl/);
   assert.match(focus, /WaitForDashboardWindow/);
   assert.match(focus, /WinActivate "ahk_id " g_hDashboard/);
@@ -462,7 +464,7 @@ test('launcher clears sensitive in-memory context after both provider windows cl
     'g_sessionResume', 'g_sessionJD', 'g_sessionMeta', 'g_sessionAvoid', 'g_sessionId'
   ]) assert.match(clear, new RegExp(`${value}\\s*:=\\s*""`));
   const monitor = block('MonitorManagedSession() {', 'IsActiveSession() {');
-  assert.match(monitor, /!sender\.Count && !receiver\.Count/);
+  assert.match(monitor, /sender\.Count \|\| receiver\.Count/);
   assert.match(monitor, /ClearSessionMemory/);
 });
 
@@ -470,7 +472,7 @@ test('launcher clears sensitive in-memory context after both provider windows cl
 test('hide and restore preserve actual three-window geometry instead of replaying stale logical layout', () => {
   assert.match(launcher, /CaptureManagedGeometry\(\)/);
   assert.match(launcher, /RestoreManagedGeometry\(g_hiddenGeometry\)/);
-  const toggle = block('ToggleHide() {', '; Alt+CapsLock');
+  const toggle = block('ToggleHide() {', 'GhostWin1() {');
   assert.ok(toggle.indexOf('CaptureManagedGeometry()') < toggle.indexOf('HideAllManaged()'));
   assert.match(toggle, /if !RestoreManagedGeometry\(g_hiddenGeometry\)/);
   assert.match(toggle, /RestoreLayout\(g_hiddenLayout\)/);

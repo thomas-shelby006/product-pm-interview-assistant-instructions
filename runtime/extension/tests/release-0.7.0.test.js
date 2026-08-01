@@ -76,8 +76,7 @@ test('active release documents dashboard queue and legacy parity', async () => {
     await read('runtime/README_INSTALL_TEST.md'),
     await read('runtime/extension/README.md'),
     await read('docs/LEGACY_FEATURE_PARITY.md')
-  ].join('
-');
+  ].join('\n');
   assert.match(docs, /Pause forwarding/i);
   assert.match(docs, /Resume Latest/i);
   assert.match(docs, /bounded 20/i);

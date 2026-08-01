@@ -28,7 +28,7 @@ export function classifySourceSilence({
 function cleanText(value, max = 1200) {
   const text = String(value || '').trim();
   if (!text) return '';
-  return text.length > max ? `${text.slice(0, max)}â€¦` : text;
+  return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
 function stableValue(value) {

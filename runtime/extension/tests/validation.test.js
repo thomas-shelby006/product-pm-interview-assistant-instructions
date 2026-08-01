@@ -355,11 +355,17 @@ test('content runtime exposes an exact managed-session end command', async () =>
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const source = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const controller = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
   assert.match(source, /key === 'F4'/);
   assert.match(source, /type: 'PMIA_END_SESSION'/);
-  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
   assert.match(background, /message\?\.type === 'PMIA_END_SESSION'/);
-  assert.match(background, /closeOwnedSessionTabs/);
+  assert.match(background, /pilotController\.handleCommand/);
+  assert.match(background, /command:\s*'end_session'/);
+  assert.match(controller, /async function endSession/);
+  assert.match(controller, /registry\.removeSession\(sessionId\)/);
+  assert.match(controller, /pilot\.remove\(sessionId\)/);
+  assert.match(controller, /clearSessionLogs\(sessionId\)/);
 });
 
 test('production sender uses bounded fallback only for ChatGPT', async () => {
@@ -497,20 +503,30 @@ test('registration conflict recovery probes and replaces only dead PMIA owners',
   assert.match(registration, /role_conflict/);
 });
 
-test('ending or orphaning a session clears registry and role logs', async () => {
+test('ending or orphaning a session clears registry, pilot state, and role logs', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const controller = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
   const end = background.slice(
     background.indexOf("message?.type === 'PMIA_END_SESSION'"),
     background.indexOf("message?.type === 'PMIA_GET_STATUS'")
   );
-  assert.match(end, /registry\.removeSession\(message\.sessionId\)/);
-  assert.match(end, /logStore\.clearSession\(message\.sessionId\)/);
+  assert.match(end, /pilotController\.handleCommand/);
+  assert.match(end, /command:\s*'end_session'/);
+  const controllerEnd = controller.slice(
+    controller.indexOf('async function endSession'),
+    controller.indexOf('async function handleCommand')
+  );
+  assert.match(controllerEnd, /registry\.removeSession\(sessionId\)/);
+  assert.match(controllerEnd, /pilot\.remove\(sessionId\)/);
+  assert.match(controllerEnd, /clearSessionLogs\(sessionId\)/);
+  assert.match(controllerEnd, /closeTabIds/);
   const removed = background.slice(background.indexOf('chrome.tabs.onRemoved.addListener'));
   assert.match(removed, /orphanedSessionIds/);
   assert.match(removed, /registry\.removeSession\(sessionId\)/);
   assert.match(removed, /logStore\.clearSession\(sessionId\)/);
+  assert.match(removed, /pilotController\.removeSession\(sessionId\)/);
 });
 
 test('boot telemetry exports safe metadata but never raw setup text', async () => {

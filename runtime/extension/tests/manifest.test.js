@@ -139,5 +139,5 @@ test('dashboard fails pending commands immediately when its runtime port disconn
   const source = await readFile(new URL('../dashboard/dashboard.js', import.meta.url), 'utf8');
   assert.match(source, /function failPendingCommands/);
   const disconnect = source.slice(source.indexOf('port.onDisconnect.addListener'), source.indexOf('function scheduleReconnect'));
-  assert.match(disconnect, /failPendingCommands\(\)/);
+  assert.match(disconnect, /failPendingCommands\(/);
 });

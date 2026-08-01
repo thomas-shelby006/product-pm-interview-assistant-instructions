@@ -38,7 +38,9 @@ test('active visible runtime surfaces contain no known mojibake sequences', () =
   const combined = `${dashboard}
 ${markup}
 ${status}`;
-  assert.doesNotMatch(combined, /�|?|???|???|??/u);
+  for (const codePoint of [0xFFFD, 0x00C2, 0x00E2]) {
+    assert.equal(combined.includes(String.fromCodePoint(codePoint)), false);
+  }
   assert.match(validator, /mojibakeMarkers/);
 });
 test('delivery success preserves the nullish fallback instead of arithmetic', () => {
