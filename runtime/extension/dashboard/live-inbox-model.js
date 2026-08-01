@@ -1,4 +1,4 @@
-﻿function safeList(value) {
+function safeList(value) {
   return Array.isArray(value) ? value : [];
 }
 

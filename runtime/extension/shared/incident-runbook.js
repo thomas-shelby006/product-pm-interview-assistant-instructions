@@ -1,4 +1,4 @@
-﻿const RUNBOOKS = Object.freeze({
+const RUNBOOKS = Object.freeze({
   state_compatibility: [
     { id: 'inspect_state', label: 'Inspect state compatibility', command: 'check_live' },
     { id: 'export_support', label: 'Export safe support evidence', command: 'export_support_bundle' },

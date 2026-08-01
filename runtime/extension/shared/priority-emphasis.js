@@ -1,4 +1,4 @@
-﻿const RANK = Object.freeze({ critical: 4, high: 3, normal: 2, low: 1 });
+const RANK = Object.freeze({ critical: 4, high: 3, normal: 2, low: 1 });
 
 export function applyPriorityEmphasis(questions = [], now = Date.now()) {
   const output = questions.map((item, deliveryOrder) => {

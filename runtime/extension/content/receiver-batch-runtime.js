@@ -3,6 +3,9 @@ import { buildRenderedProofIndex } from '../shared/proof-reconciliation-index.js
 import { BatchTransaction } from '../shared/batch-transaction.js';
 import { deriveProviderBatchBudget } from '../shared/provider-batch-budget.js';
 import { deriveBatchSchedulingDecision } from '../shared/batch-scheduling-policy.js';
+import { deriveBatchPreview } from '../shared/batch-preview-model.js';
+import { normalizeReceiverDeliveryPolicy, postAnswerDecision, updateReceiverDeliveryPolicy } from '../shared/receiver-delivery-policy.js';
+import { acknowledgeAnswer, buildAnswerAcknowledgement, buildAnswerHandoff, buildInterruptPlan, resolveNoResponse } from '../shared/answer-operations.js';
 
 export function createReceiverBatchRuntime({
   adapter,
@@ -25,6 +28,11 @@ export function createReceiverBatchRuntime({
   let lastFailureChars = 0;
   let lastSchedulingDecision = null;
   let queueOnly = { active: false, reason: '' };
+  let deliveryPolicy = normalizeReceiverDeliveryPolicy();
+  let lastAnswerOutcome = null;
+  let lastCompletedBatch = null;
+  let pendingNoResponse = null;
+  let interruptPlan = null;
 
   const emit = (type, data = {}) => {
     const event = { type, at: nowFn(), ...data };
@@ -323,12 +331,20 @@ export function createReceiverBatchRuntime({
       if (!active) return { ok: true, reason: 'no_active_batch' };
       if (batchId && active.id !== batchId) return { ok: false, error: 'batch_mismatch' };
       const completed = planner.completeActive();
-      const terminalReason = String(result?.answerState?.state || (result?.timeout ? 'timed_out' : 'complete'));
-      transitionTransaction('terminal', terminalReason, { proofVerified: result?.proof?.verified === true });
-      transitionTransaction('released', 'next_batch_release');
+      const answerState = String(result?.answerState?.state || (result?.timeout ? 'timed_out' : 'complete'));
+      transitionTransaction('terminal', answerState, { proofVerified: result?.proof?.verified === true });
+      transitionTransaction('released', 'post_answer_policy');
       lastTransaction = activeTransaction?.snapshot() || lastTransaction;
       activeTransaction = null;
-      const answerState = String(result?.answerState?.state || (result?.timeout ? 'timed_out' : 'complete'));
+      lastCompletedBatch = completed;
+      lastAnswerOutcome = buildAnswerAcknowledgement({
+        batchId: completed.id,
+        memberIds: completed.prompt.memberIds,
+        answerState: result?.answerState || { state: answerState },
+        completedAt: nowFn(),
+        reason: result?.answerState?.reason || answerState
+      }, nowFn());
+      pendingNoResponse = answerState === 'no_response' ? { ...lastAnswerOutcome } : null;
       const eventType = {
         complete: 'batch_answer_complete',
         no_response: 'batch_answer_no_response',
@@ -340,21 +356,42 @@ export function createReceiverBatchRuntime({
         memberIds: completed.prompt.memberIds,
         answerState: result?.answerState || { state: answerState },
         answer: result?.answer || result || null,
-        proof: result?.proof || null
+        proof: result?.proof || null,
+        handoff: buildAnswerHandoff({ ...lastAnswerOutcome, answerState: result?.answerState, proof: result?.proof })
       });
+      const decision = postAnswerDecision(deliveryPolicy, { nextCount: planner.nextSize, answerState });
+      deliveryPolicy = decision.nextPolicy;
+      emit('post_answer_policy', { ...decision, policy: { ...deliveryPolicy }, nextCount: planner.nextSize });
+      if (['await_resolution', 'pause', 'idle'].includes(decision.action)) {
+        mirrorNext();
+        return { ok: true, staged: planner.nextSize > 0, reason: decision.reason, policy: { ...deliveryPolicy } };
+      }
+      if (decision.action === 'submit_next') return submitNext({ force: true });
       return submitNext();
     },
 
-    async interruptLatest() {
+    previewInterrupt() {
+      interruptPlan = buildInterruptPlan(planner.snapshot(), nowFn());
+      emit('interrupt_preview_created', { ...interruptPlan });
+      return { ...interruptPlan, activeMemberIds: [...interruptPlan.activeMemberIds], preservedIds: [...interruptPlan.preservedIds] };
+    },
+
+    async interruptLatest(token = '') {
       if (submitting) return { ok: false, error: 'submission_in_progress' };
       if (!planner.nextSize) return { ok: false, error: 'no_waiting_final' };
       if (hasManualConflict()) return { ok: false, error: 'draft_conflict' };
+      if (!interruptPlan || !token || token !== interruptPlan.token) {
+        return { ok: false, error: 'interrupt_confirmation_required', plan: this.previewInterrupt() };
+      }
+      const latestId = planner.next().entries.at(-1)?.id || '';
+      if (latestId !== interruptPlan.latestId) return { ok: false, error: 'interrupt_plan_stale', plan: this.previewInterrupt() };
       if (adapter.isGenerating?.()) {
         if (!adapter.stopGenerating?.()) return { ok: false, error: 'stop_failed' };
-        emit('answer_interrupt_requested', { nextCount: planner.nextSize });
+        emit('answer_interrupt_requested', { nextCount: planner.nextSize, token });
         if (!await waitUntilIdle()) return { ok: false, error: 'stop_timeout' };
       }
       const selected = planner.interruptLatest(nowFn());
+      interruptPlan = null;
       if (!selected?.batch) return { ok: false, error: 'no_waiting_final' };
       emit('batch_interrupted', {
         interruptedBatchId: selected.interrupted?.id || '',
@@ -363,6 +400,29 @@ export function createReceiverBatchRuntime({
         preservedNextIds: planner.next().entries.map(entry => String(entry.id))
       });
       return executeBatch(selected.batch, 'operator_interrupt_latest');
+    },
+
+    acknowledgeLastAnswer() {
+      if (!lastAnswerOutcome) return { ok: false, error: 'answer_outcome_missing' };
+      lastAnswerOutcome = acknowledgeAnswer(lastAnswerOutcome, nowFn());
+      emit('answer_acknowledged', { ...lastAnswerOutcome });
+      return { ok: true, acknowledgement: { ...lastAnswerOutcome } };
+    },
+
+    async resolveNoResponseAction(action = 'wait') {
+      if (!pendingNoResponse || !lastCompletedBatch) return { ok: false, error: 'no_response_missing' };
+      const resolution = resolveNoResponse(pendingNoResponse, action, nowFn());
+      emit('no_response_resolved', resolution);
+      if (resolution.nextAction === 'retry_completed_batch') {
+        planner.requeueEntries(lastCompletedBatch.entries);
+        pendingNoResponse = null;
+        return submitNext({ force: true });
+      }
+      if (resolution.nextAction === 'submit_next') {
+        pendingNoResponse = null;
+        return submitNext({ force: true });
+      }
+      return { ok: true, staged: true, reason: 'no_response_wait_extended', resolution };
     },
 
     async resolveDraftConflict(action) {
@@ -409,6 +469,11 @@ export function createReceiverBatchRuntime({
       mirrorNext();
       return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit, queueOnly: { ...queueOnly } };
     },
+    setDeliveryPolicy(patch = {}) {
+      deliveryPolicy = updateReceiverDeliveryPolicy(deliveryPolicy, patch, nowFn());
+      emit('receiver_delivery_policy_changed', { policy: { ...deliveryPolicy } });
+      return { ok: true, policy: { ...deliveryPolicy } };
+    },
     async setAutoSubmit(value) {
       planner.setAutoSubmit(value);
       emit('batch_policy_changed', {
@@ -427,7 +492,13 @@ export function createReceiverBatchRuntime({
         lastTransaction: lastTransaction ? { ...lastTransaction, memberIds: [...(lastTransaction.memberIds || [])], history: (lastTransaction.history || []).map(item => ({ ...item })) } : null,
         budget: planner.budget(),
         scheduling: lastSchedulingDecision ? { ...lastSchedulingDecision, memberIds: [...(lastSchedulingDecision.memberIds || [])] } : null,
-        deliveryPolicy: { ...queueOnly }
+        deliveryPolicy: { ...queueOnly },
+        receiverPolicy: { ...deliveryPolicy },
+        preview: deriveBatchPreview({ plannerState: planner.snapshot(), budget: planner.budget(), policy: deliveryPolicy }),
+        answerAcknowledgement: lastAnswerOutcome ? { ...lastAnswerOutcome } : null,
+        pendingNoResponse: pendingNoResponse ? { ...pendingNoResponse } : null,
+        interruptPlan: interruptPlan ? { ...interruptPlan, activeMemberIds: [...interruptPlan.activeMemberIds], preservedIds: [...interruptPlan.preservedIds] } : null,
+        answerHandoff: lastAnswerOutcome ? buildAnswerHandoff(lastAnswerOutcome) : null
       };
     }
   };

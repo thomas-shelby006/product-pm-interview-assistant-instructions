@@ -1,4 +1,4 @@
-﻿export function deriveManagedWindowModel(snapshot = {}) {
+export function deriveManagedWindowModel(snapshot = {}) {
   const layout = snapshot.layout || {};
   const focus = String(layout.focusedRole || '');
   const mode = String(layout.mode || 'three_window');

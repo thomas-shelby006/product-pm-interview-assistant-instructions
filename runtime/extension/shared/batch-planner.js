@@ -171,6 +171,22 @@ export class BatchPlanner {
     return failed;
   }
 
+  requeueEntries(entries = []) {
+    const activeIds = new Set((this.#active?.entries || []).map(entry => String(entry.id)));
+    const nextIds = new Set(this.#next.map(entry => String(entry.id)));
+    const restored = [];
+    for (const source of Array.isArray(entries) ? entries : []) {
+      const entry = cloneEntry(source);
+      if (!entry.id || activeIds.has(entry.id) || nextIds.has(entry.id)) continue;
+      this.#next.push(entry);
+      nextIds.add(entry.id);
+      this.#known.add(entry.id);
+      restored.push(entry.id);
+    }
+    this.#next.sort((a, b) => Number(a.envelope?.seq || 0) - Number(b.envelope?.seq || 0));
+    return { restored, nextSize: this.#next.length };
+  }
+
   setHold(value) {
     this.#hold = Boolean(value);
     return this.#hold;

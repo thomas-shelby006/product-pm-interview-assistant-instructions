@@ -1,4 +1,4 @@
-﻿export function normalizeLayoutHistory(values = []) {
+export function normalizeLayoutHistory(values = []) {
   return (Array.isArray(values) ? values : []).map(value => ({
     mode: String(value?.mode || 'three_window'),
     focusedRole: String(value?.focusedRole || ''),

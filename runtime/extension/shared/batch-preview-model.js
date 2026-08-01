@@ -1,4 +1,4 @@
-﻿function entryFor(ledger = [], id = '') { return ledger.find(item => item.id === id) || null; }
+function entryFor(ledger = [], id = '') { return ledger.find(item => item.id === id) || null; }
 function chars(item) { return String(item?.envelope?.text || '').length; }
 function projectBatch(batch, ledger) {
   if (!batch) return null;

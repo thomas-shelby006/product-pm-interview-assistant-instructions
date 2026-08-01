@@ -1,4 +1,4 @@
-﻿import { composeBatchPrompt } from './batch-planner.js';
+import { composeBatchPrompt } from './batch-planner.js';
 
 export const UNRESOLVED_LEDGER_STATES = new Set([
   'persisted',

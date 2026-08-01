@@ -1,4 +1,4 @@
-﻿import { ensureDeliveryTrace } from './delivery-trace.js';
+import { ensureDeliveryTrace } from './delivery-trace.js';
 
 export const PROVIDERS = new Set(['chatgpt', 'claude']);
 export const ROLES = new Set(['sender', 'receiver']);

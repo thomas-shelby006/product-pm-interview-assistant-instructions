@@ -853,3 +853,11 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Bug fixes:** delayed or replayed focus commands can no longer steal focus after the user’s intent has expired.
 - **New features:** one-use focus-intent tokens bound to session, target, action, issue time, and expiry.
 - **Implementation:** the only new `focused: true` update is guarded by intent validation and one-use consumption; recovery remains non-focused.
+
+## Receiver-flow mechanics companion improvements
+
+- **Bug fixes:** answer completion no longer always releases the next batch; no-response no longer silently falls through; interrupt cannot execute without a fresh exact-member preview token.
+- **New features:** pause-after-answer, drain one/all, submit-on-idle, answer acknowledgement, no-response wait/retry/continue, deadline view, interrupt preview, and compact answer handoff.
+- **Implementation:** one receiver delivery-policy owner and one metadata-only answer-operations module extend the existing batch runtime; ledger order and rendered proof remain authoritative.
+
+**Source-complete status:** Receiver-flow mechanics and managed-window navigation are implemented. Executable verification remains deferred until Cycle 145 source completion.

@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { deriveIncidents, mergeIncidentState, updateIncidentControl } from '../shared/incident-center.js';
 import { deriveIncidentRunbook } from '../shared/incident-runbook.js';

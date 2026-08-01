@@ -1,4 +1,4 @@
-﻿const ACTIVE_STATES = new Set(['persisted', 'staged', 'submitting', 'failed']);
+const ACTIVE_STATES = new Set(['persisted', 'staged', 'submitting', 'failed']);
 
 function eventsWithin(timeline, now, windowMs) {
   const start = Number(now) - Number(windowMs);

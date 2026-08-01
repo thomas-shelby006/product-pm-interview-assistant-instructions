@@ -1,4 +1,4 @@
-﻿export function deriveInterruptionRecoveryCard(snapshot = {}, checkpoint = null, now = Date.now()) {
+export function deriveInterruptionRecoveryCard(snapshot = {}, checkpoint = null, now = Date.now()) {
   const cp = checkpoint || snapshot.checkpoint || null;
   const activeSession = ['active', 'paused'].includes(String(snapshot.liveSession?.phase || ''));
   const runtimeIssue = ['blocked', 'degraded', 'repairing'].includes(String(snapshot.mode || ''))

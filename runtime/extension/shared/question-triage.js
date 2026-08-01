@@ -1,4 +1,4 @@
-﻿const URGENCY = new Set(['normal', 'elevated', 'critical']);
+const URGENCY = new Set(['normal', 'elevated', 'critical']);
 
 export function normalizeQuestionTriage(value = {}) {
   return {

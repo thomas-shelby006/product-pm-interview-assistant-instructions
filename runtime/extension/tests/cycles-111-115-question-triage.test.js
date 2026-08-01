@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RuntimePilotState } from '../shared/runtime-pilot-state.js';
 import { deriveQuestionOperations } from '../shared/question-operations-state.js';

@@ -1,4 +1,4 @@
-﻿export function normalizeSessionCheckpoint(value = {}) {
+export function normalizeSessionCheckpoint(value = {}) {
   return {
     id: String(value.id || ''),
     createdAt: Math.max(0, Number(value.createdAt || 0)),

@@ -1,4 +1,4 @@
-﻿export function validateQuestionRelation(index = {}, itemId, parentId) {
+export function validateQuestionRelation(index = {}, itemId, parentId) {
   const child = String(itemId || '').trim();
   const parent = String(parentId || '').trim();
   if (!child) return { ok: false, error: 'question_id_required' };

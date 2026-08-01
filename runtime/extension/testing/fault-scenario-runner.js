@@ -1,4 +1,4 @@
-﻿function safeSnapshot(value) {
+function safeSnapshot(value) {
   if (!value || typeof value !== 'object') return value ?? null;
   return JSON.parse(JSON.stringify(value, (key, item) => (
     ['text', 'prompt', 'answer', 'setup', 'clipboard', 'credential', 'credentials', 'token', 'resume', 'jobdescription'].includes(String(key).toLowerCase())

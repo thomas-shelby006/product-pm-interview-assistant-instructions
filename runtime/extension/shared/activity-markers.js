@@ -1,4 +1,4 @@
-﻿const EVENT_MAP = Object.freeze({
+const EVENT_MAP = Object.freeze({
   final_persisted: 'question_arrived',
   batch_submitting: 'answer_requested',
   answer_started: 'answer_started',

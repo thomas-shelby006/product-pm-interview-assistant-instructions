@@ -1,4 +1,4 @@
-﻿function landmarkFromMarker(marker = {}) {
+function landmarkFromMarker(marker = {}) {
   return {
     id: String(marker.id || ''),
     type: marker.source === 'operator' ? 'operator_marker' : 'activity_marker',

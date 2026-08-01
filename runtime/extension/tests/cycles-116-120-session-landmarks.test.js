@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { addOperatorMarker, markerSummary } from '../shared/operator-markers.js';
 import { deriveActivityMarkers } from '../shared/activity-markers.js';

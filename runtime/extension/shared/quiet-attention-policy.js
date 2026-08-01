@@ -1,4 +1,4 @@
-﻿const LEVEL = Object.freeze({ info: 1, warn: 2, error: 3, critical: 4 });
+const LEVEL = Object.freeze({ info: 1, warn: 2, error: 3, critical: 4 });
 
 export function deriveQuietAttention({ incidents = [], attention = null } = {}, enabled = false, now = Date.now()) {
   const visible = (Array.isArray(incidents) ? incidents : []).filter(item => item.visible !== false && Number(item.snoozedUntil || 0) <= now);

@@ -874,6 +874,18 @@ async function startRuntime(runtimeConfig) {
       case 'set_hold':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.setHold(Boolean(payload.value));
+      case 'set_receiver_policy':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.setDeliveryPolicy(payload.policy || payload);
+      case 'preview_interrupt_latest':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.previewInterrupt();
+      case 'acknowledge_answer':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.acknowledgeLastAnswer();
+      case 'resolve_no_response':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.resolveNoResponseAction(String(payload.action || 'wait'));
       case 'set_queue_only':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.setQueueOnly(Boolean(payload.value), String(payload.reason || ''));
@@ -882,7 +894,7 @@ async function startRuntime(runtimeConfig) {
         return receiverBatchRuntime.submitNext({ force: true });
       case 'interrupt_latest':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
-        return receiverBatchRuntime.interruptLatest();
+        return receiverBatchRuntime.interruptLatest(String(payload.token || ''));
       case 'resolve_draft_keep_manual':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.resolveDraftConflict('keep_manual');

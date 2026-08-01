@@ -1,4 +1,4 @@
-﻿const TARGETS = new Set(['sender','receiver','pilot']);
+const TARGETS = new Set(['sender','receiver','pilot']);
 const ACTIONS = new Set(['focus','spotlight','back']);
 
 export function normalizeWindowNavigationIntent(value = {}) {

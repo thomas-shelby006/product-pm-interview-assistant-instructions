@@ -1,4 +1,4 @@
-﻿const OFFSCREEN = { left: 3840, top: 0, width: 600, height: 1032 };
+const OFFSCREEN = { left: 3840, top: 0, width: 600, height: 1032 };
 const DASHBOARD = { left: 1424, top: 0, width: 496, height: 1032 };
 
 const LAYOUTS = {
