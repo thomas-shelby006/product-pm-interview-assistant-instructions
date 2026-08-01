@@ -12,6 +12,7 @@ import { prepareSessionEnd, senderOutboxStorageKey, validateSessionEnd } from '.
 import { runRuntimeSelfTest } from './runtime-self-test.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
+import { SnapshotSectionCache } from './snapshot-section-cache.js';
 import { outboxAlarmName } from './alarm-rehydration.js';
 import { runTransportDrill } from './transport-drill.js';
 import { deriveSequenceFeedback } from './sequence-feedback.js';
@@ -49,6 +50,7 @@ export function createRuntimePilotController({
   const previewTimers = new Map();
   const recoveryCoordinator = createRuntimeRecoveryCoordinator({ chromeApi });
   const batchCommitTimers = new Map();
+  const snapshotCaches = new Map();
   const mutationCoordinator = createSessionMutationCoordinator();
 
   function sessionPorts(sessionId) {
@@ -93,7 +95,13 @@ export function createRuntimePilotController({
   async function broadcast(sessionId, pilot = null) {
     const current = pilot || await state();
     const baseSnapshot = current.snapshot(sessionId, Date.now());
-    const snapshot = baseSnapshot ? { ...baseSnapshot, stateAudit: store.audit() } : null;
+    const rawSnapshot = baseSnapshot ? { ...baseSnapshot, stateAudit: store.audit() } : null;
+    if (!rawSnapshot) snapshotCaches.delete(sessionId);
+    const cache = rawSnapshot
+      ? (snapshotCaches.get(sessionId) || new SnapshotSectionCache())
+      : null;
+    if (cache && !snapshotCaches.has(sessionId)) snapshotCaches.set(sessionId, cache);
+    const snapshot = cache ? cache.update(rawSnapshot).snapshot : null;
     for (const entry of sessionPorts(sessionId)) {
       if (!snapshot) {
         if (post(entry.port, { type: 'PMIA_DASHBOARD_SESSION_ENDED', sessionId, snapshot: null })) {
@@ -1044,6 +1052,7 @@ export function createRuntimePilotController({
     }
     registry.removeSession(sessionId);
     pilot.remove(sessionId);
+    snapshotCaches.delete(sessionId);
     await saveRegistry(registry);
     await store.save(pilot);
     await clearSessionLogs(sessionId);
@@ -1304,6 +1313,7 @@ export function createRuntimePilotController({
     const pilot = await state();
     await cancelRecoverySchedules(sessionId, pilot);
     pilot.remove(sessionId);
+    snapshotCaches.delete(sessionId);
     recoveryCoordinator.clear(sessionId);
     await store.save(pilot);
     await broadcast(sessionId, pilot);
