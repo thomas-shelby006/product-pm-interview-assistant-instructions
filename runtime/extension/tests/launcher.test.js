@@ -483,3 +483,14 @@ test('session-memory cleanup requires a ten-second simultaneous provider absence
   assert.match(monitor, />= 10000/);
   assert.match(monitor, /temporarily missing/);
 });
+
+
+test('persistent AutoHotkey debug logging is opt-in and session-redacted', () => {
+  assert.match(launcher, /DEBUG_LOG_ENABLED\s*:=\s*EnvGet\("PMIA_DEBUG_LOG"\) = "1"/);
+  const log = block('SanitizeLogMessage(message) {', 'ClearSessionMemory(');
+  assert.match(log, /RegExReplace/);
+  assert.match(log, /\[SESSION\]/);
+  assert.match(log, /OutputDebug/);
+  assert.match(log, /if !DEBUG_LOG_ENABLED\s*\n\s*return/);
+  assert.ok(log.indexOf('if !DEBUG_LOG_ENABLED') < log.indexOf('FileAppend'));
+});

@@ -109,3 +109,21 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** Verification is driven by the existing heartbeat/telemetry path, so it survives worker restart and adds no new timer or polling loop.
 
 **Why this is superior:** It reports recovered state only after observed health and gives the operator immediate feedback when the control channel restarts.
+
+## Cycle 7 - Privacy, cleanup, and export boundaries
+
+**Evidence inspected:** Legacy extension-log cleanup, storage.local access, AutoHotkey operational logging, session identifiers, and active privacy documentation.
+
+**Issue/opportunity:** Legacy cleanup materialized every local-storage value to discover PMIA keys. AutoHotkey wrote operational logs containing session identifiers to disk by default.
+
+**Classification:** Persistent-data minimization and diagnostics privacy improvement.
+
+**Implementation:** Legacy cleanup now uses storage key-only enumeration when supported, with a compatibility fallback. AutoHotkey disk logging is opt-in through PMIA_DEBUG_LOG=1, always redacts session identifiers, and keeps non-persistent OutputDebug diagnostics available.
+
+**Files changed:** Session log store, AutoHotkey launcher, privacy documentation, and adjacent tests.
+
+**Coverage added:** Proves key-only cleanup does not call value reads, and persistent AHK logging is gated before FileAppend with session redaction.
+
+**Source review:** Runtime delivery and diagnostics do not depend on persistent logging. Explicit export remains the only normal user-visible transcript write.
+
+**Why this is superior:** It reduces data exposure at discovery and logging boundaries without sacrificing recoverability or diagnosability.

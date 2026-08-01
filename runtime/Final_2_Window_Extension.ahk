@@ -351,6 +351,7 @@ global REVIEW_STUDIO_SCRIPT := A_ScriptDir "\Session_Tracker_End_Session.ahk"
 global EXPECTED_EXTENSION_PATH := A_ScriptDir "\extension"
 global LOG_DIR               := SETTINGS_DIR "\logs"
 global LOG_FILE              := LOG_DIR "\session_debug.log"
+global DEBUG_LOG_ENABLED     := EnvGet("PMIA_DEBUG_LOG") = "1"
 global g_selectedProfileDirectory := "Default"
 global g_layoutMode          := "ThreeWindow"
 global g_profileRecords      := []
@@ -1835,12 +1836,22 @@ ToggleWin1Mute() {
 ;  HELPERS
 ; ============================================================
 
+SanitizeLogMessage(message) {
+    safe := String(message)
+    safe := RegExReplace(safe, "i)pmia_\d{8}_[a-z0-9_-]+", "[SESSION]")
+    return safe
+}
+
 LogEvent(message) {
-    global LOG_DIR, LOG_FILE
+    global LOG_DIR, LOG_FILE, DEBUG_LOG_ENABLED
+    safe := SanitizeLogMessage(message)
+    try OutputDebug "PMIA | " safe
+    if !DEBUG_LOG_ENABLED
+        return
     try {
         if !DirExist(LOG_DIR)
             DirCreate LOG_DIR
-        FileAppend FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss") " | " message "`n", LOG_FILE, "UTF-8"
+        FileAppend FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss") " | " safe "`n", LOG_FILE, "UTF-8"
     } catch {
         ; Silent by design: debug logging must never block a live interview hotkey.
     }

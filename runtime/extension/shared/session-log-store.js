@@ -43,11 +43,19 @@ export function createSessionLogStore({
     },
 
     async purgeLegacyLocalLogs() {
-      if (!legacyLocalArea?.get || !legacyLocalArea?.remove) return 0;
-      const stored = await legacyLocalArea.get(null);
-      const keys = Object.keys(stored || {}).filter(key => key.startsWith('pmia_log_'));
-      if (keys.length) await legacyLocalArea.remove(keys);
-      return keys.length;
+      if (!legacyLocalArea?.remove) return 0;
+      let keys = [];
+      if (typeof legacyLocalArea.getKeys === 'function') {
+        keys = await legacyLocalArea.getKeys();
+      } else if (typeof legacyLocalArea.get === 'function') {
+        const stored = await legacyLocalArea.get(null);
+        keys = Object.keys(stored || {});
+      } else {
+        return 0;
+      }
+      const pmiaKeys = keys.filter(key => String(key).startsWith('pmia_log_'));
+      if (pmiaKeys.length) await legacyLocalArea.remove(pmiaKeys);
+      return pmiaKeys.length;
     }
   };
 }

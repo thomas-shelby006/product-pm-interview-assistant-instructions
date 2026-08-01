@@ -18,7 +18,8 @@ The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retai
 ## PMIA 0.7 improvements
 
 - Transcript and answer logs use `chrome.storage.session`; they are no longer written to disk-backed extension local storage.
-- Startup removes legacy `pmia_log_*` local-storage records without exposing their contents.
+- Startup removes legacy `pmia_log_*` local-storage records using key-only enumeration when supported, without materializing their values.
+- AutoHotkey disk debug logging is disabled by default. Set `PMIA_DEBUG_LOG=1` only for explicit diagnostics; session IDs are redacted.
 - Ending a session or closing its final managed tab clears registrations, pending work, sequence state, and both role logs.
 - A new managed tab can immediately replace a closed or unreachable stale owner instead of waiting for the 45-second heartbeat window.
 - Receiver recovery no longer activates a tab or focuses an Edge window.

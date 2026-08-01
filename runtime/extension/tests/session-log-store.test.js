@@ -59,3 +59,18 @@ test('legacy cleanup removes only old PMIA transcript logs from local storage', 
   assert.equal(await store.purgeLegacyLocalLogs(), 2);
   assert.deepEqual(localArea.state, { unrelated: 'keep' });
 });
+
+
+test('legacy cleanup uses key-only enumeration without reading local values when available', async () => {
+  let valueReads = 0;
+  const removed = [];
+  const localArea = {
+    async getKeys() { return ['pmia_log_old_sender', 'unrelated']; },
+    async get() { valueReads += 1; return {}; },
+    async remove(keys) { removed.push(...keys); }
+  };
+  const store = createSessionLogStore({ sessionArea: storage(), legacyLocalArea: localArea });
+  assert.equal(await store.purgeLegacyLocalLogs(), 1);
+  assert.equal(valueReads, 0);
+  assert.deepEqual(removed, ['pmia_log_old_sender']);
+});
