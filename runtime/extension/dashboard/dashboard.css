@@ -294,3 +294,26 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
   .truth-card, .live-panel, .role-card, .latency-section, .warnings, .metrics { box-shadow: none !important; break-inside: avoid; margin-bottom: .5rem; }
   [data-view-panel] { display: block !important; }
 }
+
+/* Transport-control review surfaces */
+.mechanics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+.mechanics-card, .trace-inspector { border: 1px solid var(--line, #d7d1c8); border-radius: 14px; padding: 16px; background: var(--panel, #fff); min-width: 0; }
+.mechanics-card .section-heading { margin-bottom: 12px; }
+.mechanics-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.mechanics-stats div { border: 1px solid var(--line, #d7d1c8); border-radius: 10px; padding: 10px; min-width: 0; }
+.mechanics-stats dt { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; opacity: .7; }
+.mechanics-stats dd { margin: 4px 0 0; font-weight: 700; overflow-wrap: anywhere; }
+.mechanics-primary { font-size: 20px; font-weight: 750; margin: 6px 0; }
+.drill-card pre, .trace-detail { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.trace-inspector { margin-top: 16px; }
+.trace-search { display: grid; gap: 5px; font-size: 12px; min-width: min(300px, 100%); }
+.trace-search input { width: 100%; min-width: 0; }
+.trace-layout { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.4fr); gap: 12px; }
+.trace-results { display: grid; gap: 6px; align-content: start; max-height: 330px; overflow: auto; }
+.trace-result { width: 100%; text-align: left; display: grid; gap: 3px; }
+.trace-result small { opacity: .72; overflow-wrap: anywhere; }
+.trace-result[aria-selected="true"] { outline: 2px solid currentColor; outline-offset: 1px; }
+.trace-detail { margin: 0; min-height: 160px; }
+@media (max-width: 900px) { .mechanics-grid { grid-template-columns: minmax(0, 1fr); } .trace-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 320px) { .mechanics-grid, .trace-layout, .mechanics-stats { grid-template-columns: minmax(0, 1fr); } .mechanics-card, .trace-inspector { padding: 12px; } .trace-search { min-width: 0; } }
+@media print { .mechanics-grid, .trace-inspector { break-inside: avoid; } .trace-search, #runTransportDrill, #resetRecoveryBudget { display: none !important; } }

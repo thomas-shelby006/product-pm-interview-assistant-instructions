@@ -13,6 +13,8 @@ import { runRuntimeSelfTest } from './runtime-self-test.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
 import { outboxAlarmName } from './alarm-rehydration.js';
+import { runTransportDrill } from './transport-drill.js';
+import { deriveSequenceFeedback } from './sequence-feedback.js';
 
 import { classifyRegistration } from './registration-heartbeat.js';
 
@@ -582,7 +584,7 @@ export function createRuntimePilotController({
     } else if (decision.action === 'check_live') {
       result = await liveCheck(sessionId, registry, pilot);
     } else {
-      result = await repair(sessionId, registry, pilot);
+      result = await repair(sessionId, registry, pilot, { source: 'automatic' });
     }
     const at = Date.now();
     pilot.setDeliverySla(sessionId, {
@@ -679,6 +681,41 @@ export function createRuntimePilotController({
     return result;
   }
 
+  async function runControlPlaneDrill(sessionId, registry, pilot) {
+    const session = registry.getSession(sessionId);
+    const snapshot = pilot.snapshot(sessionId);
+    const directProbe = async role => sendRuntimeCommand(registry, sessionId, role, 'self_test_probe', { source: 'transport_drill' });
+    const fallbackProbe = async role => {
+      const registration = session?.[role];
+      if (!registration?.tabId) return { ok: false, error: `${role}_missing` };
+      try {
+        const response = await chromeApi.tabs.sendMessage(registration.tabId, {
+          type: 'PMIA_RUNTIME_COMMAND', sessionId, command: 'self_test_probe', payload: { source: 'transport_drill_fallback' }
+        });
+        return response?.ok === false ? { ok: false, error: response.error || 'fallback_rejected' } : { ok: true, role, fallback: true };
+      } catch (error) { return { ok: false, error: safeError(error) }; }
+    };
+    const report = await runTransportDrill({
+      handshake: async () => {
+        const roles = ['sender', 'receiver'].map(role => snapshot?.[role]?.transportLane || {});
+        return { ok: roles.every(value => value.handshakeReady && Number(value.protocolVersion) > 0 && Number(value.epoch) > 0), roles: roles.map(value => ({ protocolVersion: value.protocolVersion || 0, epoch: value.epoch || 0, capabilityCount: value.capabilities?.length || 0 })) };
+      },
+      direct: async () => {
+        const [sender, receiver] = await Promise.all([directProbe('sender'), directProbe('receiver')]);
+        return { ok: sender.ok && receiver.ok && !sender.fallback && !receiver.fallback, senderOk: sender.ok, receiverOk: receiver.ok };
+      },
+      fallback: async () => {
+        const [sender, receiver] = await Promise.all([fallbackProbe('sender'), fallbackProbe('receiver')]);
+        return { ok: sender.ok && receiver.ok, senderOk: sender.ok, receiverOk: receiver.ok };
+      },
+      reconnect: async () => ({ ok: ['sender', 'receiver'].every(role => Number(snapshot?.[role]?.transportLane?.epoch || 0) > 0), epochs: { sender: snapshot?.sender?.transportLane?.epoch || 0, receiver: snapshot?.receiver?.transportLane?.epoch || 0 } }),
+      selectiveNack: async () => { const feedback = deriveSequenceFeedback({ lastAcceptedSeq: 1, buffered: [{ seq: 3, envelope: { seq: 3 } }] }); return { ok: JSON.stringify(feedback.nackRanges) === '[[2,2]]', nackRanges: feedback.nackRanges }; },
+      alarmAudit: async () => { const event = [...(snapshot?.timeline || [])].reverse().find(item => item.type === 'alarm_rehydration_audit'); return { ok: true, restored: Number(event?.data?.restored || 0), expected: Number(event?.data?.expected || 0) }; },
+      invariantAudit: async () => ({ ok: Number(snapshot?.stateAudit?.blocked || store.audit().blocked || 0) === 0, blocked: Number(snapshot?.stateAudit?.blocked || store.audit().blocked || 0), repaired: Number(snapshot?.stateAudit?.repaired || store.audit().repaired || 0) })
+    });
+    pilot.setTransportDrill(sessionId, report);
+    return report;
+  }
   async function submitLedgerItem(sessionId, itemId, registry, pilot) {
     const item = pilot.snapshot(sessionId)?.ledger?.find(candidate => candidate.id === itemId);
     if (!item) return { ok: false, error: 'ledger_item_missing' };
@@ -781,7 +818,9 @@ export function createRuntimePilotController({
     return recoveryCoordinator.cancelSchedules(sessionId, pilot);
   }
 
-  async function repair(sessionId, registry, pilot) {
+  async function repair(sessionId, registry, pilot, { source = 'automatic' } = {}) {
+    const budget = pilot.consumeRecoveryBudget(sessionId, { source });
+    if (!budget.accepted) return { ok: false, error: budget.reason, recoveryBudget: budget.budget };
     applyRecoveryTransition(pilot, sessionId, { type: 'repair_requested' });
     const report = { ok: true, actions: [], unresolved: [] };
     const session = registry.getSession(sessionId);
@@ -1081,7 +1120,13 @@ export function createRuntimePilotController({
         result = await activeSelfTest(sessionId, registry, pilot);
         break;
       case 'repair_runtime':
-        result = await repair(sessionId, registry, pilot);
+        result = await repair(sessionId, registry, pilot, { source: 'manual' });
+        break;
+      case 'reset_recovery_budget':
+        result = { ok: true, recoveryBudget: pilot.resetRecoveryBudget(sessionId) };
+        break;
+      case 'run_transport_drill':
+        result = await runControlPlaneDrill(sessionId, registry, pilot);
         break;
       case 'retry_outbox':
         result = await sendRuntimeCommand(registry, sessionId, 'sender', 'retry_outbox');

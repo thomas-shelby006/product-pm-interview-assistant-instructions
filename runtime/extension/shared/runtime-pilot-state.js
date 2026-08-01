@@ -1,5 +1,8 @@
 import { DeliveryLedger } from './delivery-ledger.js';
 import { CommandResultJournal } from './command-result-journal.js';
+import { RecoveryBudget } from './recovery-budget.js';
+import { createTraceSpan } from './delivery-trace.js';
+import { deriveBacklogForecast } from './backlog-forecast.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -168,7 +171,9 @@ function normalizeSession(item) {
     endGuard: item.endGuard && typeof item.endGuard === 'object' ? { ...item.endGuard, counts: { ...(item.endGuard.counts || {}) } } : null,
     senderOutboxState: normalizeOutboxState(item.senderOutboxState),
     selfTest: item.selfTest && typeof item.selfTest === 'object' ? JSON.parse(JSON.stringify(item.selfTest)) : null,
-    answerState: item.answerState && typeof item.answerState === 'object' ? { ...item.answerState } : null
+    answerState: item.answerState && typeof item.answerState === 'object' ? { ...item.answerState } : null,
+    recoveryBudget: new RecoveryBudget(item.recoveryBudget || {}) ,
+    lastTransportDrill: item.lastTransportDrill && typeof item.lastTransportDrill === 'object' ? JSON.parse(JSON.stringify(item.lastTransportDrill)) : null
   };
 }
 
@@ -355,6 +360,46 @@ export class RuntimePilotState {
     session.updatedAt = now;
   }
 
+  recordTraceSpan(sessionId, span, now = Date.now()) {
+    if (!span?.traceId || !span?.stage) return null;
+    const safe = createTraceSpan({ ...span, at: Number(span.at || now) });
+    this.record(sessionId, 'delivery_trace_span', safe, now);
+    return safe;
+  }
+
+  consumeRecoveryBudget(sessionId, options = {}) {
+    const session = this.ensure(sessionId, options.now || Date.now());
+    const result = session.recoveryBudget.consume(options);
+    session.updatedAt = Number(options.now) || Date.now();
+    this.record(sessionId, result.accepted ? 'recovery_budget_consumed' : 'recovery_budget_exhausted', {
+      source: String(options.source || 'automatic'),
+      state: result.state,
+      remaining: result.budget.remaining,
+      cooldownUntil: result.budget.cooldownUntil,
+      reason: result.reason
+    }, session.updatedAt);
+    return result;
+  }
+
+  resetRecoveryBudget(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const budget = session.recoveryBudget.reset(now);
+    session.updatedAt = now;
+    this.record(sessionId, 'recovery_budget_reset', { resetCount: budget.resetCount }, now);
+    return budget;
+  }
+
+  setTransportDrill(sessionId, report, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.lastTransportDrill = report && typeof report === 'object' ? JSON.parse(JSON.stringify(report)) : null;
+    session.updatedAt = now;
+    this.record(sessionId, 'transport_drill_complete', {
+      ok: report?.ok === true,
+      elapsedMs: Math.max(0, Number(report?.elapsedMs) || 0),
+      failedChecks: (report?.checks || []).filter(check => !check.ok).map(check => String(check.name || ''))
+    }, now);
+    return session.lastTransportDrill;
+  }
   persistFinal(sessionId, envelope, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     const outcome = session.ledger.persist(envelope, { now });
@@ -365,8 +410,10 @@ export class RuntimePilotState {
       this.record(sessionId, 'final_persisted', {
         envelopeId: envelope.id,
         seq: envelope.seq || 0,
-        ledgerState: outcome.entry?.state || 'persisted'
+        ledgerState: outcome.entry?.state || 'persisted',
+        traceId: String(envelope?.metadata?.traceId || '')
       }, now);
+      this.recordTraceSpan(sessionId, { traceId: envelope?.metadata?.traceId, stage: 'ledger_persisted', state: 'complete', envelopeId: envelope.id, seq: envelope.seq, role: 'background' }, now);
     }
     session.updatedAt = now;
     return outcome;
@@ -375,14 +422,20 @@ export class RuntimePilotState {
   markLedgerStaged(sessionId, ids, batchId, now = Date.now(), identity = {}) {
     const session = this.ensure(sessionId, now);
     const changed = session.ledger.markStaged(ids, batchId, now, identity);
-    if (changed.length) this.record(sessionId, 'batch_staged', { batchId, memberIds: changed.map(item => item.id) }, now);
+    if (changed.length) {
+      this.record(sessionId, 'batch_staged', { batchId, memberIds: changed.map(item => item.id), memberTraceIds: changed.map(item => item.envelope?.metadata?.traceId).filter(Boolean) }, now);
+      for (const item of changed) this.recordTraceSpan(sessionId, { traceId: item.envelope?.metadata?.traceId, stage: 'batch_staged', state: 'complete', envelopeId: item.id, batchId, seq: item.envelope?.seq, role: 'background' }, now);
+    }
     return changed;
   }
 
   markLedgerSubmitting(sessionId, batchId, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     const changed = session.ledger.markSubmitting(batchId, now);
-    if (changed.length) this.record(sessionId, 'batch_submitting', { batchId, memberIds: changed.map(item => item.id) }, now);
+    if (changed.length) {
+      this.record(sessionId, 'batch_submitting', { batchId, memberIds: changed.map(item => item.id), memberTraceIds: changed.map(item => item.envelope?.metadata?.traceId).filter(Boolean) }, now);
+      for (const item of changed) this.recordTraceSpan(sessionId, { traceId: item.envelope?.metadata?.traceId, stage: 'provider_submitting', state: 'active', envelopeId: item.id, batchId, seq: item.envelope?.seq, role: 'receiver' }, now);
+    }
     return changed;
   }
 
@@ -392,8 +445,9 @@ export class RuntimePilotState {
     session.metrics.delivered += result.changed.length;
     if (result.changed.length) {
       this.record(sessionId, 'batch_proven', {
-        batchId, memberIds: result.changed.map(item => item.id), proof
+        batchId, memberIds: result.changed.map(item => item.id), memberTraceIds: result.changed.map(item => item.envelope?.metadata?.traceId).filter(Boolean), proof
       }, now);
+      for (const item of result.changed) this.recordTraceSpan(sessionId, { traceId: item.envelope?.metadata?.traceId, stage: 'rendered_proof', state: 'complete', envelopeId: item.id, batchId, seq: item.envelope?.seq, role: 'receiver' }, now);
     } else if (!result.accepted) {
       this.record(sessionId, 'batch_proof_rejected', {
         batchId, reason: result.reason, memberIds: proof?.memberIds || []
@@ -508,6 +562,19 @@ export class RuntimePilotState {
       session.metrics.answerElapsedMs = session.metrics.answerElapsedMs.slice(-MAX_METRIC_SAMPLES);
     }
     this.record(sessionId, `answer_${state}`, safeEventData({ ...event, state }), now);
+    for (const item of session.ledger.snapshot().filter(entry => String(entry.batchId || '') === batchId)) {
+      this.recordTraceSpan(sessionId, {
+        traceId: item.envelope?.metadata?.traceId,
+        stage: 'answer_terminal',
+        state,
+        envelopeId: item.id,
+        batchId,
+        seq: item.envelope?.seq,
+        reason: String(event.reason || state),
+        durationMs: Math.max(0, Number(event.elapsedMs) || 0),
+        role: 'receiver'
+      }, now);
+    }
     return true;
   }
 
@@ -752,6 +819,8 @@ export class RuntimePilotState {
       });
     }
     const unresolved = session.ledger.unresolved();
+    const proofEvents = session.timeline.filter(event => event.type === 'batch_proven').map(event => ({ at: event.at }));
+    const deliveryForecast = deriveBacklogForecast({ queued: unresolved.length, oldestAgeMs: unresolved.length ? Math.max(0, now - Math.min(...unresolved.map(item => Number(item.persistedAt) || now))) : 0, targetMs: Number(session.deliverySla?.targetMs || 20000), proofLatenciesMs: session.metrics.deliveryProofMs, proofs: proofEvents }, now);
     if (unresolved.length) warnings.push({ code: 'inbox_waiting', severity: 'warn', count: unresolved.length });
     const oldestPersistedAt = unresolved.length
       ? Math.min(...unresolved.map(item => Number(item.persistedAt) || now))
@@ -797,6 +866,9 @@ export class RuntimePilotState {
       senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) },
       selfTest: session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null,
       answerState: session.answerState ? { ...session.answerState } : null,
+      recoveryBudget: session.recoveryBudget.snapshot(now),
+      deliveryForecast,
+      lastTransportDrill: session.lastTransportDrill ? JSON.parse(JSON.stringify(session.lastTransportDrill)) : null,
       metrics: {
         ...session.metrics,
         deliverySuccessRate: session.metrics.delivered + session.metrics.failed
@@ -847,7 +919,9 @@ export class RuntimePilotState {
       endGuard: session.endGuard ? { ...session.endGuard, counts: { ...(session.endGuard.counts || {}) } } : null,
       senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) },
       selfTest: session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null,
-      answerState: session.answerState ? { ...session.answerState } : null
+      answerState: session.answerState ? { ...session.answerState } : null,
+      recoveryBudget: session.recoveryBudget.snapshot(),
+      lastTransportDrill: session.lastTransportDrill ? JSON.parse(JSON.stringify(session.lastTransportDrill)) : null
     }));
   }
 }

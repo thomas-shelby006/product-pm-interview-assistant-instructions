@@ -44,6 +44,26 @@ export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {
       actionableBytes: memory.actionableBytes,
       reclaimableBytes: memory.reclaimableBytes
     },
+    transportControl: {
+      forecast: snapshot.deliveryForecast ? {
+        risk: String(snapshot.deliveryForecast.risk || ''),
+        queued: Number(snapshot.deliveryForecast.queued || 0),
+        drainEstimateMs: Number.isFinite(Number(snapshot.deliveryForecast.drainEstimateMs)) ? Number(snapshot.deliveryForecast.drainEstimateMs) : 0,
+        p95ProofMs: Number(snapshot.deliveryForecast.p95ProofMs || 0),
+        proofsPerMinute: Number(snapshot.deliveryForecast.proofsPerMinute || 0)
+      } : null,
+      recoveryBudget: snapshot.recoveryBudget ? {
+        state: String(snapshot.recoveryBudget.state || ''),
+        remaining: Number(snapshot.recoveryBudget.remaining || 0),
+        maxAutomatic: Number(snapshot.recoveryBudget.maxAutomatic || 0),
+        cooldownUntil: Number(snapshot.recoveryBudget.cooldownUntil || 0)
+      } : null,
+      lastDrill: snapshot.lastTransportDrill ? {
+        ok: Boolean(snapshot.lastTransportDrill.ok),
+        elapsedMs: Number(snapshot.lastTransportDrill.elapsedMs || 0),
+        checks: (snapshot.lastTransportDrill.checks || []).map(check => ({ name: String(check.name || ''), ok: Boolean(check.ok), error: String(check.error || '') }))
+      } : null
+    },
     recovery: {
       phase: recovery.phase,
       verified: recovery.verified,

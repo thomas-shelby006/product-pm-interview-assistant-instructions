@@ -29,6 +29,7 @@ import { deriveSelfTestView } from './self-test-model.js';
 import { renderTruthRail } from './render-live-status.js';
 import { renderRuntimeRole } from './render-runtime-health.js';
 import { ReconnectPolicy } from '../shared/reconnect-policy.js';
+import { buildTraceIndex, searchDeliveryTraces, inspectDeliveryTrace } from './trace-inspector-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -45,7 +46,9 @@ const state = {
   sessionEnded: false,
   pending: new Map(),
   efficiency: { full: 0, delta: 0, heartbeat: 0, lastMode: 'Waiting', changedSections: 0 },
-  endPreparation: null
+  endPreparation: null,
+  traceQuery: '',
+  selectedTraceId: ''
 };
 
 const byId = id => document.getElementById(id);
@@ -786,6 +789,57 @@ function reviewItem(label, value) {
   return item;
 }
 
+function formatForecastDuration(value) {
+  return Number.isFinite(Number(value)) ? formatDuration(Number(value)) : 'Unavailable';
+}
+
+function renderMechanics(snapshot) {
+  const forecast = snapshot?.deliveryForecast || {};
+  text('forecastRisk', String(forecast.risk || 'clear').replaceAll('_', ' '));
+  text('forecastDrain', formatForecastDuration(forecast.drainEstimateMs));
+  text('forecastP95', formatDuration(forecast.p95ProofMs || 0));
+  text('forecastThroughput', `${Number(forecast.proofsPerMinute || 0).toFixed(2)} proofs/min`);
+
+  const budget = snapshot?.recoveryBudget || {};
+  text('recoveryBudgetState', String(budget.state || 'available').replaceAll('_', ' '));
+  text('recoveryBudgetDetail', budget.state === 'exhausted'
+    ? `Automatic repair is stopped until ${budget.cooldownUntil ? new Date(budget.cooldownUntil).toLocaleTimeString([], { hour12: false }) : 'manual reset'}.`
+    : `${Number(budget.remaining ?? budget.maxAutomatic ?? 0)} of ${Number(budget.maxAutomatic || 0)} automatic repair attempts remain.`);
+
+  byId('transportDrillReport').textContent = snapshot?.lastTransportDrill
+    ? JSON.stringify(snapshot.lastTransportDrill, null, 2)
+    : 'No drill has been run.';
+
+  const index = buildTraceIndex(snapshot);
+  const results = searchDeliveryTraces(index, state.traceQuery);
+  if (!state.selectedTraceId || !results.some(item => item.traceId === state.selectedTraceId)) {
+    state.selectedTraceId = results[0]?.traceId || '';
+  }
+  const container = byId('traceResults');
+  container.replaceChildren();
+  if (!results.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = 'No delivery trace matches this search.';
+    container.append(empty);
+  } else {
+    for (const item of results.slice(0, 80)) {
+      const button = document.createElement('button');
+      button.className = 'trace-result';
+      button.dataset.traceId = item.traceId;
+      button.setAttribute('role', 'option');
+      button.setAttribute('aria-selected', String(item.traceId === state.selectedTraceId));
+      const title = document.createElement('b');
+      title.textContent = `Seq ${item.seq || '--'} - ${item.state || 'unknown'}`;
+      const detail = document.createElement('small');
+      detail.textContent = `${item.traceId} - ${item.envelopeId}${item.batchId ? ` - ${item.batchId}` : ''}`;
+      button.append(title, detail);
+      container.append(button);
+    }
+  }
+  const selected = inspectDeliveryTrace(index.find(item => item.traceId === state.selectedTraceId));
+  byId('traceDetail').textContent = selected ? JSON.stringify(selected, null, 2) : 'No trace selected.';
+}
 function renderReview(snapshot) {
   const review = deriveReview(snapshot);
   const grid = byId('reviewGrid');
@@ -801,6 +855,7 @@ function renderReview(snapshot) {
     reviewItem('Average answer', formatDuration(review.averageAnswerElapsedMs)),
     reviewItem('Answer timeouts', review.answerTimeouts)
   );
+  renderMechanics(snapshot);
   byId('repairReport').textContent = snapshot?.lastRepair
     ? JSON.stringify(snapshot.lastRepair, null, 2)
     : 'No repair has been run.';
@@ -836,7 +891,7 @@ function render(changedKeys = null) {
   renderOverview(state.snapshot, now);
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
-  if (changed('metrics', 'lastRepair', 'timeline', 'sender', 'receiver')) renderReview(state.snapshot);
+  if (changed('metrics', 'lastRepair', 'timeline', 'sender', 'receiver', 'ledger', 'deliveryForecast', 'recoveryBudget', 'lastTransportDrill')) renderReview(state.snapshot);
   updateControlAvailability();
 }
 
@@ -885,6 +940,12 @@ document.addEventListener('click', event => {
     render();
     return;
   }
+  const traceButton = event.target.closest('[data-trace-id]');
+  if (traceButton) {
+    state.selectedTraceId = traceButton.dataset.traceId || '';
+    renderReview(state.snapshot);
+    return;
+  }
   const button = event.target.closest('[data-command]');
   if (button) {
     const command = button.dataset.command;
@@ -897,6 +958,11 @@ document.addEventListener('click', event => {
   }
 });
 
+byId('traceSearch').addEventListener('input', event => {
+  state.traceQuery = String(event.currentTarget.value || '');
+  state.selectedTraceId = '';
+  renderReview(state.snapshot);
+});
 byId('submitSelected').addEventListener('click', event => {
   if (!state.selectedQueueId) return showToast('Select an unresolved final.', 'warn');
   const item = state.snapshot?.ledger?.find(candidate => candidate.id === state.selectedQueueId);

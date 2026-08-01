@@ -16,6 +16,8 @@ const COMMANDS = new Set([
   'check_live',
   'run_self_test',
   'repair_runtime',
+  'reset_recovery_budget',
+  'run_transport_drill',
   'resend_context',
   'toggle_mic',
   'toggle_scroll',

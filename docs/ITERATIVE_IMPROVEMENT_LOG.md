@@ -423,3 +423,30 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** the document-fence generation travels with registration; Session Registry delegates ownership to the election policy and exposes lease state in Pilot telemetry.
 
 **Source-complete status:** Cycles 61-65 are implemented. Executable verification remains deferred until Cycle 70.
+
+## Cycle 66 - Recovery Budget and Escalation Control
+- **Bug fixes:** repeated automatic repair can no longer thrash a degraded provider indefinitely.
+- **New features:** rolling automatic-attempt allowance, exhausted state, cooldown, remaining count, and explicit manual reset.
+- **Implementation:** the repair authority consumes the session budget before automatic or manual work; SLA escalation is tagged automatic and the Pilot exposes reset control.
+
+## Cycle 67 - End-to-End Delivery Trace IDs
+- **Bug fixes:** outbox, ledger, batch, proof, and answer events can now be correlated without ambiguous envelope or batch-only searches.
+- **New features:** stable trace IDs and reason-coded span IDs across every mechanical stage.
+- **Implementation:** envelopes receive a trace from session, envelope ID, and sequence only; Pilot records metadata-only persisted, staged, submitting, proof, and answer-terminal spans.
+
+## Cycle 68 - Delivery SLO and Backlog Forecast
+- **Bug fixes:** the operator is warned about projected backlog risk before the oldest final crosses its delivery target.
+- **New features:** p50/p95 proof latency, proofs per minute, drain estimate, projected age, and clear/watch/at-risk/breached state.
+- **Implementation:** the forecast is derived at snapshot time from unresolved counts and bounded timing samples only.
+
+## Cycle 69 - Per-Final Trace Inspector and Search
+- **Bug fixes:** one unresolved final no longer requires scanning the complete timeline and ledger manually.
+- **New features:** search by trace ID, envelope ID, sequence, or batch ID; ordered spans and a reason-coded next action.
+- **Implementation:** the Review panel contains an accessible trace list and detail view generated from safe ledger and trace metadata.
+
+## Cycle 70 - No-Content Transport Drill and Chaos Matrix
+- **Bug fixes:** handshake, direct-port, fallback, epoch, selective NACK, alarm, and invariant regressions can be detected before an interview.
+- **New features:** one operator-run drill with seven structured checks, elapsed time, failed-check summary, and Safe Health Report coverage.
+- **Implementation:** the controller reuses `self_test_probe`, the established one-time fallback, synthetic sequence feedback, alarm audit, and invariant audit; no prompt, answer, clipboard, or delivery state is read or mutated.
+
+**Source-complete status:** Cycles 66-70 and all Cycles 46-70 are implemented. The deferred executable verification phase is now open. The technical HTML remains deferred until runtime verification is complete.

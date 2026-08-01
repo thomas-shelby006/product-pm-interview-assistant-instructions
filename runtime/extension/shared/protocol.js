@@ -1,3 +1,5 @@
+﻿import { ensureDeliveryTrace } from './delivery-trace.js';
+
 export const PROVIDERS = new Set(['chatgpt', 'claude']);
 export const ROLES = new Set(['sender', 'receiver']);
 
@@ -23,16 +25,16 @@ export function makeEnvelope({
   if (!sessionId || !PROVIDERS.has(sourceProvider) || !normalized) {
     throw new TypeError('Invalid PMIA envelope input');
   }
-  return {
+  return ensureDeliveryTrace({
     id: `${now}-${Math.random().toString(36).slice(2, 10)}`,
     sessionId,
     sourceProvider,
     kind,
     seq: Number.isSafeInteger(seq) && seq > 0 ? seq : 0,
     text: normalized,
-    metadata: metadata && typeof metadata === 'object' ? metadata : {},
+    metadata: metadata && typeof metadata === 'object' ? { ...metadata } : {},
     createdAt: now
-  };
+  });
 }
 
 export function isEnvelope(value) {
