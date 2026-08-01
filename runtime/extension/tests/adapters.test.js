@@ -379,6 +379,14 @@ test('provider adapters expose composer readiness without submitting', () => {
   }
 });
 
+test('ChatGPT readiness waits for its real Send control to mount', () => {
+  const composer = fakeElement({ tagName: 'DIV', textContent: 'question' });
+  const adapter = chatgptModule.createChatGptAdapter(fakeDocument({
+    '#prompt-textarea': composer
+  }));
+  assert.equal(adapter.canSubmit(), false);
+});
+
 test('provider readiness reports a disabled send control', () => {
   const composer = fakeElement({ tagName: 'TEXTAREA', value: 'question' });
   const send = fakeElement({ tagName: 'BUTTON', disabled: true });

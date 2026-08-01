@@ -91,3 +91,22 @@ test('sender telemetry never includes receiver batch state', () => {
   });
   assert.equal('batchState' in telemetry.snapshot(), false);
 });
+
+
+test('receiver telemetry exposes safe hidden runtime scheduler state', () => {
+  const telemetry = telemetryModule.createRuntimeTelemetry({
+    runtimeConfig: { sessionId: 's', role: 'receiver', provider: 'chatgpt' },
+    adapter: { findComposer: () => ({}), isGenerating: () => false },
+    send: async () => ({ ok: true }),
+    getVisibilityState: () => 'hidden',
+    setIntervalFn: () => 1,
+    clearIntervalFn: () => {}
+  });
+  telemetry.scheduler({ phase: 'submit_wait', reason: 'send_control', wakeSource: 'mutation', check: 3, visibilityState: 'hidden' });
+  const snapshot = telemetry.snapshot();
+  assert.equal(snapshot.pageVisibility, 'hidden');
+  assert.equal(snapshot.schedulerState.wakeSource, 'mutation');
+  assert.equal(snapshot.schedulerState.reason, 'send_control');
+  assert.ok(!JSON.stringify(snapshot.schedulerState).includes('synthetic private question'));
+  telemetry.disconnect();
+});

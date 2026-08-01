@@ -226,3 +226,6 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 .pace-panel[data-pace="recovering"] { border-left-color: var(--olive); background: var(--olive-soft); }
 .pace-panel[data-pace="steady_backlog"], .pace-panel[data-pace="answering"] { border-left-color: var(--ochre); }
 .pace-panel[data-pace="blocked"] { border-left-color: var(--danger); }
+
+.hidden-runtime-panel[data-visibility="hidden"] { border-color: color-mix(in srgb, var(--amber) 55%, var(--line)); }
+.hidden-runtime-panel[data-visibility="hidden"] #hiddenRuntimeState { color: var(--amber); }

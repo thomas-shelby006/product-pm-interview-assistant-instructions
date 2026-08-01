@@ -331,6 +331,9 @@ function renderLiveCommandCenter(snapshot, now) {
     text('storagePressureBadge', '--');
     text('storagePressureValue', '--');
     text('storagePressureDetail', 'Session memory status is not available yet.');
+    text('hiddenRuntimeState', '--');
+    text('hiddenRuntimeTitle', 'Waiting for receiver scheduler state');
+    text('hiddenRuntimeDetail', 'No hidden-window progress evidence is available yet.');
     text('oldestInboxAge', '--');
     renderLatencyRail(null);
     return;
@@ -438,6 +441,18 @@ function renderLiveCommandCenter(snapshot, now) {
       : inbox.storage.level === 'high'
         ? 'Proven history is compacting; unresolved finals are untouched.'
         : 'Critical pressure. Unresolved finals remain protected; export or end the session soon.');
+  const scheduler = snapshot?.receiver?.schedulerState || {};
+  const visibility = String(snapshot?.receiver?.pageVisibility || scheduler.visibilityState || 'unknown');
+  const hiddenPanel = document.querySelector('.hidden-runtime-panel');
+  if (hiddenPanel) hiddenPanel.dataset.visibility = visibility;
+  text('hiddenRuntimeState', visibility === 'hidden' ? 'Hidden' : visibility === 'visible' ? 'Visible' : 'Unknown');
+  text('hiddenRuntimeTitle', scheduler.phase && scheduler.phase !== 'idle'
+    ? `${String(scheduler.phase).replaceAll('_', ' ')} - ${scheduler.reason || 'provider wait'}`
+    : 'Receiver scheduler is idle');
+  text('hiddenRuntimeDetail', scheduler.wakeSource
+    ? `Last wake: ${scheduler.wakeSource}. Visibility: ${visibility}. Check ${Number(scheduler.check || 0)}.`
+    : `Visibility: ${visibility}. No provider wait is active.`);
+
   const memory = deriveMemoryGuard(snapshot);
   const memoryBreakdown = byId('memoryBreakdown');
   memoryBreakdown.replaceChildren();

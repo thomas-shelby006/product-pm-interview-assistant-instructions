@@ -528,6 +528,9 @@ async function startRuntime(runtimeConfig) {
       latestReceiverProof = proof;
       telemetry.event('receiver_proof', proof);
     },
+    onSchedulerState(value) {
+      telemetry.scheduler(value);
+    },
     writePreview(text) {
       return composerArbiter.writePreview(text);
     }

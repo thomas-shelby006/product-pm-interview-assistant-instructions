@@ -175,3 +175,11 @@ test('Pilot exposes a one-click Safe Health Report separate from diagnostics', (
   assert.match(markup, /id="copyHealthReport"/);
   assert.match(markup, /Copy health report/);
 });
+
+
+test('Runtime Pilot exposes hidden receiver scheduler evidence', () => {
+  assert.match(dashboardHtml, /id="hiddenRuntimeState"/);
+  assert.match(dashboardHtml, /id="hiddenRuntimeTitle"/);
+  assert.match(dashboardHtml, /id="hiddenRuntimeDetail"/);
+  assert.match(dashboardJs, /receiver\?\.schedulerState/);
+});

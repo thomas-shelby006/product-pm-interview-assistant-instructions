@@ -44,6 +44,7 @@ export function createRuntimeTelemetry({
   getScrollLocked = () => false,
   getVoiceActive = () => false,
   getBatchState = () => null,
+  getVisibilityState = () => String(globalThis.document?.visibilityState || 'unknown'),
   heartbeatMs = 5000,
   silenceWarningMs = 90000,
   now = () => Date.now(),
@@ -56,6 +57,7 @@ export function createRuntimeTelemetry({
   let lastActivityAt = now();
   let lastSourceActivityAt = runtimeConfig?.role === 'sender' ? now() : 0;
   let micState = 'unknown';
+  let schedulerState = { phase: 'idle', reason: '', wakeSource: '', visibilityState: getVisibilityState(), at: now() };
   const adapterCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
   let lastFingerprint = '';
   let closed = false;
@@ -79,6 +81,8 @@ export function createRuntimeTelemetry({
       voiceActive: Boolean(getVoiceActive()),
       micState,
       adapterCapabilities,
+      pageVisibility: getVisibilityState(),
+      schedulerState: runtimeConfig?.role === 'receiver' ? { ...schedulerState } : null,
       ...(runtimeConfig?.role === 'receiver' ? { batchState: getBatchState() } : {}),
       scrollLocked: Boolean(getScrollLocked()),
       transportPaused: Boolean(getTransportPaused()),
@@ -170,6 +174,25 @@ export function createRuntimeTelemetry({
     void publish({ force: true, event: { type, ...data } });
   }
 
+
+  function scheduler(value = {}) {
+    const nextCore = {
+      phase: String(value.phase || 'idle'),
+      reason: String(value.reason || ''),
+      wakeSource: String(value.wakeSource || ''),
+      visibilityState: String(value.visibilityState || getVisibilityState()),
+      check: Math.max(0, Number(value.check) || 0),
+      attempt: Math.max(0, Number(value.attempt) || 0)
+    };
+    const previousCore = { ...schedulerState };
+    delete previousCore.at;
+    if (stableValue(nextCore) === stableValue(previousCore)) return false;
+    schedulerState = { ...nextCore, at: now() };
+    touchActivity();
+    void publish();
+    return true;
+  }
+
   function setMicState(value) {
     micState = String(value || 'unknown');
     touchActivity();
@@ -188,6 +211,7 @@ export function createRuntimeTelemetry({
     answer,
     answerTimeout,
     event,
+    scheduler,
     setMicState,
     snapshot,
     disconnect() {

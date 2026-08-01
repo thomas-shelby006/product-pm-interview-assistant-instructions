@@ -136,7 +136,7 @@ export function createChatGptAdapter(doc = document) {
     isComposerEmpty() { return !composerText(findComposer()); },
     canSubmit() {
       const button = findSendButton();
-      return Boolean(findComposer() && (!button || !button.disabled));
+      return Boolean(findComposer() && button && !button.disabled);
     },
     submit() {
       if (clickFirst(doc, SEND_SELECTORS)) return true;

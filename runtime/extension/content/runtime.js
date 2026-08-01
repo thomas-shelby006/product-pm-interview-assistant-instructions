@@ -1,14 +1,45 @@
 import { sanitizeTranscriptCandidate } from '../shared/transcript-filter.js';
 
-function yieldToProvider() {
+export function yieldToProvider({
+  requestFrame = typeof globalThis.requestAnimationFrame === 'function'
+    ? globalThis.requestAnimationFrame.bind(globalThis)
+    : null,
+  setTimer = typeof globalThis.setTimeout === 'function'
+    ? globalThis.setTimeout.bind(globalThis)
+    : null,
+  clearTimer = typeof globalThis.clearTimeout === 'function'
+    ? globalThis.clearTimeout.bind(globalThis)
+    : null,
+  MutationObserverCtor = globalThis.MutationObserver,
+  observeTarget = globalThis.document?.documentElement || globalThis.document?.body || null,
+  fallbackMs = 25
+} = {}) {
   return new Promise(resolve => {
-    if (typeof globalThis.requestAnimationFrame === 'function') {
-      globalThis.requestAnimationFrame(() => resolve());
-      return;
+    let settled = false;
+    let timer = null;
+    let observer = null;
+    const finish = (source = 'unknown') => {
+      if (settled) return;
+      settled = true;
+      observer?.disconnect?.();
+      if (timer !== null && clearTimer) clearTimer(timer);
+      resolve(source);
+    };
+    if (observeTarget && typeof MutationObserverCtor === 'function') {
+      observer = new MutationObserverCtor(() => finish('mutation'));
+      observer.observe(observeTarget, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        characterData: true
+      });
     }
-    globalThis.queueMicrotask(resolve);
+    if (requestFrame) requestFrame(() => finish('frame'));
+    if (setTimer) timer = setTimer(() => finish('timer'), Math.max(1, Number(fallbackMs) || 25));
+    else if (!requestFrame && !observer) globalThis.queueMicrotask(() => finish('microtask'));
   });
 }
+
 export function snapshotUserTurnIds(adapter) {
   if (typeof adapter.getConversationMessages !== 'function') return null;
   return new Set(
@@ -63,7 +94,9 @@ export async function submitComposerWhenReady({
   maxSubmitAttempts = 2,
   baselineUserIds = snapshotUserTurnIds(adapter),
   confirmationText = text,
-  isCurrent = () => true
+  isCurrent = () => true,
+  onSchedulerState = () => {},
+  getVisibilityState = () => String(globalThis.document?.visibilityState || 'unknown')
 }) {
   const normalized = String(text ?? '').trim();
   if (!normalized || !isCurrent()) return false;
@@ -81,9 +114,15 @@ export async function submitComposerWhenReady({
       const submitReady = textReady && (adapter.canSubmit?.() ?? true);
       if (submitReady && adapter.submit()) {
         submitTriggered = true;
+        onSchedulerState({ phase: 'submit_triggered', reason: 'send_control', wakeSource: '', attempt, check, visibilityState: getVisibilityState() });
         break;
       }
-      if (check < maxChecks) await yieldFn();
+      if (check < maxChecks) {
+        const reason = !composerWritten ? 'composer_write' : !textReady ? 'composer_mismatch' : 'send_control';
+        onSchedulerState({ phase: 'submit_wait', reason, wakeSource: '', attempt, check, visibilityState: getVisibilityState() });
+        const wakeSource = await yieldFn();
+        onSchedulerState({ phase: 'submit_wait', reason, wakeSource: String(wakeSource || 'unknown'), attempt, check, visibilityState: getVisibilityState() });
+      }
     }
     if (!submitTriggered) return false;
     if (!(baselineUserIds instanceof Set)) return true;
@@ -93,6 +132,7 @@ export async function submitComposerWhenReady({
       if (!isCurrent()) return false;
       if (hasNewSubmittedUserTurn(adapter, normalized, baselineUserIds, confirmationText)) {
         clearSubmittedComposer(adapter, normalized);
+        onSchedulerState({ phase: 'idle', reason: 'rendered_turn_confirmed', wakeSource: '', attempt, check, visibilityState: getVisibilityState() });
         return true;
       }
       retryAllowed = attempt + 1 < attempts
@@ -100,7 +140,11 @@ export async function submitComposerWhenReady({
         && (adapter.composerContains?.(normalized) ?? false)
         && !(adapter.isGenerating?.() ?? false);
       if (retryAllowed) break;
-      if (check < maxConfirmChecks) await yieldFn();
+      if (check < maxConfirmChecks) {
+        onSchedulerState({ phase: 'proof_wait', reason: 'rendered_turn', wakeSource: '', attempt, check, visibilityState: getVisibilityState() });
+        const wakeSource = await yieldFn();
+        onSchedulerState({ phase: 'proof_wait', reason: 'rendered_turn', wakeSource: String(wakeSource || 'unknown'), attempt, check, visibilityState: getVisibilityState() });
+      }
     }
     if (!retryAllowed) return false;
   }
@@ -113,6 +157,7 @@ export function createReceiverController({
   sleep,
   onStatus = () => {},
   onProof = () => {},
+  onSchedulerState = () => {},
   writePreview = text => adapter.setComposerText(text),
   stopTimeoutMs = 2500,
   stopPollMs = 75,
@@ -242,7 +287,8 @@ ${normalizedQuestion}`;
         maxConfirmChecks,
         baselineUserIds,
         confirmationText: text,
-        isCurrent: () => deliveryId === latestDeliveryId
+        isCurrent: () => deliveryId === latestDeliveryId,
+        onSchedulerState
       });
       if (!submitted) {
         const reason = adapter.findComposer?.()

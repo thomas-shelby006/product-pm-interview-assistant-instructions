@@ -4,6 +4,56 @@ import assert from 'node:assert/strict';
 const filterModule = await import('../shared/transcript-filter.js').catch(() => null);
 const runtimeModule = await import('../content/runtime.js').catch(() => null);
 
+
+
+test('provider yield progresses through a timer when hidden-window rAF is suspended', async () => {
+  let frameCallback = null;
+  let delay = null;
+  await runtimeModule.yieldToProvider({
+    requestFrame(callback) { frameCallback = callback; },
+    setTimer(callback, value) { delay = value; callback(); return 1; },
+    clearTimer() {},
+    fallbackMs: 25
+  });
+  assert.equal(typeof frameCallback, 'function');
+  assert.equal(delay, 25);
+});
+
+test('provider yield wakes on a DOM mutation when hidden timers and rAF are suspended', async () => {
+  let mutationCallback = null;
+  let disconnected = false;
+  class FakeMutationObserver {
+    constructor(callback) { mutationCallback = callback; }
+    observe(target, options) {
+      assert.equal(target.id, 'root');
+      assert.equal(options.subtree, true);
+    }
+    disconnect() { disconnected = true; }
+  }
+  const waiting = runtimeModule.yieldToProvider({
+    requestFrame() {},
+    setTimer() { return 9; },
+    clearTimer() {},
+    MutationObserverCtor: FakeMutationObserver,
+    observeTarget: { id: 'root' }
+  });
+  mutationCallback();
+  await waiting;
+  assert.equal(disconnected, true);
+});
+
+test('provider yield settles once when a visible frame wins before the fallback', async () => {
+  let resolutions = 0;
+  let timerCallback = null;
+  await runtimeModule.yieldToProvider({
+    requestFrame(callback) { queueMicrotask(callback); },
+    setTimer(callback) { timerCallback = callback; return 7; },
+    clearTimer(value) { if (value === 7) resolutions += 1; }
+  });
+  timerCallback?.();
+  assert.equal(resolutions, 1);
+});
+
 test('transcript filter suppresses filler and incomplete fragments', () => {
   assert.ok(filterModule, 'transcript filter module must exist');
   assert.equal(filterModule.isActionableTranscript('okay'), false);

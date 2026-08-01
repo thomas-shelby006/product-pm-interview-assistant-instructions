@@ -131,6 +131,12 @@
             <div id="memoryBreakdown" class="memory-breakdown" aria-label="Session memory categories"></div>
             <button id="compactProven" data-command="compact_proven">Compact proven history</button>
           </article>
+
+          <article class="live-panel hidden-runtime-panel" data-visibility="unknown">
+            <div class="panel-title"><span class="eyebrow">Hidden runtime guard</span><b id="hiddenRuntimeState">Waiting</b></div>
+            <strong id="hiddenRuntimeTitle">No receiver scheduler evidence</strong>
+            <p id="hiddenRuntimeDetail">Window 2 visibility and provider wake source will appear here.</p>
+          </article>
         </section>
 
         <section class="latency-section" aria-labelledby="latencyTitle">
