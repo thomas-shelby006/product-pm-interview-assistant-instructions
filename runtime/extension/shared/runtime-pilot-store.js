@@ -4,6 +4,7 @@ import { createStateCommitJournal, recoverCommittedState } from './state-commit-
 import { validateRuntimeState } from './runtime-invariants.js';
 import { encodeRuntimeEnvelope, normalizeRuntimeEnvelope, RUNTIME_STATE_SCHEMA_VERSION } from './runtime-state-schema.js';
 import { migrateRuntimeEnvelope } from './runtime-state-migrations.js';
+import { createStateQuarantine, preserveStateQuarantine, quarantineAudit } from './state-quarantine.js';
 
 function stateHash(value) {
   let hash = 0x811c9dc5;
@@ -24,27 +25,57 @@ export function createRuntimePilotStore({
   }
   const journalKey = `${key}_commit_journal`;
   const previousKey = `${key}_previous_applied`;
+  const quarantineKey = `${key}_quarantine`;
   let statePromise = null;
   let commitJournal = createStateCommitJournal();
-  let lastAudit = { recovered: false, repaired: 0, blocked: 0, findings: [] };
+  let lastAudit = { recovered: false, repaired: 0, blocked: 0, findings: [], quarantine: quarantineAudit(null) };
 
   async function hydrate() {
-    const stored = await storageArea.get([key, journalKey, previousKey]);
+    const stored = await storageArea.get([key, journalKey, previousKey, quarantineKey]);
     commitJournal = createStateCommitJournal(stored[journalKey] || {});
     const recovered = recoverCommittedState({
       currentState: stored[key] ?? [],
       previousState: stored[previousKey] ?? [],
       journal: stored[journalKey] || {}
     });
+    const quarantineAndBlock = async (state, reason, extra = {}) => {
+      const quarantine = preserveStateQuarantine(
+        stored[quarantineKey],
+        createStateQuarantine(state, reason)
+      );
+      await storageArea.set({ [quarantineKey]: quarantine });
+      lastAudit = {
+        recovered: recovered.recovered,
+        recoveryReason: recovered.reason,
+        repaired: 0,
+        blocked: 1,
+        findings: [{ severity: 'blocked', code: reason }],
+        quarantine: quarantineAudit(quarantine),
+        ...extra
+      };
+      throw new Error(`runtime_state_blocked:${reason}`);
+    };
     const normalized = normalizeRuntimeEnvelope(recovered.state, { writerVersion });
-    if (!normalized.ok) throw new Error(`runtime_state_invalid:${normalized.reason}`);
+    if (!normalized.ok) return quarantineAndBlock(recovered.state, normalized.reason);
     const migration = migrateRuntimeEnvelope(normalized.envelope, RUNTIME_STATE_SCHEMA_VERSION, {
       writerVersion,
       now: Date.now()
     });
-    if (!migration.ok) throw new Error(`runtime_state_incompatible:${migration.reason}`);
+    if (!migration.ok) {
+      return quarantineAndBlock(normalized.envelope, migration.reason, {
+        schema: { version: normalized.envelope.schemaVersion, writerVersion: normalized.envelope.writerVersion, legacy: normalized.legacy, migration: migration.applied }
+      });
+    }
     if (recovered.recovered) commitJournal = createStateCommitJournal(recovered.journal);
     const invariant = validateRuntimeState(migration.envelope.sessions);
+    if (invariant.blocked > 0) {
+      return quarantineAndBlock(migration.envelope, 'runtime_invariant_blocked', {
+        repaired: invariant.repaired,
+        blocked: invariant.blocked,
+        findings: invariant.findings,
+        schema: { version: migration.envelope.schemaVersion, writerVersion: migration.envelope.writerVersion, legacy: normalized.legacy, migration: migration.applied }
+      });
+    }
     const repairedEnvelope = invariant.repaired > 0
       ? encodeRuntimeEnvelope(invariant.state, { writerVersion })
       : migration.envelope;
@@ -54,6 +85,7 @@ export function createRuntimePilotStore({
       repaired: invariant.repaired,
       blocked: invariant.blocked,
       findings: invariant.findings,
+      quarantine: quarantineAudit(stored[quarantineKey]),
       schema: {
         version: repairedEnvelope.schemaVersion,
         writerVersion: repairedEnvelope.writerVersion,
@@ -118,8 +150,8 @@ export function createRuntimePilotStore({
     async clear() {
       statePromise = Promise.resolve(new RuntimePilotState());
       commitJournal = createStateCommitJournal();
-      lastAudit = { recovered: false, repaired: 0, blocked: 0, findings: [] };
-      await storageArea.remove([key, journalKey, previousKey]);
+      lastAudit = { recovered: false, repaired: 0, blocked: 0, findings: [], quarantine: quarantineAudit(null) };
+      await storageArea.remove([key, journalKey, previousKey, quarantineKey]);
     },
 
     resetCache() {
