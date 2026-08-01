@@ -62,7 +62,7 @@ test('pilot marks every batch member proven without removing unrelated finals', 
   state.persistFinal('pmia_session', envelope('q3', 3), 1002);
   state.markLedgerStaged('pmia_session', ['q1', 'q2'], 'batch-1', 1010);
   state.markLedgerSubmitting('pmia_session', 'batch-1', 1020);
-  state.markLedgerProven('pmia_session', 'batch-1', { verified: true }, 1030);
+  state.markLedgerProven('pmia_session', 'batch-1', { verified: true, memberIds: ['q-1'] }, 1030);
   const snapshot = state.snapshot('pmia_session', 1040);
   assert.deepEqual(snapshot.ledger.map(item => [item.id, item.state]), [
     ['q1', 'proven'], ['q2', 'proven'], ['q3', 'persisted']

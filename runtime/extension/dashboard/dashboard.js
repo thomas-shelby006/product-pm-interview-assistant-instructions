@@ -14,6 +14,7 @@ import { derivePaceGuard, paceLabel } from './pace-guard-model.js';
 import { diagnosticTone, groupRuntimeWarnings } from './diagnostics-model.js';
 import { deriveGapWatch } from './gap-watch-model.js';
 import { deriveOutboxStatus } from './outbox-status-model.js';
+import { deriveProofInspector } from './proof-inspector-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -268,6 +269,9 @@ function renderLiveCommandCenter(snapshot, now) {
     text('outboxState', '--');
     text('outboxTitle', 'Waiting for sender state');
     text('outboxDetail', 'No sender outbox evidence is available yet.');
+    text('proofState', '--');
+    text('proofTitle', 'Waiting for proof state');
+    text('proofDetail', 'No batch proof evidence is available yet.');
     text('storagePressureBadge', '--');
     text('storagePressureValue', '--');
     text('storagePressureDetail', 'Session memory status is not available yet.');
@@ -324,6 +328,15 @@ function renderLiveCommandCenter(snapshot, now) {
       : pace.state === 'falling_behind'
         ? `${pace.unresolved} unresolved - intake is exceeding rendered proof.`
         : `${pace.unresolved} unresolved - waiting for a positive recovery rate.`);
+
+  const proofInspector = deriveProofInspector(snapshot);
+  const proofPanel = document.querySelector('.proof-panel');
+  if (proofPanel) proofPanel.dataset.proof = proofInspector.state;
+  text('proofState', proofInspector.label);
+  text('proofTitle', proofInspector.batchId
+    ? `${proofInspector.batchId} - ${proofInspector.memberCount} member(s)`
+    : 'No batch evaluated');
+  text('proofDetail', proofInspector.detail);
 
   const outbox = deriveOutboxStatus(snapshot, now);
   const outboxPanel = document.querySelector('.outbox-panel');

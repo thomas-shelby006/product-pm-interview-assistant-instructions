@@ -223,9 +223,9 @@ export class RuntimePilotState {
     return outcome;
   }
 
-  markLedgerStaged(sessionId, ids, batchId, now = Date.now()) {
+  markLedgerStaged(sessionId, ids, batchId, now = Date.now(), identity = {}) {
     const session = this.ensure(sessionId, now);
-    const changed = session.ledger.markStaged(ids, batchId, now);
+    const changed = session.ledger.markStaged(ids, batchId, now, identity);
     if (changed.length) this.record(sessionId, 'batch_staged', { batchId, memberIds: changed.map(item => item.id) }, now);
     return changed;
   }
@@ -239,10 +239,21 @@ export class RuntimePilotState {
 
   markLedgerProven(sessionId, batchId, proof = {}, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const changed = session.ledger.markProven(batchId, proof, now);
-    session.metrics.delivered += changed.length;
-    if (changed.length) this.record(sessionId, 'batch_proven', { batchId, memberIds: changed.map(item => item.id), proof }, now);
-    return changed;
+    const result = session.ledger.markBatchProven(batchId, proof, now);
+    session.metrics.delivered += result.changed.length;
+    if (result.changed.length) {
+      this.record(sessionId, 'batch_proven', {
+        batchId, memberIds: result.changed.map(item => item.id), proof
+      }, now);
+    } else if (!result.accepted) {
+      this.record(sessionId, 'batch_proof_rejected', {
+        batchId, reason: result.reason, memberIds: proof?.memberIds || []
+      }, now);
+    } else if (result.duplicate) {
+      session.metrics.duplicateAcks += 1;
+      this.record(sessionId, 'batch_proof_duplicate', { batchId, memberIds: proof?.memberIds || [] }, now);
+    }
+    return result;
   }
 
   markLedgerFailed(sessionId, ids, reason = 'delivery_failed', now = Date.now()) {

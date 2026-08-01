@@ -241,14 +241,22 @@ export function createRuntimePilotController({
     if (envelope.kind === 'boot' || outcome?.buffered || outcome?.duplicate) return;
     const memberIds = outcome?.memberIds?.length ? outcome.memberIds : [envelope.id];
     const batchId = outcome?.batchId || (outcome?.staged ? 'next' : `single-${envelope.id}`);
+    const identity = {
+      fingerprint: outcome?.fingerprint || outcome?.proof?.fingerprint || '',
+      memberFingerprint: outcome?.memberFingerprint || outcome?.proof?.memberFingerprint || ''
+    };
     if (outcome?.staged || outcome?.delivered) {
-      pilot.markLedgerStaged(envelope.sessionId, memberIds, batchId);
+      pilot.markLedgerStaged(envelope.sessionId, memberIds, batchId, Date.now(), identity);
     }
     if (outcome?.delivered) {
       pilot.markLedgerSubmitting(envelope.sessionId, batchId);
-      pilot.markLedgerProven(envelope.sessionId, batchId, outcome.proof || {
-        proof: 'receiver_ack',
-        verified: Boolean(outcome.proof?.verified)
+      pilot.markLedgerProven(envelope.sessionId, batchId, {
+        ...(outcome.proof || {}),
+        verified: outcome.proof?.verified === true,
+        batchId,
+        memberIds,
+        fingerprint: identity.fingerprint,
+        memberFingerprint: identity.memberFingerprint
       });
     } else if (!outcome?.staged) {
       pilot.completeLedgerItem(envelope.sessionId, envelope.id, outcome);
@@ -296,10 +304,16 @@ export function createRuntimePilotController({
     const batchId = String(value.batchId || '');
     pilot.updateBatchState(sessionId, value);
     if (value.type === 'batch_submitting' && batchId) {
-      pilot.markLedgerStaged(sessionId, memberIds, batchId);
+      pilot.markLedgerStaged(sessionId, memberIds, batchId, Date.now(), {
+        fingerprint: value.fingerprint || value.proof?.fingerprint || '',
+        memberFingerprint: value.memberFingerprint || value.proof?.memberFingerprint || ''
+      });
       pilot.markLedgerSubmitting(sessionId, batchId);
     } else if ((value.type === 'batch_submitted' || value.type === 'batch_reconciled') && batchId) {
-      pilot.markLedgerStaged(sessionId, memberIds, batchId);
+      pilot.markLedgerStaged(sessionId, memberIds, batchId, Date.now(), {
+        fingerprint: value.fingerprint || value.proof?.fingerprint || '',
+        memberFingerprint: value.memberFingerprint || value.proof?.memberFingerprint || ''
+      });
       pilot.markLedgerSubmitting(sessionId, batchId);
       if (value.type === 'batch_reconciled' || value.proof?.verified === true) {
         pilot.markLedgerProven(sessionId, batchId, value.proof || {});

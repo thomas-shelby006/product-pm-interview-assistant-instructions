@@ -127,3 +127,10 @@ test('Pilot exposes sender outbox status and a safe retry control', () => {
   assert.match(markup, /data-command="retry_outbox"/);
   assert.match(markup, /id="outboxDetail"/);
 });
+
+
+test('Pilot exposes exact batch proof inspection', () => {
+  assert.match(markup, /class="live-panel proof-panel"/);
+  assert.match(markup, /id="proofState"/);
+  assert.match(markup, /id="proofDetail"/);
+});

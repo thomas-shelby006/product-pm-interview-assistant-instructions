@@ -16,7 +16,7 @@ function normalizedText(value) {
   return String(value || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 }
 
-function stableFingerprint(value) {
+export function stableFingerprint(value) {
   let hash = 0x811c9dc5;
   for (const character of String(value || '')) {
     hash ^= character.codePointAt(0);
@@ -25,12 +25,27 @@ function stableFingerprint(value) {
   return hash.toString(16).padStart(8, '0');
 }
 
+
+export function canonicalMemberIds(memberIds = []) {
+  return [...new Set((Array.isArray(memberIds) ? memberIds : []).map(String).filter(Boolean))].sort();
+}
+
+export function memberSetFingerprint(memberIds = []) {
+  return stableFingerprint(canonicalMemberIds(memberIds).join('|'));
+}
+
+export function sameMemberSet(first = [], second = []) {
+  const left = canonicalMemberIds(first);
+  const right = canonicalMemberIds(second);
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 export function composeBatchPrompt({ entries = [] } = {}) {
   const valid = entries
     .map(cloneEntry)
     .filter(entry => entry.id && normalizedText(entry.envelope?.text));
   const memberIds = valid.map(entry => entry.id);
-  if (!valid.length) return { text: '', memberIds: [], focusId: '', questionCount: 0, fingerprint: '' };
+  if (!valid.length) return { text: '', memberIds: [], focusId: '', questionCount: 0, fingerprint: '', memberFingerprint: '' };
   const latest = valid.at(-1);
   const text = valid.length === 1
     ? String(latest.envelope.text).trim()
@@ -51,7 +66,8 @@ export function composeBatchPrompt({ entries = [] } = {}) {
     memberIds,
     focusId: latest.id,
     questionCount: valid.length,
-    fingerprint: stableFingerprint(`${memberIds.join('|')}::${text}`)
+    fingerprint: stableFingerprint(`${memberIds.join('|')}::${text}`),
+    memberFingerprint: memberSetFingerprint(memberIds)
   };
 }
 
@@ -187,7 +203,9 @@ export class BatchPlanner {
     return {
       id: String(batch?.id || batchId(entries)),
       entries,
-      prompt: batch?.prompt || composeBatchPrompt({ entries }),
+      prompt: batch?.prompt?.memberFingerprint
+        ? { ...batch.prompt }
+        : { ...composeBatchPrompt({ entries }), ...(batch?.prompt || {}) },
       createdAt: Number(batch?.createdAt || Date.now()),
       submittedAt: Number(batch?.submittedAt || 0)
     };

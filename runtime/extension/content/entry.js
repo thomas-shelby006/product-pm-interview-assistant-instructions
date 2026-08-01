@@ -731,7 +731,9 @@ async function startRuntime(runtimeConfig) {
         delivered: Boolean(originalResult.delivered),
         batchId: originalResult.batchId || '',
         memberIds: originalResult.memberIds || [envelope.id],
-        proof: originalResult.proof || null
+        proof: originalResult.proof || null,
+        fingerprint: originalResult.batch?.prompt?.fingerprint || originalResult.fingerprint || '',
+        memberFingerprint: originalResult.batch?.prompt?.memberFingerprint || originalResult.memberFingerprint || ''
       };
     }
     return {

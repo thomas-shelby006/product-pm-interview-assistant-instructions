@@ -57,7 +57,8 @@ export function classifyDelivery({ route, response, error } = {}) {
     if (batchId) outcome.batchId = batchId;
     if (memberIds.length) outcome.memberIds = memberIds;
     if (response.proof) outcome.proof = response.proof;
-    if (response.duplicate === true) outcome.duplicate = true;
+    if (response.fingerprint) outcome.fingerprint = String(response.fingerprint);
+    if (response.memberFingerprint) outcome.memberFingerprint = String(response.memberFingerprint);    if (response.duplicate === true) outcome.duplicate = true;
     return outcome;
   }
   return {

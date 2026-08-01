@@ -162,6 +162,9 @@ tbody tr.superseded td.question { text-decoration: line-through; }
 .live-panel > p { margin-top: .38rem; color: var(--muted); font-size: .68rem; line-height: 1.45; max-height: 5.4rem; overflow: auto; overflow-wrap: anywhere; }
 .current-answer-panel { border-left: 4px solid var(--aubergine); }
 .next-draft-panel { border-left: 4px solid var(--rust); }
+.proof-panel { border-left: 4px solid var(--olive); }
+.proof-panel[data-proof="pending"], .proof-panel[data-proof="duplicate"] { border-left-color: var(--ochre); }
+.proof-panel[data-proof="rejected"] { border-left-color: var(--danger); background: var(--rust-soft); }
 .outbox-panel { border-left: 4px solid var(--olive); }
 .outbox-panel[data-outbox="waiting"], .outbox-panel[data-outbox="retained"] { border-left-color: var(--ochre); }
 .outbox-panel[data-outbox="retrying"] { border-left-color: var(--rust); background: var(--ochre-soft); }

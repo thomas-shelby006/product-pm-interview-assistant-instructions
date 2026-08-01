@@ -87,7 +87,7 @@ test('newer proof never erases an older unresolved final in a burst', () => {
   for (let seq = 1; seq <= 10; seq += 1) ledger.persist(envelope(seq));
   ledger.markStaged(['q-10'], 'latest-batch');
   ledger.markSubmitting('latest-batch');
-  ledger.markProven('latest-batch', { verified: true });
+  ledger.markProven('latest-batch', { verified: true, memberIds: ['q-10'] });
   assert.deepEqual(ledger.snapshot().map(item => item.state), [
     'persisted', 'persisted', 'persisted', 'persisted', 'persisted',
     'persisted', 'persisted', 'persisted', 'persisted', 'proven'

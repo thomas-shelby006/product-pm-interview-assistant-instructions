@@ -65,6 +65,7 @@ export function createReceiverBatchRuntime({
       questionCount: batch.prompt.questionCount,
       focusId: batch.prompt.focusId,
       fingerprint: batch.prompt.fingerprint,
+      memberFingerprint: batch.prompt.memberFingerprint,
       source
     });
     let result;
@@ -94,7 +95,13 @@ export function createReceiverBatchRuntime({
     }
     planner.markSubmitted(nowFn());
     draftArbiter?.release?.('batch');
-    const proof = result.proof || null;
+    const proof = result.proof ? {
+      ...result.proof,
+      batchId: batch.id,
+      memberIds: [...batch.prompt.memberIds],
+      fingerprint: batch.prompt.fingerprint,
+      memberFingerprint: batch.prompt.memberFingerprint
+    } : null;
     const verified = proof?.ok !== false && proof?.verified === true;
     emit('batch_submitted', {
       batchId: batch.id,
@@ -102,6 +109,7 @@ export function createReceiverBatchRuntime({
       questionCount: batch.prompt.questionCount,
       focusId: batch.prompt.focusId,
       fingerprint: batch.prompt.fingerprint,
+      memberFingerprint: batch.prompt.memberFingerprint,
       source,
       proof,
       verified
@@ -191,7 +199,13 @@ export function createReceiverBatchRuntime({
         emit('batch_reconciled', {
           batchId: String(batch.id),
           memberIds: Array.isArray(batch.memberIds) ? batch.memberIds.map(String) : [],
-          proof: { ok: true, verified: true, proof: 'existing_rendered_batch' }
+          proof: {
+            ok: true, verified: true, proof: 'existing_rendered_batch',
+            batchId: String(batch.id),
+            memberIds: Array.isArray(batch.memberIds) ? batch.memberIds.map(String) : [],
+            fingerprint: String(batch.prompt?.fingerprint || ''),
+            memberFingerprint: String(batch.prompt?.memberFingerprint || '')
+          }
         });
       }
       const provenMembers = new Set(

@@ -1,4 +1,5 @@
-﻿import { isEnvelope } from './protocol.js';
+import { isEnvelope } from './protocol.js';
+import { memberSetFingerprint, sameMemberSet } from './batch-planner.js';
 
 export const ACTIVE_LEDGER_STATES = new Set(['persisted', 'staged', 'submitting', 'failed']);
 const ALL_LEDGER_STATES = new Set([...ACTIVE_LEDGER_STATES, 'proven', 'archived']);
@@ -39,6 +40,8 @@ function normalizeEntry(value) {
     updatedAt: Number(value?.updatedAt || persistedAt),
     attempts: Math.max(0, Number(value?.attempts) || 0),
     batchId: String(value?.batchId || ''),
+    batchFingerprint: String(value?.batchFingerprint || ''),
+    memberFingerprint: String(value?.memberFingerprint || ''),
     lastError: String(value?.lastError || ''),
     proof: value?.proof && typeof value.proof === 'object' ? { ...value.proof } : null,
     archivedAt: Number(value?.archivedAt || 0)
@@ -110,11 +113,13 @@ export class DeliveryLedger {
     });
   }
 
-  markStaged(ids, batchId, now = Date.now()) {
+  markStaged(ids, batchId, now = Date.now(), identity = {}) {
     return this.#transition(ids, entry => {
       if (!ACTIVE_LEDGER_STATES.has(entry.state)) return false;
       entry.state = 'staged';
       entry.batchId = String(batchId || '');
+      entry.batchFingerprint = String(identity?.fingerprint || entry.batchFingerprint || '');
+      entry.memberFingerprint = String(identity?.memberFingerprint || entry.memberFingerprint || '');
       entry.updatedAt = now;
       entry.lastError = '';
       return true;
@@ -142,8 +147,43 @@ export class DeliveryLedger {
     })[0] || null;
   }
 
+  markBatchProven(batchId, proof = {}, now = Date.now()) {
+    const normalized = String(batchId || '');
+    const entries = this.#entries.filter(entry => entry.batchId === normalized && entry.state !== 'archived');
+    if (!entries.length) return { accepted: false, duplicate: false, reason: 'batch_missing', changed: [], entries: [] };
+    if (proof?.verified !== true) {
+      return { accepted: false, duplicate: false, reason: 'proof_unverified', changed: [], entries: entries.map(cloneEntry) };
+    }
+    const expectedIds = entries.map(entry => entry.id);
+    const proofIds = Array.isArray(proof?.memberIds) ? proof.memberIds.map(String) : [];
+    if (!proofIds.length || !sameMemberSet(expectedIds, proofIds)) {
+      return { accepted: false, duplicate: false, reason: 'proof_member_mismatch', changed: [], entries: entries.map(cloneEntry) };
+    }
+    const expectedMemberFingerprint = entries.find(entry => entry.memberFingerprint)?.memberFingerprint
+      || memberSetFingerprint(expectedIds);
+    if (proof?.memberFingerprint && proof.memberFingerprint !== expectedMemberFingerprint) {
+      return { accepted: false, duplicate: false, reason: 'proof_member_fingerprint_mismatch', changed: [], entries: entries.map(cloneEntry) };
+    }
+    const expectedBatchFingerprint = entries.find(entry => entry.batchFingerprint)?.batchFingerprint || '';
+    if (proof?.fingerprint && expectedBatchFingerprint && proof.fingerprint !== expectedBatchFingerprint) {
+      return { accepted: false, duplicate: false, reason: 'proof_batch_fingerprint_mismatch', changed: [], entries: entries.map(cloneEntry) };
+    }
+    const alreadyProven = entries.every(entry => entry.state === 'proven');
+    if (alreadyProven) {
+      return { accepted: true, duplicate: true, reason: 'proof_duplicate', changed: [], entries: entries.map(cloneEntry) };
+    }
+    const normalizedProof = {
+      ...proof,
+      memberIds: [...proofIds],
+      memberFingerprint: expectedMemberFingerprint,
+      fingerprint: proof.fingerprint || expectedBatchFingerprint
+    };
+    const changed = this.#transitionBatch(normalized, entry => this.#prove(entry, normalizedProof, now));
+    return { accepted: true, duplicate: false, reason: 'proof_accepted', changed, entries: entries.map(cloneEntry) };
+  }
+
   markProven(batchId, proof = {}, now = Date.now()) {
-    return this.#transitionBatch(batchId, entry => this.#prove(entry, proof, now));
+    return this.markBatchProven(batchId, proof, now).changed;
   }
 
   markItemProven(id, proof = {}, now = Date.now()) {
