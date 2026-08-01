@@ -7,6 +7,7 @@ import { buildReconciliationPayload } from './delivery-reconciler.js';
 import { shouldPersistBatchEvent } from './batch-event-policy.js';
 import { utf8Bytes } from './storage-accounting.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
+import { buildSnapshotDelta } from './snapshot-delta.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -61,11 +62,23 @@ export function createRuntimePilotController({
     const current = pilot || await state();
     const snapshot = current.snapshot(sessionId, Date.now());
     for (const entry of sessionPorts(sessionId)) {
-      post(entry.port, {
-        type: snapshot ? 'PMIA_DASHBOARD_SNAPSHOT' : 'PMIA_DASHBOARD_SESSION_ENDED',
-        sessionId,
-        snapshot
-      });
+      if (!snapshot) {
+        if (post(entry.port, { type: 'PMIA_DASHBOARD_SESSION_ENDED', sessionId, snapshot: null })) {
+          entry.lastSnapshot = null;
+        }
+        continue;
+      }
+      if (!entry.lastSnapshot) {
+        if (post(entry.port, { type: 'PMIA_DASHBOARD_SNAPSHOT', sessionId, snapshot })) {
+          entry.lastSnapshot = snapshot;
+        }
+        continue;
+      }
+      const delta = buildSnapshotDelta(entry.lastSnapshot, snapshot);
+      if (delta.empty) continue;
+      if (post(entry.port, { type: 'PMIA_DASHBOARD_DELTA', sessionId, delta })) {
+        entry.lastSnapshot = snapshot;
+      }
     }
     return snapshot;
   }
@@ -98,12 +111,14 @@ export function createRuntimePilotController({
   function broadcastHeartbeat(sessionId, role, roleState) {
     const patch = heartbeatPatch(roleState);
     for (const entry of sessionPorts(sessionId)) {
-      post(entry.port, {
-        type: 'PMIA_DASHBOARD_HEARTBEAT',
-        sessionId,
-        role,
-        patch
-      });
+      if (post(entry.port, { type: 'PMIA_DASHBOARD_HEARTBEAT', sessionId, role, patch })) {
+        if (entry.lastSnapshot) {
+          entry.lastSnapshot = {
+            ...entry.lastSnapshot,
+            [role]: { ...entry.lastSnapshot[role], ...patch }
+          };
+        }
+      }
     }
   }
 
@@ -839,7 +854,8 @@ export function createRuntimePilotController({
     const entry = {
       port,
       tabId: Number.isInteger(port.sender?.tab?.id) ? port.sender.tab.id : null,
-      windowId: Number.isInteger(port.sender?.tab?.windowId) ? port.sender.tab.windowId : null
+      windowId: Number.isInteger(port.sender?.tab?.windowId) ? port.sender.tab.windowId : null,
+      lastSnapshot: null
     };
     if (!ports.has(sessionId)) ports.set(sessionId, new Set());
     ports.get(sessionId).add(entry);

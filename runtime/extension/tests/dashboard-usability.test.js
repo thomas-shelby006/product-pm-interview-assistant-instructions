@@ -147,3 +147,19 @@ test('Pilot exposes an accessible decisive Interview Readiness Gate', () => {
   assert.match(markup, /id="readinessBlockers"/);
   assert.match(markup, /Interview readiness/);
 });
+
+
+test('Pilot exposes the current update lane as a Runtime Efficiency indicator', () => {
+  assert.match(markup, /id="runtimeEfficiency">Waiting/);
+});
+
+
+test('heartbeat updates use the lightweight role-only render path', async () => {
+  const source = await readFile(resolve(extensionRoot, 'dashboard/dashboard.js'), 'utf8');
+  const branch = source.slice(
+    source.indexOf("message?.type === 'PMIA_DASHBOARD_HEARTBEAT'"),
+    source.indexOf("message?.type === 'PMIA_DASHBOARD_COMMAND_RESULT'")
+  );
+  assert.match(branch, /render\(\[message\.role\]\)/);
+  assert.doesNotMatch(branch, /render\(\);/);
+});

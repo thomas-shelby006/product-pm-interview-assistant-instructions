@@ -17,6 +17,7 @@ import { deriveOutboxStatus } from './outbox-status-model.js';
 import { deriveProofInspector } from './proof-inspector-model.js';
 import { deriveMemoryGuard } from './memory-guard-model.js';
 import { deriveReadiness } from './readiness-model.js';
+import { applySnapshotDelta } from '../shared/snapshot-delta.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -30,7 +31,8 @@ const state = {
   timelineFilter: 'all',
   activeView: 'overview',
   sessionEnded: false,
-  pending: new Map()
+  pending: new Map(),
+  efficiency: { full: 0, delta: 0, heartbeat: 0, lastMode: 'Waiting', changedSections: 0 }
 };
 
 const byId = id => document.getElementById(id);
@@ -134,8 +136,20 @@ function handlePortMessage(message) {
     state.reconnectAttempt = 0;
     state.sessionEnded = false;
     state.snapshot = message.snapshot;
+    state.efficiency.full += 1;
+    state.efficiency.lastMode = 'Full';
+    state.efficiency.changedSections = Object.keys(message.snapshot || {}).length;
     setConnection('Live', 'ok');
     render();
+    return;
+  }
+  if (message?.type === 'PMIA_DASHBOARD_DELTA' && state.snapshot) {
+    state.snapshot = applySnapshotDelta(state.snapshot, message.delta);
+    state.efficiency.delta += 1;
+    state.efficiency.lastMode = 'Delta';
+    state.efficiency.changedSections = message.delta?.keys?.length || 0;
+    setConnection('Live', 'ok');
+    render(message.delta?.keys || []);
     return;
   }
   if (message?.type === 'PMIA_DASHBOARD_SESSION_ENDED') {
@@ -159,7 +173,10 @@ function handlePortMessage(message) {
         ...(message.patch || {})
       }
     };
-    render();
+    state.efficiency.heartbeat += 1;
+    state.efficiency.lastMode = 'Heartbeat';
+    state.efficiency.changedSections = 1;
+    render([message.role]);
     return;
   }
   if (message?.type === 'PMIA_DASHBOARD_COMMAND_RESULT') {
@@ -170,6 +187,11 @@ function handlePortMessage(message) {
     renderOperationActivity();
     updateControlAvailability();
   }
+}
+
+function renderEfficiency() {
+  const value = state.efficiency;
+  text('runtimeEfficiency', `${value.lastMode}${value.changedSections ? ` - ${value.changedSections}` : ''}`);
 }
 
 function formatBytes(value) {
@@ -488,6 +510,7 @@ function renderOverview(snapshot, now) {
   text('transportMode', snapshot?.mode || '--');
   text('uptime', snapshot ? formatDuration(now - snapshot.createdAt) : '--');
   renderOperationActivity();
+  renderEfficiency();
   renderReadiness(snapshot, now);
   renderLiveCommandCenter(snapshot, now);
   renderRole('sender', snapshot?.sender, now);
@@ -673,12 +696,14 @@ function updateControlAvailability() {
   document.body.dataset.sessionEnded = state.sessionEnded ? 'true' : 'false';
 }
 
-function render() {
+function render(changedKeys = null) {
   const now = Date.now();
+  const keys = changedKeys ? new Set(changedKeys) : null;
+  const changed = (...values) => !keys || values.some(value => keys.has(value));
   renderOverview(state.snapshot, now);
-  renderQueue(state.snapshot, now);
-  renderTimeline(state.snapshot);
-  renderReview(state.snapshot);
+  if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
+  if (changed('timeline')) renderTimeline(state.snapshot);
+  if (changed('metrics', 'lastRepair', 'timeline', 'sender', 'receiver')) renderReview(state.snapshot);
   updateControlAvailability();
 }
 
