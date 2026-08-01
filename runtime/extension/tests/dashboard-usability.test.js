@@ -16,8 +16,8 @@ test('dashboard ends cleanly without reconnecting or leaving controls active', (
 });
 
 test('destructive dashboard actions require explicit confirmation', () => {
-  assert.match(markup, /id="discardSelected" data-confirm=/);
-  assert.match(markup, /id="discardAll" data-confirm=/);
+  assert.match(markup, /id="archiveSelected" data-confirm=/);
+  assert.match(markup, /id="archiveAll" data-confirm=/);
   assert.match(markup, /data-command="end_session" data-confirm=/);
 });
 
@@ -88,8 +88,8 @@ test('Pilot exposes meaningful real-time inbox controls without removing legacy 
 
 test('dangerous interrupt and archive controls require confirmation', () => {
   assert.match(markup, /id="interruptLatest"[^>]*data-confirm=/);
-  assert.match(markup, /id="discardSelected"[^>]*data-confirm=/);
-  assert.match(markup, /id="discardAll"[^>]*data-confirm=/);
+  assert.match(markup, /id="archiveSelected"[^>]*data-confirm=/);
+  assert.match(markup, /id="archiveAll"[^>]*data-confirm=/);
 });
 
 

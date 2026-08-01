@@ -30,7 +30,7 @@ test('sequence gate can roll back a provisional receiver reservation', () => {
   assert.equal(gate.check(13).accepted, true);
 });
 
-test('receiver reserves and persists a sequence before provider submission', async () => {
+test('receiver admits a sequence only after the batch runtime accepts ownership', async () => {
   const { readFile } = await import('node:fs/promises');
   const { dirname, resolve } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
@@ -38,14 +38,13 @@ test('receiver reserves and persists a sequence before provider submission', asy
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
   const receive = entry.slice(
     entry.indexOf('async function receiveEnvelope'),
-    entry.indexOf('chrome.runtime.onMessage.addListener')
+    entry.indexOf('async function handleRuntimeCommand')
   );
-  const reserveIndex = receive.indexOf('receiverSequenceGate.accept(envelope.seq)');
+  const batchIndex = receive.indexOf('await receiverBatchRuntime.accept(envelope)');
+  const acceptIndex = receive.indexOf('receiverSequenceGate.accept(envelope.seq)');
   const persistIndex = receive.indexOf('sessionStorage.setItem');
-  const deliverIndex = receive.indexOf('await receiver.deliver(envelope)');
-  assert.ok(reserveIndex >= 0 && reserveIndex < deliverIndex);
-  assert.ok(persistIndex >= 0 && persistIndex < deliverIndex);
-  assert.match(receive, /if \(!submitted\) \{[\s\S]*receiverSequenceGate\.restore\(previousAcceptedSeq\)/);
+  assert.ok(batchIndex >= 0 && batchIndex < acceptIndex);
+  assert.ok(acceptIndex >= 0 && acceptIndex < persistIndex);
 });
 
 
@@ -74,7 +73,7 @@ test('sequence admission distinguishes a retry from a stale envelope', () => {
   });
 });
 
-test('receiver retry acknowledgement is explicit and never calls provider delivery twice', async () => {
+test('receiver duplicate acknowledgement returns before batch admission', async () => {
   const { readFile } = await import('node:fs/promises');
   const { dirname, resolve } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
@@ -82,9 +81,10 @@ test('receiver retry acknowledgement is explicit and never calls provider delive
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
   const receive = entry.slice(
     entry.indexOf('async function receiveEnvelope'),
-    entry.indexOf('chrome.runtime.onMessage.addListener')
+    entry.indexOf('async function handleRuntimeCommand')
   );
-  assert.match(receive, /receiverSequenceGate\.admit\(envelope\?\.seq\)/);
-  assert.match(receive, /if \(sequenceDecision\.duplicate\)[\s\S]*reason:\s*'duplicate_ack'/);
-  assert.match(receive, /duplicate_ack[\s\S]*return[\s\S]*await receiver\.deliver\(envelope\)/);
+  const duplicateIndex = receive.indexOf("reason: 'duplicate_ack'");
+  const batchIndex = receive.indexOf('await receiverBatchRuntime.accept(envelope)');
+  assert.ok(duplicateIndex >= 0 && duplicateIndex < batchIndex);
+  assert.match(receive, /if \(sequenceDecision\.duplicate\)[\s\S]*return \{ ok: true, reason: 'duplicate_ack', duplicate: true \}/);
 });

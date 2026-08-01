@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DeliveryLedger } from '../shared/delivery-ledger.js';
 import { BatchPlanner } from '../shared/batch-planner.js';
@@ -71,7 +71,8 @@ test('100-final burst survives duplicate input generation backlog restart and co
   const proven = restoredLedger.markProven(batch.id, {
     verified: true,
     proof: 'new_rendered_turn',
-    fingerprint: batch.prompt.fingerprint
+    fingerprint: batch.prompt.fingerprint,
+    memberIds: batch.prompt.memberIds
   }, 1003);
   assert.equal(proven.length, 100);
   assert.equal(restoredLedger.counts().unresolved, 0);

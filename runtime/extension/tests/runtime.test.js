@@ -79,27 +79,20 @@ test('runtime title includes session suffix so stale windows cannot be reused', 
 });
 
 
-test('receiver waits for generation to stop before writing replacement prompt', async () => {
+test('ordinary receiver delivery never invokes the stop-generation surface', async () => {
   const calls = [];
-  let checks = 0;
-  const adapter = {
-    isGenerating: () => checks++ < 3,
-    stopGenerating: () => { calls.push('stop'); return true; },
-    setComposerText: text => { calls.push(['set', text]); return true; },
-    submit: () => { calls.push('submit'); return true; }
-  };
   const controller = runtimeModule.createReceiverController({
-    adapter,
-    sleep: async ms => calls.push(['sleep', ms]),
-    onStatus: status => calls.push(['status', status]),
-    stopTimeoutMs: 1000,
-    stopPollMs: 50
+    adapter: {
+      isGenerating: () => true,
+      stopGenerating: () => { calls.push('stop'); return true; },
+      setComposerText: text => { calls.push(['set', text]); return true; },
+      submit: () => { calls.push('submit'); return true; }
+    },
+    sleep: async () => {},
+    onStatus: status => calls.push(['status', status])
   });
-  assert.equal(await controller.deliver({ id: 'm3', text: 'replacement' }), true);
-  assert.equal(calls[0], 'stop');
-  const setIndex = calls.findIndex(value => Array.isArray(value) && value[0] === 'set');
-  const sleepCountBeforeSet = calls.slice(0, setIndex).filter(value => Array.isArray(value) && value[0] === 'sleep').length;
-  assert.ok(sleepCountBeforeSet >= 2);
+  assert.equal(await controller.deliver({ id: 'm3', text: 'replacement' }), false);
+  assert.deepEqual(calls, [['status', 'RECEIVER BUSY']]);
 });
 
 test('receiver preview updates composer without stopping or submitting', () => {

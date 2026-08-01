@@ -15,6 +15,7 @@ test('preflight responder reports runtime identity and reads composer availabili
       getConversationMessages() { throw new Error('must not read messages'); },
       isGenerating() { throw new Error('must not inspect generation'); },
       setComposerText() { throw new Error('must not write'); },
+      getComposerText() { throw new Error('must not read composer'); },
       submit() { throw new Error('must not submit'); },
       stopGenerating() { throw new Error('must not stop'); }
     }
@@ -23,9 +24,9 @@ test('preflight responder reports runtime identity and reads composer availabili
     ok: true, sessionId: 's1', role: 'receiver', provider: 'claude',
     version: '0.5.1', instanceId: 'runtime-1', composerAvailable: true,
     capabilities: {
-      composerFinder: true, messageReader: true, composerWriter: true, submit: true,
+      composerFinder: true, messageReader: true, composerWriter: true, composerReader: true, submit: true,
       generationState: true, stopGeneration: true, microphoneToggle: false, voiceState: false,
-      required: ['composerFinder', 'messageReader', 'composerWriter', 'submit', 'generationState'],
+      required: ['composerFinder', 'messageReader', 'composerWriter', 'composerReader', 'submit', 'generationState'],
       missingRequired: [], complete: true
     }
   });

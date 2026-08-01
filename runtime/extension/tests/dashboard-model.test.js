@@ -90,14 +90,15 @@ test('transitional lifecycle phases are never reported healthy', () => {
 });
 
 
-test('warning labels describe the lossless inbox rather than a latest-only queue', async () => {
+test('warning labels expose current storage and proof blockers', async () => {
   const { warningLabel } = await import('../dashboard/dashboard-model.js');
   assert.equal(
-    warningLabel({ code: 'inbox_waiting' }),
-    'Unresolved finals are waiting in the lossless inbox'
+    warningLabel({ code: 'session_storage_critical' }),
+    'Session memory is above 95%; unresolved finals remain protected but action is required'
   );
   assert.equal(
-    warningLabel({ code: 'inbox_oldest_stale' }),
-    'The oldest unresolved final may be contextually stale'
+    warningLabel({ code: 'receiver_proof_unverified' }),
+    'Receiver submission was not verified by a rendered provider turn'
   );
+  assert.equal(warningLabel({ code: 'future_warning' }), 'future_warning');
 });

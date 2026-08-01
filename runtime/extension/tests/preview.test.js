@@ -96,7 +96,7 @@ test('preview delivery drops absent or unreachable receivers without queueing', 
   assert.deepEqual(await previewModule.deliverPreview({
     registry, preview, senderTabId: 10, sendToTab: async () => { throw new Error('offline'); }
   }), { ok: true, delivered: false, dropped: true, reason: 'receiver_unreachable' });
-  assert.equal(registry.getSession('s1').pending, null);
+  assert.equal(Object.hasOwn(registry.getSession('s1'), 'pending'), false);
 });
 
 test('preview contract permits empty text only for an explicit clear phase', () => {

@@ -7,6 +7,7 @@ test('receiver adapter capability report requires rendered-turn and submission s
     findComposer() {},
     getConversationMessages() {},
     setComposerText() {},
+    getComposerText() {},
     submit() {},
     isGenerating() {}
   }, 'receiver');
@@ -18,6 +19,6 @@ test('adapter capability report identifies the exact missing required surfaces',
   const result = describeAdapterCapabilities({ findComposer() {} }, 'receiver');
   assert.equal(result.complete, false);
   assert.deepEqual(result.missingRequired, [
-    'messageReader', 'composerWriter', 'submit', 'generationState'
+    'messageReader', 'composerWriter', 'composerReader', 'submit', 'generationState'
   ]);
 });
