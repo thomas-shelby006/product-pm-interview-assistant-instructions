@@ -57,7 +57,8 @@
         "content/runtime-recovery.js",
         "content/runtime-fatal.js",
         "content/preflight-responder.js",
-        "content/runtime-telemetry.js"
+        "content/runtime-telemetry.js",
+        "content/adapter-health.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

@@ -1,3 +1,5 @@
+import { describeAdapterCapabilities } from './adapter-health.js';
+
 export function classifySourceSilence({
   role,
   voiceActive,
@@ -53,6 +55,7 @@ export function createRuntimeTelemetry({
   let lastActivityAt = now();
   let lastSourceActivityAt = runtimeConfig?.role === 'sender' ? now() : 0;
   let micState = 'unknown';
+  const adapterCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
   let lastFingerprint = '';
   let closed = false;
 
@@ -74,6 +77,7 @@ export function createRuntimeTelemetry({
       generating: Boolean(adapter?.isGenerating?.()),
       voiceActive: Boolean(getVoiceActive()),
       micState,
+      adapterCapabilities,
       scrollLocked: Boolean(getScrollLocked()),
       transportPaused: Boolean(getTransportPaused()),
       latestPreview,

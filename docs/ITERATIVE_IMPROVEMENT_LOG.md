@@ -127,3 +127,21 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** Runtime delivery and diagnostics do not depend on persistent logging. Explicit export remains the only normal user-visible transcript write.
 
 **Why this is superior:** It reduces data exposure at discovery and logging boundaries without sacrificing recoverability or diagnosability.
+
+## Cycle 8 - Provider-adapter resilience and selector risk
+
+**Evidence inspected:** ChatGPT and Claude adapter exports, active preflight response, runtime telemetry, and dashboard role health.
+
+**Issue/opportunity:** A composer-ready result did not reveal whether message reading, composer writing, submission, generation state, stop, microphone, and voice capabilities were still present after provider or adapter changes.
+
+**Classification:** Provider-change observability and release-safety improvement.
+
+**Implementation:** Added a semantic adapter capability reporter. Preflight and heartbeat telemetry publish required/optional capabilities; pilot health raises role-specific errors for missing required surfaces; dashboard role cards show Complete or the exact missing capabilities.
+
+**Files changed:** New adapter-health module, preflight responder, telemetry, pilot state/controller, dashboard, manifest, and adjacent tests.
+
+**Coverage added:** Complete and incomplete receiver capability reports, preflight response contract, and packaged-resource assertions.
+
+**Source review:** The capability probe checks function presence only and never reads conversations, writes composers, submits, stops generation, or toggles microphones.
+
+**Why this is superior:** It detects adapter contract drift before a live question reaches the submission boundary without adding brittle selector-specific checks or side effects.

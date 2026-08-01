@@ -320,6 +320,14 @@ export class RuntimePilotState {
     for (const role of ROLE_NAMES) {
       const state = session[role];
       if (!state.connected) warnings.push({ code: `${role}_missing`, role, severity: 'error' });
+      else if (state.adapterCapabilities?.complete === false) {
+        warnings.push({
+          code: `${role}_adapter_incomplete`,
+          role,
+          severity: 'error',
+          missing: state.adapterCapabilities.missingRequired || []
+        });
+      }
       else if (state.phase === 'unresponsive') {
         warnings.push({ code: `${role}_unresponsive`, role, severity: 'error' });
       } else if (state.heartbeatAt && now - state.heartbeatAt > 15_000) {

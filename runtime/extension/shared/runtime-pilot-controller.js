@@ -284,12 +284,14 @@ export function createRuntimePilotController({
           responsive: response?.ok === true,
           provider: response?.provider || registration.provider,
           composerAvailable: Boolean(response?.composerAvailable),
-          version: response?.version || ''
+          version: response?.version || '',
+          capabilities: response?.capabilities || null
         };
         pilot.updateRole(sessionId, role, {
           provider: registration.provider,
           phase: response?.composerAvailable ? 'ready' : 'registered',
           composerReady: Boolean(response?.composerAvailable),
+          adapterCapabilities: response?.capabilities || null,
           heartbeatAt: Date.now()
         });
       } catch (error) {

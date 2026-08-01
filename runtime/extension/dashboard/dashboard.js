@@ -149,6 +149,12 @@ function renderRole(roleName, role, now) {
   text(`${prefix}Phase`, role?.phase || 'â€”');
   text(`${prefix}Composer`, role?.composerReady ? 'Ready' : 'Waiting');
   text(`${prefix}Heartbeat`, health.ageMs === null ? 'â€”' : `${formatDuration(health.ageMs)} ago`);
+  const capabilities = role?.adapterCapabilities;
+  text(`${prefix}Adapter`, !capabilities
+    ? 'Unknown'
+    : capabilities.complete
+      ? 'Complete'
+      : `Missing: ${(capabilities.missingRequired || []).join(', ')}`);
   if (roleName === 'sender') {
     text('senderVoice', role?.voiceActive ? 'Active' : 'Idle');
     text('senderSilence', role?.sourceSilenceMs ? formatDuration(role.sourceSilenceMs) : '0s');

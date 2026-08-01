@@ -1,0 +1,26 @@
+function hasFunction(adapter, name) {
+  return typeof adapter?.[name] === 'function';
+}
+
+export function describeAdapterCapabilities(adapter, role = '') {
+  const capabilities = {
+    composerFinder: hasFunction(adapter, 'findComposer'),
+    messageReader: hasFunction(adapter, 'getConversationMessages'),
+    composerWriter: hasFunction(adapter, 'setComposerText'),
+    submit: hasFunction(adapter, 'submit'),
+    generationState: hasFunction(adapter, 'isGenerating'),
+    stopGeneration: hasFunction(adapter, 'stopGenerating'),
+    microphoneToggle: hasFunction(adapter, 'toggleMute'),
+    voiceState: hasFunction(adapter, 'isVoiceActive')
+  };
+  const required = role === 'receiver'
+    ? ['composerFinder', 'messageReader', 'composerWriter', 'submit', 'generationState']
+    : ['composerFinder', 'messageReader'];
+  const missingRequired = required.filter(name => !capabilities[name]);
+  return {
+    ...capabilities,
+    required,
+    missingRequired,
+    complete: missingRequired.length === 0
+  };
+}
