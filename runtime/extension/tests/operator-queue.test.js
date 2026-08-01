@@ -65,3 +65,13 @@ test('unavailable receiver returns a queued item to queued state', () => {
   assert.equal(queue.get('q1').status, 'queued');
   assert.equal(queue.get('q1').lastError, 'receiver_missing');
 });
+
+
+test('superseded history can be cleared without deleting actionable finals', () => {
+  const queue = new OperatorQueue();
+  queue.enqueue(envelope('q1', 1));
+  queue.enqueue(envelope('q2', 2));
+  queue.supersedeBefore(2);
+  assert.deepEqual(queue.discardSuperseded().map(item => item.id), ['q1']);
+  assert.deepEqual(queue.list().map(item => item.id), ['q2']);
+});

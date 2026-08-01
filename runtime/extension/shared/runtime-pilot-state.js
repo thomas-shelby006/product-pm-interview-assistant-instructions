@@ -242,6 +242,13 @@ export class RuntimePilotState {
     return item;
   }
 
+  discardSuperseded(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const removed = session.queue.discardSuperseded();
+    this.record(sessionId, 'superseded_queue_cleared', { count: removed.length }, now);
+    return removed;
+  }
+
   clearQueue(sessionId, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     const removed = session.queue.clear();
@@ -316,6 +323,17 @@ export class RuntimePilotState {
       }
     }
     if (session.queue.size) warnings.push({ code: 'queue_waiting', severity: 'warn', count: session.queue.size });
+    const actionableQueue = session.queue.list().filter(item => item.status !== 'superseded');
+    const oldestQueuedAt = actionableQueue.length
+      ? Math.min(...actionableQueue.map(item => Number(item.queuedAt) || now))
+      : 0;
+    if (oldestQueuedAt && now - oldestQueuedAt >= 120_000) {
+      warnings.push({
+        code: 'queue_oldest_stale',
+        severity: 'error',
+        ageMs: now - oldestQueuedAt
+      });
+    }
     if (session.mode === 'paused') warnings.push({ code: 'transport_paused', severity: 'warn' });
     return {
       sessionId: session.sessionId,

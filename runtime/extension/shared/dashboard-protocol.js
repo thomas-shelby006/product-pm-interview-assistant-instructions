@@ -5,6 +5,7 @@
   'send_selected',
   'discard_selected',
   'discard_all',
+  'discard_superseded',
   'check_live',
   'repair_runtime',
   'resend_context',

@@ -37,3 +37,21 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** The service worker remains authoritative; UI filtering never deletes queue history and controller rejection remains the backstop.
 
 **Why this is superior:** It reduces operator decisions and prevents an invalid action without weakening queue auditability.
+
+## Cycle 3 - Queue correctness and stale-question handling
+
+**Evidence inspected:** Operator queue retention, superseded item lifecycle, dashboard queue actions, and warning derivation.
+
+**Issue/opportunity:** Superseded history required item-by-item cleanup, and a question waiting long enough to become contextually risky looked identical to a fresh queued final.
+
+**Classification:** Queue safety and operator-attention improvement.
+
+**Implementation:** Added an idempotent Clear superseded command that preserves actionable finals. The pilot snapshot now raises a critical oldest-queue warning after two minutes for non-superseded items.
+
+**Files changed:** dashboard protocol, operator queue, pilot state/controller, dashboard UI/model, and adjacent tests.
+
+**Coverage added:** Superseded-only cleanup and oldest-actionable-age warning checks.
+
+**Source review:** Queue age is derived from session timestamps, not recurring storage writes. Cleanup never touches actionable items or provider conversations.
+
+**Why this is superior:** It keeps audit history available when useful, removes it in one safe action, and surfaces when queued context is likely stale before submission.

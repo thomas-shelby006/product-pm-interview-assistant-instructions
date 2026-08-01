@@ -365,6 +365,9 @@ byId('discardSelected').addEventListener('click', event => {
   if (!state.selectedQueueId) return showToast('Select a queued final.', 'warn');
   void runCommand(event.currentTarget, 'discard_selected', { queueItemId: state.selectedQueueId });
 });
+byId('discardSuperseded').addEventListener('click', event => {
+  void runCommand(event.currentTarget, 'discard_superseded');
+});
 byId('discardAll').addEventListener('click', event => {
   event.currentTarget.dataset.confirm = 'Discard every queued final?';
   void runCommand(event.currentTarget, 'discard_all');

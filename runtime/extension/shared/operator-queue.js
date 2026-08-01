@@ -152,6 +152,14 @@ export class OperatorQueue {
     return cloneItem(removed);
   }
 
+  discardSuperseded() {
+    const removed = this.#items
+      .filter(item => item.status === 'superseded')
+      .map(cloneItem);
+    this.#items = this.#items.filter(item => item.status !== 'superseded');
+    return removed;
+  }
+
   clear() {
     const removed = this.list();
     this.#items = [];

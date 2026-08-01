@@ -47,3 +47,11 @@ test('pilot state survives export and restore with queue identity', () => {
   assert.equal(snapshot.latestFinal.id, 'q1');
   assert.equal(snapshot.queue[0].id, 'q1');
 });
+
+
+test('pilot state warns when the oldest actionable queue item exceeds two minutes', () => {
+  const state = new RuntimePilotState();
+  state.queueFinal('pmia_session', envelope('q1'), { now: 1000 });
+  const snapshot = state.snapshot('pmia_session', 122000);
+  assert.ok(snapshot.warnings.some(item => item.code === 'queue_oldest_stale'));
+});

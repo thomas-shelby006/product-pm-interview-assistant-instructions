@@ -31,6 +31,7 @@ export function warningLabel(warning) {
     sender_composer_missing: 'Sender composer is not ready',
     receiver_composer_missing: 'Receiver composer is not ready',
     queue_waiting: 'Final questions are waiting in the queue',
+    queue_oldest_stale: 'The oldest actionable queued question has waited over two minutes',
     transport_paused: 'Forwarding is paused'
   };
   return labels[warning?.code] || String(warning?.code || 'Runtime warning');

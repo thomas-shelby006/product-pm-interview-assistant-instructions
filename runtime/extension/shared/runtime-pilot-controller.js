@@ -472,6 +472,9 @@ export function createRuntimePilotController({
       case 'discard_all':
         result = { ok: true, discarded: pilot.clearQueue(sessionId).length };
         break;
+      case 'discard_superseded':
+        result = { ok: true, discarded: pilot.discardSuperseded(sessionId).length };
+        break;
       case 'check_live':
         result = await liveCheck(sessionId, registry, pilot);
         break;
