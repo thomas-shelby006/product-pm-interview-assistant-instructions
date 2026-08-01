@@ -2,6 +2,7 @@ import { RuntimePilotState } from './runtime-pilot-state.js';
 import { estimateStorageCategories } from './storage-accounting.js';
 import { createStateCommitJournal, recoverCommittedState } from './state-commit-journal.js';
 import { validateRuntimeState } from './runtime-invariants.js';
+import { encodeRuntimeEnvelope, normalizeRuntimeEnvelope } from './runtime-state-schema.js';
 
 function stateHash(value) {
   let hash = 0x811c9dc5;
@@ -14,7 +15,8 @@ function stateHash(value) {
 
 export function createRuntimePilotStore({
   storageArea,
-  key = 'pmia_runtime_pilot_v1'
+  key = 'pmia_runtime_pilot_v1',
+  writerVersion = globalThis.chrome?.runtime?.getManifest?.().version || 'unknown'
 } = {}) {
   if (!storageArea?.get || !storageArea?.set || !storageArea?.remove) {
     throw new TypeError('PMIA runtime pilot requires chrome.storage.session');
@@ -29,26 +31,36 @@ export function createRuntimePilotStore({
     const stored = await storageArea.get([key, journalKey, previousKey]);
     commitJournal = createStateCommitJournal(stored[journalKey] || {});
     const recovered = recoverCommittedState({
-      currentState: stored[key] || [],
-      previousState: stored[previousKey] || [],
+      currentState: stored[key] ?? [],
+      previousState: stored[previousKey] ?? [],
       journal: stored[journalKey] || {}
     });
+    const normalized = normalizeRuntimeEnvelope(recovered.state, { writerVersion });
+    if (!normalized.ok) throw new Error(`runtime_state_invalid:${normalized.reason}`);
     if (recovered.recovered) {
       commitJournal = createStateCommitJournal(recovered.journal);
       await storageArea.set({
-        [key]: recovered.state,
+        [key]: normalized.envelope,
         [journalKey]: commitJournal.snapshot()
       });
     }
-    const invariant = validateRuntimeState(recovered.state);
+    const invariant = validateRuntimeState(normalized.envelope.sessions);
+    const repairedEnvelope = invariant.repaired > 0
+      ? encodeRuntimeEnvelope(invariant.state, { writerVersion })
+      : normalized.envelope;
     lastAudit = {
       recovered: recovered.recovered,
       recoveryReason: recovered.reason,
       repaired: invariant.repaired,
       blocked: invariant.blocked,
-      findings: invariant.findings
+      findings: invariant.findings,
+      schema: {
+        version: repairedEnvelope.schemaVersion,
+        writerVersion: repairedEnvelope.writerVersion,
+        legacy: normalized.legacy
+      }
     };
-    if (invariant.repaired > 0) await storageArea.set({ [key]: invariant.state });
+    if (invariant.repaired > 0) await storageArea.set({ [key]: repairedEnvelope });
     return new RuntimePilotState(invariant.state);
   }
 
@@ -67,14 +79,14 @@ export function createRuntimePilotStore({
       if (!(state instanceof RuntimePilotState)) {
         throw new TypeError('Invalid PMIA runtime pilot state');
       }
-      const nextState = state.exportState();
+      const nextEnvelope = encodeRuntimeEnvelope(state.exportState(), { writerVersion });
       const current = await storageArea.get(key);
-      const prepared = commitJournal.prepare({ stateHash: stateHash(nextState) });
+      const prepared = commitJournal.prepare({ stateHash: stateHash(nextEnvelope) });
       await storageArea.set({
-        [previousKey]: Array.isArray(current[key]) ? current[key] : [],
+        [previousKey]: current[key] ?? encodeRuntimeEnvelope([], { writerVersion }),
         [journalKey]: prepared
       });
-      await storageArea.set({ [key]: nextState });
+      await storageArea.set({ [key]: nextEnvelope });
       const applied = commitJournal.apply(prepared.generation);
       await storageArea.set({ [journalKey]: applied });
     },

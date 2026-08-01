@@ -62,14 +62,14 @@ export function recoverCommittedState({ currentState = [], previousState = [], j
     return {
       recovered: true,
       reason: 'unapplied_generation',
-      state: clone(Array.isArray(previousState) ? previousState : []),
+      state: clone(previousState),
       journal: createStateCommitJournal(normalized).recover()
     };
   }
   return {
     recovered: false,
     reason: 'current_generation_applied',
-    state: clone(Array.isArray(currentState) ? currentState : []),
+    state: clone(currentState),
     journal: normalized
   };
 }
