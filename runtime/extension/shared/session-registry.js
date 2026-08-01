@@ -57,7 +57,8 @@ export class SessionRegistry {
     const existing = session[role];
     const incomingInstanceId = String(registration.instanceId || '').trim();
     const existingInstanceId = String(existing?.instanceId || '').trim();
-    const sameRuntimeLease = Boolean(existing && existing.provider === provider && incomingInstanceId && existingInstanceId === incomingInstanceId);
+    const legacySameTabHeartbeat = Boolean(existing && existing.provider === provider && existing.tabId === tabId && !incomingInstanceId && !existingInstanceId);
+    const sameRuntimeLease = Boolean(existing && existing.provider === provider && ((incomingInstanceId && existingInstanceId === incomingInstanceId) || legacySameTabHeartbeat));
 
     if (sameRuntimeLease && existing.tabId !== tabId && !allowInstanceMigration) {
       return { accepted: false, changed: false, conflict: true, reason: 'instance_migration_disabled', registration: { ...existing } };
@@ -100,7 +101,7 @@ export class SessionRegistry {
     this.#sessions.set(sessionId, session);
     return {
       accepted: true,
-      changed: Boolean(replacedRegistration),
+      changed: !existing || Boolean(replacedRegistration),
       conflict: false,
       reason: election.reason,
       replacedTabId: replacedRegistration?.tabId || null,

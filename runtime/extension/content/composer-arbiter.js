@@ -14,7 +14,10 @@ export function createComposerArbiter({ adapter, onConflict = () => {} } = {}) {
   let fingerprintRevision = 0;
 
   const currentText = () => normalize(adapter.getComposerText?.() || '');
-  const currentFingerprint = () => createComposerFingerprint(adapter.findComposer?.(), { revision: ++fingerprintRevision });
+  const currentFingerprint = () => createComposerFingerprint(
+    adapter.findComposer?.() || { tagName: 'VIRTUAL', textContent: currentText(), getAttribute: () => null },
+    { revision: ++fingerprintRevision }
+  );
   const adoptCurrentFingerprint = () => { ownedFingerprint = currentFingerprint(); };
 
   function observe() {

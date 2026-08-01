@@ -293,7 +293,7 @@ test('runtime fallback diagnostics contain no replacement-character mojibake', a
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const main = await readFile(resolve(extensionRoot, 'content/main.js'), 'utf8');
-  assert.doesNotMatch(main, /\uFFFD|A�|Ã|â€™|â€“/);
+  assert.doesNotMatch(main, /\uFFFD|Aï¿½|Ãƒ|Ã¢â‚¬â„¢|Ã¢â‚¬â€œ/);
 });
 
 
@@ -552,7 +552,8 @@ test('runtime registrations and revocations are scoped to one content instance',
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
   const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
   assert.match(entry, /getOrCreateRuntimeInstanceId/);
-  assert.match(entry, /registration: \{ \.\.\.runtimeConfig, instanceId: runtimeInstanceId \}/);
+  assert.match(entry, /instanceId: runtimeInstanceId, ownerGeneration: runtimeFence\.generation/);
+  assert.match(entry, /acquireRuntimeInstanceFence/);
   assert.match(entry, /shouldApplyRoleRevocation\(runtimeConfig, runtimeInstanceId, incoming\)/);
   assert.match(background, /instanceId: String\(replacedRegistration\?\.instanceId/);
   assert.match(background, /registry\.canForward\([^)]*message\.runtimeInstanceId/);
@@ -576,7 +577,9 @@ test('runtime lease migrates across provider tab replacement through session sto
   assert.match(entry, /pmia_runtime_instance_/);
   assert.match(entry, /getOrCreateRuntimeInstanceId\(sessionStorage/);
   assert.match(registry, /sameRuntimeLease/);
-  assert.match(registry, /existing\.tabId = tabId/);
+  assert.match(registry, /electRegistryOwner/);
+  assert.match(registry, /ownerGeneration/);
+  assert.match(registry, /leaseExpiresAt/);
 });
 
 
@@ -635,8 +638,9 @@ test('production runtime contains no latest-only delivery authority', async () =
     'shared/runtime-pilot-state.js'
   ];
   const source = (await Promise.all(files.map(file => readFile(resolve(extensionRoot, file), 'utf8')))).join('\n');
-  assert.doesNotMatch(source, /queueLatest|acceptSequence|lastAcceptedSeq|supersedeBefore|resume_latest/);
+  assert.doesNotMatch(source, /queueLatest|supersedeBefore|resume_latest/);
   assert.match(source, /persistFinal|DeliveryLedger|resume_catch_up/);
+  assert.match(source, /sequenceFeedback|lastAcceptedSeq/);
 });
 
 

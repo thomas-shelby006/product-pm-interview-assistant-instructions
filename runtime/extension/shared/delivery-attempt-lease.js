@@ -46,7 +46,7 @@ export function acquireAttemptLease(current, {
     owner: requestedOwner,
     reason: String(reason || 'delivery_attempt'),
     acquiredAt: timestamp,
-    expiresAt: timestamp + Math.max(250, Number(ttlMs) || 5000),
+    expiresAt: timestamp + Math.max(1, Number(ttlMs) || 5000),
     takeoverCount: Math.max(0, Number(existing?.takeoverCount) || 0) + (takeover ? 1 : 0)
   };
   return { accepted: true, duplicate: false, reason: takeover ? 'attempt_lease_takeover' : 'attempt_lease_acquired', lease };

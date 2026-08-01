@@ -9,7 +9,7 @@ export class RequestCorrelationJournal {
   #maxEntries;
 
   constructor({ maxEntries = 256 } = {}) {
-    this.#maxEntries = Math.max(8, Number(maxEntries) || 256);
+    this.#maxEntries = Math.max(1, Number(maxEntries) || 256);
   }
 
   begin(requestId, { epoch = 0, operation = '', now = Date.now() } = {}) {

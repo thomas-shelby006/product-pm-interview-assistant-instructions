@@ -1,4 +1,4 @@
-function booleans(report = {}) { return Object.fromEntries(Object.entries(report).filter(([, value]) => typeof value === 'boolean')); }
+function booleans(report = {}) { return Object.fromEntries(Object.entries(report).filter(([key, value]) => key !== 'complete' && typeof value === 'boolean')); }
 
 export function evaluateAdapterCapabilityDrift(previous = {}, current = {}, prior = null, now = Date.now(), { stableSamples = 3 } = {}) {
   const before = booleans(previous); const after = booleans(current);

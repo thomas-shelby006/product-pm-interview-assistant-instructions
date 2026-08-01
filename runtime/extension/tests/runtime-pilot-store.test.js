@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRuntimePilotStore } from '../shared/runtime-pilot-store.js';
 
@@ -6,7 +6,10 @@ function memoryArea() {
   const data = {};
   return {
     data,
-    async get(key) { return key ? { [key]: data[key] } : { ...data }; },
+    async get(key) {
+      if (Array.isArray(key)) return Object.fromEntries(key.map(item => [item, data[item]]));
+      return key ? { [key]: data[key] } : { ...data };
+    },
     async set(values) { Object.assign(data, values); },
     async remove(key) {
       for (const item of Array.isArray(key) ? key : [key]) delete data[item];

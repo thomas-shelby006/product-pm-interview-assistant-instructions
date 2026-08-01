@@ -5,8 +5,8 @@ function lane(value = {}, now = Date.now()) {
   const score = Math.max(0, Math.min(100, Number(value?.score) || 0));
   const label = state === 'open' ? 'Open circuit'
     : state === 'probing' || state === 'half_open' ? 'Probing'
-      : mode === 'fallback' || preferredMode === 'fallback' ? 'Fallback preferred'
-        : state === 'closed' ? 'Direct preferred'
+      : mode === 'fallback' || preferredMode === 'fallback' ? 'Fallback'
+        : state === 'closed' ? 'Direct'
           : 'Unknown';
   return {
     state,

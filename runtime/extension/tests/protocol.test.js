@@ -32,7 +32,8 @@ test('message envelope trims text and preserves metadata', () => {
   assert.equal(result.text, 'latest question');
   assert.equal(result.createdAt, 123);
   assert.equal(result.kind, 'question');
-  assert.deepEqual(result.metadata, { buffered: false });
+  assert.equal(result.metadata.buffered, false);
+  assert.match(result.metadata.traceId, /^tr-[0-9a-f]{8}$/);
 });
 
 test('session registry rejects a duplicate live role and permits stale takeover', () => {

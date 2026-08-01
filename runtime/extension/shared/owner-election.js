@@ -2,7 +2,7 @@ function generation(value) { return Math.max(0, Number(value?.ownerGeneration) |
 export function electRegistryOwner(existing, incoming, { now = Date.now(), leaseMs = 45000 } = {}) {
   const timestamp = Number(now) || Date.now(); const current = existing && typeof existing === 'object' ? existing : null; const candidate = incoming && typeof incoming === 'object' ? incoming : {};
   const currentExpired = !current || Number(current.leaseExpiresAt || current.registeredAt || 0) <= timestamp;
-  const sameInstance = Boolean(current && candidate.instanceId && current.instanceId === candidate.instanceId);
+  const sameInstance = Boolean(current && ((candidate.instanceId && current.instanceId === candidate.instanceId) || (current.tabId === candidate.tabId && !candidate.instanceId && !current.instanceId)));
   const requestedGeneration = Math.max(1, generation(candidate) || (sameInstance ? generation(current) : 1));
   const incomingWins = !current || currentExpired || sameInstance || requestedGeneration > generation(current);
   if (!incomingWins) return { winner: 'existing', reason: 'fresh_higher_generation_owner', registration: { ...current } };

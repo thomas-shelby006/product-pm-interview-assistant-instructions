@@ -37,8 +37,14 @@ export function createReceiverBatchRuntime({
       recentSuccessfulChars: lastSuccessfulChars,
       recentFailureChars: lastFailureChars
     });
-    planner.setBudget({ maxMembers: budget.maxMembers, maxChars: budget.maxChars });
-    return budget;
+    const configured = planner.budget();
+    const applied = {
+      ...budget,
+      maxMembers: Math.min(configured.maxMembers, budget.maxMembers),
+      maxChars: Math.min(configured.maxChars, budget.maxChars)
+    };
+    planner.setBudget({ maxMembers: applied.maxMembers, maxChars: applied.maxChars });
+    return applied;
   };
 
   const ensureTransaction = batch => {
