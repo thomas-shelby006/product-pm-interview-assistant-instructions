@@ -2,7 +2,8 @@ import { RuntimePilotState } from './runtime-pilot-state.js';
 import { estimateStorageCategories } from './storage-accounting.js';
 import { createStateCommitJournal, recoverCommittedState } from './state-commit-journal.js';
 import { validateRuntimeState } from './runtime-invariants.js';
-import { encodeRuntimeEnvelope, normalizeRuntimeEnvelope } from './runtime-state-schema.js';
+import { encodeRuntimeEnvelope, normalizeRuntimeEnvelope, RUNTIME_STATE_SCHEMA_VERSION } from './runtime-state-schema.js';
+import { migrateRuntimeEnvelope } from './runtime-state-migrations.js';
 
 function stateHash(value) {
   let hash = 0x811c9dc5;
@@ -37,17 +38,16 @@ export function createRuntimePilotStore({
     });
     const normalized = normalizeRuntimeEnvelope(recovered.state, { writerVersion });
     if (!normalized.ok) throw new Error(`runtime_state_invalid:${normalized.reason}`);
-    if (recovered.recovered) {
-      commitJournal = createStateCommitJournal(recovered.journal);
-      await storageArea.set({
-        [key]: normalized.envelope,
-        [journalKey]: commitJournal.snapshot()
-      });
-    }
-    const invariant = validateRuntimeState(normalized.envelope.sessions);
+    const migration = migrateRuntimeEnvelope(normalized.envelope, RUNTIME_STATE_SCHEMA_VERSION, {
+      writerVersion,
+      now: Date.now()
+    });
+    if (!migration.ok) throw new Error(`runtime_state_incompatible:${migration.reason}`);
+    if (recovered.recovered) commitJournal = createStateCommitJournal(recovered.journal);
+    const invariant = validateRuntimeState(migration.envelope.sessions);
     const repairedEnvelope = invariant.repaired > 0
       ? encodeRuntimeEnvelope(invariant.state, { writerVersion })
-      : normalized.envelope;
+      : migration.envelope;
     lastAudit = {
       recovered: recovered.recovered,
       recoveryReason: recovered.reason,
@@ -57,10 +57,16 @@ export function createRuntimePilotStore({
       schema: {
         version: repairedEnvelope.schemaVersion,
         writerVersion: repairedEnvelope.writerVersion,
-        legacy: normalized.legacy
+        legacy: normalized.legacy,
+        migration: migration.applied
       }
     };
-    if (invariant.repaired > 0) await storageArea.set({ [key]: repairedEnvelope });
+    if (recovered.recovered || migration.applied.length || invariant.repaired > 0) {
+      await storageArea.set({
+        [key]: repairedEnvelope,
+        ...(recovered.recovered ? { [journalKey]: commitJournal.snapshot() } : {})
+      });
+    }
     return new RuntimePilotState(invariant.state);
   }
 
