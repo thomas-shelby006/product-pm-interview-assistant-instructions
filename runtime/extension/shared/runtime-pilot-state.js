@@ -5,6 +5,8 @@ import { createTraceSpan } from './delivery-trace.js';
 import { deriveBacklogForecast } from './backlog-forecast.js';
 import { RuntimePerformanceBudget } from './runtime-performance-budget.js';
 import { normalizeLiveSession, transitionLiveSession as transitionLiveSessionValue, markInterviewerActivity, setFocusMode } from './live-session-state.js';
+import { normalizeQuestionMetadataIndex, updateQuestionMetadata } from './question-metadata-index.js';
+import { consumeUndo, normalizeUndoJournal, recordUndo } from './operator-undo-journal.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -179,7 +181,11 @@ function normalizeSession(item) {
     recoveryBudget: new RecoveryBudget(item.recoveryBudget || {}),
     performanceBudget: new RuntimePerformanceBudget(item.performanceBudget || {}),
     lastTransportDrill: item.lastTransportDrill && typeof item.lastTransportDrill === 'object' ? JSON.parse(JSON.stringify(item.lastTransportDrill)) : null,
-    liveSession: normalizeLiveSession(item.liveSession, createdAt)
+    liveSession: normalizeLiveSession(item.liveSession, createdAt),
+    questionOperations: {
+      metadata: normalizeQuestionMetadataIndex(item.questionOperations?.metadata || {}),
+      undoJournal: normalizeUndoJournal(item.questionOperations?.undoJournal || [])
+    }
   };
 }
 
@@ -246,6 +252,37 @@ export class RuntimePilotState {
     session.updatedAt = now;
     this.record(sessionId, 'focus_mode_changed', { enabled: Boolean(enabled) }, now);
     return JSON.parse(JSON.stringify(session.liveSession));
+  }
+
+  updateQuestionMetadata(sessionId, itemId, patch = {}, action = 'metadata_change', now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    if (!session.ledger.get(itemId)) return { ok: false, error: 'ledger_item_missing' };
+    const parentId = String(patch?.parentId || '');
+    if (parentId && parentId === String(itemId)) return { ok: false, error: 'question_parent_self' };
+    if (parentId && !session.ledger.get(parentId)) return { ok: false, error: 'question_parent_missing' };
+    const change = updateQuestionMetadata(session.questionOperations.metadata, itemId, patch, now);
+    if (!change.ok) return change;
+    session.questionOperations.metadata = change.index;
+    session.questionOperations.undoJournal = recordUndo(session.questionOperations.undoJournal, {
+      action, itemId: change.itemId, before: change.before, after: change.after
+    }, now);
+    session.updatedAt = now;
+    this.record(sessionId, 'question_metadata_changed', { itemId: change.itemId, action }, now);
+    return { ok: true, itemId: change.itemId, metadata: { ...change.after }, undo: session.questionOperations.undoJournal.at(-1) };
+  }
+
+  undoQuestionMetadata(sessionId, undoId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const result = consumeUndo(session.questionOperations.undoJournal, undoId, now);
+    if (!result.ok) return result;
+    session.questionOperations.undoJournal = result.journal;
+    session.questionOperations.metadata = {
+      ...session.questionOperations.metadata,
+      [result.entry.itemId]: JSON.parse(JSON.stringify(result.entry.before))
+    };
+    session.updatedAt = now;
+    this.record(sessionId, 'question_metadata_undone', { itemId: result.entry.itemId, action: result.entry.action, undoId: result.entry.id }, now);
+    return { ok: true, itemId: result.entry.itemId, metadata: { ...result.entry.before }, undoId: result.entry.id };
   }
 
   replayCommandResult(sessionId, requestId, now = Date.now()) {
@@ -997,7 +1034,11 @@ export class RuntimePilotState {
       proofArchive: { ...session.proofArchive },
       contextArmed: session.contextArmed,
       contextArmedAt: session.contextArmedAt,
-      liveSession: JSON.parse(JSON.stringify(session.liveSession || {}))
+      liveSession: JSON.parse(JSON.stringify(session.liveSession || {})),
+      questionOperations: {
+        metadata: JSON.parse(JSON.stringify(session.questionOperations.metadata || {})),
+        undoJournal: JSON.parse(JSON.stringify(session.questionOperations.undoJournal || []))
+      }
     };
   }
 
@@ -1035,7 +1076,11 @@ export class RuntimePilotState {
       recoveryBudget: session.recoveryBudget.snapshot(),
       performanceBudget: session.performanceBudget.exportState(),
       lastTransportDrill: session.lastTransportDrill ? JSON.parse(JSON.stringify(session.lastTransportDrill)) : null,
-      liveSession: JSON.parse(JSON.stringify(session.liveSession || {}))
+      liveSession: JSON.parse(JSON.stringify(session.liveSession || {})),
+      questionOperations: {
+        metadata: JSON.parse(JSON.stringify(session.questionOperations.metadata || {})),
+        undoJournal: JSON.parse(JSON.stringify(session.questionOperations.undoJournal || []))
+      }
     }));
   }
 }

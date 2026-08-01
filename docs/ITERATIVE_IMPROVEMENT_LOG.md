@@ -694,3 +694,56 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** one persisted preference drives a CSS-only projection; hidden diagnostic state remains connected and unchanged.
 
 **Source-complete status:** Cycles 96-105 are implemented. Executable verification remains deferred until the complete Phase A source program is finished.
+
+
+## Cycle 106 - Question Navigator
+- **Bug fixes:** live question handling no longer depends on a flat ledger table with mixed delivery states.
+- **New features:** Current, Waiting, Delivered, and Archived groups with counts and one selected question.
+- **Implementation:** a projection groups immutable ledger entries without changing sequence or delivery order.
+
+## Cycle 107 - Pinned Questions
+- **Bug fixes:** important questions no longer disappear visually inside long sessions.
+- **New features:** pin and unpin metadata with a visible row rail and Pinned-only filter.
+- **Implementation:** pin state is a bounded operator metadata overlay keyed by ledger ID.
+
+## Cycle 108 - Explicit Deferral
+- **Bug fixes:** delaying a question no longer requires archiving or losing its delivery state.
+- **New features:** defer until current answer completes, manual resume, or a bounded time.
+- **Implementation:** defer readiness is advisory metadata; the canonical ledger and provider sequence remain unchanged.
+
+## Cycle 109 - Priority Bands
+- **Bug fixes:** waiting questions no longer appear equally urgent during a fast interview.
+- **New features:** Low, Normal, High, and Critical priority metadata and filtering.
+- **Implementation:** priority is an operator-facing overlay only and never participates in delivery sorting.
+
+## Cycle 110 - Follow-up Relationships
+- **Bug fixes:** follow-up questions no longer lose their link to the earlier discussion.
+- **New features:** parent/follow-up relationship with inspector visibility.
+- **Implementation:** relationships require another existing ledger ID, reject self-links, and remain reversible metadata.
+
+## Cycle 111 - Duplicate Explanation
+- **Bug fixes:** duplicate suppression is no longer visible only as a metric count.
+- **New features:** retained identity, reason, occurrence count, and last duplicate event in the inspector.
+- **Implementation:** a metadata-only timeline index explains duplicate decisions without creating duplicate ledger rows.
+
+## Cycle 112 - Canonical Question Status
+- **Bug fixes:** the Inbox, active batch, and inspector no longer derive different labels for the same ledger entry.
+- **New features:** Current answer, Next batch, Waiting, Submitting, Delivered, Needs attention, and Archived labels.
+- **Implementation:** one status model maps ledger and batch state to group, label, and actionability.
+
+## Cycle 113 - Indexed Question Search
+- **Bug fixes:** large sessions no longer require linear visual scanning for a question.
+- **New features:** search by question text, ledger ID, sequence, batch, state, priority, pin, defer, and parent.
+- **Implementation:** a reusable normalized query index applies search and filters without modifying source entries.
+
+## Cycle 114 - Detailed Question Inspector
+- **Bug fixes:** selecting a row no longer exposes only submit/archive controls.
+- **New features:** exact status, trace, duplicate history, relationship, priority, defer state, and question text.
+- **Implementation:** the inspector is a pure projection from the selected question and existing trace metadata.
+
+## Cycle 115 - Bounded Metadata Undo
+- **Bug fixes:** an accidental pin, priority, defer, or relationship change no longer requires manual reconstruction.
+- **New features:** one-use five-minute undo with visible last action.
+- **Implementation:** a 32-entry metadata-only undo journal stores before/after operator state and never stores question text.
+
+**Source-complete status:** Cycles 106-115 are implemented. Executable verification remains deferred until the complete Phase A source program is finished.

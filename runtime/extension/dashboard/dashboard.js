@@ -34,6 +34,7 @@ import { deriveStateCompatibility } from './state-compatibility-model.js';
 import { createCommandPaletteState, movePaletteSelection, recordPaletteCommand } from './command-palette-model.js';
 import { applyRovingTabIndex, handleToolbarKey } from './toolbar-navigation.js';
 import { applyFocusMode, deriveFocusMode } from './focus-mode-model.js';
+import { deriveQuestionNavigator } from './question-navigator-model.js';
 import { deriveInterviewRunbook } from '../shared/interview-runbook.js';
 import { deriveSessionClock } from '../shared/session-clock.js';
 import { deriveInterviewerSilence } from '../shared/interviewer-silence.js';
@@ -51,6 +52,7 @@ const state = {
   reconnectTimer: null,
   selectedQueueId: '',
   queueFilter: 'actionable',
+  questionNavigator: { query: '', group: 'all', priority: 'all', pinned: false, actionable: true, selectedId: '' },
   timelineFilter: 'all',
   activeView: 'overview',
   sessionEnded: false,
@@ -824,36 +826,71 @@ function renderOverview(snapshot, now) {
   text('holdAction', `Hold after answer: ${hold ? 'On' : 'Off'}`);
 }
 
+function renderQuestionInspector(navigator) {
+  const selected = navigator.selected;
+  const inspector = byId('questionInspector');
+  inspector.dataset.empty = selected ? 'false' : 'true';
+  text('questionInspectorTitle', selected ? `Question #${selected.seq || '--'}` : 'No question selected');
+  text('questionInspectorMeta', selected
+    ? `${selected.id} - ${selected.batchId || 'No batch'} - ${selected.operator.priority || 'normal'} priority`
+    : 'Select a ledger entry to inspect delivery and operator metadata.');
+  text('questionInspectorText', selected?.text || '');
+  text('questionInspectorStatus', selected?.status?.label || '--');
+  text('questionInspectorTrace', selected?.traceId || '--');
+  text('questionInspectorDuplicate', selected?.duplicate?.duplicate
+    ? `${selected.duplicate.count} duplicate event(s) - retained ${selected.duplicate.retainedId}` : 'No');
+  text('questionInspectorRelationship', selected?.relationship?.parentId ? `Follow-up to ${selected.relationship.parentId}` : 'None');
+  const pin = byId('pinQuestion');
+  pin.disabled = !selected;
+  pin.textContent = selected?.operator?.pinned ? 'Unpin question' : 'Pin question';
+  byId('setQuestionPriority').disabled = !selected;
+  byId('setQuestionPriority').value = selected?.operator?.priority || 'normal';
+  byId('deferQuestion').disabled = !selected;
+  byId('deferQuestion').value = selected?.operator?.deferCondition || 'none';
+  byId('questionParentId').disabled = !selected;
+  byId('questionParentId').value = selected?.relationship?.parentId || '';
+  byId('linkQuestion').disabled = !selected;
+  const undo = byId('undoQuestionAction');
+  undo.hidden = !navigator.latestUndo;
+  undo.dataset.undoId = navigator.latestUndo?.id || '';
+  undo.textContent = navigator.latestUndo ? `Undo ${humanizeCode(navigator.latestUndo.action)}` : 'Undo last metadata change';
+}
+
 function renderQueue(snapshot, now) {
   const body = byId('queueBody');
   body.replaceChildren();
-  const ledger = Array.isArray(snapshot?.ledger) ? snapshot.ledger : [];
-  const inbox = state.queueFilter === 'all'
-    ? ledger
-    : ledger.filter(item => ['persisted', 'failed', 'staged', 'submitting'].includes(item?.state));
+  state.questionNavigator = {
+    ...state.questionNavigator,
+    actionable: state.queueFilter !== 'all',
+    selectedId: state.selectedQueueId || state.questionNavigator.selectedId || ''
+  };
+  const navigator = deriveQuestionNavigator(snapshot || {}, state.questionNavigator, now);
+  state.questionNavigator = { ...state.questionNavigator, selectedId: navigator.selectedId };
+  state.selectedQueueId = navigator.selectedId;
+  const inbox = navigator.results;
   if (!inbox.length) {
     state.selectedQueueId = '';
+    state.questionNavigator.selectedId = '';
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 6;
+    cell.colSpan = 7;
     cell.className = 'empty';
-    cell.textContent = state.queueFilter === 'all' ? 'No ledger entries.' : 'Inbox is caught up.';
+    cell.textContent = state.queueFilter === 'all' ? 'No questions match the current filters.' : 'Inbox is caught up.';
     row.append(cell);
     body.append(row);
+    renderQuestionInspector({ ...navigator, selected: null, selectedId: '' });
     return;
-  }
-  if (!inbox.some(item => item.id === state.selectedQueueId)) {
-    state.selectedQueueId = inbox.findLast?.(item => ['persisted', 'failed'].includes(item.state))?.id
-      || [...inbox].reverse().find(item => ['persisted', 'failed'].includes(item.state))?.id
-      || inbox.at(-1)?.id || '';
   }
   for (const item of inbox) {
     const row = document.createElement('tr');
-    const ledgerState = item.state || item.ledgerState || item.status || 'persisted';
+    const ledgerState = item.state || 'persisted';
+    row.dataset.pinned = item.operator?.pinned ? 'true' : 'false';
+    row.dataset.priority = item.operator?.priority || 'normal';
     if (item.id === state.selectedQueueId) row.classList.add('selected');
     row.classList.add(ledgerState);
     row.addEventListener('click', () => {
       state.selectedQueueId = item.id;
+      state.questionNavigator.selectedId = item.id;
       renderQueue(state.snapshot, Date.now());
     });
     const selectCell = document.createElement('td');
@@ -861,24 +898,29 @@ function renderQueue(snapshot, now) {
     radio.type = 'radio';
     radio.name = 'queueItem';
     radio.checked = item.id === state.selectedQueueId;
-    radio.disabled = !['persisted', 'failed'].includes(ledgerState);
-    radio.setAttribute('aria-label', `Select inbox item ${item.envelope?.seq || ''}`);
+    radio.disabled = !item.status?.actionable;
+    radio.setAttribute('aria-label', `Select question ${item.envelope?.seq || ''}`);
     selectCell.append(radio);
     const age = document.createElement('td');
     age.textContent = formatDuration(now - Number(item.persistedAt || item.queuedAt || now));
     const seq = document.createElement('td');
     seq.textContent = String(item.envelope?.seq || 0);
     const status = document.createElement('td');
-    status.textContent = ledgerState;
+    status.textContent = item.status?.label || ledgerState;
+    const priority = document.createElement('td');
+    priority.className = 'priority';
+    priority.dataset.priority = item.operator?.priority || 'normal';
+    priority.textContent = `${item.operator?.pinned ? 'Pinned - ' : ''}${item.operator?.priority || 'normal'}${item.deferred ? ' - deferred' : ''}`;
     const batch = document.createElement('td');
     batch.className = 'batch';
     batch.textContent = item.batchId || '--';
     const question = document.createElement('td');
     question.className = 'question';
     question.textContent = item.envelope?.text || '';
-    row.append(selectCell, age, seq, status, batch, question);
+    row.append(selectCell, age, seq, status, priority, batch, question);
     body.append(row);
   }
+  renderQuestionInspector(navigator);
 }
 
 function eventCategory(type) {
@@ -1027,7 +1069,7 @@ function renderReview(snapshot) {
 
 function updateControlAvailability() {
   const unavailable = !state.snapshot || state.sessionEnded;
-  document.querySelectorAll('[data-command], #submitSelected, #archiveSelected, #archiveProven, #archiveAll, #copyLatest, #endSessionAction, #exportBeforeEnd, #archiveAndEnd, #cancelEndSession').forEach(node => {
+  document.querySelectorAll('[data-command], #submitSelected, #archiveSelected, #archiveProven, #archiveAll, #copyLatest, #endSessionAction, #exportBeforeEnd, #archiveAndEnd, #cancelEndSession, #pinQuestion, #setQuestionPriority, #deferQuestion, #questionParentId, #linkQuestion, #undoQuestionAction').forEach(node => {
     const busy = node.dataset.busy === 'true';
     const commandBlocked = state.pending.size > 0 && Boolean(node.dataset.command);
     node.disabled = unavailable || busy || commandBlocked;
@@ -1242,9 +1284,56 @@ byId('archiveAndEnd').addEventListener('click', async () => {
 });
 byId('cancelEndSession').addEventListener('click', closeEndSheet);
 
+function selectedQuestion() {
+  return state.snapshot?.questionOperationsDerived?.questions?.find(item => item.id === state.selectedQueueId) || null;
+}
+
+byId('questionSearch').addEventListener('input', event => {
+  state.questionNavigator.query = String(event.target.value || '');
+  renderQueue(state.snapshot, Date.now());
+});
+byId('questionGroup').addEventListener('change', event => {
+  state.questionNavigator.group = event.target.value;
+  renderQueue(state.snapshot, Date.now());
+});
+byId('questionPriority').addEventListener('change', event => {
+  state.questionNavigator.priority = event.target.value;
+  renderQueue(state.snapshot, Date.now());
+});
+byId('questionPinned').addEventListener('change', event => {
+  state.questionNavigator.pinned = Boolean(event.target.checked);
+  renderQueue(state.snapshot, Date.now());
+});
 byId('queueFilter').addEventListener('change', event => {
   state.queueFilter = event.target.value;
   renderQueue(state.snapshot, Date.now());
+});
+
+byId('pinQuestion').addEventListener('click', event => {
+  const item = selectedQuestion();
+  if (!item) return;
+  void runCommand(event.currentTarget, 'set_question_pin', { itemId: item.id, value: !Boolean(item.operator?.pinned) });
+});
+byId('setQuestionPriority').addEventListener('change', event => {
+  const item = selectedQuestion();
+  if (!item) return;
+  void runCommand(event.currentTarget, 'set_question_priority', { itemId: item.id, priority: event.target.value });
+});
+byId('deferQuestion').addEventListener('change', event => {
+  const item = selectedQuestion();
+  if (!item) return;
+  const condition = event.target.value;
+  const until = condition === 'until_time' ? Date.now() + 5 * 60_000 : 0;
+  void runCommand(event.currentTarget, 'defer_question', { itemId: item.id, condition, until });
+});
+byId('linkQuestion').addEventListener('click', event => {
+  const item = selectedQuestion();
+  if (!item) return;
+  void runCommand(event.currentTarget, 'link_question_follow_up', { itemId: item.id, parentId: byId('questionParentId').value });
+});
+byId('undoQuestionAction').addEventListener('click', event => {
+  const undoId = event.currentTarget.dataset.undoId;
+  if (undoId) void runCommand(event.currentTarget, 'undo_question_action', { undoId });
 });
 byId('timelineFilter').addEventListener('change', event => {
   state.timelineFilter = event.target.value;

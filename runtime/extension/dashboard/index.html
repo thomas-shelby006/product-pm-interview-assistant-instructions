@@ -307,7 +307,11 @@
       <section class="view" id="panelQueue" data-view-panel="queue" role="tabpanel" hidden>
         <div class="section-heading">
           <div><h2>Lossless inbox</h2><p>Every unique final remains until rendered proof or explicit archive.</p></div>
-          <div class="inline-actions">
+          <div class="inline-actions question-navigator-controls">
+            <input id="questionSearch" type="search" autocomplete="off" placeholder="Search question, ID, seq, batch" aria-label="Search questions">
+            <select id="questionGroup" aria-label="Question group"><option value="all">All groups</option><option value="current">Current</option><option value="waiting">Waiting</option><option value="proven">Delivered</option><option value="archived">Archived</option></select>
+            <select id="questionPriority" aria-label="Question priority"><option value="all">All priorities</option><option value="critical">Critical</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select>
+            <label class="compact-check"><input id="questionPinned" type="checkbox">Pinned only</label>
             <select id="queueFilter" aria-label="Queue filter"><option value="actionable">Unresolved</option><option value="all">All ledger states</option></select>
             <button id="submitSelected">Submit selected</button>
             <button id="archiveSelected" data-confirm="Archive the selected ledger final? It will remain in session history but will not be submitted automatically.">Archive selected</button>
@@ -317,10 +321,25 @@
         </div>
         <div class="queue-wrap">
           <table>
-            <thead><tr><th></th><th>Age</th><th>Seq</th><th>State</th><th>Batch</th><th>Question</th></tr></thead>
-            <tbody id="queueBody"><tr><td colspan="6" class="empty">Inbox is caught up.</td></tr></tbody>
+            <thead><tr><th></th><th>Age</th><th>Seq</th><th>Status</th><th>Priority</th><th>Batch</th><th>Question</th></tr></thead>
+            <tbody id="queueBody"><tr><td colspan="7" class="empty">Inbox is caught up.</td></tr></tbody>
           </table>
         </div>
+        <section class="question-inspector" id="questionInspector" aria-live="polite">
+          <div class="section-heading"><div><h3 id="questionInspectorTitle">No question selected</h3><p id="questionInspectorMeta">Select a ledger entry to inspect delivery and operator metadata.</p></div><button id="undoQuestionAction" hidden>Undo last metadata change</button></div>
+          <p id="questionInspectorText" class="question-inspector-text"></p>
+          <dl class="question-inspector-stats">
+            <div><dt>Status</dt><dd id="questionInspectorStatus">--</dd></div><div><dt>Trace</dt><dd id="questionInspectorTrace">--</dd></div>
+            <div><dt>Duplicate</dt><dd id="questionInspectorDuplicate">No</dd></div><div><dt>Relationship</dt><dd id="questionInspectorRelationship">None</dd></div>
+          </dl>
+          <div class="question-inspector-actions" role="toolbar" aria-label="Question metadata actions">
+            <button id="pinQuestion">Pin question</button>
+            <label>Priority<select id="setQuestionPriority"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="critical">Critical</option></select></label>
+            <label>Defer<select id="deferQuestion"><option value="none">Do not defer</option><option value="after_current_answer">After current answer</option><option value="manual">Until resumed manually</option><option value="until_time">For 5 minutes</option></select></label>
+            <label>Follow-up to<input id="questionParentId" type="text" autocomplete="off" placeholder="Parent ledger ID"></label>
+            <button id="linkQuestion">Save relationship</button>
+          </div>
+        </section>
       </section>
 
       <section class="view" id="panelTimeline" data-view-panel="timeline" role="tabpanel" hidden>

@@ -32,6 +32,7 @@ import { deriveAttentionTarget } from './attention-model.js';
 import { deriveNextAction } from './next-action-model.js';
 import { deriveSessionPhase } from './session-phase-model.js';
 import { commandCatalog } from './operator-command-catalog.js';
+import { deriveQuestionOperations } from './question-operations-state.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -243,6 +244,7 @@ export function createRuntimePilotController({
       rootCause,
       deliveryPolicy,
       liveOperations,
+      questionOperationsDerived: deriveQuestionOperations(enrichedBase, Date.now()),
       performanceBudget: {
         ...(snapshotBase.performanceBudget || {}),
         cacheHits: localPerformance.cacheHits,
@@ -1396,6 +1398,21 @@ export function createRuntimePilotController({
         result = { ok: catchUp?.ok !== false, reason: catchUp?.reason || 'catch_up_started', roles, catchUp };
         break;
       }
+      case 'set_question_pin':
+        result = pilot.updateQuestionMetadata(sessionId, payload.itemId, { pinned: Boolean(payload.value) }, 'pin');
+        break;
+      case 'defer_question':
+        result = pilot.updateQuestionMetadata(sessionId, payload.itemId, { deferCondition: payload.condition, deferUntil: payload.until }, 'defer');
+        break;
+      case 'set_question_priority':
+        result = pilot.updateQuestionMetadata(sessionId, payload.itemId, { priority: payload.priority }, 'priority');
+        break;
+      case 'link_question_follow_up':
+        result = pilot.updateQuestionMetadata(sessionId, payload.itemId, { parentId: payload.parentId }, 'relationship');
+        break;
+      case 'undo_question_action':
+        result = pilot.undoQuestionMetadata(sessionId, payload.undoId);
+        break;
       case 'submit_selected':
         result = await submitLedgerItem(sessionId, payload.queueItemId, registry, pilot);
         break;

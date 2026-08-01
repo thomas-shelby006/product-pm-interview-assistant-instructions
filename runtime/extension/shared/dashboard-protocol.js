@@ -5,6 +5,11 @@ const COMMANDS = new Set([
   'mark_interviewer_activity',
   'set_focus_mode',
   'resume_catch_up',
+  'set_question_pin',
+  'defer_question',
+  'set_question_priority',
+  'link_question_follow_up',
+  'undo_question_action',
   'submit_selected',
   'resume_without_send',
   'set_auto_submit',
@@ -72,6 +77,23 @@ export function normalizeDashboardCommand(value) {
     const queueItemId = cleanText(payload.queueItemId, 160);
     if (!queueItemId) return null;
     payload.queueItemId = queueItemId;
+  }
+  if (['set_question_pin', 'defer_question', 'set_question_priority', 'link_question_follow_up'].includes(command)) {
+    payload.itemId = cleanText(payload.itemId, 160);
+    if (!payload.itemId) return null;
+  }
+  if (command === 'set_question_pin') payload.value = Boolean(payload.value);
+  if (command === 'defer_question') {
+    payload.condition = ['none', 'after_current_answer', 'manual', 'until_time'].includes(payload.condition) ? payload.condition : 'manual';
+    payload.until = Math.max(0, Number(payload.until || 0));
+  }
+  if (command === 'set_question_priority') {
+    payload.priority = ['low', 'normal', 'high', 'critical'].includes(payload.priority) ? payload.priority : 'normal';
+  }
+  if (command === 'link_question_follow_up') payload.parentId = cleanText(payload.parentId, 160);
+  if (command === 'undo_question_action') {
+    payload.undoId = cleanText(payload.undoId, 200);
+    if (!payload.undoId) return null;
   }
   if (['set_auto_submit', 'set_hold', 'set_focus_mode'].includes(command)) {
     payload.value = Boolean(payload.value);
