@@ -5,6 +5,7 @@ import { validateRuntimeState } from './runtime-invariants.js';
 import { encodeRuntimeEnvelope, normalizeRuntimeEnvelope, RUNTIME_STATE_SCHEMA_VERSION } from './runtime-state-schema.js';
 import { migrateRuntimeEnvelope } from './runtime-state-migrations.js';
 import { createStateQuarantine, preserveStateQuarantine, quarantineAudit } from './state-quarantine.js';
+import { sealRuntimeEnvelope, verifyRuntimeEnvelope } from './state-integrity.js';
 
 function stateHash(value) {
   let hash = 0x811c9dc5;
@@ -39,10 +40,7 @@ export function createRuntimePilotStore({
       journal: stored[journalKey] || {}
     });
     const quarantineAndBlock = async (state, reason, extra = {}) => {
-      const quarantine = preserveStateQuarantine(
-        stored[quarantineKey],
-        createStateQuarantine(state, reason)
-      );
+      const quarantine = preserveStateQuarantine(stored[quarantineKey], createStateQuarantine(state, reason));
       await storageArea.set({ [quarantineKey]: quarantine });
       lastAudit = {
         recovered: recovered.recovered,
@@ -55,45 +53,80 @@ export function createRuntimePilotStore({
       };
       throw new Error(`runtime_state_blocked:${reason}`);
     };
-    const normalized = normalizeRuntimeEnvelope(recovered.state, { writerVersion });
-    if (!normalized.ok) return quarantineAndBlock(recovered.state, normalized.reason);
-    const migration = migrateRuntimeEnvelope(normalized.envelope, RUNTIME_STATE_SCHEMA_VERSION, {
-      writerVersion,
-      now: Date.now()
-    });
-    if (!migration.ok) {
-      return quarantineAndBlock(normalized.envelope, migration.reason, {
-        schema: { version: normalized.envelope.schemaVersion, writerVersion: normalized.envelope.writerVersion, legacy: normalized.legacy, migration: migration.applied }
+    const prepare = raw => {
+      const normalized = normalizeRuntimeEnvelope(raw, { writerVersion });
+      if (!normalized.ok) return { ok: false, reason: normalized.reason, raw };
+      const migration = migrateRuntimeEnvelope(normalized.envelope, RUNTIME_STATE_SCHEMA_VERSION, {
+        writerVersion,
+        now: Date.now()
       });
+      if (!migration.ok) return { ok: false, reason: migration.reason, normalized, migration, raw };
+      const integrity = verifyRuntimeEnvelope(migration.envelope);
+      return {
+        ok: integrity.ok || integrity.reason === 'digest_missing',
+        reason: integrity.reason,
+        normalized,
+        migration,
+        integrity,
+        envelope: migration.envelope,
+        unsigned: integrity.reason === 'digest_missing'
+      };
+    };
+    let prepared = prepare(recovered.state);
+    if (!prepared.ok && prepared.reason !== 'digest_mismatch') {
+      return quarantineAndBlock(prepared.normalized?.envelope || recovered.state, prepared.reason);
+    }
+    let integrityState = prepared.integrity?.ok ? 'verified' : prepared.unsigned ? 'sealed' : 'blocked';
+    let integrityReason = prepared.reason;
+    let integrityRecovered = false;
+    if (!prepared.ok && prepared.reason === 'digest_mismatch') {
+      const previous = prepare(stored[previousKey]);
+      if (!previous.ok) {
+        return quarantineAndBlock(prepared.envelope, 'digest_mismatch', {
+          integrity: { state: 'blocked', reason: 'digest_mismatch', expected: prepared.integrity.expected, actual: prepared.integrity.actual }
+        });
+      }
+      prepared = previous;
+      integrityState = 'recovered';
+      integrityReason = 'digest_mismatch';
+      integrityRecovered = true;
     }
     if (recovered.recovered) commitJournal = createStateCommitJournal(recovered.journal);
-    const invariant = validateRuntimeState(migration.envelope.sessions);
+    const invariant = validateRuntimeState(prepared.envelope.sessions);
     if (invariant.blocked > 0) {
-      return quarantineAndBlock(migration.envelope, 'runtime_invariant_blocked', {
+      return quarantineAndBlock(prepared.envelope, 'runtime_invariant_blocked', {
         repaired: invariant.repaired,
         blocked: invariant.blocked,
         findings: invariant.findings,
-        schema: { version: migration.envelope.schemaVersion, writerVersion: migration.envelope.writerVersion, legacy: normalized.legacy, migration: migration.applied }
+        integrity: { state: integrityState, reason: integrityReason },
+        schema: { version: prepared.envelope.schemaVersion, writerVersion: prepared.envelope.writerVersion, legacy: prepared.normalized.legacy, migration: prepared.migration.applied }
       });
     }
-    const repairedEnvelope = invariant.repaired > 0
+    const baseEnvelope = invariant.repaired > 0
       ? encodeRuntimeEnvelope(invariant.state, { writerVersion })
-      : migration.envelope;
+      : prepared.envelope;
+    const repairedEnvelope = sealRuntimeEnvelope(baseEnvelope);
     lastAudit = {
-      recovered: recovered.recovered,
-      recoveryReason: recovered.reason,
+      recovered: recovered.recovered || integrityRecovered,
+      recoveryReason: integrityRecovered ? 'digest_mismatch' : recovered.reason,
       repaired: invariant.repaired,
       blocked: invariant.blocked,
       findings: invariant.findings,
       quarantine: quarantineAudit(stored[quarantineKey]),
+      integrity: {
+        state: integrityState,
+        reason: integrityReason,
+        expected: prepared.integrity?.expected || '',
+        actual: prepared.integrity?.actual || repairedEnvelope.integrityDigest
+      },
       schema: {
         version: repairedEnvelope.schemaVersion,
         writerVersion: repairedEnvelope.writerVersion,
-        legacy: normalized.legacy,
-        migration: migration.applied
+        legacy: prepared.normalized.legacy,
+        migration: prepared.migration.applied
       }
     };
-    if (recovered.recovered || migration.applied.length || invariant.repaired > 0) {
+    if (recovered.recovered || integrityRecovered || prepared.unsigned || prepared.migration.applied.length || invariant.repaired > 0) {
       await storageArea.set({
         [key]: repairedEnvelope,
         ...(recovered.recovered ? { [journalKey]: commitJournal.snapshot() } : {})
@@ -117,11 +150,11 @@ export function createRuntimePilotStore({
       if (!(state instanceof RuntimePilotState)) {
         throw new TypeError('Invalid PMIA runtime pilot state');
       }
-      const nextEnvelope = encodeRuntimeEnvelope(state.exportState(), { writerVersion });
+      const nextEnvelope = sealRuntimeEnvelope(encodeRuntimeEnvelope(state.exportState(), { writerVersion }));
       const current = await storageArea.get(key);
       const prepared = commitJournal.prepare({ stateHash: stateHash(nextEnvelope) });
       await storageArea.set({
-        [previousKey]: current[key] ?? encodeRuntimeEnvelope([], { writerVersion }),
+        [previousKey]: current[key] ?? sealRuntimeEnvelope(encodeRuntimeEnvelope([], { writerVersion })),
         [journalKey]: prepared
       });
       await storageArea.set({ [key]: nextEnvelope });
