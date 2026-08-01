@@ -3,6 +3,7 @@ import {
   buildDiagnostics,
   deriveReview,
   formatDuration,
+  latestReceiverProof,
   primaryTransportAction,
   roleHealth,
   virtualSlice,
@@ -186,6 +187,12 @@ function renderOverview(snapshot, now) {
   text('latestPreview', snapshot?.latestPreview?.text || 'No preview observed.');
   text('latestFinal', snapshot?.latestFinal?.text || 'No final observed.');
   text('latestAnswer', snapshot?.receiver?.latestAnswer?.text || snapshot?.latestAnswer?.text || 'No answer captured.');
+  const proof = snapshot?.latestProof || latestReceiverProof(snapshot?.timeline)?.data || null;
+  text('latestProof', proof
+    ? (proof.ok
+      ? `${proof.proof || 'rendered_turn'} Â· ${proof.verified === false ? 'unverified' : 'verified'} Â· ${proof.envelopeId || ''}`
+      : `${proof.reason || 'proof_failed'} Â· ${proof.envelopeId || ''}`)
+    : 'No receiver proof recorded.');
   const activeQueue = actionableQueue(snapshot?.queue, false);
   text('queueBadge', String(activeQueue.length));
   const primary = primaryTransportAction(snapshot?.mode);

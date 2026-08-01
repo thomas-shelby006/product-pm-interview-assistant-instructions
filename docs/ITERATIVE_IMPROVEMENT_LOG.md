@@ -73,3 +73,21 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** No extra polling or storage writes were added. Existing five-second heartbeat and meaningful preview events feed the classifier.
 
 **Why this is superior:** It distinguishes an actual capture failure from normal interviewer silence and surfaces the failure up to 75 seconds earlier.
+
+## Cycle 5 - Receiver submission and proof robustness
+
+**Evidence inspected:** Receiver stop/supersede flow, composer readiness, retry baseline IDs, rendered-turn confirmation, Boolean delivery result, and dashboard evidence.
+
+**Issue/opportunity:** A Boolean result hid whether delivery used an existing rendered turn, confirmed a new rendered turn, failed to stop generation, lacked a composer, or never produced proof.
+
+**Classification:** Exactly-once proof diagnostics and future-adapter safety improvement.
+
+**Implementation:** Added structured receiver proof callbacks while preserving the Boolean transport contract. Proof records now identify existing/new rendered turns, verification status, and owning failure reason. Pilot state retains the latest proof and raises an error for failed or unverified proof.
+
+**Files changed:** receiver runtime, content orchestration, pilot state, dashboard model/view, and runtime/state tests.
+
+**Coverage added:** Verified rendered-turn proof, composer-missing failure reason, and unverified-proof health warning.
+
+**Source review:** Both supported provider adapters expose conversation-message IDs, so supported routes remain provider-rendered-proof capable. Submit-action-only fallback is explicitly unhealthy rather than silently trusted.
+
+**Why this is superior:** It preserves the existing transport API while making the actual proof boundary observable and auditable.

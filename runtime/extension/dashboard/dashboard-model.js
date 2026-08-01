@@ -35,6 +35,8 @@ export function warningLabel(warning) {
     sender_voice_transcript_slow: 'Voice is active but transcript updates are delayed',
     sender_voice_transcript_stalled: 'Voice is active but transcript updates appear stalled',
     sender_source_silent: 'No actionable sender transcript has been observed for 90 seconds',
+    receiver_proof_unverified: 'Receiver submission was not verified by a rendered provider turn',
+    receiver_proof_failed: 'Receiver delivery did not produce provider-rendered proof',
     transport_paused: 'Forwarding is paused'
   };
   return labels[warning?.code] || String(warning?.code || 'Runtime warning');
@@ -119,4 +121,13 @@ export function primaryTransportAction(mode) {
   return mode === 'paused'
     ? { command: 'resume_without_send', label: 'Resume forwarding' }
     : { command: 'pause', label: 'Pause forwarding' };
+}
+
+
+export function latestReceiverProof(timeline) {
+  const events = Array.isArray(timeline) ? timeline : [];
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index]?.type === 'receiver_proof') return { ...events[index] };
+  }
+  return null;
 }

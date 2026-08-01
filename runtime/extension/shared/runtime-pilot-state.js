@@ -71,6 +71,7 @@ function normalizeSession(item) {
     receiver: cloneRole(item.receiver),
     latestPreview: item.latestPreview || null,
     latestFinal: item.latestFinal || null,
+    latestProof: item.latestProof || null,
     queue: new OperatorQueue(item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
     metrics: { ...emptyMetrics(), ...(item.metrics || {}) },
@@ -297,11 +298,16 @@ export class RuntimePilotState {
 
   record(sessionId, type, data = {}, now = Date.now()) {
     const session = this.ensure(sessionId, now);
+    const eventType = String(type || 'event');
+    const eventData = safeEventData(data);
+    if (eventType === 'receiver_proof') {
+      session.latestProof = { ...eventData, at: now };
+    }
     session.timeline.push({
       id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
       at: now,
-      type: String(type || 'event'),
-      data: safeEventData(data)
+      type: eventType,
+      data: eventData
     });
     session.timeline = session.timeline.slice(-MAX_TIMELINE);
     session.updatedAt = now;
@@ -321,6 +327,16 @@ export class RuntimePilotState {
       } else if (!state.composerReady) {
         warnings.push({ code: `${role}_composer_missing`, role, severity: 'warn' });
       }
+    }
+    if (session.latestProof?.ok && session.latestProof?.verified === false) {
+      warnings.push({ code: 'receiver_proof_unverified', severity: 'error' });
+    }
+    if (session.latestProof?.ok === false) {
+      warnings.push({
+        code: 'receiver_proof_failed',
+        severity: 'error',
+        reason: session.latestProof.reason || 'unknown'
+      });
     }
     if (session.sender.sourceSilenceState === 'voice_stalled') {
       warnings.push({
@@ -365,6 +381,7 @@ export class RuntimePilotState {
       receiver: { ...session.receiver },
       latestPreview: session.latestPreview ? { ...session.latestPreview } : null,
       latestFinal: session.latestFinal ? { ...session.latestFinal } : null,
+      latestProof: session.latestProof ? { ...session.latestProof } : null,
       queue: session.queue.list(),
       warnings,
       timeline: session.timeline.map(event => ({ ...event, data: { ...event.data } })),
@@ -393,6 +410,7 @@ export class RuntimePilotState {
       receiver: { ...session.receiver },
       latestPreview: session.latestPreview,
       latestFinal: session.latestFinal,
+      latestProof: session.latestProof,
       queue: session.queue.exportState(),
       timeline: session.timeline,
       metrics: session.metrics,

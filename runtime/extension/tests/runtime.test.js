@@ -688,3 +688,51 @@ test('overflow safety wraps long provider content without removing provider node
   remove();
   assert.equal(appended[0].removed, true);
 });
+
+
+test('receiver emits verified provider-rendered proof after submission', async () => {
+  const messages = [];
+  let composer = '';
+  const proofs = [];
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      setComposerText(text) { composer = text; return true; },
+      composerContains: text => composer === text,
+      canSubmit: () => true,
+      submit() { messages.push({ id: 'user-1', role: 'user', text: composer }); return true; },
+      getConversationMessages: () => [...messages],
+      findComposer: () => ({})
+    },
+    sleep: async () => {},
+    yieldFn: async () => {},
+    maxSubmitChecks: 1,
+    maxConfirmChecks: 1,
+    onProof: proof => proofs.push(proof)
+  });
+  assert.equal(await controller.deliver({ id: 'q1', kind: 'question', text: 'Question?' }), true);
+  assert.deepEqual(proofs.at(-1), {
+    envelopeId: 'q1', ok: true, verified: true, proof: 'new_rendered_turn'
+  });
+});
+
+test('receiver reports the owning proof failure reason', async () => {
+  const proofs = [];
+  const controller = runtimeModule.createReceiverController({
+    adapter: {
+      isGenerating: () => false,
+      setComposerText: () => false,
+      canSubmit: () => false,
+      submit: () => false,
+      getConversationMessages: () => [],
+      findComposer: () => null
+    },
+    sleep: async () => {},
+    yieldFn: async () => {},
+    maxSubmitChecks: 0,
+    maxConfirmChecks: 0,
+    onProof: proof => proofs.push(proof)
+  });
+  assert.equal(await controller.deliver({ id: 'q2', kind: 'question', text: 'Question?' }), false);
+  assert.equal(proofs.at(-1).reason, 'receiver_composer_missing');
+});

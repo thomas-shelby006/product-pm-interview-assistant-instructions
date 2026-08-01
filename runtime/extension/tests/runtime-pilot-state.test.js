@@ -70,3 +70,14 @@ test('pilot warnings escalate an active voice transcript stall', () => {
     item => item.code === 'sender_voice_transcript_stalled' && item.severity === 'error'
   ));
 });
+
+
+test('pilot state exposes and warns on unverified receiver proof', () => {
+  const state = new RuntimePilotState();
+  state.record('pmia_session', 'receiver_proof', {
+    envelopeId: 'q1', ok: true, verified: false, proof: 'submit_action_only'
+  }, 1000);
+  const snapshot = state.snapshot('pmia_session', 1001);
+  assert.equal(snapshot.latestProof.verified, false);
+  assert.ok(snapshot.warnings.some(item => item.code === 'receiver_proof_unverified'));
+});

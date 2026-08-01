@@ -112,6 +112,7 @@ export function createReceiverController({
   adapter,
   sleep,
   onStatus = () => {},
+  onProof = () => {},
   stopTimeoutMs = 2500,
   stopPollMs = 75,
   yieldFn = yieldToProvider,
@@ -206,11 +207,13 @@ ${normalizedQuestion}`;
       if (adapter.isGenerating()) {
         if (!adapter.stopGenerating()) {
           onStatus('STOP FAIL');
+          onProof({ envelopeId: envelope.id, ok: false, reason: 'stop_failed' });
           return false;
         }
         onStatus('SUPERSEDE');
         if (!await waitForIdle(deliveryId)) {
           if (deliveryId === latestDeliveryId) onStatus('STOP TIMEOUT');
+          onProof({ envelopeId: envelope.id, ok: false, reason: 'stop_timeout' });
           return false;
         }
       }
@@ -230,6 +233,12 @@ ${normalizedQuestion}`;
         stagedContext = '';
         clearCommittedPreview(envelope);
         onStatus('SENT');
+        onProof({
+          envelopeId: envelope.id,
+          ok: true,
+          verified: true,
+          proof: 'existing_rendered_turn'
+        });
         return true;
       }
       const submitted = await submitComposerWhenReady({
@@ -243,13 +252,24 @@ ${normalizedQuestion}`;
         isCurrent: () => deliveryId === latestDeliveryId
       });
       if (!submitted) {
-        onStatus(adapter.findComposer?.() ? 'SUBMIT FAIL' : 'NO COMPOSER');
+        const reason = adapter.findComposer?.()
+          ? 'rendered_turn_not_confirmed'
+          : 'receiver_composer_missing';
+        onStatus(reason === 'receiver_composer_missing' ? 'NO COMPOSER' : 'SUBMIT FAIL');
+        onProof({ envelopeId: envelope.id, ok: false, reason });
         return false;
       }
       submissionBaselines.delete(envelopeKey);
       stagedContext = '';
       clearCommittedPreview(envelope);
       onStatus('SENT');
+      const verified = baselineUserIds instanceof Set;
+      onProof({
+        envelopeId: envelope.id,
+        ok: true,
+        verified,
+        proof: verified ? 'new_rendered_turn' : 'submit_action_only'
+      });
       return true;
     },
     supersede(envelope) {

@@ -409,6 +409,9 @@ async function startRuntime(runtimeConfig) {
     onStatus(status) {
       const tone = /FAIL|NO /.test(status) ? 'error' : status === 'SUPERSEDE' ? 'warn' : 'ok';
       overlay.setStatus(status, tone, 1500);
+    },
+    onProof(proof) {
+      telemetry.event('receiver_proof', proof);
     }
   });
 
