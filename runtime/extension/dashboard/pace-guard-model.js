@@ -47,7 +47,6 @@ export function derivePaceGuard(snapshot, now = Date.now(), windowMs = 60_000) {
   );
   let state = 'stable';
   if (blocked) state = 'blocked';
-  else if (!unresolved.length && snapshot?.receiver?.generating) state = 'answering';
   else if (!unresolved.length) state = 'caught_up';
   else if (proofPerMinute > intakePerMinute) state = 'recovering';
   else if (unresolved.length >= 2 && intakePerMinute > proofPerMinute) state = 'falling_behind';
@@ -78,7 +77,6 @@ export function derivePaceGuard(snapshot, now = Date.now(), windowMs = 60_000) {
 export function paceLabel(state) {
   return ({
     caught_up: 'Caught up',
-    answering: 'Answering',
     stable: 'Stable',
     recovering: 'Recovering',
     falling_behind: 'Falling behind',

@@ -34,9 +34,8 @@ export function deriveLiveInbox(snapshot, now = Date.now()) {
   let catchUpState = 'live';
   if (blocked) catchUpState = 'blocked';
   else if (snapshot?.batchState?.hold) catchUpState = 'held';
-  else if (nextCount > 0 && snapshot?.receiver?.generating) catchUpState = 'accumulating';
+  else if (nextCount > 0 && ['waiting', 'streaming'].includes(String(snapshot?.answerState?.state || ''))) catchUpState = 'accumulating';
   else if (pendingCount || inFlightCount || nextCount) catchUpState = 'catching_up';
-  else if (active || snapshot?.receiver?.generating) catchUpState = 'answering';
 
   const actionable = [...groups.pending, ...groups.staged, ...groups.submitting]
     .sort((a, b) => Number(a?.envelope?.seq || 0) - Number(b?.envelope?.seq || 0));
@@ -109,7 +108,6 @@ export function deriveLatencyRail(snapshot) {
 export function catchUpLabel(state) {
   const labels = {
     live: 'Caught up',
-    answering: 'Answering now',
     accumulating: 'Accumulating next',
     catching_up: 'Catching up',
     held: 'Held by operator',

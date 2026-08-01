@@ -290,3 +290,8 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Bug fixes:** no-response and answer timeout outcomes cannot reduce rendered delivery success.
 - **New features:** completed, no-response, timed-out, cancelled and answer-availability metrics.
 - **Implementation:** terminal answer outcomes deduplicate by batch ID and remain text-free in Pilot state and Safe Health reporting.
+
+## Cycle 41 - Coherent Live Dashboard State
+- **Bug fixes:** Delivery “Caught up” no longer conflicts with a separate answer lifecycle or stale raw generation boolean.
+- **New features:** independent Delivery, Answer and Verification truth rails with explicit labels, evidence and accessible live updates.
+- **Implementation:** pure answer-status model, delivery-only inbox and Pace Guard state, reconciled generation display and trust-aware self-test labels.

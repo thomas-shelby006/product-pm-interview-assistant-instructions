@@ -69,6 +69,24 @@
           <button id="copyLatest">Copy latest question</button>
         </div>
 
+        <section class="truth-rail" aria-label="Runtime truth summary" aria-live="polite">
+          <article class="truth-card delivery-truth" data-state="connecting">
+            <span class="eyebrow">Delivery</span>
+            <strong id="deliveryTruthState">Connecting</strong>
+            <p id="deliveryTruthDetail">Waiting for the lossless ledger.</p>
+          </article>
+          <article class="truth-card answer-truth" data-state="idle">
+            <span class="eyebrow">Answer</span>
+            <strong id="answerTruthState">Idle</strong>
+            <p id="answerTruthDetail">No answer in progress.</p>
+          </article>
+          <article class="truth-card verification-truth" data-state="missing">
+            <span class="eyebrow">Verification</span>
+            <strong id="verificationTruthState">Not run</strong>
+            <p id="verificationTruthDetail">Run the active no-content pulse.</p>
+          </article>
+        </section>
+
         <section class="live-command-center" aria-label="Live delivery command center">
           <article class="live-state-card" data-catch-up="live">
             <span class="eyebrow">Delivery state</span>

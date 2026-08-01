@@ -27,6 +27,8 @@ import { deriveDeliverySlaView } from './delivery-sla-model.js';
 import { deriveRecoverySchedule } from './recovery-schedule-model.js';
 import { deriveSessionEndView } from './session-end-model.js';
 import { deriveSelfTestView } from './self-test-model.js';
+import { deriveSelfTestTrust } from './self-test-trust-model.js';
+import { deriveAnswerStatus } from './answer-status-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -313,6 +315,12 @@ function renderLiveCommandCenter(snapshot, now) {
     text('catchUpDetail', state.sessionEnded
       ? 'The lossless session state was cleared after managed shutdown.'
       : 'Waiting for the first authoritative ledger snapshot.');
+    text('deliveryTruthState', state.sessionEnded ? 'Session ended' : 'Connecting');
+    text('deliveryTruthDetail', state.sessionEnded ? 'The managed lossless ledger was cleared.' : 'Waiting for the lossless ledger.');
+    text('answerTruthState', 'Idle');
+    text('answerTruthDetail', 'No answer state is available yet.');
+    text('verificationTruthState', 'Not run');
+    text('verificationTruthDetail', 'Waiting for active verification evidence.');
     for (const id of ['inboxPending', 'inboxInFlight', 'inboxProven']) text(id, '0');
     text('currentAnswerBadge', 'Idle');
     text('currentBatchTitle', 'No active batch');
@@ -371,6 +379,23 @@ function renderLiveCommandCenter(snapshot, now) {
   if (stateCard) stateCard.dataset.catchUp = inbox.catchUpState;
   text('catchUpState', catchUpLabel(inbox.catchUpState));
   text('catchUpDetail', catchUpDetail(inbox));
+  text('deliveryTruthState', catchUpLabel(inbox.catchUpState));
+  text('deliveryTruthDetail', catchUpDetail(inbox));
+  const answerStatus = deriveAnswerStatus(snapshot, now);
+  text('answerTruthState', answerStatus.label);
+  text('answerTruthDetail', `${answerStatus.title}. ${answerStatus.detail}`);
+  const verificationTrust = deriveSelfTestTrust(snapshot, now);
+  const verificationLabels = { active: 'Actively verified', evidence_fresh: 'Evidence fresh', stale: 'Stale', failed: 'Failed', missing: 'Not run' };
+  text('verificationTruthState', verificationLabels[verificationTrust.state] || 'Unknown');
+  text('verificationTruthDetail', verificationTrust.detail);
+  for (const [selector, value] of [
+    ['.delivery-truth', inbox.catchUpState],
+    ['.answer-truth', answerStatus.state],
+    ['.verification-truth', verificationTrust.state]
+  ]) {
+    const node = document.querySelector(selector);
+    if (node) node.dataset.state = value;
+  }
   text('inboxPending', String(inbox.pendingCount));
   text('inboxInFlight', String(inbox.inFlightCount));
   text('inboxProven', String(inbox.provenCount));
@@ -380,7 +405,7 @@ function renderLiveCommandCenter(snapshot, now) {
   const activeIds = active?.memberIds || active?.prompt?.memberIds || [];
   const activeEntries = ledgerEntries(snapshot, activeIds);
   const activeCount = Number(active?.questionCount || activeIds.length || 0);
-  text('currentAnswerBadge', snapshot?.receiver?.generating ? 'Generating' : active ? 'Awaiting completion' : 'Idle');
+  text('currentAnswerBadge', answerStatus.label);
   text('currentBatchTitle', active
     ? `${activeCount || activeIds.length} question active batch`
     : 'No active batch');
@@ -483,13 +508,15 @@ function renderLiveCommandCenter(snapshot, now) {
   const selfTestPanel = document.querySelector('.self-test-panel');
   if (selfTestPanel) selfTestPanel.dataset.state = selfTest.state;
   text('selfTestState', selfTest.label);
-  text('selfTestTitle', selfTest.state === 'passed'
-    ? `Verified ${formatDuration(selfTest.ageMs)} ago`
-    : selfTest.state === 'failed'
-      ? 'One or more active checks failed'
-      : selfTest.state === 'stale'
-        ? 'Previous pass is older than 30 seconds'
-        : 'Control plane not actively verified');
+  text('selfTestTitle', selfTest.state === 'active'
+    ? `Actively verified ${formatDuration(selfTest.ageMs)} ago`
+    : selfTest.state === 'evidence_fresh'
+      ? 'Verification extended by fresh role evidence'
+      : selfTest.state === 'failed'
+        ? 'One or more active checks failed'
+        : selfTest.state === 'stale'
+          ? 'Active verification evidence is stale'
+          : 'Control plane not actively verified');
   text('selfTestDetail', selfTest.detail);
 
   const deliverySla = deriveDeliverySlaView(snapshot, now);
@@ -604,7 +631,15 @@ function renderRole(roleName, role, now) {
     text('senderVoice', role?.voiceActive ? 'Active' : 'Idle');
     text('senderSilence', role?.sourceSilenceMs ? formatDuration(role.sourceSilenceMs) : '0s');
   } else {
-    text('receiverGenerating', role?.generating ? 'Generating' : 'Idle');
+    const generation = role?.generationState || {};
+    const generationLabel = generation.state === 'streaming'
+      ? `Streaming (${generation.confidence || 'unknown'})`
+      : generation.state === 'starting'
+        ? 'Starting'
+        : generation.state === 'complete'
+          ? 'Complete'
+          : 'Idle';
+    text('receiverGenerating', `${generationLabel}${generation.reason ? ` - ${String(generation.reason).replaceAll('_', ' ')}` : ''}`);
     text('receiverScroll', role?.scrollLocked ? 'Locked' : 'Free');
   }
 }
@@ -835,7 +870,7 @@ function updateControlAvailability() {
     const batch = state.snapshot?.batchState || {};
     const nextCount = Number(batch.next?.questionCount || batch.next?.memberIds?.length || 0);
     const active = Boolean(batch.active);
-    const generating = Boolean(state.snapshot?.receiver?.generating);
+    const generating = Boolean(state.snapshot?.receiver?.generationState?.generating);
     byId('submitNow').disabled ||= !nextCount || active;
     byId('interruptLatest').disabled ||= !nextCount || !(active || generating);
     byId('copyLatest').disabled ||= !state.snapshot?.latestFinal?.text;

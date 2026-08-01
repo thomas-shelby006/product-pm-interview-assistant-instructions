@@ -251,3 +251,20 @@ test('Runtime Pilot exposes active no-content self-test and freshness', () => {
   assert.match(markup, /id="selfTestDetail"/);
   assert.match(dashboard, /deriveSelfTestView\(snapshot, now\)/);
 });
+
+
+test('Pilot separates Delivery Answer and Verification truth rails', () => {
+  for (const id of ['deliveryTruthState', 'answerTruthState', 'verificationTruthState']) {
+    assert.match(markup, new RegExp(`id="${id}"`));
+  }
+  assert.match(markup, /aria-live="polite"/);
+  assert.match(dashboard, /deriveAnswerStatus/);
+  assert.match(dashboard, /deriveSelfTestTrust/);
+  assert.doesNotMatch(dashboard, /currentAnswerBadge', snapshot\?\.receiver\?\.generating/);
+});
+
+test('dashboard uses reconciled generation state instead of raw receiver boolean', () => {
+  assert.match(dashboard, /generationState/);
+  assert.match(dashboard, /answerStatus\.label/);
+  assert.doesNotMatch(dashboard, /receiverGenerating', role\?\.generating \?/);
+});

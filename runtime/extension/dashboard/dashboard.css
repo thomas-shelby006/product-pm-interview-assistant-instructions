@@ -260,3 +260,17 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 .self-test-panel[data-state="passed"] { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
 .self-test-panel[data-state="failed"] { border-color: color-mix(in srgb, var(--danger) 65%, var(--line)); }
 .self-test-panel[data-state="stale"] { border-color: color-mix(in srgb, var(--amber) 60%, var(--line)); }
+
+/* Independent runtime truth rails */
+.truth-rail { display: grid; grid-template-columns: 1fr; gap: .55rem; margin-bottom: .7rem; }
+.truth-card { border: 1px solid var(--line); border-left: 4px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); padding: .7rem .75rem; box-shadow: var(--shadow); min-width: 0; }
+.truth-card strong { display: block; margin-top: .2rem; font-size: .86rem; }
+.truth-card p { margin-top: .28rem; color: var(--muted); font-size: .65rem; line-height: 1.42; overflow-wrap: anywhere; }
+.delivery-truth { border-left-color: var(--olive); }
+.answer-truth { border-left-color: var(--aubergine); }
+.verification-truth { border-left-color: var(--rust); }
+.answer-truth[data-state="no_response"], .answer-truth[data-state="timed_out"] { border-left-color: var(--ochre); }
+.answer-truth[data-state="streaming"] { border-left-color: var(--ok); }
+.verification-truth[data-state="failed"], .verification-truth[data-state="stale"] { border-left-color: var(--danger); }
+.self-test-panel[data-state="active"], .self-test-panel[data-state="evidence_fresh"] { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
+@media (min-width: 720px) { .truth-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
