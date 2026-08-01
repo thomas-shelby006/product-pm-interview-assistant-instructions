@@ -448,8 +448,10 @@ function renderLiveCommandCenter(snapshot, now) {
   text('outboxState', outbox.state === 'clear' ? 'Clear' : outbox.replaying ? 'Retrying' : `${outbox.count} retained`);
   text('outboxTitle', outbox.count ? `${outbox.count} final(s) awaiting persistence` : 'No unpersisted finals');
   text('outboxDetail', outbox.count
-    ? `${outbox.lastError || 'Waiting for service-worker acknowledgement'}${outbox.retryInMs ? ` - retry in ${formatDuration(outbox.retryInMs)}` : ''}.`
-    : 'Window 1 has no pending persistence acknowledgement.');
+    ? `${outbox.lastError || outbox.persistenceError || 'Waiting for service-worker acknowledgement'}${outbox.retryInMs ? ` - retry in ${formatDuration(outbox.retryInMs)}` : ''}.`
+    : outbox.restoredCount
+      ? `Restored ${outbox.restoredCount} final(s) from ${String(outbox.recoverySource || 'session state').replaceAll('_', ' ')}; all are now persisted.`
+      : 'Window 1 has no pending persistence acknowledgement.');
 
   const gap = deriveGapWatch(snapshot, now);
   const gapPanel = document.querySelector('.gap-panel');

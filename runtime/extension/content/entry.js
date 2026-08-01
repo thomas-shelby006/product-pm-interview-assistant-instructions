@@ -33,6 +33,7 @@ import { createRuntimeTelemetry } from './runtime-telemetry.js';
 import { getOrCreateRuntimeInstanceId, shouldApplyRoleRevocation } from './role-revocation.js';
 import { sendWithRegistrationRecovery } from './registration-recovery.js';
 import { createSenderOutbox } from './sender-outbox.js';
+import { createSessionStorageAdapter } from './session-storage-adapter.js';
 import { createReceiverBatchRuntime } from './receiver-batch-runtime.js';
 import { createRuntimeRolePort } from './runtime-role-port.js';
 import { createComposerArbiter } from './composer-arbiter.js';
@@ -175,13 +176,27 @@ async function startRuntime(runtimeConfig) {
     }
   };
 
-  const senderOutbox = runtimeConfig.role === 'sender'
-    ? createSenderOutbox({
-        storage: sessionStorage,
-        key: `pmia_sender_outbox_${runtimeConfig.sessionId}`,
-        onState: value => telemetry?.event('outbox_state', value)
-      })
-    : null;
+  const legacySenderOutboxKey = `pmia_sender_outbox_${runtimeConfig.sessionId}`;
+  let senderOutbox = null;
+  let senderOutboxReady = runtimeConfig.role !== 'sender';
+  async function initializeSenderOutbox() {
+    if (runtimeConfig.role !== 'sender' || senderOutbox) return senderOutbox;
+    const storageAdapter = await createSessionStorageAdapter({
+      send: message,
+      sessionId: runtimeConfig.sessionId,
+      legacyStorage: sessionStorage,
+      legacyKey: legacySenderOutboxKey
+    });
+    senderOutbox = createSenderOutbox({
+      initialEntries: storageAdapter.initialEntries,
+      saveState: entries => storageAdapter.save(entries),
+      restoredCount: storageAdapter.restoredCount,
+      recoverySource: storageAdapter.recoverySource,
+      onState: value => telemetry?.event('outbox_state', value)
+    });
+    senderOutboxReady = true;
+    return senderOutbox;
+  }
 
   async function persistEnvelope(envelope) {
     const fallback = async () => {
@@ -206,7 +221,7 @@ async function startRuntime(runtimeConfig) {
     } catch {
       response = await fallback();
     }
-    if (response?.persisted && senderOutbox) senderOutbox.ackPersisted(envelope.id);
+    if (response?.persisted && senderOutbox) await senderOutbox.ackPersisted(envelope.id);
     return response;
   }
 
@@ -254,7 +269,6 @@ async function startRuntime(runtimeConfig) {
     getVoiceActive: isCombinedVoiceActive,
     getBatchState: () => safeBatchTelemetry(receiverBatchRuntime?.snapshot())
   });
-  if (senderOutbox) telemetry.event('outbox_state', senderOutbox.snapshot());
 
   async function register() {
     const response = await message({
@@ -273,6 +287,17 @@ async function startRuntime(runtimeConfig) {
       }
       rolePort?.connect();
       void telemetry.publish({ force: true, event: { type: 'registration' } });
+      if (runtimeConfig.role === 'sender' && !senderOutboxReady) {
+        try {
+          await initializeSenderOutbox();
+          telemetry.event('outbox_state', senderOutbox.snapshot());
+        } catch (error) {
+          senderOutboxReady = false;
+          overlay.setStatus('OUTBOX RESTORE FAILED', 'error', 3000);
+          telemetry.event('outbox_restore_failed', { error: String(error?.message || error) });
+          return false;
+        }
+      }
       if (senderOutbox?.size) senderOutbox.schedule(envelope => persistEnvelope(envelope), { immediate: true });
       return true;
     }
@@ -337,6 +362,10 @@ async function startRuntime(runtimeConfig) {
       ? sanitizeTranscriptCandidate(text)
       : String(text || '').trim();
     if (!normalized || paused) return false;
+    if (runtimeConfig.role === 'sender' && !senderOutboxReady) {
+      overlay.setStatus('OUTBOX NOT READY', 'error', 2200);
+      return false;
+    }
     if (kind === 'boot') latestBootContext = normalized;
     if (kind === 'question' && !isActionableTranscript(normalized)) return false;
     const transcriptPhase = kind === 'question' ? 'final' : '';
@@ -359,7 +388,7 @@ async function startRuntime(runtimeConfig) {
       if (transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
       return false;
     }
-    if (kind === 'question' && senderOutbox && !senderOutbox.enqueue(envelope)) {
+    if (kind === 'question' && senderOutbox && !await senderOutbox.enqueue(envelope)) {
       if (transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
       overlay.setStatus('OUTBOX SAVE FAILED', 'error', 2500);
       return false;
@@ -758,10 +787,14 @@ async function startRuntime(runtimeConfig) {
         telemetry.event('transport_paused');
         return { ok: true, transportPaused };
       case 'resume':
+        if (runtimeConfig.role === 'sender' && !senderOutboxReady) {
+          try { await initializeSenderOutbox(); }
+          catch (error) { return { ok: false, error: String(error?.message || error), outboxReady: false }; }
+        }
         transportPaused = false;
         overlay.setStatus('FORWARDING ACTIVE', 'ok', 1600);
         telemetry.event('transport_resumed');
-        return { ok: true, transportPaused };
+        return { ok: true, transportPaused, outboxReady: senderOutboxReady };
       case 'reconcile_delivery':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.reconcile(payload);

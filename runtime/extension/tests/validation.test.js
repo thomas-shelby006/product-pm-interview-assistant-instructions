@@ -647,3 +647,11 @@ test('background separates per-session operations from serialized registry write
   assert.match(source, /registryWriteCoordinator\.run\('__registry_write__'/);
   assert.match(source, /message\?\.sessionId \|\| message\?\.envelope\?\.sessionId/);
 });
+
+
+test('sender forwarding is gated on extension-session outbox readiness', async () => {
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  assert.match(entry, /senderOutboxReady/);
+  assert.match(entry, /OUTBOX NOT READY/);
+  assert.match(entry, /await senderOutbox\.enqueue\(envelope\)/);
+});

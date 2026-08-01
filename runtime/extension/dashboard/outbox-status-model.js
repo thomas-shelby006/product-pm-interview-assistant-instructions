@@ -12,6 +12,9 @@ export function deriveOutboxStatus(snapshot, now = Date.now()) {
     replaying: Boolean(data.replaying),
     attempts: Number(data.attempts || 0),
     lastError: String(data.lastError || ''),
+    persistenceError: String(data.persistenceError || ''),
+    restoredCount: Math.max(0, Number(data.restoredCount || 0)),
+    recoverySource: String(data.recoverySource || ''),
     retryInMs: nextRetryAt ? Math.max(0, nextRetryAt - Number(now)) : 0,
     state: !count ? 'clear' : data.replaying ? 'retrying' : nextRetryAt ? 'waiting' : 'retained'
   };

@@ -227,3 +227,9 @@ test('Runtime Pilot exposes durable recovery deadline and source', () => {
   assert.match(markup, /id="recoveryScheduleDetail"/);
   assert.match(dashboard, /deriveRecoverySchedule\(snapshot, now\)/);
 });
+
+
+test('Runtime Pilot reports sender outbox restoration source without content', () => {
+  assert.match(dashboard, /outbox\.restoredCount/);
+  assert.match(dashboard, /outbox\.recoverySource/);
+});

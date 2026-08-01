@@ -27,7 +27,7 @@ function envelope(id, seq) {
 test('sender outbox retains a final until persisted acknowledgement', async () => {
   const area = storage();
   const outbox = createSenderOutbox({ storage: area, key: 'outbox' });
-  outbox.enqueue(envelope('q-1', 1));
+  await outbox.enqueue(envelope('q-1', 1));
   await outbox.replay(async () => ({ ok: false, persisted: false, error: 'worker_offline' }));
   assert.equal(outbox.size, 1);
   await outbox.replay(async () => ({ ok: true, persisted: true, queued: true }));
@@ -37,8 +37,8 @@ test('sender outbox retains a final until persisted acknowledgement', async () =
 test('sender outbox reloads and replays in sequence order', async () => {
   const area = storage();
   const first = createSenderOutbox({ storage: area, key: 'outbox' });
-  first.enqueue(envelope('q-2', 2));
-  first.enqueue(envelope('q-1', 1));
+  await first.enqueue(envelope('q-2', 2));
+  await first.enqueue(envelope('q-1', 1));
   const reloaded = createSenderOutbox({ storage: area, key: 'outbox' });
   const seen = [];
   await reloaded.replay(async item => {
@@ -51,8 +51,8 @@ test('sender outbox reloads and replays in sequence order', async () => {
 
 test('sender outbox stops replay after the first unpersisted final', async () => {
   const outbox = createSenderOutbox({ storage: storage(), key: 'outbox' });
-  outbox.enqueue(envelope('q-1', 1));
-  outbox.enqueue(envelope('q-2', 2));
+  await outbox.enqueue(envelope('q-1', 1));
+  await outbox.enqueue(envelope('q-2', 2));
   const seen = [];
   await outbox.replay(async item => {
     seen.push(item.id);
@@ -71,8 +71,8 @@ test('sender outbox schedules one ordered retry with capped jittered backoff', a
     setTimer(fn, delay) { timers.push({ fn, delay }); return timers.length; },
     clearTimer() {}
   });
-  outbox.enqueue(envelope('q-2', 2));
-  outbox.enqueue(envelope('q-1', 1));
+  await outbox.enqueue(envelope('q-2', 2));
+  await outbox.enqueue(envelope('q-1', 1));
   await outbox.replay(async () => ({ ok: false, persisted: false, error: 'offline' }));
   assert.equal(outbox.snapshot().attempts, 1);
   assert.equal(outbox.schedule(async () => ({ ok: true, persisted: true })), true);
@@ -82,8 +82,8 @@ test('sender outbox schedules one ordered retry with capped jittered backoff', a
 
 test('retry now resets to immediate ordered replay without duplicating persisted entries', async () => {
   const outbox = createSenderOutbox({ storage: storage(), key: 'outbox' });
-  outbox.enqueue(envelope('q-2', 2));
-  outbox.enqueue(envelope('q-1', 1));
+  await outbox.enqueue(envelope('q-2', 2));
+  await outbox.enqueue(envelope('q-1', 1));
   const seen = [];
   await outbox.retryNow(async item => {
     seen.push(item.id);
@@ -97,4 +97,43 @@ test('retry delay is capped and jitter remains bounded', () => {
   assert.equal(nextRetryDelay(0, () => 0), 200);
   assert.equal(nextRetryDelay(0, () => 1), 300);
   assert.ok(nextRetryDelay(99, () => 1) <= 9600);
+});
+
+
+test('sender outbox rolls back an enqueue when session persistence fails', async () => {
+  const outbox = createSenderOutbox({
+    initialEntries: [],
+    saveState: async () => { throw new Error('quota'); }
+  });
+  assert.equal(await outbox.enqueue(envelope('q-1', 1)), false);
+  assert.equal(outbox.size, 0);
+  assert.equal(outbox.snapshot().persistenceError, 'quota');
+});
+
+test('sender outbox exposes restored count and source without envelope text', () => {
+  const outbox = createSenderOutbox({
+    initialEntries: [{ envelope: envelope('q-1', 1) }],
+    restoredCount: 1,
+    recoverySource: 'extension_session',
+    saveState: async () => {}
+  });
+  const snapshot = outbox.snapshot();
+  assert.equal(snapshot.restoredCount, 1);
+  assert.equal(snapshot.recoverySource, 'extension_session');
+  assert.equal(JSON.stringify(snapshot).includes('Question 1'), false);
+});
+
+
+test('replay continues when the send path already acknowledged the current entry', async () => {
+  const outbox = createSenderOutbox({ storage: storage(), key: 'outbox' });
+  await outbox.enqueue(envelope('q-1', 1));
+  await outbox.enqueue(envelope('q-2', 2));
+  const seen = [];
+  await outbox.replay(async item => {
+    seen.push(item.id);
+    await outbox.ackPersisted(item.id);
+    return { ok: true, persisted: true };
+  });
+  assert.deepEqual(seen, ['q-1', 'q-2']);
+  assert.equal(outbox.size, 0);
 });

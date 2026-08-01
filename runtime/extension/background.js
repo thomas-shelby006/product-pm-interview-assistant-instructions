@@ -298,6 +298,18 @@ function currentSessionStatus(registry, sessionId) {
   );
 }
 
+
+function senderOutboxStorageKey(sessionId) {
+  return `pmia_sender_outbox_v2:${String(sessionId || '').trim()}`;
+}
+
+function validSenderOutboxState(value, sessionId) {
+  return Array.isArray(value) && value.every(item => {
+    const envelope = item?.envelope || item;
+    return Boolean(envelope?.id && envelope?.sessionId === sessionId);
+  });
+}
+
 async function broadcastLinkStatus(sessionId, registry) {
   const session = registry.getSession(sessionId);
   const status = currentSessionStatus(registry, sessionId);
@@ -389,6 +401,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       sendResponse(await pilotController.handleCommand(message));
+      return;
+    }
+
+    if (['PMIA_SESSION_STATE_GET', 'PMIA_SESSION_STATE_SET', 'PMIA_SESSION_STATE_REMOVE'].includes(message?.type)) {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
+        sendResponse({ ok: false, error: 'session_not_owned' });
+        return;
+      }
+      const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
+      if (role !== 'sender' || message.namespace !== 'sender_outbox') {
+        sendResponse({ ok: false, error: 'sender_outbox_only' });
+        return;
+      }
+      const key = senderOutboxStorageKey(message.sessionId);
+      if (message.type === 'PMIA_SESSION_STATE_GET') {
+        const stored = await chrome.storage.session.get(key);
+        sendResponse({ ok: true, value: stored[key] ?? null });
+        return;
+      }
+      if (message.type === 'PMIA_SESSION_STATE_REMOVE') {
+        await chrome.storage.session.remove(key);
+        sendResponse({ ok: true });
+        return;
+      }
+      if (!validSenderOutboxState(message.value, message.sessionId)) {
+        sendResponse({ ok: false, error: 'invalid_sender_outbox_state' });
+        return;
+      }
+      await chrome.storage.session.set({ [key]: message.value });
+      sendResponse({ ok: true });
       return;
     }
 
