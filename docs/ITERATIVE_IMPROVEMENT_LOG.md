@@ -948,3 +948,32 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** one pure health model produces reason-coded watch/degraded states and a safe recommendation.
 
 **Source-complete status:** Cycles 136–140 are implemented. Executable verification remains deferred until Cycle 145 source completion.
+
+## Live interview UX cycles 141–145
+
+### Cycle 141 — Indexed Command Search
+- **Bug fixes:** command-palette search no longer rescans and normalizes the full catalog on every keystroke.
+- **New features:** deterministic relevance-ranked command results.
+- **Implementation:** one reusable normalized index is cached with palette state.
+
+### Cycle 142 — Bounded Virtual Lists
+- **Bug fixes:** long Inbox and review collections no longer require rendering every row.
+- **New features:** exact visible ranges with top/bottom spacer metadata.
+- **Implementation:** one pure virtual-list model bounds DOM work without truncating source collections.
+
+### Cycle 143 — Coalesced Render Scheduler
+- **Bug fixes:** multiple transport updates in one frame no longer trigger repeated full render passes.
+- **New features:** semantic-section render batching.
+- **Implementation:** one animation-frame scheduler merges changed sections and preserves synchronous user navigation.
+
+### Cycle 144 — Idle Work Coordinator
+- **Bug fixes:** noncritical index and review rebuilds no longer compete with live delivery rendering.
+- **New features:** bounded idle-only background work with cancellation.
+- **Implementation:** one queue uses idle callbacks with a timer fallback and never owns authoritative state.
+
+### Cycle 145 — Live UX Memory Budget
+- **Bug fixes:** search, timeline, traces, queue rows, and idle work no longer grow without an explicit cockpit budget.
+- **New features:** exact usage, breach, and safe-action reporting in Review.
+- **Implementation:** one budget model bounds presentation collections while the complete ledger remains authoritative.
+
+**Source-complete status:** Cycles 96–145 are implemented. The deferred Phase A executable gate is now required before hardening work proceeds.

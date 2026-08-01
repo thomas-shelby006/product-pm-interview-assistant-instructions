@@ -50,6 +50,7 @@ import { addSloSample, deriveSloTrend } from './slo-history.js';
 import { advanceRunbook, cancelRunbook, startRunbook } from './stabilization-runbook.js';
 import { filterOperationalEvents } from './operational-event-filter.js';
 import { derivePerformanceHealth } from './performance-health.js';
+import { deriveLiveUxMemoryBudget } from './live-ux-memory-budget.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -307,6 +308,7 @@ export function createRuntimePilotController({
         stabilization: enrichedBase.stabilizationRunbook || null,
         performanceHealth: derivePerformanceHealth(enrichedBase)
       },
+      liveUxBudget: deriveLiveUxMemoryBudget(enrichedBase),
       performanceBudget: {
         ...(snapshotBase.performanceBudget || {}),
         cacheHits: localPerformance.cacheHits,

@@ -82,6 +82,8 @@ const timelineCanvas = byId('timelineCanvas');
 const dialogFocus = createDialogFocusCoordinator();
 const liveAnnouncer = createLiveAnnouncer({ polite: byId('screenReaderPolite'), assertive: byId('screenReaderAssertive') });
 const shortcutBindings = normalizeShortcutBindings();
+const idleWork = createIdleWorkCoordinator();
+const renderScheduler = createRenderScheduler();
 
 function setConnection(label, tone = 'warn') {
   connectionState.dataset.tone = tone;
@@ -191,7 +193,7 @@ function handlePortMessage(message) {
     state.efficiency.lastMode = 'Full';
     state.efficiency.changedSections = Object.keys(message.snapshot || {}).length;
     setConnection('Live', 'ok');
-    render();
+    scheduleRender();
     return;
   }
   if (message?.type === 'PMIA_DASHBOARD_DELTA' && state.snapshot) {
@@ -200,7 +202,7 @@ function handlePortMessage(message) {
     state.efficiency.lastMode = 'Delta';
     state.efficiency.changedSections = message.delta?.keys?.length || 0;
     setConnection('Live', 'ok');
-    render(message.delta?.keys || []);
+    scheduleRender(message.delta?.keys || []);
     return;
   }
   if (message?.type === 'PMIA_DASHBOARD_SESSION_ENDED') {
@@ -209,7 +211,7 @@ function handlePortMessage(message) {
     failPendingCommands('session_ended');
     clearTimeout(state.reconnectTimer);
     setConnection('Session ended', 'error');
-    render();
+    scheduleRender();
     return;
   }
   if (
@@ -227,7 +229,7 @@ function handlePortMessage(message) {
     state.efficiency.heartbeat += 1;
     state.efficiency.lastMode = 'Heartbeat';
     state.efficiency.changedSections = 1;
-    render([message.role]);
+    scheduleRender([message.role]);
     return;
   }
   if (message?.type === 'PMIA_DASHBOARD_COMMAND_RESULT') {
@@ -1049,7 +1051,8 @@ function renderQueue(snapshot, now) {
   const navigator = deriveQuestionNavigator(snapshot || {}, state.questionNavigator, now);
   state.questionNavigator = { ...state.questionNavigator, selectedId: navigator.selectedId };
   state.selectedQueueId = navigator.selectedId;
-  const inbox = navigator.results;
+  const queueVirtual = virtualItems(navigator.results, { scrollTop: 0, viewportHeight: 5760, rowHeight: 48, overscan: 8 });
+  const inbox = queueVirtual.items;
   if (!inbox.length) {
     state.selectedQueueId = '';
     state.questionNavigator.selectedId = '';
@@ -1229,6 +1232,10 @@ function renderMechanics(snapshot) {
     ? JSON.stringify(snapshot.lastTransportDrill, null, 2)
     : 'No drill has been run.';
 
+  const uxBudget = snapshot?.liveUxBudget || {};
+  text('liveUxBudgetState', humanizeCode(uxBudget.state || 'unknown'));
+  text('liveUxBudgetDetail', uxBudget.breaches?.length ? uxBudget.breaches.map(item => `${item.key} ${item.value}/${item.limit}`).join(' · ') : 'All live cockpit collections are within budget.');
+
   const operational = snapshot?.operationalReview || {};
   const health = operational.performanceHealth || {};
   const healthCard = document.querySelector('.operational-health-card');
@@ -1332,6 +1339,11 @@ function render(changedKeys = null) {
   updateControlAvailability();
 }
 
+function scheduleRender(changedKeys = null) {
+  const sections = Array.isArray(changedKeys) ? changedKeys : changedKeys ? [...changedKeys] : ['all'];
+  renderScheduler.schedule(sections, pending => render(pending.includes('all') ? null : pending));
+}
+
 async function runCommand(button, command, payload = {}) {
   if (state.sessionEnded) {
     showToast('This session has ended.', 'warn');
@@ -1419,7 +1431,7 @@ document.addEventListener('click', event => {
       node.classList.toggle('active', active);
       node.hidden = !active;
     });
-    render();
+    scheduleRender();
     return;
   }
   const traceButton = event.target.closest('[data-trace-id]');
@@ -1524,7 +1536,7 @@ document.querySelectorAll('[data-accessibility-name],#reducedMotionPreference,#t
 byId('traceSearch').addEventListener('input', event => {
   state.traceQuery = String(event.currentTarget.value || '');
   state.selectedTraceId = '';
-  renderReview(state.snapshot);
+  idleWork.schedule(() => renderReview(state.snapshot));
 });
 byId('submitSelected').addEventListener('click', event => {
   if (!state.selectedQueueId) return showToast('Select an unresolved final.', 'warn');

@@ -1,13 +1,15 @@
-import { commandCatalog, commandPreview, searchCommands } from '../shared/operator-command-catalog.js';
+import { commandCatalog, commandPreview } from '../shared/operator-command-catalog.js';
+import { buildCommandSearchIndex, searchCommandIndex } from '../shared/command-search-index.js';
 
 export function createCommandPaletteState(snapshot = {}, value = {}) {
   const catalog = commandCatalog(snapshot);
   const query = String(value.query || '');
-  const results = searchCommands(catalog, query);
+  const index = Array.isArray(value.index) && value.index.length ? value.index : buildCommandSearchIndex(catalog);
+  const results = searchCommandIndex(index, query);
   const selectedIndex = Math.min(Math.max(0, Number(value.selectedIndex || 0)), Math.max(0, results.length - 1));
   const selected = results[selectedIndex] || null;
   return {
-    open: Boolean(value.open), query, results, selectedIndex, selected,
+    open: Boolean(value.open), query, index, results, selectedIndex, selected,
     preview: selected ? commandPreview(selected, snapshot) : null,
     recent: Array.isArray(value.recent) ? value.recent.slice(0, 8) : []
   };
