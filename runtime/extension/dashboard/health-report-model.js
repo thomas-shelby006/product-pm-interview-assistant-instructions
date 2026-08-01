@@ -37,6 +37,18 @@ export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {
       nextAction: compatibility.nextAction,
       quarantinePresent: compatibility.quarantinePresent
     },
+    performanceBudget: snapshot.performanceBudget ? {
+      state: String(snapshot.performanceBudget.state || ''),
+      operations: { ...(snapshot.performanceBudget.operations || {}) },
+      payloadBytes: Number(snapshot.performanceBudget.payloadBytes || 0),
+      cacheHitRate: Number(snapshot.performanceBudget.cacheHitRate ?? 100),
+      violations: (snapshot.performanceBudget.violations || []).map(item => ({
+        kind: String(item.kind || ''),
+        operations: Number(item.operations || 0),
+        budget: Number(item.budget || 0),
+        excess: Number(item.excess || 0)
+      }))
+    } : null,
     verification: { state: verification.state, source: verification.source, expiresAt: verification.expiresAt },
     delivery: {
       gap: { state: gap.state, expectedSeq: gap.expectedSeq, bufferedCount: gap.bufferedCount, ageMs: gap.ageMs },

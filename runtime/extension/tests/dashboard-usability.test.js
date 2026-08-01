@@ -293,3 +293,12 @@ test('Runtime Pilot exposes metadata-only state compatibility', () => {
   assert.match(dashboard, /deriveStateCompatibility\(snapshot\)/);
   assert.match(styles, /\.compatibility-card/);
 });
+
+
+test('Runtime Pilot exposes deterministic performance budgets', () => {
+  for (const id of ['performanceBudgetState', 'performanceBudgetOperations', 'performanceBudgetBytes', 'performanceBudgetCache']) {
+    assert.match(markup, new RegExp(`id="${id}"`));
+  }
+  assert.match(dashboard, /snapshot\?\.performanceBudget/);
+  assert.match(styles, /\.performance-budget-card/);
+});

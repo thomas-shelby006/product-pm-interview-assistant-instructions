@@ -3,6 +3,7 @@ import { CommandResultJournal } from './command-result-journal.js';
 import { RecoveryBudget } from './recovery-budget.js';
 import { createTraceSpan } from './delivery-trace.js';
 import { deriveBacklogForecast } from './backlog-forecast.js';
+import { RuntimePerformanceBudget } from './runtime-performance-budget.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -172,7 +173,8 @@ function normalizeSession(item) {
     senderOutboxState: normalizeOutboxState(item.senderOutboxState),
     selfTest: item.selfTest && typeof item.selfTest === 'object' ? JSON.parse(JSON.stringify(item.selfTest)) : null,
     answerState: item.answerState && typeof item.answerState === 'object' ? { ...item.answerState } : null,
-    recoveryBudget: new RecoveryBudget(item.recoveryBudget || {}) ,
+    recoveryBudget: new RecoveryBudget(item.recoveryBudget || {}),
+    performanceBudget: new RuntimePerformanceBudget(item.performanceBudget || {}),
     lastTransportDrill: item.lastTransportDrill && typeof item.lastTransportDrill === 'object' ? JSON.parse(JSON.stringify(item.lastTransportDrill)) : null
   };
 }
@@ -387,6 +389,13 @@ export class RuntimePilotState {
     session.updatedAt = now;
     this.record(sessionId, 'recovery_budget_reset', { resetCount: budget.resetCount }, now);
     return budget;
+  }
+
+  recordPerformance(sessionId, sample = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const result = session.performanceBudget.record({ ...sample, at: Number(sample.at || now) });
+    session.updatedAt = now;
+    return result;
   }
 
   setTransportDrill(sessionId, report, now = Date.now()) {
@@ -867,6 +876,7 @@ export class RuntimePilotState {
       selfTest: session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null,
       answerState: session.answerState ? { ...session.answerState } : null,
       recoveryBudget: session.recoveryBudget.snapshot(now),
+      performanceBudget: session.performanceBudget.snapshot(),
       deliveryForecast,
       lastTransportDrill: session.lastTransportDrill ? JSON.parse(JSON.stringify(session.lastTransportDrill)) : null,
       metrics: {
@@ -921,6 +931,7 @@ export class RuntimePilotState {
       selfTest: session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null,
       answerState: session.answerState ? { ...session.answerState } : null,
       recoveryBudget: session.recoveryBudget.snapshot(),
+      performanceBudget: session.performanceBudget.exportState(),
       lastTransportDrill: session.lastTransportDrill ? JSON.parse(JSON.stringify(session.lastTransportDrill)) : null
     }));
   }

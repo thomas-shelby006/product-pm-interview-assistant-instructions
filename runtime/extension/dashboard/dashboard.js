@@ -804,6 +804,14 @@ function renderMechanics(snapshot) {
   text('stateCompatibilityIntegrity', compatibility.integrityState.replaceAll('_', ' '));
   text('stateCompatibilityAction', compatibility.nextAction.replaceAll('_', ' '));
 
+  const performance = snapshot?.performanceBudget || {};
+  const performanceCard = document.querySelector('.performance-budget-card');
+  if (performanceCard) performanceCard.dataset.state = String(performance.state || 'healthy');
+  text('performanceBudgetState', String(performance.state || 'healthy').replaceAll('_', ' '));
+  text('performanceBudgetOperations', Object.values(performance.operations || {}).reduce((sum, value) => sum + Number(value || 0), 0));
+  text('performanceBudgetBytes', formatBytes(performance.payloadBytes || 0));
+  text('performanceBudgetCache', `${Number(performance.cacheHitRate ?? 100)}%`);
+
   const forecast = snapshot?.deliveryForecast || {};
   text('forecastRisk', String(forecast.risk || 'clear').replaceAll('_', ' '));
   text('forecastDrain', formatForecastDuration(forecast.drainEstimateMs));

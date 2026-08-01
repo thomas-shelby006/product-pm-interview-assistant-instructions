@@ -299,6 +299,8 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 .compatibility-card { border-left: 4px solid var(--olive); }
 .compatibility-card[data-state="migrated"], .compatibility-card[data-state="recovered"] { border-left-color: var(--ochre); }
 .compatibility-card[data-state="blocked"] { border-left-color: var(--danger); background: var(--rust-soft); }
+.performance-budget-card { border-left: 4px solid var(--olive); }
+.performance-budget-card[data-state="violated"] { border-left-color: var(--danger); background: var(--rust-soft); }
 .mechanics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
 .mechanics-card, .trace-inspector { border: 1px solid var(--line, #d7d1c8); border-radius: 14px; padding: 16px; background: var(--panel, #fff); min-width: 0; }
 .mechanics-card .section-heading { margin-bottom: 12px; }

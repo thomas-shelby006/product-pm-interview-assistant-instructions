@@ -50,13 +50,14 @@ export function createRuntimePilotController({
   const ports = new Map();
   const recoveryCoordinator = createRuntimeRecoveryCoordinator({ chromeApi });
   const snapshotCaches = new Map();
+  const snapshotPerformance = new Map();
   const mutationCoordinator = createSessionMutationCoordinator();
   const coalescedCommitLane = createCoalescedCommitLane({
     delayMs: 60,
-    commit: sessionId => mutationCoordinator.run(sessionId, async () => {
+    commit: (sessionId, reasons) => mutationCoordinator.run(sessionId, async () => {
       const pilot = await state();
       if (!pilot.snapshot(sessionId)) return;
-      await commit(sessionId, pilot);
+      await commit(sessionId, pilot, `coalesced:${reasons.join('+')}`);
     })
   });
 
@@ -102,13 +103,35 @@ export function createRuntimePilotController({
   async function broadcast(sessionId, pilot = null) {
     const current = pilot || await state();
     const baseSnapshot = current.snapshot(sessionId, Date.now());
-    const rawSnapshot = baseSnapshot ? { ...baseSnapshot, stateAudit: store.audit() } : null;
-    if (!rawSnapshot) snapshotCaches.delete(sessionId);
+    const localPerformance = snapshotPerformance.get(sessionId) || { cacheHits: 0, cacheMisses: 0 };
+    const rawSnapshot = baseSnapshot ? {
+      ...baseSnapshot,
+      performanceBudget: {
+        ...(baseSnapshot.performanceBudget || {}),
+        cacheHits: localPerformance.cacheHits,
+        cacheMisses: localPerformance.cacheMisses,
+        cacheHitRate: localPerformance.cacheHits + localPerformance.cacheMisses
+          ? Math.round((localPerformance.cacheHits / (localPerformance.cacheHits + localPerformance.cacheMisses)) * 100)
+          : 100
+      },
+      stateAudit: store.audit()
+    } : null;
+    if (!rawSnapshot) {
+      snapshotCaches.delete(sessionId);
+      snapshotPerformance.delete(sessionId);
+    }
     const cache = rawSnapshot
       ? (snapshotCaches.get(sessionId) || new SnapshotSectionCache())
       : null;
     if (cache && !snapshotCaches.has(sessionId)) snapshotCaches.set(sessionId, cache);
-    const snapshot = cache ? cache.update(rawSnapshot).snapshot : null;
+    const cached = cache ? cache.update(rawSnapshot) : null;
+    if (cached) {
+      snapshotPerformance.set(sessionId, {
+        cacheHits: localPerformance.cacheHits + cached.reusedKeys.length,
+        cacheMisses: localPerformance.cacheMisses + cached.changedKeys.length
+      });
+    }
+    const snapshot = cached ? cached.snapshot : null;
     for (const entry of sessionPorts(sessionId)) {
       if (!snapshot) {
         if (post(entry.port, { type: 'PMIA_DASHBOARD_SESSION_ENDED', sessionId, snapshot: null })) {
@@ -131,8 +154,15 @@ export function createRuntimePilotController({
     return snapshot;
   }
 
-  async function commit(sessionId, pilot = null) {
+  async function commit(sessionId, pilot = null, reason = 'semantic_commit') {
     const current = pilot || await state();
+    current.recordPerformance(sessionId, {
+      kind: 'persistence',
+      operations: 1,
+      bytes: utf8Bytes(current.exportState()),
+      budget: 1,
+      reason
+    });
     await store.save(current);
     const bytes = await store.bytesInUse().catch(() => 0);
     const quota = Number(storageArea?.QUOTA_BYTES || DEFAULT_SESSION_QUOTA_BYTES);
