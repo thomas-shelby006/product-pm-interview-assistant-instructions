@@ -302,6 +302,7 @@ async function startRuntime(runtimeConfig) {
       registration: { ...runtimeConfig, instanceId: runtimeInstanceId }
     });
     if (response?.ok) {
+      const firstRegistration = !runtimeRegistered;
       runtimeRegistered = true;
       restoreTitle.setTarget(runtimeLifecycleTitle(runtimeConfig, 'registered'));
       if (adapter.findComposer()) {
@@ -312,7 +313,9 @@ async function startRuntime(runtimeConfig) {
         overlay.setStatus(status.text, status.tone);
       }
       rolePort?.connect();
-      void telemetry.publish({ force: true, event: { type: 'registration' } });
+      void telemetry.publish(firstRegistration
+        ? { force: true, event: { type: 'registration_transition' } }
+        : { force: true });
       if (runtimeConfig.role === 'sender' && !senderOutboxReady) {
         try {
           await initializeSenderOutbox();

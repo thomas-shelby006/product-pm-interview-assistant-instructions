@@ -13,6 +13,8 @@ import { runRuntimeSelfTest } from './runtime-self-test.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
 import { transitionRecovery } from './recovery-state-machine.js';
+import { createRepairEventCoalescer } from './repair-event-coalescer.js';
+import { classifyRegistration } from './registration-heartbeat.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -43,6 +45,7 @@ export function createRuntimePilotController({
   const store = createRuntimePilotStore({ storageArea });
   const ports = new Map();
   const previewTimers = new Map();
+  const repairEventCoalescer = createRepairEventCoalescer({ cooldownMs: 1000 });
   const batchCommitTimers = new Map();
   const mutationCoordinator = createSessionMutationCoordinator();
 
@@ -163,14 +166,22 @@ export function createRuntimePilotController({
     };
   }
 
+  function persistRepairReport(pilot, sessionId, report, now = Date.now()) {
+    const decision = repairEventCoalescer.accept(sessionId, report, now);
+    pilot.setRepair(sessionId, decision.report, now, { record: decision.persist });
+    return decision.report;
+  }
+
   function applyRecoveryTransition(pilot, sessionId, event) {
     const snapshot = pilot.snapshot(sessionId);
     const previous = snapshot?.lastRepair || null;
     const next = transitionRecovery(previous, event, Date.now());
-    if (JSON.stringify(previous) !== JSON.stringify(next)) pilot.setRepair(sessionId, next);
-    const mode = next.phase === 'healthy' ? 'active' : next.phase;
+    const report = JSON.stringify(previous) !== JSON.stringify(next)
+      ? persistRepairReport(pilot, sessionId, next)
+      : next;
+    const mode = report.phase === 'healthy' ? 'active' : report.phase;
     if (pilot.snapshot(sessionId)?.mode !== mode) pilot.setMode(sessionId, mode);
-    return next;
+    return report;
   }
 
   async function reconcileSession(sessionId, {
@@ -240,17 +251,34 @@ export function createRuntimePilotController({
 
   async function syncRegistration(registration) {
     const pilot = await state();
+    const previous = pilot.snapshot(registration.sessionId)?.[registration.role] || null;
+    const classification = classifyRegistration(previous?.tabId ? {
+      role: registration.role,
+      provider: previous.provider,
+      tabId: previous.tabId,
+      instanceId: previous.instanceId || ''
+    } : null, registration);
     const tab = await tabState(registration.tabId);
+    const heartbeatCount = Math.max(0, Number(previous?.registrationHeartbeatCount || 0))
+      + (classification === 'heartbeat' ? 1 : 0);
     pilot.updateRole(registration.sessionId, registration.role, {
       ...tab,
+      role: registration.role,
+      instanceId: String(registration.instanceId || ''),
       provider: registration.provider,
-      phase: 'registered',
-      heartbeatAt: registration.registeredAt || Date.now()
+      phase: previous?.phase === 'ready' ? 'ready' : 'registered',
+      heartbeatAt: registration.registeredAt || Date.now(),
+      lastRegistrationAt: registration.registeredAt || Date.now(),
+      registrationHeartbeatCount: heartbeatCount
     });
-    pilot.record(registration.sessionId, 'registration', {
+    if (classification === 'heartbeat') {
+      return { ok: true, classification, persisted: false };
+    }
+    pilot.record(registration.sessionId, `registration_${classification}`, {
       role: registration.role,
       provider: registration.provider,
-      tabId: registration.tabId
+      tabId: registration.tabId,
+      instanceId: String(registration.instanceId || '')
     });
     await commit(registration.sessionId, pilot);
     if (registration.role === 'receiver') {
@@ -261,6 +289,7 @@ export function createRuntimePilotController({
         );
       }, 0);
     }
+    return { ok: true, classification, persisted: true };
   }
 
   async function handlePreview({ preview, deliver }) {
@@ -484,6 +513,9 @@ export function createRuntimePilotController({
     }
     if (event?.type === 'answer_state') {
       pilot.setAnswerState(sessionId, event);
+      if (['complete', 'no_response', 'timed_out', 'cancelled'].includes(String(event.state || ''))) {
+        pilot.recordAnswer(sessionId, event);
+      }
     } else if (event?.type === 'answer') {
       pilot.recordAnswer(sessionId, {
         envelopeId: event.envelopeId,
@@ -811,7 +843,7 @@ export function createRuntimePilotController({
       storageCritical: pilot.snapshot(sessionId)?.storagePressure?.level === 'critical'
     });
     finalReport = { ...finalReport, ...report, pendingVerification: true, verified: false };
-    pilot.setRepair(sessionId, finalReport);
+    finalReport = persistRepairReport(pilot, sessionId, finalReport);
     if (!report.ok || !report.actions.length) {
       finalReport = applyRecoveryTransition(pilot, sessionId, {
         type: 'failure', error: report.unresolved[0]?.reason || 'repair_not_started'
@@ -1209,6 +1241,7 @@ export function createRuntimePilotController({
     const pilot = await state();
     await cancelRecoverySchedules(sessionId, pilot);
     pilot.remove(sessionId);
+    repairEventCoalescer.clear(sessionId);
     await store.save(pilot);
     await broadcast(sessionId, pilot);
     if (dashboardTabIds.length) {

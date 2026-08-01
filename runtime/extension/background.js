@@ -187,9 +187,7 @@ async function handleRegistration(message, incomingTab, registry) {
     };
   }
   await saveRegistry(registry);
-  if (result.changed) {
-    await pilotController.syncRegistration(result.registration);
-  }
+  await pilotController.syncRegistration(result.registration);
 
   try {
     await chrome.tabs.update(tabId, { autoDiscardable: false });

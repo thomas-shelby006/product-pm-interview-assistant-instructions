@@ -265,3 +265,28 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Bug fixes:** no-response, timeout and cancellation terminal states release active batch ownership exactly once.
 - **New features:** terminal answer outcome is retained beside exact delivery proof in completed-batch state.
 - **Implementation:** receiver batch runtime maps terminal answer states to distinct events and advances the next protected partition deterministically.
+
+## Cycle 36 - Repair Event Coalescing
+- **Bug fixes:** repeated semantically identical repair reports no longer flood the timeline or session writes.
+- **New features:** safe suppressed-transition count on the next persisted repair report.
+- **Implementation:** per-session semantic repair fingerprint with a one-second cooldown; phase, checks, error and verification changes always persist.
+
+## Cycle 37 - Registration Heartbeat Coalescing
+- **Bug fixes:** routine 15-second same-instance registration no longer creates a durable registration event.
+- **New features:** role registration heartbeat count, last-registration time and transition classification.
+- **Implementation:** ownership, instance replacement and lease migration remain durable; same ownership updates only the in-memory Pilot cache until another semantic commit.
+
+## Cycle 38 - Self-Test Trust Lease
+- **Bug fixes:** a successful pulse is no longer reduced to a generic stale label while fresh role and direct-port evidence remains available.
+- **New features:** active, evidence-fresh, stale, failed and missing verification trust states with evidence source and expiry.
+- **Implementation:** pure trust model leaves the original self-test result immutable and extends trust only when both roles and the dashboard remain current.
+
+## Cycle 39 - Readiness Evidence Fusion
+- **Bug fixes:** readiness no longer raises a contradictory self-test-stale blocker when current role and transport evidence is valid.
+- **New features:** readiness reports the verification evidence source and expiry.
+- **Implementation:** failed active pulses remain authoritative; context, adapter, gap, outbox and storage blockers remain independent.
+
+## Cycle 40 - Delivery and Answer Metrics Separation
+- **Bug fixes:** no-response and answer timeout outcomes cannot reduce rendered delivery success.
+- **New features:** completed, no-response, timed-out, cancelled and answer-availability metrics.
+- **Implementation:** terminal answer outcomes deduplicate by batch ID and remain text-free in Pilot state and Safe Health reporting.

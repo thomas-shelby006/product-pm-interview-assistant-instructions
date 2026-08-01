@@ -1,3 +1,5 @@
+import { deriveSelfTestTrust } from './self-test-trust-model.js';
+
 function blocker(code, label, action = 'check_live') {
   return { code, label, action };
 }
@@ -40,14 +42,13 @@ export function deriveReadiness(snapshot, now = Date.now()) {
   if (gapEvent?.type === 'sequence_gap') blockers.push(blocker('sequence_gap', `Waiting for sequence ${gapEvent.data?.expectedSeq || '?'}`, 'check_live'));
   const outboxCount = Number(snapshot?.senderOutboxState?.count || 0);
   if (outboxCount > 0) blockers.push(blocker('outbox_retained', `${outboxCount} Window 1 final(s) await persistence`, 'retry_outbox'));
-  const selfTest = snapshot?.selfTest;
-  const selfTestAge = selfTest?.completedAt ? Math.max(0, Number(now) - Number(selfTest.completedAt)) : Infinity;
-  if (!selfTest) blockers.push(blocker('self_test_missing', 'Active runtime self-test has not run', 'run_self_test'));
-  else if (selfTest.ok !== true) blockers.push(blocker('self_test_failed', 'Active runtime self-test did not pass', 'run_self_test'));
-  else if (selfTestAge > 30000) blockers.push(blocker('self_test_stale', 'Active runtime self-test is stale', 'run_self_test'));
+  const trust = deriveSelfTestTrust(snapshot, now);
+  if (trust.state === 'missing') blockers.push(blocker('self_test_missing', 'Active runtime self-test has not run', 'run_self_test'));
+  else if (trust.state === 'failed') blockers.push(blocker('self_test_failed', 'Active runtime self-test did not pass', 'run_self_test'));
+  else if (trust.state === 'stale') blockers.push(blocker('self_test_stale', 'Active runtime verification evidence is stale', 'run_self_test'));
 
   const actions = [...new Set(blockers.map(item => item.action).filter(Boolean))];
   return blockers.length
-    ? { state: 'not_ready', label: 'Not ready', blockers, actions }
-    : { state: 'ready', label: 'Ready', blockers: [], actions: [] };
+    ? { state: 'not_ready', label: 'Not ready', blockers, actions, evidenceSource: trust.source, evidenceExpiresAt: trust.expiresAt }
+    : { state: 'ready', label: 'Ready', blockers: [], actions: [], evidenceSource: trust.source, evidenceExpiresAt: trust.expiresAt };
 }

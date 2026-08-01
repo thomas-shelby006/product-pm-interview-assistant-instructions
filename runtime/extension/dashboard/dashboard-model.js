@@ -131,6 +131,11 @@ export function deriveReview(snapshot) {
     questions: metrics.finalsObserved || 0,
     delivered: metrics.delivered || 0,
     answerTimeouts: metrics.answerTimeouts || 0,
+    answersCompleted: metrics.answersCompleted || 0,
+    answersNoResponse: metrics.answersNoResponse || 0,
+    answersTimedOut: metrics.answersTimedOut || 0,
+    answersCancelled: metrics.answersCancelled || 0,
+    answerAvailabilityRate: metrics.answerAvailabilityRate ?? 100,
     deliverySuccessRate: metrics.deliverySuccessRate ?? 100,
     averageDeliveryProofMs: metrics.averageDeliveryProofMs || 0,
     averageAnswerElapsedMs: metrics.averageAnswerElapsedMs || 0

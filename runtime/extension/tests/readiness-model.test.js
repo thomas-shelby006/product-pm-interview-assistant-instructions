@@ -8,7 +8,7 @@ function readySnapshot(now = 10000) {
 }
 
 test('readiness is true only when every operational prerequisite is healthy', () => {
-  assert.deepEqual(deriveReadiness(readySnapshot(), 10000), { state: 'ready', label: 'Ready', blockers: [], actions: [] });
+  assert.deepEqual(deriveReadiness(readySnapshot(), 10000), { state: 'ready', label: 'Ready', blockers: [], actions: [], evidenceSource: 'active_pulse', evidenceExpiresAt: 40000 });
 });
 
 test('readiness reports exact role context and storage blockers', () => {
@@ -52,4 +52,24 @@ test('missing failed or stale active self-test blocks readiness', () => {
   const stale = readySnapshot();
   stale.selfTest = { ok: true, completedAt: 1 };
   assert.ok(deriveReadiness(stale, 40000).blockers.some(item => item.code === 'self_test_stale'));
+});
+
+test('readiness accepts evidence-fresh verification while preserving independent blockers', () => {
+  const snapshot = readySnapshot(100000);
+  snapshot.selfTest = { ok: true, completedAt: 40000 };
+  snapshot.sender.transportLane = { lastMode: 'direct', lastRttMs: 5, updatedAt: 99000 };
+  snapshot.receiver.transportLane = { lastMode: 'direct', lastRttMs: 6, updatedAt: 99000 };
+  snapshot.sender.heartbeatAt = 99000;
+  snapshot.receiver.heartbeatAt = 99000;
+  const result = deriveReadiness(snapshot, 100000);
+  assert.equal(result.state, 'ready');
+  assert.equal(result.evidenceSource, 'role_and_transport_evidence');
+});
+
+test('failed active pulse remains a blocker despite fresh role evidence', () => {
+  const snapshot = readySnapshot(100000);
+  snapshot.selfTest = { ok: false, completedAt: 99000 };
+  snapshot.sender.transportLane = { lastMode: 'direct', updatedAt: 99000 };
+  snapshot.receiver.transportLane = { lastMode: 'direct', updatedAt: 99000 };
+  assert.ok(deriveReadiness(snapshot, 100000).blockers.some(item => item.code === 'self_test_failed'));
 });

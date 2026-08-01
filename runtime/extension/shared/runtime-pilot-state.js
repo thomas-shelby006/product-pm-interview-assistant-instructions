@@ -23,7 +23,10 @@ function emptyRole() {
     heartbeatAt: 0,
     lastActivityAt: 0,
     pageUrl: '',
-    transportLane: { state: 'unknown', lastMode: '', lastRttMs: 0, consecutiveFailures: 0, nextProbeAt: 0, lastFailureReason: '', updatedAt: 0 }
+    transportLane: { state: 'unknown', lastMode: '', lastRttMs: 0, consecutiveFailures: 0, nextProbeAt: 0, lastFailureReason: '', updatedAt: 0 },
+    instanceId: '',
+    lastRegistrationAt: 0,
+    registrationHeartbeatCount: 0
   };
 }
 
@@ -36,6 +39,11 @@ function emptyMetrics() {
     duplicateAcks: 0,
     archived: 0,
     answerTimeouts: 0,
+    answersCompleted: 0,
+    answersNoResponse: 0,
+    answersTimedOut: 0,
+    answersCancelled: 0,
+    answerTerminalBatches: [],
     deliveryProofMs: [],
     answerElapsedMs: []
   };
@@ -52,6 +60,11 @@ function normalizeMetrics(value = {}) {
     duplicateAcks: Number(source.duplicateAcks || 0),
     archived: Number(source.archived || source.superseded || 0),
     answerTimeouts: Number(source.answerTimeouts || 0),
+    answersCompleted: Number(source.answersCompleted || 0),
+    answersNoResponse: Number(source.answersNoResponse || 0),
+    answersTimedOut: Number(source.answersTimedOut || source.answerTimeouts || 0),
+    answersCancelled: Number(source.answersCancelled || 0),
+    answerTerminalBatches: Array.isArray(source.answerTerminalBatches) ? source.answerTerminalBatches.map(String).slice(-128) : [],
     deliveryProofMs: Array.isArray(source.deliveryProofMs) ? source.deliveryProofMs.slice(-MAX_METRIC_SAMPLES) : [],
     answerElapsedMs: Array.isArray(source.answerElapsedMs) ? source.answerElapsedMs.slice(-MAX_METRIC_SAMPLES) : []
   };
@@ -468,13 +481,23 @@ export class RuntimePilotState {
 
   recordAnswer(sessionId, event = {}, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    if (event.timeout) session.metrics.answerTimeouts += 1;
+    const state = String(event.state || (event.timeout ? 'timed_out' : 'complete'));
+    const batchId = String(event.batchId || event.envelopeId || '');
+    if (batchId && session.metrics.answerTerminalBatches.includes(batchId)) return false;
+    if (batchId) session.metrics.answerTerminalBatches = [...session.metrics.answerTerminalBatches, batchId].slice(-128);
+    if (state === 'complete') session.metrics.answersCompleted += 1;
+    else if (state === 'no_response') session.metrics.answersNoResponse += 1;
+    else if (state === 'timed_out') {
+      session.metrics.answersTimedOut += 1;
+      session.metrics.answerTimeouts += 1;
+    } else if (state === 'cancelled') session.metrics.answersCancelled += 1;
     const elapsed = Number(event.elapsedMs);
-    if (Number.isFinite(elapsed)) {
+    if (Number.isFinite(elapsed) && state === 'complete') {
       session.metrics.answerElapsedMs.push(elapsed);
       session.metrics.answerElapsedMs = session.metrics.answerElapsedMs.slice(-MAX_METRIC_SAMPLES);
     }
-    this.record(sessionId, event.timeout ? 'answer_timeout' : 'answer_captured', safeEventData(event), now);
+    this.record(sessionId, `answer_${state}`, safeEventData({ ...event, state }), now);
+    return true;
   }
 
   restoreBatchState(sessionId, checkpoint = {}, now = Date.now()) {
@@ -615,11 +638,11 @@ export class RuntimePilotState {
     this.record(sessionId, 'layout_changed', session.layout, now);
   }
 
-  setRepair(sessionId, report, now = Date.now()) {
+  setRepair(sessionId, report, now = Date.now(), { record = true } = {}) {
     const session = this.ensure(sessionId, now);
     session.lastRepair = { ...(report || {}), at: now };
     session.updatedAt = now;
-    this.record(sessionId, 'repair_report', session.lastRepair, now);
+    if (record) this.record(sessionId, 'repair_report', session.lastRepair, now);
   }
 
   record(sessionId, type, data = {}, now = Date.now()) {
@@ -750,7 +773,10 @@ export class RuntimePilotState {
           ? Math.round((session.metrics.delivered / (session.metrics.delivered + session.metrics.failed)) * 100)
           : 100,
         averageDeliveryProofMs: average(session.metrics.deliveryProofMs),
-        averageAnswerElapsedMs: average(session.metrics.answerElapsedMs)
+        averageAnswerElapsedMs: average(session.metrics.answerElapsedMs),
+        answerAvailabilityRate: session.metrics.answersCompleted + session.metrics.answersNoResponse + session.metrics.answersTimedOut
+          ? Math.round((session.metrics.answersCompleted / (session.metrics.answersCompleted + session.metrics.answersNoResponse + session.metrics.answersTimedOut)) * 100)
+          : 100
       },
       dashboardConnections: session.dashboardConnections,
       layout: { ...session.layout },

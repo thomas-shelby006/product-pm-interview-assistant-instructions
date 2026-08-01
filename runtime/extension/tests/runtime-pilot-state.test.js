@@ -159,3 +159,23 @@ test('Runtime Pilot stores and replays exact dashboard command results', () => {
   assert.equal(snapshot.commandJournal[0].durationMs, 15);
   assert.equal(snapshot.commandJournal[0].replayCount, 1);
 });
+
+test('answer terminal metrics do not change rendered delivery success', () => {
+  const state = new RuntimePilotState();
+  state.persistFinal('pmia_session', envelope('q1'), 1000);
+  state.markLedgerStaged('pmia_session', ['q1'], 'b1', 1100, { memberIds: ['q1'] });
+  state.markLedgerSubmitting('pmia_session', 'b1', 1200);
+  state.markLedgerProven('pmia_session', 'b1', { verified: true, memberIds: ['q1'] }, 1300);
+  state.recordAnswer('pmia_session', { batchId: 'b1', state: 'no_response' }, 1400);
+  const metrics = state.snapshot('pmia_session', 1500).metrics;
+  assert.equal(metrics.deliverySuccessRate, 100);
+  assert.equal(metrics.answersNoResponse, 1);
+  assert.equal(metrics.answerAvailabilityRate, 0);
+});
+
+test('answer terminal state is counted once per batch', () => {
+  const state = new RuntimePilotState();
+  state.recordAnswer('pmia_session', { batchId: 'b1', state: 'timed_out' }, 1000);
+  state.recordAnswer('pmia_session', { batchId: 'b1', state: 'timed_out' }, 1100);
+  assert.equal(state.snapshot('pmia_session', 1200).metrics.answersTimedOut, 1);
+});

@@ -6,6 +6,7 @@ import { deriveProofInspector } from './proof-inspector-model.js';
 import { deriveMemoryGuard } from './memory-guard-model.js';
 import { deriveRecoveryProgress } from './recovery-progress-model.js';
 import { derivePaceGuard } from './pace-guard-model.js';
+import { deriveSelfTestTrust } from './self-test-trust-model.js';
 
 export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {}) {
   if (!snapshot) return { generatedAt: now, status: 'disconnected' };
@@ -16,6 +17,7 @@ export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {
   const memory = deriveMemoryGuard(snapshot);
   const recovery = deriveRecoveryProgress(snapshot);
   const pace = derivePaceGuard(snapshot, now);
+  const verification = deriveSelfTestTrust(snapshot, now);
   return {
     generatedAt: now,
     sessionId: String(snapshot.sessionId || ''),
@@ -24,6 +26,7 @@ export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {
       blockers: readiness.blockers.map(item => ({ code: item.code, label: item.label }))
     },
     runtime: buildDiagnostics(snapshot, now),
+    verification: { state: verification.state, source: verification.source, expiresAt: verification.expiresAt },
     delivery: {
       gap: { state: gap.state, expectedSeq: gap.expectedSeq, bufferedCount: gap.bufferedCount, ageMs: gap.ageMs },
       outbox: { state: outbox.state, count: outbox.count, attempts: outbox.attempts, retryInMs: outbox.retryInMs },

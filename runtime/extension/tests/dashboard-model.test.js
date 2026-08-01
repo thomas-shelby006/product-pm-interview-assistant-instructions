@@ -102,3 +102,10 @@ test('warning labels expose current storage and proof blockers', async () => {
   );
   assert.equal(warningLabel({ code: 'future_warning' }), 'future_warning');
 });
+
+test('review separates answer availability from delivery success', () => {
+  const review = deriveReview({ metrics: { finalsObserved: 2, delivered: 2, deliverySuccessRate: 100, answersCompleted: 1, answersNoResponse: 1, answerAvailabilityRate: 50 }, timeline: [] });
+  assert.equal(review.deliverySuccessRate, 100);
+  assert.equal(review.answerAvailabilityRate, 50);
+  assert.equal(review.answersNoResponse, 1);
+});
