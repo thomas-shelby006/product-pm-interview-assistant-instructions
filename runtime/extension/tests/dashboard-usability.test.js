@@ -47,3 +47,10 @@ test('delivery success preserves the nullish fallback instead of arithmetic', ()
   assert.match(dashboard, /deliverySuccessRate \?\? 100/);
   assert.doesNotMatch(dashboard, /deliverySuccessRate - 100/);
 });
+
+test('dashboard control grid remains bounded in the operational window', async () => {
+  const css = await readFile(new URL('../dashboard/dashboard.css', import.meta.url), 'utf8');
+  assert.match(css, /\.control-grid button \{[^}]*min-width: 0;[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/s);
+  assert.match(css, /@media \(min-width: 720px\)[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(min-width: 1200px\)[\s\S]*repeat\(5, minmax\(0, 1fr\)\)/);
+});

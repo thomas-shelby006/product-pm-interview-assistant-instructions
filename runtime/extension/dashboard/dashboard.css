@@ -57,7 +57,7 @@ main { flex: 1; padding: .9rem; }
 .view { display: none; }
 .view.active { display: block; }
 .control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin-bottom: .8rem; }
-.control-grid button { border-radius: var(--radius); text-align: left; }
+.control-grid button { min-width: 0; border-radius: var(--radius); text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .role-grid { display: grid; grid-template-columns: 1fr; gap: .7rem; }
 .role-card, .warnings, .metrics article, .latest-grid article, .repair-report { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .role-card { padding: .85rem; }
@@ -107,6 +107,9 @@ pre { margin: 0; max-height: 14rem; overflow: auto; white-space: pre-wrap; overf
 @media (min-width: 720px) {
   .role-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .latest-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .control-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1200px) {
   .control-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 @media (max-width: 470px) {
