@@ -11,7 +11,15 @@ const required = [
   'dashboard/index.html',
   'dashboard/dashboard.css',
   'dashboard/dashboard.js',
-  'dashboard/dashboard-model.js'
+  'dashboard/dashboard-model.js',
+  'dashboard/readiness-model.js',
+  'dashboard/health-report-model.js',
+  'shared/delivery-ledger.js',
+  'shared/contiguous-sequence-buffer.js',
+  'shared/session-mutation-coordinator.js',
+  'shared/storage-accounting.js',
+  'shared/snapshot-delta.js',
+  'shared/recovery-state-machine.js'
 ];
 
 for (const path of required) {
@@ -65,4 +73,45 @@ for (const file of visibleRuntimeFiles) {
   }
 }
 
-console.log(`Extension validation passed: ${files.length} JavaScript files and ${required.length} required runtime surfaces checked.`);
+
+function relativeImportSpecifiers(source) {
+  const output = [];
+  const patterns = [
+    /import\s+(?:[^'\"]+?\s+from\s+)?['\"](\.{1,2}\/[^'\"]+)['\"]/g,
+    /import\(\s*['\"](\.{1,2}\/[^'\"]+)['\"]\s*\)/g,
+    /export\s+[^'\"]+?\s+from\s+['\"](\.{1,2}\/[^'\"]+)['\"]/g
+  ];
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) output.push(match[1]);
+  }
+  return output;
+}
+
+const productionFiles = new Set(runtimeFiles.map(file => resolve(file)));
+const graphRoots = [
+  resolve(root, manifest.background.service_worker),
+  ...manifest.content_scripts.flatMap(item => item.js).map(path => resolve(root, path)),
+  resolve(root, 'content/entry.js'),
+  resolve(root, 'dashboard/dashboard.js')
+];
+const reachable = new Set();
+const pending = [...graphRoots];
+while (pending.length) {
+  const file = resolve(pending.pop());
+  if (reachable.has(file) || !productionFiles.has(file)) continue;
+  reachable.add(file);
+  const source = await readFile(file, 'utf8');
+  for (const specifier of relativeImportSpecifiers(source)) {
+    const target = resolve(dirname(file), specifier);
+    const normalized = /\.(?:js|mjs)$/.test(target) ? target : `${target}.js`;
+    if (productionFiles.has(normalized) && !reachable.has(normalized)) pending.push(normalized);
+  }
+}
+const unreachable = [...productionFiles]
+  .filter(file => !reachable.has(file))
+  .map(file => relative(root, file));
+if (unreachable.length) {
+  throw new Error(`Unreachable production JavaScript modules: ${unreachable.join(', ')}`);
+}
+
+console.log(`Extension validation passed: ${files.length} JavaScript files, ${required.length} required runtime surfaces, and ${reachable.size} reachable production modules checked.`);

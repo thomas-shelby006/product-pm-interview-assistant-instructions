@@ -44,3 +44,8 @@ Last updated: 2026-08-01
 - Do not persist Resume, JD, notes, prompts, answers, transcript logs, or session IDs to disk-backed runtime storage.
 - Do not push real interview evidence during candidate verification.
 - Preserve rollback files, original checkout, unrelated Edge windows, and the private tracker unless an explicit push is requested.
+
+
+## 2026-08-01 lossless hardening candidate
+
+Implementation Cycles 11-20 are source-complete. The candidate now includes per-session mutation serialization, contiguous receiver sequencing, ordered sender replay, exact batch proof identity, quota backpressure, Readiness Gate, delta updates, explicit recovery state, and Safe Health Report. Automated and isolated-browser evidence is pending the consolidated Cycle 20 gate and must not be inferred from source completion.

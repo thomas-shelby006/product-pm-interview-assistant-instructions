@@ -178,3 +178,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_R
 Manual release checks should cover applicable provider combinations, dashboard connect/reconnect, one-at-a-time delivery, accumulation during generation, latest-focused multi-question submission, duplicate suppression, pause/catch-up, selected submission, hold, submit-now, explicit interrupt, context resend, repair, layouts, export, full three-window shutdown, receiver reload and a long-session soak.
 
 The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.7.0 runtime.
+
+
+## New live safety surfaces
+
+The Runtime Pilot now includes grouped diagnostics, Operation Guard, Gap Watch, Sender Outbox Retry, Batch Proof Inspector, Memory Guard, Interview Readiness, Runtime Efficiency, and Recovery Progress.
+
+Before an interview, the Readiness Gate must show **Ready**. A merely open tab is not sufficient. During operation:
+
+- Gap Watch means later finals are protected while a missing sequence is recovered.
+- Sender Outbox means Window 1 still owns one or more finals pending durable acknowledgement.
+- Memory Guard never compacts unresolved final text; Compact Proven affects transient/proven history only.
+- Recovery remains Repairing until all six semantic checks pass.
+- `G` copies a Safe Health Report. `D` retains the lower-level safe diagnostics export.

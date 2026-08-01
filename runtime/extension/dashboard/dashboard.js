@@ -19,6 +19,7 @@ import { deriveMemoryGuard } from './memory-guard-model.js';
 import { deriveReadiness } from './readiness-model.js';
 import { applySnapshotDelta } from '../shared/snapshot-delta.js';
 import { deriveRecoveryProgress } from './recovery-progress-model.js';
+import { buildSafeHealthReport } from './health-report-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -820,6 +821,16 @@ byId('timelineFilter').addEventListener('change', event => {
   renderTimeline(state.snapshot);
 });
 timelineViewport.addEventListener('scroll', () => renderTimeline(state.snapshot), { passive: true });
+byId('copyHealthReport').addEventListener('click', async () => {
+  const report = JSON.stringify(buildSafeHealthReport(state.snapshot, Date.now(), state.efficiency), null, 2);
+  try {
+    await navigator.clipboard.writeText(report);
+    showToast('Safe health report copied.', 'ok');
+  } catch {
+    showToast('Clipboard write failed.', 'error');
+  }
+});
+
 byId('copyDiagnostics').addEventListener('click', async () => {
   const diagnostics = JSON.stringify(buildDiagnostics(state.snapshot), null, 2);
   try {
@@ -854,6 +865,7 @@ document.addEventListener('keydown', event => {
   else if (key === 'n') void runKeyboardCommand('submit_now');
   else if (key === 'i') void runKeyboardCommand('interrupt_latest');
   else if (key === 'c') byId('copyLatest').click();
+  else if (key === 'g') byId('copyHealthReport').click();
   else if (key === 'd') byId('copyDiagnostics').click();
 });
 

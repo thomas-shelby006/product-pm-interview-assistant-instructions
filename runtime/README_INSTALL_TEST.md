@@ -149,3 +149,16 @@ For material browser claims, use an isolated Edge profile with synthetic context
 - `registration_recovered`: a missing/unresponsive prior owner was safely replaced.
 
 Use **Check Live** first. Use **Fast Repair** when a role is missing or not ready. Use extension settings only when Profile Doctor reports a path, version, or registration problem.
+
+
+## New live safety surfaces
+
+The Runtime Pilot now includes grouped diagnostics, Operation Guard, Gap Watch, Sender Outbox Retry, Batch Proof Inspector, Memory Guard, Interview Readiness, Runtime Efficiency, and Recovery Progress.
+
+Before an interview, the Readiness Gate must show **Ready**. A merely open tab is not sufficient. During operation:
+
+- Gap Watch means later finals are protected while a missing sequence is recovered.
+- Sender Outbox means Window 1 still owns one or more finals pending durable acknowledgement.
+- Memory Guard never compacts unresolved final text; Compact Proven affects transient/proven history only.
+- Recovery remains Repairing until all six semantic checks pass.
+- `G` copies a Safe Health Report. `D` retains the lower-level safe diagnostics export.

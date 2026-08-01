@@ -49,14 +49,14 @@ The per-cycle feature additions are: verification diagnostics, operation activit
 
 **Produces:** A syntactically valid test suite whose assertions describe ledger, batch, archive, and current receiver semantics.
 
-- [ ] Replace malformed string literals in `validation.test.js` with `join('\n')`.
-- [ ] Replace deleted discard/supersede control assertions with `archiveSelected`, `archiveProven`, and `archiveAll` confirmations.
-- [ ] Assert warning codes separately from warning label rendering.
-- [ ] Update release documentation assertions to current Runtime Pilot terminology.
-- [ ] Replace legacy stop-generation and direct-provider-delivery sequence assertions with batch-runtime admission and explicit interrupt-only assertions.
-- [ ] Fix burst fixtures so each persisted final uses the current ledger schema and proof path.
-- [ ] Source-review all edits without executing tests.
-- [ ] Commit as `test: align release gate with lossless runtime`.
+- [x] Replace malformed string literals in `validation.test.js` with `join('\n')`.
+- [x] Replace deleted discard/supersede control assertions with `archiveSelected`, `archiveProven`, and `archiveAll` confirmations.
+- [x] Assert warning codes separately from warning label rendering.
+- [x] Update release documentation assertions to current Runtime Pilot terminology.
+- [x] Replace legacy stop-generation and direct-provider-delivery sequence assertions with batch-runtime admission and explicit interrupt-only assertions.
+- [x] Fix burst fixtures so each persisted final uses the current ledger schema and proof path.
+- [x] Source-review all edits without executing tests.
+- [x] Commit as `test: align release gate with lossless runtime`.
 
 ### Task 12: Serialize per-session mutations
 
@@ -70,12 +70,12 @@ The per-cycle feature additions are: verification diagnostics, operation activit
 **Interfaces:**
 - Produces: `createSessionMutationCoordinator()` with `run(sessionId, operation)` and `pending(sessionId)`.
 
-- [ ] Write tests for same-session FIFO ordering, cross-session concurrency, rejection recovery, and no stale outer-state overwrite.
-- [ ] Implement a keyed promise tail that removes settled lanes.
-- [ ] Route controller commands, telemetry transitions, reconciliation, and end-session cleanup through one session lane.
-- [ ] Ensure one command loads registry/state once and commits once.
-- [ ] Source-review for nested coordinator deadlocks.
-- [ ] Commit as `fix: serialize session state mutations`.
+- [x] Write tests for same-session FIFO ordering, cross-session concurrency, rejection recovery, and no stale outer-state overwrite.
+- [x] Implement a keyed promise tail that removes settled lanes.
+- [x] Route controller commands, telemetry transitions, reconciliation, and end-session cleanup through one session lane.
+- [x] Ensure one command loads registry/state once and commits once.
+- [x] Source-review for nested coordinator deadlocks.
+- [x] Commit as `fix: serialize session state mutations`.
 
 ### Task 13: Admit receiver sequences contiguously
 
@@ -90,12 +90,12 @@ The per-cycle feature additions are: verification diagnostics, operation activit
 **Interfaces:**
 - Produces: `createContiguousSequenceBuffer({ lastAcceptedSeq, maxBuffered, gapTimeoutMs })` with `offer(envelope)`, `drain()`, `snapshot()`, and `restore(snapshot)`.
 
-- [ ] Write tests for in-order delivery, duplicate acknowledgement, 3-before-2 buffering, gap refill, bounded buffer rejection without deletion, and restart restore.
-- [ ] Admit only the next expected sequence to the batch runtime.
-- [ ] Keep higher sequences in the safe checkpoint and request ledger refill after gap timeout.
-- [ ] Return explicit `buffered_gap` and `duplicate_ack` outcomes.
-- [ ] Source-review that no buffered final is archived or discarded.
-- [ ] Commit as `fix: preserve out-of-order receiver finals`.
+- [x] Write tests for in-order delivery, duplicate acknowledgement, 3-before-2 buffering, gap refill, bounded buffer rejection without deletion, and restart restore.
+- [x] Admit only the next expected sequence to the batch runtime.
+- [x] Keep higher sequences in the safe checkpoint and request ledger refill after gap timeout.
+- [x] Return explicit `buffered_gap` and `duplicate_ack` outcomes.
+- [x] Source-review that no buffered final is archived or discarded.
+- [x] Commit as `fix: preserve out-of-order receiver finals`.
 
 ### Task 14: Harden sender outbox replay
 
@@ -109,12 +109,12 @@ The per-cycle feature additions are: verification diagnostics, operation activit
 **Interfaces:**
 - Produces: ordered `replayPending()` and capped `nextRetryDelay(attempt, random)` behavior.
 
-- [ ] Write tests for persisted acknowledgement removal, receiver-only failure retention, reload restoration, sequence-order replay, capped jitter, and immediate reset after healthy port acknowledgement.
-- [ ] Separate service-worker persistence acknowledgement from receiver proof.
-- [ ] Replay only unpersisted entries; never duplicate persisted ledger ownership.
-- [ ] Add one timer per outbox, not one timer per final.
-- [ ] Source-review sessionStorage keys and cleanup.
-- [ ] Commit as `fix: harden sender outbox replay`.
+- [x] Write tests for persisted acknowledgement removal, receiver-only failure retention, reload restoration, sequence-order replay, capped jitter, and immediate reset after healthy port acknowledgement.
+- [x] Separate service-worker persistence acknowledgement from receiver proof.
+- [x] Replay only unpersisted entries; never duplicate persisted ledger ownership.
+- [x] Add one timer per outbox, not one timer per final.
+- [x] Source-review sessionStorage keys and cleanup.
+- [x] Commit as `fix: harden sender outbox replay`.
 
 ### Task 15: Make batch proof idempotent
 
@@ -130,12 +130,12 @@ The per-cycle feature additions are: verification diagnostics, operation activit
 **Interfaces:**
 - Produces: stable batch fingerprint, member-set equality, and repeatable `markBatchProven(batchId, proof)`.
 
-- [ ] Write tests for duplicate stage, duplicate submit callback, duplicate rendered proof, reordered member arrays, partial proof rejection, and replay after reload.
-- [ ] Freeze active batch membership and fingerprint before composer submission.
-- [ ] Treat repeated matching proof as success without incrementing metrics twice.
-- [ ] Reject mismatched or partial proof while preserving all members unresolved.
-- [ ] Source-review that proof closes only verified rendered members.
-- [ ] Commit as `fix: make receiver batch proof idempotent`.
+- [x] Write tests for duplicate stage, duplicate submit callback, duplicate rendered proof, reordered member arrays, partial proof rejection, and replay after reload.
+- [x] Freeze active batch membership and fingerprint before composer submission.
+- [x] Treat repeated matching proof as success without incrementing metrics twice.
+- [x] Reject mismatched or partial proof while preserving all members unresolved.
+- [x] Source-review that proof closes only verified rendered members.
+- [x] Commit as `fix: make receiver batch proof idempotent`.
 
 ### Task 16: Add quota-aware backpressure
 
@@ -150,12 +150,12 @@ The per-cycle feature additions are: verification diagnostics, operation activit
 **Interfaces:**
 - Produces: `classifyStorageUsage(usage)` and `buildCompactionPlan(state, targetBytes)`.
 
-- [ ] Write tests for normal/warn/high/critical classification, safe compaction order, actionable-text protection, and acknowledgement withholding at critical pressure.
-- [ ] Measure registry, actionable ledger, proven detail, telemetry, and snapshots separately.
-- [ ] Compact expired telemetry, redundant snapshots, then proven detail; never actionable entries.
-- [ ] Return `persisted: false, error: 'storage_pressure'` when the safety write cannot complete.
-- [ ] Source-review that sender outbox remains owner on failed persistence.
-- [ ] Commit as `fix: protect lossless delivery under storage pressure`.
+- [x] Write tests for normal/warn/high/critical classification, safe compaction order, actionable-text protection, and acknowledgement withholding at critical pressure.
+- [x] Measure registry, actionable ledger, proven detail, telemetry, and snapshots separately.
+- [x] Compact expired telemetry, redundant snapshots, then proven detail; never actionable entries.
+- [x] Return `persisted: false, error: 'storage_pressure'` when the safety write cannot complete.
+- [x] Source-review that sender outbox remains owner on failed persistence.
+- [x] Commit as `fix: protect lossless delivery under storage pressure`.
 
 ### Task 17: Add the Pilot Readiness Gate
 
@@ -170,12 +170,12 @@ The per-cycle feature additions are: verification diagnostics, operation activit
 **Interfaces:**
 - Produces: `deriveReadiness(snapshot, now)` returning `{ state, label, blockers, actions }`.
 
-- [ ] Write tests for ready, sender missing, receiver stale, adapter incomplete, context unarmed, storage critical, repairing, and disconnected states.
-- [ ] Render one decisive Ready / Not ready / Repairing card with exact blockers.
-- [ ] Link blockers to existing Check Live and Repair commands without new provider focus operations.
-- [ ] Add `aria-live` status and keyboard-safe focus order.
-- [ ] Source-review narrow-window overflow and destructive-action confirmations.
-- [ ] Commit as `feat: add interview readiness gate`.
+- [x] Write tests for ready, sender missing, receiver stale, adapter incomplete, context unarmed, storage critical, repairing, and disconnected states.
+- [x] Render one decisive Ready / Not ready / Repairing card with exact blockers.
+- [x] Link blockers to existing Check Live and Repair commands without new provider focus operations.
+- [x] Add `aria-live` status and keyboard-safe focus order.
+- [x] Source-review narrow-window overflow and destructive-action confirmations.
+- [x] Commit as `feat: add interview readiness gate`.
 
 ### Task 18: Reduce steady-state work
 
@@ -190,12 +190,12 @@ The per-cycle feature additions are: verification diagnostics, operation activit
 **Interfaces:**
 - Produces: `buildSnapshotDelta(previous, next)` and `applySnapshotDelta(current, delta)`.
 
-- [ ] Write tests for heartbeat-only coalescing, semantic-change delivery, batch checkpoint change, timeline append, and delta round-trip.
-- [ ] Broadcast deltas after the initial full snapshot.
-- [ ] Persist semantic changes immediately and transient heartbeats on the existing coalesced schedule.
-- [ ] Skip dashboard rerenders for unchanged sections.
-- [ ] Source-review for dropped warnings or stale readiness state.
-- [ ] Commit as `perf: reduce steady-state Pilot work`.
+- [x] Write tests for heartbeat-only coalescing, semantic-change delivery, batch checkpoint change, timeline append, and delta round-trip.
+- [x] Broadcast deltas after the initial full snapshot.
+- [x] Persist semantic changes immediately and transient heartbeats on the existing coalesced schedule.
+- [x] Skip dashboard rerenders for unchanged sections.
+- [x] Source-review for dropped warnings or stale readiness state.
+- [x] Commit as `perf: reduce steady-state Pilot work`.
 
 ### Task 19: Harden recovery state transitions
 
@@ -210,12 +210,12 @@ The per-cycle feature additions are: verification diagnostics, operation activit
 **Interfaces:**
 - Produces: `transitionRecovery(state, event, now)` with explicit `healthy`, `degraded`, `repairing`, and `blocked` phases.
 
-- [ ] Write tests for role disconnect, repair request, one-role recovery, full recovery, repeated failure, storage block, and timeout.
-- [ ] Keep Repairing until both roles, adapters, ledger reconciliation, and batch checkpoint are healthy.
-- [ ] Prevent heartbeat-only telemetry from clearing a semantic blocker.
-- [ ] Emit one recovery timeline transition per phase change.
-- [ ] Source-review that repair never focuses provider tabs.
-- [ ] Commit as `fix: make runtime recovery state explicit`.
+- [x] Write tests for role disconnect, repair request, one-role recovery, full recovery, repeated failure, storage block, and timeout.
+- [x] Keep Repairing until both roles, adapters, ledger reconciliation, and batch checkpoint are healthy.
+- [x] Prevent heartbeat-only telemetry from clearing a semantic blocker.
+- [x] Emit one recovery timeline transition per phase change.
+- [x] Source-review that repair never focuses provider tabs.
+- [x] Commit as `fix: make runtime recovery state explicit`.
 
 ### Task 20: Release hardening and consolidated verification
 

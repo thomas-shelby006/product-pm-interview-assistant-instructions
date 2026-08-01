@@ -142,3 +142,18 @@ Review Studio detects exactly one complete READY pair, requests both role export
 ## Verification contract
 
 Automated verification must run the complete Node suite, JavaScript validator, and silent validation of both active AutoHotkey programs from the exact worktree. Browser evidence is required before claiming real-provider rendering, focus behavior, downloads, storage behavior, or action timing. Use synthetic interview content for release checks and preserve unrelated browser state.
+
+
+## Lossless runtime hardening: Cycles 11-20
+
+The current 0.7 candidate adds a second ten-cycle hardening pass organized into Bug fixes, New features, and Implementation work in every cycle.
+
+- Per-session mutation lanes prevent stale Pilot snapshots from overwriting newer state while preserving cross-session concurrency.
+- Gap Watch protects out-of-order finals until missing sequences arrive and exposes the exact missing sequence.
+- Sender Outbox Retry provides ordered replay with one capped-backoff timer and a safe Retry Now action.
+- Batch Proof Inspector validates the exact frozen member set and treats repeated proof idempotently.
+- Memory Guard separates protected actionable bytes from safe reclaimable telemetry/proven history and withholds persistence acknowledgement under critical pressure.
+- Interview Readiness Gate requires positive sender, receiver, context, adapter, heartbeat, storage, gap, and outbox evidence.
+- Runtime Efficiency streams semantic deltas and heartbeat patches instead of repeated full snapshots.
+- Recovery Progress requires roles, adapters, reconciliation, batch safety, and storage checks before returning to Active.
+- Safe Health Report copies only operational metadata; it excludes setup context, questions, answers, and ledger text.

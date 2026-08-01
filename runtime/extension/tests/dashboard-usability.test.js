@@ -169,3 +169,9 @@ test('Pilot exposes semantic Recovery Progress rather than a binary repair flag'
   assert.match(markup, /class="live-panel recovery-panel"/);
   assert.match(markup, /id="recoveryChecks"/);
 });
+
+
+test('Pilot exposes a one-click Safe Health Report separate from diagnostics', () => {
+  assert.match(markup, /id="copyHealthReport"/);
+  assert.match(markup, /Copy health report/);
+});
