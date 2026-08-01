@@ -205,3 +205,11 @@ test('Runtime Pilot exposes protected batch partition plan', () => {
   assert.match(markup, /id="batchPlanDetail"/);
   assert.match(dashboard, /deriveBatchPlan\(snapshot\)/);
 });
+
+
+test('Runtime Pilot exposes explicit receiver draft conflict resolutions', () => {
+  assert.match(markup, /data-command="resolve_draft_keep_manual"/);
+  assert.match(markup, /data-command="resolve_draft_restore_pmia"/);
+  assert.match(markup, /data-command="resolve_draft_merge"/);
+  assert.match(dashboard, /deriveDraftConflict\(snapshot\)/);
+});

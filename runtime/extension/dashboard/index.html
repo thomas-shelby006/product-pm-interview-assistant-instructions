@@ -157,6 +157,17 @@
             <strong id="batchPlanTitle">Nothing waiting</strong>
             <p id="batchPlanDetail">Accumulated finals will be partitioned only when provider limits require it.</p>
           </article>
+
+          <article class="live-panel draft-conflict-panel" hidden>
+            <div class="panel-title"><span class="eyebrow">Draft conflict</span><b id="draftConflictState">Action required</b></div>
+            <strong id="draftConflictTitle">Manual text differs from the PMIA draft</strong>
+            <p id="draftConflictDetail">Choose how Window 2 should preserve the manual text and protected PMIA batch.</p>
+            <div class="draft-conflict-actions">
+              <button data-command="resolve_draft_keep_manual">Keep manual</button>
+              <button data-command="resolve_draft_restore_pmia">Restore PMIA draft</button>
+              <button data-command="resolve_draft_merge">Merge PMIA below manual</button>
+            </div>
+          </article>
         </section>
 
         <section class="latency-section" aria-labelledby="latencyTitle">

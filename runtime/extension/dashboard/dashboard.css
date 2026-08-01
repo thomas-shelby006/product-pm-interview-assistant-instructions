@@ -238,3 +238,7 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 .transport-lane-list span { display: grid; grid-template-columns: auto 1fr; gap: .25rem .6rem; align-items: baseline; }
 .transport-lane-list strong { justify-self: end; }
 .transport-lane-list small { grid-column: 1 / -1; color: var(--muted); }
+
+.draft-conflict-panel[data-state="unresolved"] { border-color: color-mix(in srgb, var(--amber) 65%, var(--line)); }
+.draft-conflict-actions { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .7rem; }
+.draft-conflict-actions button { flex: 1 1 9rem; }

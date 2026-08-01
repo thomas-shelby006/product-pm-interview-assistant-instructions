@@ -546,7 +546,7 @@ async function startRuntime(runtimeConfig) {
         const batchEnvelope = {
           ...latest,
           id: batch.id,
-          text: batch.prompt.text,
+          text: batch.submissionText || batch.prompt.text,
           metadata: {
             ...(latest.metadata || {}),
             batchId: batch.id,
@@ -777,6 +777,15 @@ async function startRuntime(runtimeConfig) {
       case 'interrupt_latest':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.interruptLatest();
+      case 'resolve_draft_keep_manual':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.resolveDraftConflict('keep_manual');
+      case 'resolve_draft_restore_pmia':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.resolveDraftConflict('restore_pmia');
+      case 'resolve_draft_merge':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.resolveDraftConflict('merge');
       case 'recover': {
         const scheduled = runtimeRecovery?.trigger('dashboard_repair') || false;
         senderObserver?.refresh();

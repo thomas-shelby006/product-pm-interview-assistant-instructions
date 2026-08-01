@@ -453,7 +453,13 @@ export class RuntimePilotState {
       session.batchState.active = null;
       session.batchState.next = { memberIds, questionCount: memberIds.length, written: true };
     } else if (type === 'draft_conflict') {
-      session.batchState.draftConflict = { owner: String(event.owner || 'unknown'), at: now };
+      session.batchState.draftConflict = { owner: String(event.owner || 'unknown'), state: 'unresolved', at: now };
+    } else if (type === 'draft_conflict_resolved') {
+      session.batchState.draftConflict = {
+        owner: String(event.owner || 'unknown'),
+        state: String(event.action || 'resolved'),
+        at: now
+      };
     } else if (type === 'batch_policy_changed') {
       if ('hold' in event) session.batchState.hold = Boolean(event.hold);
       if ('autoSubmit' in event) session.batchState.autoSubmit = Boolean(event.autoSubmit);
@@ -612,7 +618,9 @@ export class RuntimePilotState {
         ageMs: now - oldestPersistedAt
       });
     }
-    if (session.batchState.draftConflict) warnings.push({ code: 'receiver_draft_conflict', severity: 'warn' });
+    if (['unresolved', 'keep_manual'].includes(session.batchState.draftConflict?.state)) {
+      warnings.push({ code: 'receiver_draft_conflict', severity: 'warn' });
+    }
     if (session.storagePressure?.level === 'critical') warnings.push({ code: 'session_storage_critical', severity: 'error', percent: session.storagePressure.percent });
     else if (session.storagePressure?.level === 'high') warnings.push({ code: 'session_storage_high', severity: 'warn', percent: session.storagePressure.percent });
     else if (session.storagePressure?.level === 'elevated') warnings.push({ code: 'session_storage_elevated', severity: 'warn', percent: session.storagePressure.percent });

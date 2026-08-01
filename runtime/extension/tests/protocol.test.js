@@ -238,3 +238,10 @@ test('runtime lease migration can be denied for an inactive duplicate tab', () =
   assert.equal(duplicate.conflict, true);
   assert.equal(registry.getSession('s1').sender.tabId, 5);
 });
+
+
+test('dashboard protocol accepts explicit draft conflict resolution commands', () => {
+  for (const command of ['resolve_draft_keep_manual', 'resolve_draft_restore_pmia', 'resolve_draft_merge']) {
+    assert.equal(protocolModule.normalizeDashboardCommand({ sessionId: 's', requestId: command, command, payload: {} })?.command, command);
+  }
+});

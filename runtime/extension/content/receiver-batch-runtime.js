@@ -74,7 +74,10 @@ export function createReceiverBatchRuntime({
     });
     let result;
     try {
-      result = await submitBatch(batch);
+      result = await submitBatch({
+        ...batch,
+        submissionText: draftArbiter?.submissionTextFor?.(batch.prompt.text) || batch.prompt.text
+      });
     } catch (error) {
       result = { ok: false, error: String(error?.message || error) };
     } finally {
@@ -263,6 +266,20 @@ export function createReceiverBatchRuntime({
         preservedNextIds: planner.next().entries.map(entry => String(entry.id))
       });
       return executeBatch(selected.batch, 'operator_interrupt_latest');
+    },
+
+    async resolveDraftConflict(action) {
+      const resolved = draftArbiter?.resolveConflict?.(action) || { ok: false, error: 'draft_arbiter_unavailable' };
+      if (!resolved.ok) return resolved;
+      emit('draft_conflict_resolved', {
+        action: String(action || ''),
+        owner: String(resolved.owner || '')
+      });
+      if (action === 'keep_manual') return { ...resolved, staged: true, reason: 'manual_draft_kept' };
+      if (action === 'restore_pmia' && planner.nextSize) {
+        draftArbiter?.writeBatch?.(planner.next().prompt.text);
+      }
+      return submitNext({ force: true });
     },
 
     mirrorNext,

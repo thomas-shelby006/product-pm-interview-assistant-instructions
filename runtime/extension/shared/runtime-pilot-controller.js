@@ -863,6 +863,13 @@ export function createRuntimePilotController({
           source: 'dashboard'
         });
         break;
+      case 'resolve_draft_keep_manual':
+      case 'resolve_draft_restore_pmia':
+      case 'resolve_draft_merge':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', command.command, {
+          source: 'dashboard'
+        });
+        break;
       case 'archive_selected': {
         const archived = pilot.archiveLedgerItem(sessionId, payload.queueItemId);
         result = {

@@ -22,6 +22,7 @@ import { deriveRecoveryProgress } from './recovery-progress-model.js';
 import { buildSafeHealthReport } from './health-report-model.js';
 import { deriveTransportLanes } from './transport-lane-model.js';
 import { deriveBatchPlan } from './batch-plan-model.js';
+import { deriveDraftConflict } from './draft-conflict-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -347,6 +348,7 @@ function renderLiveCommandCenter(snapshot, now) {
     text('batchPlanState', '--');
     text('batchPlanTitle', 'Waiting for protected batch state');
     text('batchPlanDetail', 'No partition plan is available yet.');
+    document.querySelector('.draft-conflict-panel')?.setAttribute('hidden', '');
     text('oldestInboxAge', '--');
     renderLatencyRail(null);
     return;
@@ -454,6 +456,24 @@ function renderLiveCommandCenter(snapshot, now) {
       : inbox.storage.level === 'high'
         ? 'Proven history is compacting; unresolved finals are untouched.'
         : 'Critical pressure. Unresolved finals remain protected; export or end the session soon.');
+  const draftConflict = deriveDraftConflict(snapshot);
+  const conflictPanel = document.querySelector('.draft-conflict-panel');
+  if (conflictPanel) {
+    conflictPanel.hidden = !draftConflict.visible;
+    conflictPanel.dataset.state = draftConflict.state;
+  }
+  text('draftConflictState', draftConflict.label);
+  text('draftConflictTitle', draftConflict.state === 'keep_manual'
+    ? 'Manual draft retained; protected questions remain queued.'
+    : draftConflict.state === 'restore_pmia'
+      ? 'Protected PMIA draft restored.'
+      : draftConflict.state === 'merge'
+        ? 'Manual prefix and protected PMIA draft merged.'
+        : 'Manual text differs from the PMIA draft');
+  text('draftConflictDetail', draftConflict.state === 'unresolved'
+    ? 'Choose how Window 2 should preserve the manual text and protected PMIA batch.'
+    : 'The resolution is recorded. Lossless batch membership remains unchanged.');
+
   const batchPlan = deriveBatchPlan(snapshot);
   text('batchPlanState', batchPlan.partitionCount ? `${batchPlan.partitionCount} batch${batchPlan.partitionCount === 1 ? '' : 'es'}` : 'No batches');
   text('batchPlanTitle', batchPlan.protectedCount
