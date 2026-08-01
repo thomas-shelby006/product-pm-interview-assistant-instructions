@@ -52,6 +52,10 @@ import { advanceRunbook, cancelRunbook, startRunbook } from './stabilization-run
 import { filterOperationalEvents } from './operational-event-filter.js';
 import { derivePerformanceHealth } from './performance-health.js';
 import { deriveLiveUxMemoryBudget } from './live-ux-memory-budget.js';
+import { auditLiveCommandIntegrity, repairLiveCommandMetadata } from './live-command-integrity.js';
+import { buildRestartContinuity } from './restart-continuity.js';
+import { monotonicElapsed, normalizeMonotonicClock } from './monotonic-session-clock.js';
+import { restoreManagedLayout } from './layout-restoration.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -310,6 +314,13 @@ export function createRuntimePilotController({
         performanceHealth: derivePerformanceHealth(enrichedBase)
       },
       liveUxBudget: deriveLiveUxMemoryBudget(enrichedBase),
+      liveCommandIntegrity: auditLiveCommandIntegrity(enrichedBase, Date.now()),
+      restartContinuity: buildRestartContinuity(enrichedBase, Date.now()),
+      monotonicClock: {
+        ...normalizeMonotonicClock(enrichedBase.liveSession?.monotonicClock || {}, Date.now(), globalThis.performance?.now?.() || 0),
+        elapsedMs: monotonicElapsed(enrichedBase.liveSession?.monotonicClock || {}, globalThis.performance?.now?.() || 0)
+      },
+      restoredLayoutPreview: restoreManagedLayout(enrichedBase.layout || {}, [{ left: 0, top: 0, width: 1920, height: 1080 }]),
       performanceBudget: {
         ...(snapshotBase.performanceBudget || {}),
         cacheHits: localPerformance.cacheHits,

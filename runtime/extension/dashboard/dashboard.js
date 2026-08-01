@@ -52,6 +52,9 @@ import { virtualItems } from './virtual-list-model.js';
 import { createRenderScheduler } from './render-scheduler.js';
 import { createIdleWorkCoordinator } from './idle-work-coordinator.js';
 import { explainTrace } from '../shared/trace-explanation.js';
+import { auditShortcutConflicts } from '../shared/shortcut-conflict-model.js';
+import { auditDashboardAccessibility } from './accessibility-audit.js';
+import { buildVisualPreferenceProof } from './visual-preference-proof.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -1236,6 +1239,12 @@ function renderMechanics(snapshot) {
   byId('transportDrillReport').textContent = snapshot?.lastTransportDrill
     ? JSON.stringify(snapshot.lastTransportDrill, null, 2)
     : 'No drill has been run.';
+
+  const shortcutAudit = auditShortcutConflicts(snapshot?.uiPreferences?.shortcutBindings || {});
+  const accessibilityAudit = auditDashboardAccessibility(document);
+  const visualProof = buildVisualPreferenceProof({ width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth, preferences: snapshot?.uiPreferences?.accessibility || {}, controlsVisible: document.querySelectorAll('button:not([hidden])').length, dialogs: document.querySelectorAll('[role="dialog"],dialog').length });
+  text('liveIntegrityState', humanizeCode(snapshot?.liveCommandIntegrity?.state || 'unknown'));
+  text('liveIntegrityDetail', `${snapshot?.liveCommandIntegrity?.issues?.length || 0} metadata issue(s) ? ${shortcutAudit.issues.length} shortcut conflict(s) ? ${accessibilityAudit.issues.length} accessibility issue(s) ? ${visualProof.reflow ? 'reflow clear' : `${visualProof.overflowPx}px overflow`}.`);
 
   const uxBudget = snapshot?.liveUxBudget || {};
   text('liveUxBudgetState', humanizeCode(uxBudget.state || 'unknown'));

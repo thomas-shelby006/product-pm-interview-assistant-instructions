@@ -60,6 +60,12 @@ export function buildSafeSupportBundle(snapshot = {}, { manifest = {}, sourceHas
       consistency: snapshot.consistencyAudit ? { ok: snapshot.consistencyAudit.ok === true, reason: clean(snapshot.consistencyAudit.reason, 80), repairs: safeCodes(snapshot.consistencyAudit.repairs), blocked: safeCodes(snapshot.consistencyAudit.blocked) } : null
     },
     performance: snapshot.performanceBudget ? JSON.parse(JSON.stringify(snapshot.performanceBudget)) : null,
+    liveUx: {
+      budget: snapshot.liveUxBudget ? JSON.parse(JSON.stringify(snapshot.liveUxBudget)) : null,
+      integrity: snapshot.liveCommandIntegrity ? { ok: snapshot.liveCommandIntegrity.ok === true, state: clean(snapshot.liveCommandIntegrity.state, 40), issues: safeCodes(snapshot.liveCommandIntegrity.issues) } : null,
+      restart: snapshot.restartContinuity ? JSON.parse(JSON.stringify(snapshot.restartContinuity)) : null,
+      accessibility: snapshot.accessibilityProof ? JSON.parse(JSON.stringify(snapshot.accessibilityProof)) : null
+    },
     drill: snapshot.lastTransportDrill ? { ok: snapshot.lastTransportDrill.ok === true, elapsedMs: Math.max(0, Number(snapshot.lastTransportDrill.elapsedMs) || 0), contentAccessed: snapshot.lastTransportDrill.contentAccessed === true, checks: (snapshot.lastTransportDrill.checks || []).map(check => ({ name: clean(check.name, 80), ok: check.ok === true, error: clean(check.error, 120), durationMs: Math.max(0, Number(check.durationMs) || 0) })) } : null,
     sourceHashes: Object.fromEntries(Object.entries(sourceHashes || {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [clean(key, 200), clean(value, 128)]))
   };

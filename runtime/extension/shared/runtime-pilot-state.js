@@ -477,6 +477,18 @@ export class RuntimePilotState {
 
 
 
+
+  repairLiveCommandMetadata(sessionId, repaired = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    if (repaired.metadata && typeof repaired.metadata === 'object') session.questionOperations.metadata = JSON.parse(JSON.stringify(repaired.metadata));
+    if (Array.isArray(repaired.undoJournal)) session.questionOperations.undoJournal = JSON.parse(JSON.stringify(repaired.undoJournal));
+    if (Array.isArray(repaired.markers)) session.operatorMarkers = JSON.parse(JSON.stringify(repaired.markers));
+    if (repaired.controls && typeof repaired.controls === 'object') session.incidentControls.controls = JSON.parse(JSON.stringify(repaired.controls));
+    session.updatedAt = now;
+    this.record(sessionId, 'live_command_metadata_repaired', { repairedAt: now }, now);
+    return { ok: true, repairedAt: now };
+  }
+
   setSloHistory(sessionId, history = [], now = Date.now()) {
     const session = this.ensure(sessionId, now);
     session.sloHistory = Array.isArray(history) ? history.slice(-120).map(value => ({ ...value })) : [];

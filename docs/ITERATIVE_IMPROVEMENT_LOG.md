@@ -977,3 +977,65 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** one budget model bounds presentation collections while the complete ledger remains authoritative.
 
 **Source-complete status:** Cycles 96–145 are implemented. The deferred Phase A executable gate is now required before hardening work proceeds.
+
+## Live UX hardening cycles 146–150
+
+- **146 — Focus-token integrity:** rejects replayed, expired, mismatched, or malformed focus gestures; exposes explicit reason codes.
+- **147 — Incident-control integrity:** detects controls whose incident no longer exists and repairs only metadata.
+- **148 — Marker integrity:** removes orphaned marker references without touching delivery entries.
+- **149 — Triage relationship integrity:** detects missing/self parent links and bounded expired undo records.
+- **150 — Unified live integrity:** one Pilot status audits metadata, shortcut, accessibility, layout, and reflow state with an explicit repair action.
+
+**Bug fixes:** stale metadata can no longer silently survive after ledger/incident changes.
+**New features:** Live Integrity status and metadata-only repair.
+**Implementation:** one pure audit/repair owner; ledger order, proof, and provider text remain untouched.
+
+## Live UX hardening cycles 151–155
+
+- **151 — Restart continuity envelope:** snapshots session, schema, generation, phase, ledger, outbox, gap, and recovery identity.
+- **152 — Generation continuity:** rejects owner-generation regression after worker restart.
+- **153 — Monotonic session clock:** elapsed time cannot move backward through suspension, pause, or reanchor.
+- **154 — Display-safe bounds restoration:** remembered geometry is clamped to the current display.
+- **155 — Non-focused layout restore:** restored windows remain non-focused until an explicit gesture token is consumed.
+
+**Bug fixes:** restart and display changes no longer create silent identity/time/layout regressions.
+**New features:** restart continuity and safe layout preview evidence.
+**Implementation:** metadata-only continuity models extend existing store and window owners.
+
+## Live UX hardening cycles 156–160
+
+- **156 — Shortcut conflict audit:** finds duplicate, reserved, and unsafe bindings across active commands.
+- **157 — Deterministic shortcut repair:** restores only conflicting bindings to known-safe defaults.
+- **158 — Accessibility source audit:** checks duplicate IDs, control/dialog labels, and polite/assertive regions.
+- **159 — Visual preference proof:** captures motion, text-scale, contrast, reflow, and visible-control evidence.
+- **160 — Responsive proof matrix:** requires desktop, 320px, 280px, and print evidence without horizontal overflow.
+
+**Bug fixes:** accessibility and responsive regressions become release blockers instead of visual guesses.
+**New features:** explicit accessibility/reflow evidence in release support data.
+**Implementation:** pure audit/proof models feed the existing Pilot and isolated smoke.
+
+## Live UX hardening cycles 161–165
+
+- **161 — Deterministic load scenario:** exercises 1,000 commands and 10,000 ledger items with a fixed seed.
+- **162 — Virtualization load proof:** verifies visible rows remain bounded under large sessions.
+- **163 — Render coalescing load proof:** merges one thousand semantic updates into one frame.
+- **164 — Idle-work load proof:** drains bounded noncritical tasks without leaving a second state owner.
+- **165 — Live-UX budget enforcement:** reports exact collection breaches while preserving the full ledger.
+
+**Bug fixes:** high-volume sessions cannot hide unbounded render/search/idle growth.
+**New features:** deterministic cockpit load report.
+**Implementation:** test-only load generation validates existing production budgets.
+
+## Live UX hardening cycles 166–170
+
+- **166 — Live fault matrix:** covers dashboard disconnect, port timeout, storage pressure, sequence gap, draft conflict, provider drift, and worker restart.
+- **167 — Deterministic fault cleanup:** stops at first failed observation and always runs scoped cleanup.
+- **168 — Restart-continuity scenario:** proves generation, unresolved ownership, outbox, and gap state across restart without content access.
+- **169 — Expanded browser evidence:** isolated smoke now captures desktop, 320px, 280px, and print accessibility/reflow proof.
+- **170 — Source-bound release evidence:** manifest generation rejects incomplete transport, UI, accessibility, isolation, or cleanup evidence.
+
+**Bug fixes:** release evidence can no longer pass with only delivery proof while cockpit accessibility or cleanup is broken.
+**New features:** content-free fault/restart evidence and four-view Pilot proof.
+**Implementation:** test-only matrices plus stricter deterministic evidence builder; normal-profile access remains forbidden.
+
+**Source-complete status:** Cycles 146–170 are implemented. Executable verification remains deferred until Cycles 171–195 are source-complete.

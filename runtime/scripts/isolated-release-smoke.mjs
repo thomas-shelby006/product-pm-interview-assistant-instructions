@@ -267,7 +267,10 @@ try {
         traceResultCount:document.querySelectorAll('[data-trace-id]').length,
         drillReportReady:(document.getElementById('transportDrillReport')?.textContent||'').includes('handshake'),
         forecastRisk:(document.getElementById('forecastRisk')?.textContent||'').trim(),
-        recoveryBudgetState:(document.getElementById('recoveryBudgetState')?.textContent||'').trim()
+        recoveryBudgetState:(document.getElementById('recoveryBudgetState')?.textContent||'').trim(),
+        accessibility:{polite:Boolean(document.querySelector('[aria-live="polite"]')),assertive:Boolean(document.querySelector('[aria-live="assertive"]')),shortcutDialog:Boolean(document.getElementById('shortcutHelpDialog'))},
+        liveIntegrity:Boolean(document.getElementById('liveUxBudgetState')),
+        crashResume:Boolean(document.getElementById('crashResumeCard'))
       });
     })()`);
     const value = JSON.parse(raw);
@@ -279,14 +282,21 @@ try {
 
   const desktopUi = await dashboardUiState(1200, 900, 'desktop');
   const mobileUi = await dashboardUiState(320, 900, '320px');
+  const tinyUi = await dashboardUiState(280, 900, '280px');
+  await dashboard.send('Emulation.setEmulatedMedia', { media: 'print' });
+  const printUi = await dashboardUiState(1200, 900, 'print');
+  await dashboard.send('Emulation.setEmulatedMedia', { media: 'screen' });
   await dashboard.send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 900, deviceScaleFactor: 1, mobile: false });
-  evidence.pilotUi = { desktop: desktopUi, mobile: mobileUi };
-  evidence.pilotUiOk = [desktopUi, mobileUi].every(value => (
+  evidence.pilotUi = { desktop: desktopUi, mobile: mobileUi, tiny: tinyUi, print: printUi };
+  evidence.pilotUiOk = [desktopUi, mobileUi, tinyUi, printUi].every(value => (
     !value.horizontalOverflow
     && value.reviewActive
     && Object.values(value.required).every(Boolean)
     && value.drillReportReady
     && value.traceResultCount >= 3
+    && value.accessibility.polite
+    && value.accessibility.assertive
+    && value.accessibility.shortcutDialog
   ));
 
   evidence.deliveryProofOk = proof.value.deliveryProofOk && evidence.outbox.count === 0 && evidence.gap.clear;
