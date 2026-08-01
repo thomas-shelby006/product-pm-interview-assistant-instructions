@@ -78,7 +78,7 @@
               <button class="primary" data-command="start_mock" id="startMockAction">Start mock</button>
               <button data-command="mark_interviewer_activity">Mark interviewer active</button>
               <button id="focusModeAction" data-command="set_focus_mode" aria-pressed="false">Enter Focus mode</button>
-              <button id="openCommandPalette" aria-haspopup="dialog">Commands <kbd>Ctrl K</kbd></button>
+              <button id="openCommandPalette" aria-haspopup="dialog">Commands <kbd>Ctrl K</kbd></button><button id="openShortcutHelp" aria-haspopup="dialog">Keyboard help <kbd>F1</kbd></button>
             </div>
           </div>
           <article class="attention-panel" data-severity="none" aria-live="polite">
@@ -458,6 +458,14 @@
             <button id="exportSupportBundle">Download support bundle</button>
             <p id="supportBundleStatus">No support bundle has been exported.</p>
           </article>
+          <article class="mechanics-card accessibility-card">
+            <div class="section-heading"><div><h3>Accessibility</h3><p>Session-scoped visual and announcement preferences.</p></div></div>
+            <div class="accessibility-controls accessibility-settings">
+              <label>Motion<select data-accessibility-name="reducedMotion"><option value="system">System</option><option value="on">Reduced</option><option value="off">Full motion</option></select></label>
+              <label>Text size<select data-accessibility-name="textScale"><option value="normal">Normal</option><option value="large">Large</option></select></label>
+              <label>Contrast<select data-accessibility-name="contrast"><option value="normal">Normal</option><option value="high">High</option></select></label>
+            </div>
+          </article>
         </section>
         <article class="trace-inspector">
           <div class="section-heading">
@@ -486,7 +494,7 @@
         <button data-command="restore_managed">Restore</button>
       </div>
       <div class="footer-actions">
-        <details class="shortcut-help"><summary>Keys</summary><p><b>Space</b> pause/resume - <b>L</b> catch up - <b>H</b> health - <b>R</b> repair - <b>E</b> export - <b>M</b> mic - <b>S</b> scroll - <b>N</b> submit now - <b>I</b> interrupt latest - <b>C</b> copy latest - <b>G</b> health report - <b>D</b> diagnostics</p></details>
+        <button id="openShortcutHelp">Keys & display</button>
         <button id="copyHealthReport">Copy health report</button>
         <button id="copyDiagnostics">Copy diagnostics</button>
         <button class="danger" id="endSessionAction">End session</button>
@@ -502,6 +510,21 @@
         <article id="commandPalettePreview" class="command-palette-preview"><strong>Select a command</strong><p>Availability and risk will appear here.</p></article>
       </div>
       <p class="command-palette-help">Arrow keys move. Enter runs the selected command. Escape closes and restores focus.</p>
+    </div>
+  </div>
+
+  <div class="shortcut-sheet" id="shortcutHelpDialog" hidden role="dialog" aria-modal="true" aria-labelledby="shortcutHelpTitle" tabindex="-1">
+    <div class="shortcut-card">
+      <div class="section-heading"><div><span class="eyebrow">Keyboard and accessibility</span><h2 id="shortcutHelpTitle">Keys & display</h2></div><button id="closeShortcutHelp">Close</button></div>
+      <p>Dashboard shortcuts are session-only. Provider-page hotkeys are unchanged.</p>
+      <div id="shortcutHelpGroups" class="shortcut-help-groups"></div>
+      <div class="shortcut-actions"><button id="resetShortcutBindings">Reset dashboard keys</button></div>
+      <fieldset class="accessibility-settings"><legend>Display preferences</legend>
+        <label>Motion<select id="reducedMotionPreference"><option value="system">Use system setting</option><option value="on">Reduce motion</option><option value="off">Allow motion</option></select></label>
+        <label>Text size<select id="textScalePreference"><option value="normal">Normal</option><option value="large">Large</option></select></label>
+        <label>Contrast<select id="contrastPreference"><option value="normal">Normal</option><option value="high">High contrast</option></select></label>
+      </fieldset>
+      <p id="shortcutPreferenceStatus" class="muted">Changes are stored only for this browser session.</p>
     </div>
   </div>
 
@@ -522,6 +545,8 @@
       </div>
     </div>
   </div>
+  <div id="screenReaderPolite" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="screenReaderAssertive" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="dashboard.js"></script>
 </body>

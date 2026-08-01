@@ -1474,6 +1474,15 @@ export function createRuntimePilotController({
       case 'set_focus_mode':
         result = { ok: true, liveSession: pilot.setFocusMode(sessionId, Boolean(payload.value)) };
         break;
+      case 'set_shortcut_binding':
+        result = pilot.setShortcutBinding(sessionId, payload.commandId, payload.chord);
+        break;
+      case 'reset_shortcut_bindings':
+        result = pilot.resetShortcutBindings(sessionId);
+        break;
+      case 'set_accessibility_preference':
+        result = pilot.setAccessibilityPreference(sessionId, payload.name, payload.value);
+        break;
       case 'acknowledge_incident':
         result = pilot.updateIncidentControl(sessionId, payload.incidentId, 'acknowledge');
         break;

@@ -11,6 +11,7 @@ import { updateIncidentControl } from './incident-center.js';
 import { addOperatorMarker, removeOperatorMarker } from './operator-markers.js';
 import { normalizeSessionCheckpoint } from './session-checkpoint.js';
 import { normalizeLayoutHistory, popLayoutHistory, pushLayoutHistory } from './layout-history.js';
+import { defaultShortcutBindings, normalizeShortcutBindings, setShortcutBinding } from './shortcut-bindings.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -140,6 +141,14 @@ function normalizeIncidentControls(value = {}) {
   return { controls: bounded, quietMode: Boolean(source.quietMode) };
 }
 
+function normalizeAccessibilityPreferences(value = {}) {
+  return {
+    reducedMotion: ['system','on','off'].includes(String(value.reducedMotion)) ? String(value.reducedMotion) : 'system',
+    textScale: ['normal','large'].includes(String(value.textScale)) ? String(value.textScale) : 'normal',
+    contrast: ['normal','high'].includes(String(value.contrast)) ? String(value.contrast) : 'normal'
+  };
+}
+
 function normalizeSession(item) {
   const sessionId = String(item?.sessionId || '').trim();
   if (!sessionId) return null;
@@ -217,7 +226,11 @@ function normalizeSession(item) {
     },
     incidentControls: normalizeIncidentControls(item.incidentControls || {}),
     operatorMarkers: Array.isArray(item.operatorMarkers) ? item.operatorMarkers.map(value => ({ ...value })).slice(-100) : [],
-    checkpoint: item.checkpoint && typeof item.checkpoint === 'object' ? normalizeSessionCheckpoint(item.checkpoint) : null
+    checkpoint: item.checkpoint && typeof item.checkpoint === 'object' ? normalizeSessionCheckpoint(item.checkpoint) : null,
+    uiPreferences: {
+      shortcutBindings: normalizeShortcutBindings(item.uiPreferences?.shortcutBindings || {}),
+      accessibility: normalizeAccessibilityPreferences(item.uiPreferences?.accessibility || {})
+    }
   };
 }
 
@@ -382,6 +395,35 @@ export class RuntimePilotState {
       reason: session.checkpoint.reason
     }, now);
     return session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null;
+  }
+
+  setShortcutBinding(sessionId, command, chord, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const result = setShortcutBinding(session.uiPreferences.shortcutBindings, command, chord);
+    if (!result.ok) return result;
+    session.uiPreferences.shortcutBindings = result.bindings;
+    session.updatedAt = now;
+    this.record(sessionId, 'shortcut_binding_changed', { command: result.command, chord: result.chord }, now);
+    return { ok: true, command: result.command, chord: result.chord, bindings: { ...result.bindings } };
+  }
+
+  resetShortcutBindings(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.uiPreferences.shortcutBindings = defaultShortcutBindings();
+    session.updatedAt = now;
+    this.record(sessionId, 'shortcut_bindings_reset', { count: Object.keys(session.uiPreferences.shortcutBindings).length }, now);
+    return { ok: true, bindings: { ...session.uiPreferences.shortcutBindings } };
+  }
+
+  setAccessibilityPreference(sessionId, name, value, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    if (!['reducedMotion','textScale','contrast'].includes(String(name || ''))) return { ok: false, error: 'accessibility_preference_unknown' };
+    const next = normalizeAccessibilityPreferences({ ...session.uiPreferences.accessibility, [name]: value });
+    if (String(next[name]) !== String(value)) return { ok: false, error: 'accessibility_preference_invalid' };
+    session.uiPreferences.accessibility = next;
+    session.updatedAt = now;
+    this.record(sessionId, 'accessibility_preference_changed', { name, value: next[name] }, now);
+    return { ok: true, name, value: next[name], preferences: { ...next } };
   }
 
   replayCommandResult(sessionId, requestId, now = Date.now()) {
@@ -1184,7 +1226,8 @@ export class RuntimePilotState {
       },
       incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false })),
       operatorMarkers: JSON.parse(JSON.stringify(session.operatorMarkers || [])),
-      checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null
+      checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null,
+      uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() }))
     };
   }
 
@@ -1229,7 +1272,8 @@ export class RuntimePilotState {
       },
       incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false })),
       operatorMarkers: JSON.parse(JSON.stringify(session.operatorMarkers || [])),
-      checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null
+      checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null,
+      uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() }))
     }));
   }
 }

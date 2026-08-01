@@ -4,6 +4,9 @@ const COMMANDS = new Set([
   'set_session_phase',
   'mark_interviewer_activity',
   'set_focus_mode',
+  'set_shortcut_binding',
+  'reset_shortcut_bindings',
+  'set_accessibility_preference',
   'acknowledge_incident',
   'snooze_incident',
   'clear_incident',
@@ -119,6 +122,16 @@ export function normalizeDashboardCommand(value) {
   }
   if (command === 'snooze_incident') {
     payload.durationMs = Math.max(60_000, Math.min(3_600_000, Number(payload.durationMs) || 300_000));
+  }
+  if (command === 'set_shortcut_binding') {
+    payload.commandId = cleanText(payload.commandId, 80);
+    payload.chord = cleanText(payload.chord, 80);
+    if (!payload.commandId || !payload.chord) return null;
+  }
+  if (command === 'set_accessibility_preference') {
+    payload.name = cleanText(payload.name, 40);
+    payload.value = cleanText(payload.value, 40);
+    if (!['reducedMotion','textScale','contrast'].includes(payload.name)) return null;
   }
   if (command === 'add_marker') {
     payload.category = cleanText(payload.category, 40);

@@ -42,6 +42,11 @@ import { deriveAttentionTarget } from '../shared/attention-model.js';
 import { deriveNextAction } from '../shared/next-action-model.js';
 import { commandCatalog, searchCommands } from '../shared/operator-command-catalog.js';
 import { deriveAnswerDeadlineView } from '../shared/answer-operations.js';
+import { deriveShortcutHelp } from './shortcut-help-model.js';
+import { applyAccessibilityPreferences, normalizeAccessibilityPreferences } from './accessibility-preferences.js';
+import { createLiveAnnouncer } from './live-announcer.js';
+import { createDialogFocusCoordinator } from './dialog-focus-coordinator.js';
+import { normalizeShortcutBindings, resolveShortcutCommand } from '../shared/shortcut-bindings.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -73,6 +78,9 @@ const connectionState = byId('connectionState');
 const toast = byId('toast');
 const timelineViewport = byId('timelineViewport');
 const timelineCanvas = byId('timelineCanvas');
+const dialogFocus = createDialogFocusCoordinator();
+const liveAnnouncer = createLiveAnnouncer({ politeNode: byId('politeAnnouncements'), assertiveNode: byId('assertiveAnnouncements') });
+const shortcutBindings = normalizeShortcutBindings();
 
 function setConnection(label, tone = 'warn') {
   connectionState.dataset.tone = tone;
@@ -83,6 +91,9 @@ function showToast(message, tone = 'info') {
   toast.textContent = message;
   toast.dataset.tone = tone;
   toast.classList.add('show');
+  if (state.snapshot?.accessibilityPreferences?.announcements !== false) {
+    liveAnnouncer.announce(message, { priority: ['error', 'warn'].includes(tone) ? 'assertive' : 'polite' });
+  }
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => toast.classList.remove('show'), 2400);
 }
@@ -225,6 +236,26 @@ function handlePortMessage(message) {
     pending.resolve(message.result || { ok: false, error: 'empty_command_result' });
     renderOperationActivity();
     updateControlAvailability();
+  }
+}
+
+
+function renderAccessibility(snapshot) {
+  const bindings = normalizeShortcutBindings(snapshot?.uiPreferences?.shortcutBindings || shortcutBindings);
+  const prefs = applyAccessibilityPreferences(document.documentElement, snapshot?.uiPreferences?.accessibility || {});
+  document.querySelectorAll('[data-accessibility-name]').forEach(node => { node.value = String(prefs[node.dataset.accessibilityName] || ''); });
+  const list = byId('shortcutHelpList');
+  if (list) {
+    list.replaceChildren();
+    for (const group of deriveShortcutHelp(bindings, commandCatalog(snapshot || {})).groups) {
+      const heading = document.createElement('h3'); heading.textContent = group.name; list.append(heading);
+      for (const item of group.rows) {
+        const row = document.createElement('div'); row.className = 'shortcut-help-row';
+        const label = document.createElement('span'); label.textContent = item.label;
+        const key = document.createElement('kbd'); key.textContent = item.chord;
+        row.append(label, key); list.append(row);
+      }
+    }
   }
 }
 
@@ -532,13 +563,14 @@ function openCommandPalette(trigger = document.activeElement) {
   state.commandPalette = { ...state.commandPalette, open: true, query: '', selectedIndex: 0 };
   byId('commandPaletteSearch').value = '';
   renderCommandPalette();
+  dialogFocus.open(byId('commandPalette'), trigger);
   queueMicrotask(() => byId('commandPaletteSearch').focus());
 }
 
 function closeCommandPalette() {
   state.commandPalette = { ...state.commandPalette, open: false };
   renderCommandPalette();
-  state.commandPaletteReturnFocus?.focus?.();
+  dialogFocus.close(byId('commandPalette'));
   state.commandPaletteReturnFocus = null;
 }
 
@@ -1251,6 +1283,7 @@ function render(changedKeys = null) {
   const changed = (...values) => !keys || values.some(value => keys.has(value));
   renderOverview(state.snapshot, now);
   renderLiveOperations(state.snapshot, now);
+  renderAccessibility(state.snapshot);
   renderCommandPalette();
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
@@ -1312,6 +1345,8 @@ document.addEventListener('click', event => {
     return;
   }
   if (event.target.closest('#openCommandPalette')) { openCommandPalette(event.target.closest('#openCommandPalette')); return; }
+  if (event.target.closest('#openShortcutHelp')) { dialogFocus.open(byId('shortcutHelpDialog'), event.target.closest('#openShortcutHelp')); return; }
+  if (event.target.closest('#closeShortcutHelp')) { dialogFocus.close(byId('shortcutHelpDialog')); return; }
   if (event.target.closest('#closeCommandPalette')) { closeCommandPalette(); return; }
   const tab = event.target.closest('[data-view]');
   if (tab) {
@@ -1568,6 +1603,10 @@ function runKeyboardCommand(command) {
 }
 
 document.addEventListener('keydown', event => {
+  if (dialogFocus.handleKey(event)) return;
+  const shortcutCommand = resolveShortcutCommand(state.snapshot?.uiPreferences?.shortcutBindings || shortcutBindings, event);
+  if (shortcutCommand === 'open_shortcut_help') { event.preventDefault(); dialogFocus.open(byId('shortcutHelpDialog'), document.activeElement); return; }
+  if (shortcutCommand === 'open_command_palette') { event.preventDefault(); state.commandPalette.open ? closeCommandPalette() : openCommandPalette(document.activeElement); return; }
   const paletteOpen = state.commandPalette.open;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();

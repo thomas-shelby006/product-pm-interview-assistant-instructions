@@ -861,3 +861,32 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** one receiver delivery-policy owner and one metadata-only answer-operations module extend the existing batch runtime; ledger order and rendered proof remain authoritative.
 
 **Source-complete status:** Receiver-flow mechanics and managed-window navigation are implemented. Executable verification remains deferred until Cycle 145 source completion.
+
+## Live interview UX cycles 126–130
+
+### Cycle 126 — Remappable Shortcut Safety
+- **Bug fixes:** fixed-key handlers no longer hide collisions or allow unsafe destructive single-key bindings.
+- **New features:** session-scoped shortcut bindings with conflict, reserved-key, and destructive-action validation.
+- **Implementation:** one canonical chord parser and command resolver owns keyboard dispatch.
+
+### Cycle 127 — Grouped Shortcut Help
+- **Bug fixes:** the footer key paragraph no longer serves as the only keyboard reference.
+- **New features:** searchable/grouped keyboard help organized by Delivery, Recovery, Provider, Review, and Navigation.
+- **Implementation:** help rows derive from the active binding map and command catalog.
+
+### Cycle 128 — Accessible Visual Preferences
+- **Bug fixes:** motion, text scale, and contrast no longer depend only on browser defaults or ad hoc CSS.
+- **New features:** System/Reduced/Full motion, Normal/Large text, and Normal/High contrast controls.
+- **Implementation:** one versioned session preference owner drives document data attributes and print-safe CSS.
+
+### Cycle 129 — Bounded Live Announcements
+- **Bug fixes:** important command outcomes no longer rely only on visual toast content.
+- **New features:** polite and assertive live regions with repeated-message suppression.
+- **Implementation:** one announcer routes severity-aware status without duplicating timeline evidence.
+
+### Cycle 130 — Unified Dialog Focus
+- **Bug fixes:** modal focus containment is no longer implemented separately for each dialog.
+- **New features:** Escape close, circular Tab/Shift+Tab, first-control focus, and trigger restoration.
+- **Implementation:** one focus coordinator owns the command palette and shortcut-help dialog contract.
+
+**Source-complete status:** Cycles 126–130 are implemented. Executable verification remains deferred until Cycle 145 source completion.
