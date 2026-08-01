@@ -1,5 +1,6 @@
 import { isEnvelope } from './protocol.js';
 import { memberSetFingerprint, sameMemberSet } from './batch-planner.js';
+import { acquireAttemptLease, normalizeAttemptLease, releaseAttemptLease } from './delivery-attempt-lease.js';
 
 export const ACTIVE_LEDGER_STATES = new Set(['persisted', 'staged', 'submitting', 'failed']);
 const ALL_LEDGER_STATES = new Set([...ACTIVE_LEDGER_STATES, 'proven', 'archived']);
@@ -17,7 +18,8 @@ function cloneEntry(entry) {
   return {
     ...entry,
     envelope: cloneEnvelope(entry.envelope),
-    proof: entry.proof && typeof entry.proof === 'object' ? { ...entry.proof } : null
+    proof: entry.proof && typeof entry.proof === 'object' ? { ...entry.proof } : null,
+    attemptLease: normalizeAttemptLease(entry.attemptLease)
   };
 }
 
@@ -44,6 +46,7 @@ function normalizeEntry(value) {
     memberFingerprint: String(value?.memberFingerprint || ''),
     lastError: String(value?.lastError || ''),
     proof: value?.proof && typeof value.proof === 'object' ? { ...value.proof } : null,
+    attemptLease: normalizeAttemptLease(value?.attemptLease),
     archivedAt: Number(value?.archivedAt || 0)
   };
 }
@@ -109,6 +112,7 @@ export class DeliveryLedger {
       entry.state = 'persisted';
       entry.updatedAt = now;
       entry.lastError = String(reason || '');
+      entry.attemptLease = null;
       return true;
     });
   }
@@ -126,9 +130,18 @@ export class DeliveryLedger {
     });
   }
 
-  markSubmitting(batchId, now = Date.now()) {
+  markSubmitting(batchId, now = Date.now(), leaseOptions = {}) {
+    const owner = String(leaseOptions?.owner || `batch:${batchId}`);
     return this.#transitionBatch(batchId, entry => {
       if (entry.state !== 'staged') return false;
+      const lease = acquireAttemptLease(entry.attemptLease, {
+        owner,
+        reason: leaseOptions?.reason || 'batch_submit',
+        now,
+        ttlMs: leaseOptions?.ttlMs
+      });
+      if (!lease.accepted) return false;
+      entry.attemptLease = lease.lease;
       entry.state = 'submitting';
       entry.updatedAt = now;
       entry.attempts += 1;
@@ -136,15 +149,48 @@ export class DeliveryLedger {
     });
   }
 
-  markItemSubmitting(id, now = Date.now()) {
+  markItemSubmitting(id, now = Date.now(), leaseOptions = {}) {
+    const owner = String(leaseOptions?.owner || `item:${id}`);
     return this.#transition([id], entry => {
       if (!['persisted', 'failed'].includes(entry.state)) return false;
+      const lease = acquireAttemptLease(entry.attemptLease, {
+        owner,
+        reason: leaseOptions?.reason || 'item_submit',
+        now,
+        ttlMs: leaseOptions?.ttlMs
+      });
+      if (!lease.accepted) return false;
+      entry.attemptLease = lease.lease;
       entry.state = 'submitting';
       entry.updatedAt = now;
       entry.attempts += 1;
       entry.lastError = '';
       return true;
     })[0] || null;
+  }
+
+  acquireAttemptLease(id, options = {}) {
+    const entry = this.#entries.find(candidate => candidate.id === String(id));
+    if (!entry || !ACTIVE_LEDGER_STATES.has(entry.state)) {
+      return { accepted: false, reason: 'ledger_item_unavailable', lease: null, entry: entry ? cloneEntry(entry) : null };
+    }
+    const result = acquireAttemptLease(entry.attemptLease, options);
+    if (result.accepted) {
+      entry.attemptLease = result.lease;
+      entry.updatedAt = Number(options?.now) || Date.now();
+    }
+    return { ...result, entry: cloneEntry(entry) };
+  }
+
+  releaseAttemptLease(id, options = {}) {
+    const entry = this.#entries.find(candidate => candidate.id === String(id));
+    if (!entry) return { released: false, reason: 'ledger_item_missing', lease: null, entry: null };
+    const result = releaseAttemptLease(entry.attemptLease, options);
+    if (result.released) {
+      entry.attemptLease = null;
+      entry.updatedAt = Number(options?.now) || Date.now();
+    }
+    return { ...result, entry: cloneEntry(entry) };
   }
 
   markBatchProven(batchId, proof = {}, now = Date.now()) {
@@ -196,6 +242,7 @@ export class DeliveryLedger {
       entry.state = 'failed';
       entry.updatedAt = now;
       entry.lastError = String(reason || 'delivery_failed');
+      entry.attemptLease = null;
       return true;
     });
   }
@@ -206,6 +253,7 @@ export class DeliveryLedger {
       entry.state = 'archived';
       entry.updatedAt = now;
       entry.archivedAt = now;
+      entry.attemptLease = null;
       return true;
     });
   }
@@ -278,6 +326,7 @@ export class DeliveryLedger {
     entry.updatedAt = now;
     entry.lastError = '';
     entry.proof = { ...proof, at: Number(proof.at || now) };
+    entry.attemptLease = null;
     return true;
   }
 

@@ -315,3 +315,30 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Bug fixes:** browser smoke no longer depends on hand-built command lines, ambiguous profiles or manual cleanup.
 - **New features:** repository-owned temporary-profile smoke for exact extension identity, managed roles, active self-test, Q1 plus accumulated Q2/Q3, rendered proof, outbox, sequence gap, answer capability and cleanup.
 - **Implementation:** PowerShell owns quoted Edge isolation and process-tree cleanup; Node owns DevTools validation and structured synthetic evidence. Anonymous answer unavailability is reported separately from delivery proof.
+
+## Cycle 46 - Versioned Transport Handshake
+- **Bug fixes:** unversioned or incompatible direct-port frames now fail closed instead of entering request routing.
+- **New features:** negotiated protocol version and shared capability set per role connection.
+- **Implementation:** hub-issued handshake offer, role acceptance, explicit ready state, and fallback preservation.
+
+## Cycle 47 - Session Epoch Fencing
+- **Bug fixes:** replaced ports and stale responses cannot resolve current requests.
+- **New features:** monotonic per-role connection epoch in direct transport state.
+- **Implementation:** every request, response, validation decision, and pending correlation is epoch-bound.
+
+## Cycle 48 - Reconnect-Safe Correlation Journal
+- **Bug fixes:** late duplicate responses no longer resolve a newer request after reconnect.
+- **New features:** bounded request/result journal with duplicate-response counting and safe replay.
+- **Implementation:** independent inbound and outbound journals on the hub and content role port.
+
+## Cycle 49 - Per-Final Attempt Leases
+- **Bug fixes:** concurrent automatic and repair paths cannot submit one ledger final at the same time.
+- **New features:** owner, reason, expiry, takeover count, and explicit release metadata per final.
+- **Implementation:** the Delivery Ledger acquires leases before submitting and clears them on persisted fallback, proof, failure, or archive.
+
+## Cycle 50 - Selective Sequence ACK and NACK
+- **Bug fixes:** a receiver gap now identifies exact missing ranges instead of returning only a generic expected sequence.
+- **New features:** contiguous ACK, buffered ranges, and selective NACK ranges in receiver acknowledgements.
+- **Implementation:** feedback is derived from the authoritative contiguous buffer and contains no question text.
+
+**Source-complete status:** Cycles 46-50 are implemented. Executable verification remains deferred until Cycle 70.

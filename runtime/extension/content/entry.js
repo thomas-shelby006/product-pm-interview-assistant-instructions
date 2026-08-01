@@ -24,6 +24,7 @@ import { createLatestPreviewScheduler } from './preview-scheduler.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
 import { nextSequence } from '../shared/sequence.js';
 import { ContiguousSequenceBuffer } from '../shared/contiguous-sequence-buffer.js';
+import { deriveSequenceFeedback } from '../shared/sequence-feedback.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 import { describeRuntimeStatus } from '../shared/session-status.js';
 import { extractSafeSessionContext } from '../shared/session-context.js';
@@ -678,7 +679,12 @@ async function startRuntime(runtimeConfig) {
     } else {
       publishSequenceGap();
     }
-    return { targetResult, failure, gap: receiverSequenceBuffer.status() };
+    return {
+      targetResult,
+      failure,
+      gap: receiverSequenceBuffer.status(),
+      sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot())
+    };
   }
 
   async function receiveEnvelope(envelope) {
@@ -708,7 +714,8 @@ async function startRuntime(runtimeConfig) {
         reason: sequenceDecision.reason,
         duplicate: true,
         buffered: Boolean(sequenceDecision.buffered),
-        expectedSeq: sequenceDecision.expectedSeq
+        expectedSeq: sequenceDecision.expectedSeq,
+        sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot())
       };
     }
     if (!sequenceDecision.accepted) {
@@ -717,7 +724,8 @@ async function startRuntime(runtimeConfig) {
         ok: false,
         buffered: false,
         error: sequenceDecision.reason,
-        expectedSeq: sequenceDecision.expectedSeq
+        expectedSeq: sequenceDecision.expectedSeq,
+        sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot())
       };
     }
 
@@ -732,7 +740,10 @@ async function startRuntime(runtimeConfig) {
     scrollToLatest();
 
     if (drain.failure?.envelope?.id === envelope.id) {
-      return drain.failure.result || { ok: false, error: 'batch_rejected' };
+      return {
+        ...(drain.failure.result || { ok: false, error: 'batch_rejected' }),
+        sequenceFeedback: drain.sequenceFeedback
+      };
     }
 
     if (originalResult) {
@@ -746,7 +757,8 @@ async function startRuntime(runtimeConfig) {
         memberIds: originalResult.memberIds || [envelope.id],
         proof: originalResult.proof || null,
         fingerprint: originalResult.batch?.prompt?.fingerprint || originalResult.fingerprint || '',
-        memberFingerprint: originalResult.batch?.prompt?.memberFingerprint || originalResult.memberFingerprint || ''
+        memberFingerprint: originalResult.batch?.prompt?.memberFingerprint || originalResult.memberFingerprint || '',
+        sequenceFeedback: drain.sequenceFeedback
       };
     }
     return {
@@ -756,7 +768,8 @@ async function startRuntime(runtimeConfig) {
       staged: false,
       reason: 'buffered_gap',
       expectedSeq: gap.expectedSeq,
-      bufferedCount: gap.bufferedCount
+      bufferedCount: gap.bufferedCount,
+      sequenceFeedback: drain.sequenceFeedback
     };
   }
 
