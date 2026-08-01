@@ -1,18 +1,9 @@
-const VOLATILE_FIELDS = new Set(['heartbeatAt', 'sourceSilenceMs']);
+import { canonicalFingerprint } from './canonical-fingerprint.js';
 
-function stableObject(value) {
-  if (Array.isArray(value)) return value.map(stableObject);
-  if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .filter(key => !VOLATILE_FIELDS.has(key))
-      .sort()
-      .map(key => [key, stableObject(value[key])])
-  );
-}
+const VOLATILE_FIELDS = ['heartbeatAt', 'sourceSilenceMs'];
 
 export function telemetryFingerprint(value) {
-  return JSON.stringify(stableObject(value || {}));
+  return canonicalFingerprint(value || {}, { omitKeys: VOLATILE_FIELDS });
 }
 
 export function hasMeaningfulTelemetryChange(previous, next) {

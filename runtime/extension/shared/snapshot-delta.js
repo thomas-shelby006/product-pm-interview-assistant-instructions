@@ -1,3 +1,5 @@
+import { canonicalFingerprint } from './canonical-fingerprint.js';
+
 const VOLATILE_KEYS = new Set(['now', 'uptimeMs']);
 
 function clone(value) {
@@ -5,7 +7,7 @@ function clone(value) {
 }
 
 function comparable(value) {
-  return JSON.stringify(value);
+  return canonicalFingerprint(value);
 }
 
 export function buildSnapshotDelta(previous, next) {
