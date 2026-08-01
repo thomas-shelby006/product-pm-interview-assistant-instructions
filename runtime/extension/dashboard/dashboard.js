@@ -18,6 +18,7 @@ import { deriveProofInspector } from './proof-inspector-model.js';
 import { deriveMemoryGuard } from './memory-guard-model.js';
 import { deriveReadiness } from './readiness-model.js';
 import { applySnapshotDelta } from '../shared/snapshot-delta.js';
+import { deriveRecoveryProgress } from './recovery-progress-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -322,6 +323,10 @@ function renderLiveCommandCenter(snapshot, now) {
     text('proofState', '--');
     text('proofTitle', 'Waiting for proof state');
     text('proofDetail', 'No batch proof evidence is available yet.');
+    text('recoveryPhase', '--');
+    text('recoveryTitle', 'Waiting for recovery state');
+    byId('recoveryChecks')?.replaceChildren();
+    text('recoveryError', '');
     text('storagePressureBadge', '--');
     text('storagePressureValue', '--');
     text('storagePressureDetail', 'Session memory status is not available yet.');
@@ -378,6 +383,21 @@ function renderLiveCommandCenter(snapshot, now) {
       : pace.state === 'falling_behind'
         ? `${pace.unresolved} unresolved - intake is exceeding rendered proof.`
         : `${pace.unresolved} unresolved - waiting for a positive recovery rate.`);
+
+  const recovery = deriveRecoveryProgress(snapshot);
+  const recoveryPanel = document.querySelector('.recovery-panel');
+  if (recoveryPanel) recoveryPanel.dataset.recovery = recovery.phase;
+  text('recoveryPhase', recovery.phase);
+  text('recoveryTitle', recovery.verified ? 'Recovery verified' : `${recovery.complete}/${recovery.total} checks complete`);
+  const recoveryChecks = byId('recoveryChecks');
+  recoveryChecks.replaceChildren();
+  for (const check of recovery.items) {
+    const item = document.createElement('span');
+    item.dataset.complete = check.complete ? 'true' : 'false';
+    item.textContent = `${check.complete ? 'OK' : 'WAIT'} - ${check.label}`;
+    recoveryChecks.append(item);
+  }
+  text('recoveryError', recovery.error);
 
   const proofInspector = deriveProofInspector(snapshot);
   const proofPanel = document.querySelector('.proof-panel');

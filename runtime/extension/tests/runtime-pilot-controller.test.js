@@ -340,3 +340,29 @@ test('controller sends one full snapshot then semantic deltas per dashboard port
   assert.match(source, /buildSnapshotDelta\(entry\.lastSnapshot, snapshot\)/);
   assert.match(source, /lastSnapshot:\s*null/);
 });
+
+
+test('heartbeat telemetry cannot clear repair without reconciliation', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { dirname, resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
+  const telemetry = source.slice(source.indexOf('async function telemetry'), source.indexOf('async function sendRuntimeCommand'));
+  assert.doesNotMatch(telemetry, /setMode\(sessionId, 'active'\)/);
+  assert.match(telemetry, /currentRecoveryChecks/);
+  assert.match(source, /reconciliation:\s*result\.ok !== false/);
+});
+
+
+test('repair schedules bounded background verification without activating tabs', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { dirname, resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
+  assert.match(source, /function scheduleRecoveryVerification\(sessionId, attempt = 0\)/);
+  assert.match(source, /if \(attempt >= 4\) return false/);
+  const helper = source.slice(source.indexOf('function scheduleRecoveryVerification'), source.indexOf('async function repair'));
+  assert.doesNotMatch(helper, /active:\s*true|focused:\s*true/);
+});

@@ -8,6 +8,7 @@ import { shouldPersistBatchEvent } from './batch-event-policy.js';
 import { utf8Bytes } from './storage-accounting.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
+import { transitionRecovery } from './recovery-state-machine.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -143,6 +144,31 @@ export function createRuntimePilotController({
     }
   }
 
+  function currentRecoveryChecks(snapshot, overrides = {}) {
+    const senderReady = Boolean(snapshot?.sender?.connected && snapshot.sender.phase === 'ready' && snapshot.sender.composerReady);
+    const receiverReady = Boolean(snapshot?.receiver?.connected && snapshot.receiver.phase === 'ready' && snapshot.receiver.composerReady);
+    return {
+      sender: senderReady,
+      receiver: receiverReady,
+      adapters: snapshot?.sender?.adapterCapabilities?.complete === true
+        && snapshot?.receiver?.adapterCapabilities?.complete === true,
+      reconciliation: Boolean(snapshot?.lastRepair?.checks?.reconciliation),
+      batch: !snapshot?.batchState?.draftConflict,
+      storage: snapshot?.storagePressure?.level !== 'critical',
+      ...overrides
+    };
+  }
+
+  function applyRecoveryTransition(pilot, sessionId, event) {
+    const snapshot = pilot.snapshot(sessionId);
+    const previous = snapshot?.lastRepair || null;
+    const next = transitionRecovery(previous, event, Date.now());
+    if (JSON.stringify(previous) !== JSON.stringify(next)) pilot.setRepair(sessionId, next);
+    const mode = next.phase === 'healthy' ? 'active' : next.phase;
+    if (pilot.snapshot(sessionId)?.mode !== mode) pilot.setMode(sessionId, mode);
+    return next;
+  }
+
   async function reconcileSession(sessionId, {
     registry = null,
     pilot = null,
@@ -153,7 +179,18 @@ export function createRuntimePilotController({
     const snapshot = currentPilot.snapshot(sessionId);
     if (!snapshot?.receiver?.connected) return { ok: false, error: 'receiver_missing' };
     const payload = buildReconciliationPayload(snapshot);
-    if (!payload.pending.length) return { ok: true, reason: 'ledger_clean' };
+    if (!payload.pending.length) {
+      if (currentPilot.snapshot(sessionId)?.mode === 'repairing') {
+        applyRecoveryTransition(currentPilot, sessionId, {
+          type: 'checks_updated',
+          checks: currentRecoveryChecks(currentPilot.snapshot(sessionId), { reconciliation: true }),
+          storageCritical: currentPilot.snapshot(sessionId)?.storagePressure?.level === 'critical'
+        });
+        applyRecoveryTransition(currentPilot, sessionId, { type: 'verify' });
+        if (commitResult) await commit(sessionId, currentPilot);
+      }
+      return { ok: true, reason: 'ledger_clean' };
+    }
     const result = await sendRuntimeCommand(
       currentRegistry,
       sessionId,
@@ -167,6 +204,14 @@ export function createRuntimePilotController({
       batchCount: payload.batches.length,
       error: result.error || ''
     });
+    if (currentPilot.snapshot(sessionId)?.mode === 'repairing') {
+      applyRecoveryTransition(currentPilot, sessionId, {
+        type: 'checks_updated',
+        checks: currentRecoveryChecks(currentPilot.snapshot(sessionId), { reconciliation: result.ok !== false }),
+        storageCritical: currentPilot.snapshot(sessionId)?.storagePressure?.level === 'critical'
+      });
+      applyRecoveryTransition(currentPilot, sessionId, { type: 'verify' });
+    }
     if (commitResult) await commit(sessionId, currentPilot);
     return result;
   }
@@ -404,20 +449,13 @@ export function createRuntimePilotController({
     const meaningful = Boolean(event) || batchChanged || hasMeaningfulTelemetryChange(previousRole, nextRole);
     const updatedRole = pilot.updateRole(sessionId, role, nextRole);
     const refreshed = pilot.snapshot(sessionId);
-    if (
-      refreshed?.mode === 'repairing'
-      && refreshed.sender?.connected
-      && refreshed.sender?.composerReady
-      && refreshed.receiver?.connected
-      && refreshed.receiver?.composerReady
-    ) {
-      pilot.setMode(sessionId, 'active');
-      pilot.setRepair(sessionId, {
-        ...(refreshed.lastRepair || {}),
-        ok: true,
-        pendingVerification: false,
-        verified: true
+    if (refreshed?.mode === 'repairing' || refreshed?.mode === 'blocked') {
+      applyRecoveryTransition(pilot, sessionId, {
+        type: 'checks_updated',
+        checks: currentRecoveryChecks(pilot.snapshot(sessionId)),
+        storageCritical: pilot.snapshot(sessionId)?.storagePressure?.level === 'critical'
       });
+      applyRecoveryTransition(pilot, sessionId, { type: 'verify' });
     }
     if (event?.type === 'session_armed') {
       pilot.setContextArmed(sessionId, true);
@@ -559,22 +597,42 @@ export function createRuntimePilotController({
       }
     }
     const ok = Boolean(roles.sender?.responsive && roles.receiver?.responsive);
-    if (pilot.snapshot(sessionId)?.mode === 'repairing') {
-      pilot.setMode(sessionId, ok ? 'active' : 'degraded');
-      pilot.setRepair(sessionId, {
-        ...(pilot.snapshot(sessionId)?.lastRepair || {}),
-        ok,
-        pendingVerification: false,
-        verified: ok,
-        verification: roles
+    let recovery = pilot.snapshot(sessionId)?.lastRepair || null;
+    if (pilot.snapshot(sessionId)?.mode === 'repairing' || pilot.snapshot(sessionId)?.mode === 'blocked') {
+      const reconciliation = ok
+        ? await reconcileSession(sessionId, { registry, pilot, commitResult: false })
+        : { ok: false, error: 'roles_unhealthy' };
+      recovery = applyRecoveryTransition(pilot, sessionId, {
+        type: 'checks_updated',
+        checks: currentRecoveryChecks(pilot.snapshot(sessionId), { reconciliation: reconciliation.ok !== false }),
+        storageCritical: pilot.snapshot(sessionId)?.storagePressure?.level === 'critical'
       });
+      recovery = applyRecoveryTransition(pilot, sessionId, { type: 'verify' });
     }
-    pilot.record(sessionId, 'live_check', { ok, roles });
-    return { ok, roles };
+    pilot.record(sessionId, 'live_check', { ok, roles, recoveryPhase: recovery?.phase || '' });
+    return { ok, roles, recovery };
+  }
+
+  function scheduleRecoveryVerification(sessionId, attempt = 0) {
+    if (attempt >= 4) return false;
+    const delay = Math.min(8000, 1200 * (2 ** attempt));
+    setTimeout(() => {
+      void mutationCoordinator.run(sessionId, async () => {
+        const current = await state();
+        if (current.snapshot(sessionId)?.lastRepair?.phase !== 'repairing') return;
+        const registry = await registryProvider();
+        await liveCheck(sessionId, registry, current);
+        await commit(sessionId, current);
+        if (current.snapshot(sessionId)?.lastRepair?.phase === 'repairing') {
+          scheduleRecoveryVerification(sessionId, attempt + 1);
+        }
+      });
+    }, delay);
+    return true;
   }
 
   async function repair(sessionId, registry, pilot) {
-    pilot.setMode(sessionId, 'repairing');
+    applyRecoveryTransition(pilot, sessionId, { type: 'repair_requested' });
     const report = { ok: true, actions: [], unresolved: [] };
     const session = registry.getSession(sessionId);
     const snapshot = pilot.snapshot(sessionId);
@@ -622,10 +680,29 @@ export function createRuntimePilotController({
       }
     }
 
-    const pendingVerification = report.ok && report.actions.length > 0;
-    const finalReport = { ...report, pendingVerification, verified: false };
+    let finalReport = applyRecoveryTransition(pilot, sessionId, {
+      type: 'checks_updated',
+      checks: currentRecoveryChecks(pilot.snapshot(sessionId)),
+      storageCritical: pilot.snapshot(sessionId)?.storagePressure?.level === 'critical'
+    });
+    finalReport = { ...finalReport, ...report, pendingVerification: true, verified: false };
     pilot.setRepair(sessionId, finalReport);
-    pilot.setMode(sessionId, pendingVerification ? 'repairing' : 'degraded');
+    if (!report.ok || !report.actions.length) {
+      finalReport = applyRecoveryTransition(pilot, sessionId, {
+        type: 'failure', error: report.unresolved[0]?.reason || 'repair_not_started'
+      });
+    } else {
+      scheduleRecoveryVerification(sessionId);
+      setTimeout(() => {
+        void mutationCoordinator.run(sessionId, async () => {
+          const current = await state();
+          const snapshot = current.snapshot(sessionId);
+          if (snapshot?.lastRepair?.phase !== 'repairing') return;
+          applyRecoveryTransition(current, sessionId, { type: 'timeout', error: 'verification_timeout' });
+          await commit(sessionId, current);
+        });
+      }, 30000);
+    }
     return finalReport;
   }
 

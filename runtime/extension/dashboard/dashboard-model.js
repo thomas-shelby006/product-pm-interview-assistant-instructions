@@ -42,6 +42,7 @@ export function warningLabel(warning) {
     receiver_proof_failed: 'Receiver delivery did not produce provider-rendered proof',
     repair_in_progress: 'Runtime repair is waiting for both roles to report healthy',
     runtime_degraded: 'Runtime repair could not restore full health',
+    runtime_blocked: 'Runtime recovery is blocked by a safety condition',
     sender_adapter_incomplete: 'Sender provider adapter is missing required capabilities',
     receiver_adapter_incomplete: 'Receiver provider adapter is missing required capabilities',
     transport_paused: 'Forwarding is paused',

@@ -171,6 +171,12 @@ tbody tr.superseded td.question { text-decoration: line-through; }
 .live-panel > p { margin-top: .38rem; color: var(--muted); font-size: .68rem; line-height: 1.45; max-height: 5.4rem; overflow: auto; overflow-wrap: anywhere; }
 .current-answer-panel { border-left: 4px solid var(--aubergine); }
 .next-draft-panel { border-left: 4px solid var(--rust); }
+.recovery-panel { border-left: 4px solid var(--olive); }
+.recovery-panel[data-recovery="repairing"] { border-left-color: var(--ochre); }
+.recovery-panel[data-recovery="degraded"], .recovery-panel[data-recovery="blocked"] { border-left-color: var(--danger); background: var(--rust-soft); }
+.recovery-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .3rem; margin-top: .5rem; }
+.recovery-checks span { padding: .3rem; border: 1px solid var(--line); font-size: .58rem; }
+.recovery-checks span[data-complete="true"] { background: var(--olive-soft); }
 .proof-panel { border-left: 4px solid var(--olive); }
 .proof-panel[data-proof="pending"], .proof-panel[data-proof="duplicate"] { border-left-color: var(--ochre); }
 .proof-panel[data-proof="rejected"] { border-left-color: var(--danger); background: var(--rust-soft); }

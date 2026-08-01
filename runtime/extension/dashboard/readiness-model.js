@@ -19,6 +19,7 @@ export function deriveReadiness(snapshot, now = Date.now()) {
     return { state: 'repairing', label: 'Repairing', blockers: [blocker('repair_in_progress', 'Runtime repair has not been verified', 'repair_runtime')], actions: ['check_live'] };
   }
   const blockers = [];
+  if (snapshot.mode === 'blocked') blockers.push(blocker('runtime_blocked', 'Runtime recovery is blocked', 'repair_runtime'));
   if (Number(snapshot.dashboardConnections || 0) < 1) blockers.push(blocker('dashboard_disconnected', 'Runtime Pilot is not connected'));
   for (const role of ['sender', 'receiver']) {
     const value = snapshot[role] || {};

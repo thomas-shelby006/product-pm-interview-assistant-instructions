@@ -1,6 +1,6 @@
 import { DeliveryLedger } from './delivery-ledger.js';
 
-const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'ended']);
+const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
 const MAX_TIMELINE = 200;
 const MAX_COMMAND_IDS = 128;
@@ -588,6 +588,7 @@ export class RuntimePilotState {
     else if (session.storagePressure?.level === 'elevated') warnings.push({ code: 'session_storage_elevated', severity: 'warn', percent: session.storagePressure.percent });
     if (session.mode === 'repairing') warnings.push({ code: 'repair_in_progress', severity: 'warn' });
     if (session.mode === 'degraded') warnings.push({ code: 'runtime_degraded', severity: 'error' });
+    if (session.mode === 'blocked') warnings.push({ code: 'runtime_blocked', severity: 'error' });
     if (session.mode === 'paused') warnings.push({ code: 'transport_paused', severity: 'warn' });
     return {
       sessionId: session.sessionId,

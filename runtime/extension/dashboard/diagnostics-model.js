@@ -2,7 +2,7 @@ const GROUPS = [
   { id: 'delivery', label: 'Delivery', prefixes: ['receiver_proof_', 'transport_', 'receiver_draft_', 'inbox_', 'sequence_'] },
   { id: 'provider', label: 'Provider', prefixes: ['sender_', 'receiver_'] },
   { id: 'storage', label: 'Storage', prefixes: ['session_storage_', 'storage_'] },
-  { id: 'recovery', label: 'Recovery', prefixes: ['repair_', 'runtime_degraded', 'recovery_'] }
+  { id: 'recovery', label: 'Recovery', prefixes: ['repair_', 'runtime_degraded', 'runtime_blocked', 'recovery_'] }
 ];
 
 function groupFor(code) {

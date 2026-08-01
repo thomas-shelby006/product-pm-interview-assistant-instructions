@@ -163,3 +163,9 @@ test('heartbeat updates use the lightweight role-only render path', async () => 
   assert.match(branch, /render\(\[message\.role\]\)/);
   assert.doesNotMatch(branch, /render\(\);/);
 });
+
+
+test('Pilot exposes semantic Recovery Progress rather than a binary repair flag', () => {
+  assert.match(markup, /class="live-panel recovery-panel"/);
+  assert.match(markup, /id="recoveryChecks"/);
+});
