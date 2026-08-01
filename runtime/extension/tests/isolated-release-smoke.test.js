@@ -39,3 +39,30 @@ test('complete validator requires the repository-owned smoke surfaces', () => {
   assert.match(validator, /run-isolated-release-smoke\.ps1/);
   assert.match(validator, /isolated-release-smoke\.mjs/);
 });
+test('smoke waits for exact ready titles without inventing a lifecycle token', () => {
+  assert.match(runner, /PMIA_SENDER_CHATGPT_\$\{suffix\}/);
+  assert.match(runner, /PMIA_RECEIVER_CHATGPT_\$\{suffix\}/);
+  assert.doesNotMatch(runner, /CHATGPT_READY_/);
+});
+
+test('smoke waits for the provider send control instead of sleeping', () => {
+  assert.match(runner, /waitFor\('Q1 send control ready'/);
+  assert.match(runner, /value\.composer === questions\.q1 && value\.sendReady/);
+  assert.doesNotMatch(runner, /Input\.insertText'[\s\S]{0,200}sleep\(/);
+});
+
+
+test('smoke never rewrites provider composer DOM before input', () => {
+  assert.match(runner, /editor\.focus\(\)/);
+  assert.match(runner, /Input\.insertText/);
+  assert.doesNotMatch(runner, /editor\.innerHTML|deleteContentBackward/);
+});
+
+
+test('smoke mirrors the production ChatGPT composer and send selectors', () => {
+  assert.match(runner, /textarea\[name="prompt-textarea"\]/);
+  assert.match(runner, /#prompt-textarea/);
+  assert.match(runner, /contenteditable="true"\]\[role="textbox"\]/);
+  assert.match(runner, /button\[aria-label\^="Send"\]/);
+  assert.match(runner, /'value' in composer/);
+});

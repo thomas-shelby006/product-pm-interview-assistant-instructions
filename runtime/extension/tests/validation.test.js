@@ -233,7 +233,7 @@ test('entry imports every runtime dependency passed to the receiver controller',
   )?.[1] || '';
   const receiverCall = entry.slice(
     entry.indexOf('const receiver = createReceiverController'),
-    entry.indexOf("if (runtimeConfig.role === 'receiver')")
+    entry.indexOf("if (runtimeConfig.role === 'receiver')", entry.indexOf('const receiver = createReceiverController'))
   );
   assert.match(receiverCall, /\bsleep\b/);
   assert.match(runtimeImport, /\bsleep\b/);

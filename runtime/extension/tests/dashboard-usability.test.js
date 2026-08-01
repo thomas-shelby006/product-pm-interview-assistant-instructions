@@ -68,10 +68,11 @@ test('Pilot live view exposes lossless inbox current answer next draft and laten
   assert.match(styles, /\.latency-rail/);
 });
 
-test('Pilot live rendering is ledger and batch-state driven', () => {
-  assert.match(dashboard, /deriveLiveInbox\(snapshot, now\)/);
-  assert.match(dashboard, /snapshot\?\.ledger/);
-  assert.match(dashboard, /snapshot\?\.batchState/);
+test('Pilot live rendering is ledger and batch-state driven', async () => {
+  const live = await readFile(new URL('../dashboard/render-live-status.js', import.meta.url), 'utf8');
+  assert.match(live, /deriveLiveInbox\(snapshot, now\)/);
+  assert.match(live, /inbox\.catchUpState/);
+  assert.match(live, /deliveryTruthState/);
   assert.match(dashboard, /storagePressure/);
 });
 
@@ -253,13 +254,14 @@ test('Runtime Pilot exposes active no-content self-test and freshness', () => {
 });
 
 
-test('Pilot separates Delivery Answer and Verification truth rails', () => {
+test('Pilot separates Delivery Answer and Verification truth rails', async () => {
   for (const id of ['deliveryTruthState', 'answerTruthState', 'verificationTruthState']) {
     assert.match(markup, new RegExp(`id="${id}"`));
   }
   assert.match(markup, /aria-live="polite"/);
-  assert.match(dashboard, /deriveAnswerStatus/);
-  assert.match(dashboard, /deriveSelfTestTrust/);
+  const live = await readFile(new URL('../dashboard/render-live-status.js', import.meta.url), 'utf8');
+  assert.match(live, /deriveAnswerStatus/);
+  assert.match(live, /deriveSelfTestTrust/);
   assert.doesNotMatch(dashboard, /currentAnswerBadge', snapshot\?\.receiver\?\.generating/);
 });
 

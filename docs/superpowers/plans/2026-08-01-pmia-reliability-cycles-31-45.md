@@ -1,6 +1,6 @@
 # PMIA Reliability Cycles 31–45 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Separate rendered delivery proof from answer lifecycle, eliminate stale/noisy runtime state, decompose the affected orchestration owners, and add a repeatable isolated-browser release gate.
 
@@ -32,11 +32,11 @@
 - Produces: `reconcileGenerationTruth({ adapterGenerating, stopAvailable, textChanged, finalHintChanged, previous, now }) -> { state, generating, confidence, reason, observedAt }`.
 - Consumed by: Tasks 2, 3, 11, and 13.
 
-- [ ] Write tests for active generation, contradictory stale generation, unknown evidence, and final-hint completion.
-- [ ] Implement the pure reconciler without reading DOM directly.
-- [ ] Publish safe generation state and reason in receiver telemetry.
-- [ ] Replace direct long-lived `adapter.isGenerating()` assumptions in answer observation with reconciled state.
-- [ ] Review diff for provider independence and commit `fix: reconcile receiver generation truth`.
+- [x] Write tests for active generation, contradictory stale generation, unknown evidence, and final-hint completion.
+- [x] Implement the pure reconciler without reading DOM directly.
+- [x] Publish safe generation state and reason in receiver telemetry.
+- [x] Replace direct long-lived `adapter.isGenerating()` assumptions in answer observation with reconciled state.
+- [x] Review diff for provider independence and commit `fix: reconcile receiver generation truth`.
 
 ### Task 2 / Cycle 32: Explicit Answer Lifecycle
 
@@ -51,11 +51,11 @@
 - Produces: `createAnswerLifecycle(initial?)` with `transition(event)` and `snapshot()`.
 - Snapshot fields: `{ batchId, state, startedAt, firstTokenAt, completedAt, lastEvidenceAt, reason, wordCount, elapsedMs }`.
 
-- [ ] Write transition tests for waiting, streaming, complete, no_response, timed_out, cancelled, and idempotent terminal events.
-- [ ] Implement the text-free lifecycle state machine.
-- [ ] Add `answerState` to normalized/exported Pilot session state.
-- [ ] Permit safe answer lifecycle fields through batch/telemetry policy while excluding text.
-- [ ] Commit `feat: separate answer lifecycle from delivery proof`.
+- [x] Write transition tests for waiting, streaming, complete, no_response, timed_out, cancelled, and idempotent terminal events.
+- [x] Implement the text-free lifecycle state machine.
+- [x] Add `answerState` to normalized/exported Pilot session state.
+- [x] Permit safe answer lifecycle fields through batch/telemetry policy while excluding text.
+- [x] Commit `feat: separate answer lifecycle from delivery proof`.
 
 ### Task 3 / Cycle 33: Adaptive Answer Deadlines
 
@@ -68,11 +68,11 @@
 - Produces: `deriveAnswerDeadline({ state, startedAt, firstTokenAt, lastEvidenceAt, now, limits? }) -> { terminal, state, reason, nextCheckMs, deadlineAt }`.
 - Defaults: start grace 8 seconds, stream stall 20 seconds, hard cap 120 seconds.
 
-- [ ] Write tests for never-started response, active stream, stalled stream, hard cap, and configured limits.
-- [ ] Implement deadline policy with exact reason codes.
-- [ ] Use the policy in answer capture; preserve the hard cap for genuine streaming.
-- [ ] Emit `no_response` separately from `timed_out`.
-- [ ] Commit `fix: use evidence-driven answer deadlines`.
+- [x] Write tests for never-started response, active stream, stalled stream, hard cap, and configured limits.
+- [x] Implement deadline policy with exact reason codes.
+- [x] Use the policy in answer capture; preserve the hard cap for genuine streaming.
+- [x] Emit `no_response` separately from `timed_out`.
+- [x] Commit `fix: use evidence-driven answer deadlines`.
 
 ### Task 4 / Cycle 34: Delivery SLA Scope Correction
 
@@ -86,11 +86,11 @@
 - SLA consumes only unresolved ledger entries and transport/storage state.
 - Produces informational `answerWaiting` separately; it never returns a repair action.
 
-- [ ] Add failing cases for proven active batch, answer timeout after proof, and genuinely unresolved delivery.
-- [ ] Remove active-answer age from delivery escalation inputs.
-- [ ] Record answer waiting as safe informational state, not repair state.
-- [ ] Verify existing catch-up/live-check/repair sequence remains unchanged for unresolved finals.
-- [ ] Commit `fix: keep answer waits outside delivery SLA`.
+- [x] Add failing cases for proven active batch, answer timeout after proof, and genuinely unresolved delivery.
+- [x] Remove active-answer age from delivery escalation inputs.
+- [x] Record answer waiting as safe informational state, not repair state.
+- [x] Verify existing catch-up/live-check/repair sequence remains unchanged for unresolved finals.
+- [x] Commit `fix: keep answer waits outside delivery SLA`.
 
 ### Task 5 / Cycle 35: Answer-Safe Batch Advancement
 
@@ -103,11 +103,11 @@
 - `answerComplete(batchId, { answerState, answer, proof })` accepts every terminal answer state exactly once.
 - Proven delivery remains attached to `lastCompleted` even when answer state is `no_response` or `timed_out`.
 
-- [ ] Add tests for no-response, stream-timeout, cancelled stale batch, duplicate terminal event, and next-batch advancement.
-- [ ] Normalize old timeout payloads into the new lifecycle states.
-- [ ] Release active ownership on every terminal state while retaining exact proof.
-- [ ] Ensure later protected partitions submit sequentially once.
-- [ ] Commit `fix: release proven batches on terminal answer state`.
+- [x] Add tests for no-response, stream-timeout, cancelled stale batch, duplicate terminal event, and next-batch advancement.
+- [x] Normalize old timeout payloads into the new lifecycle states.
+- [x] Release active ownership on every terminal state while retaining exact proof.
+- [x] Ensure later protected partitions submit sequentially once.
+- [x] Commit `fix: release proven batches on terminal answer state`.
 
 ### Task 6 / Cycle 36: Repair Event Coalescing
 
@@ -121,11 +121,11 @@
 - Produces: `createRepairEventCoalescer({ cooldownMs })` with `accept(report, now) -> { persist, report, suppressed }`.
 - Phase, error, verification completion, timeout, and check-set changes always persist.
 
-- [ ] Write tests for duplicate suppression, semantic transitions, final healthy report, and suppressed count.
-- [ ] Implement semantic fingerprinting without transcript data.
-- [ ] Route repair timeline recording through the coalescer.
-- [ ] Expose cumulative suppressed count in safe repair diagnostics.
-- [ ] Commit `perf: coalesce duplicate recovery transitions`.
+- [x] Write tests for duplicate suppression, semantic transitions, final healthy report, and suppressed count.
+- [x] Implement semantic fingerprinting without transcript data.
+- [x] Route repair timeline recording through the coalescer.
+- [x] Expose cumulative suppressed count in safe repair diagnostics.
+- [x] Commit `perf: coalesce duplicate recovery transitions`.
 
 ### Task 7 / Cycle 37: Registration Heartbeat Coalescing
 
@@ -139,11 +139,11 @@
 - Produces: `classifyRegistration(previous, incoming) -> ownership_transition | instance_replacement | lease_migration | heartbeat`.
 - Pilot role state gains `{ registrationHeartbeatCount, lastRegistrationAt }`.
 
-- [ ] Test all registration classes and same-instance heartbeat behavior.
-- [ ] Record durable timeline events only for ownership/instance/lease transitions.
-- [ ] Increment safe heartbeat counters without adding timeline rows.
-- [ ] Preserve role conflict and revocation behavior.
-- [ ] Commit `perf: coalesce registration heartbeats`.
+- [x] Test all registration classes and same-instance heartbeat behavior.
+- [x] Record durable timeline events only for ownership/instance/lease transitions.
+- [x] Increment safe heartbeat counters without adding timeline rows.
+- [x] Preserve role conflict and revocation behavior.
+- [x] Commit `perf: coalesce registration heartbeats`.
 
 ### Task 8 / Cycle 38: Self-Test Trust Lease
 
@@ -157,11 +157,11 @@
 - Produces: `deriveSelfTestTrust(snapshot, now, limits?) -> { state, source, expiresAt, ageMs, detail }`.
 - States: `active`, `evidence_fresh`, `stale`, `failed`, `missing`.
 
-- [ ] Test pulse freshness, fresh direct/heartbeat extension, stale evidence, and failed pulse.
-- [ ] Implement trust lease without modifying the original self-test result.
-- [ ] Update self-test card and health report with source and expiry.
-- [ ] Keep manual Run self-test control unchanged.
-- [ ] Commit `feat: add active verification trust lease`.
+- [x] Test pulse freshness, fresh direct/heartbeat extension, stale evidence, and failed pulse.
+- [x] Implement trust lease without modifying the original self-test result.
+- [x] Update self-test card and health report with source and expiry.
+- [x] Keep manual Run self-test control unchanged.
+- [x] Commit `feat: add active verification trust lease`.
 
 ### Task 9 / Cycle 39: Readiness Evidence Fusion
 
@@ -174,11 +174,11 @@
 - Readiness consumes `deriveSelfTestTrust` and returns `{ evidenceSource, evidenceExpiresAt }`.
 - Context-arm and storage-critical requirements remain independent blockers.
 
-- [ ] Add tests for active pulse, evidence-fresh roles, stale roles, failed pulse, and context-unarmed state.
-- [ ] Replace the fixed 30-second self-test blocker with trust-state evaluation.
-- [ ] Render the evidence source in concise readiness detail.
-- [ ] Ensure no passive evidence can override a failed active pulse.
-- [ ] Commit `fix: fuse active evidence into readiness`.
+- [x] Add tests for active pulse, evidence-fresh roles, stale roles, failed pulse, and context-unarmed state.
+- [x] Replace the fixed 30-second self-test blocker with trust-state evaluation.
+- [x] Render the evidence source in concise readiness detail.
+- [x] Ensure no passive evidence can override a failed active pulse.
+- [x] Commit `fix: fuse active evidence into readiness`.
 
 ### Task 10 / Cycle 40: Delivery and Answer Metrics Separation
 
@@ -193,11 +193,11 @@
 - Metrics add `answersCompleted`, `answersNoResponse`, `answersTimedOut`, `answersCancelled`, and `answerAvailabilityRate`.
 - `deliverySuccessRate` remains based only on rendered proof outcomes.
 
-- [ ] Write metric tests proving answer failure cannot reduce delivery success.
-- [ ] Record terminal answer states once per batch.
-- [ ] Extend safe review and health report with answer availability.
-- [ ] Preserve historical metric migration defaults.
-- [ ] Commit `feat: separate delivery and answer metrics`.
+- [x] Write metric tests proving answer failure cannot reduce delivery success.
+- [x] Record terminal answer states once per batch.
+- [x] Extend safe review and health report with answer availability.
+- [x] Preserve historical metric migration defaults.
+- [x] Commit `feat: separate delivery and answer metrics`.
 
 ### Task 11 / Cycle 41: Coherent Live Dashboard State
 
@@ -215,11 +215,11 @@
 - Produces separate Delivery, Answer, and Verification view models.
 - “Caught up” refers only to delivery; answer state is independently labeled.
 
-- [ ] Test coherent combinations for proven/waiting, streaming, no-response, timeout, and idle.
-- [ ] Add a compact Answer rail beside Delivery and Verification.
-- [ ] Remove ambiguous use of receiver `generating` when generation truth is stale.
-- [ ] Keep controls, queue, Pace Guard, and latency rail intact.
-- [ ] Commit `feat: separate live delivery answer and verification state`.
+- [x] Test coherent combinations for proven/waiting, streaming, no-response, timeout, and idle.
+- [x] Add a compact Answer rail beside Delivery and Verification.
+- [x] Remove ambiguous use of receiver `generating` when generation truth is stale.
+- [x] Keep controls, queue, Pace Guard, and latency rail intact.
+- [x] Commit `feat: separate live delivery answer and verification state`.
 
 ### Task 12 / Cycle 42: Recovery/SLA Controller Boundary
 
@@ -233,11 +233,11 @@
 - Coordinator owns `evaluateSla`, `repair`, `handleAlarm`, `cancelSchedules`, and `liveCheckTransition` through injected callbacks.
 - Controller remains command/routing owner.
 
-- [ ] Write coordinator unit tests with fake clock, alarms, roles, and Pilot mutations.
-- [ ] Extract policy orchestration without changing public command names or result shapes.
-- [ ] Remove duplicated repair/SLA helper state from controller.
-- [ ] Add import-reachability and no-focus validation.
-- [ ] Commit `refactor: isolate recovery and SLA coordination`.
+- [x] Write coordinator unit tests with fake clock, alarms, roles, and Pilot mutations.
+- [x] Extract policy orchestration without changing public command names or result shapes.
+- [x] Remove duplicated repair/SLA helper state from controller.
+- [x] Add import-reachability and no-focus validation.
+- [x] Commit `refactor: isolate recovery and SLA coordination`.
 
 ### Task 13 / Cycle 43: Content Answer Orchestrator Boundary
 
@@ -251,11 +251,11 @@
 - `createReceiverAnswerOrchestrator({ adapter, wake, telemetry, log, now, policy })` exposes `start`, `cancel`, `observe`, and `snapshot`.
 - Returns only text to the existing role log path; Pilot receives safe metadata.
 
-- [ ] Test completion, no-response, stream timeout, cancellation, stale generation reconciliation, and one terminal callback.
-- [ ] Move token/wake/tracker/deadline logic out of `entry.js`.
-- [ ] Integrate batch submission and answer completion through the orchestrator.
-- [ ] Package the module and verify no second observer/timer loop is introduced.
-- [ ] Commit `refactor: isolate receiver answer orchestration`.
+- [x] Test completion, no-response, stream timeout, cancellation, stale generation reconciliation, and one terminal callback.
+- [x] Move token/wake/tracker/deadline logic out of `entry.js`.
+- [x] Integrate batch submission and answer completion through the orchestrator.
+- [x] Package the module and verify no second observer/timer loop is introduced.
+- [x] Commit `refactor: isolate receiver answer orchestration`.
 
 ### Task 14 / Cycle 44: Dashboard Rendering Boundary and Accessibility
 
@@ -272,11 +272,11 @@
 - Render modules receive `{ document, snapshot, now, text, formatDuration }` and mutate only owned section IDs.
 - `dashboard.js` remains connection, command, queue, timeline, and composition owner.
 
-- [ ] Write source-boundary and DOM-fixture tests for independent render ownership.
-- [ ] Extract live status and health rendering without changing IDs consumed by tests/controls.
-- [ ] Add `aria-live` and explicit headings for Delivery, Answer, and Verification rails.
-- [ ] Add CSS assertions for 320-pixel reflow and print-safe ordering.
-- [ ] Commit `refactor: split Pilot rendering into focused sections`.
+- [x] Write source-boundary and DOM-fixture tests for independent render ownership.
+- [x] Extract live status and health rendering without changing IDs consumed by tests/controls.
+- [x] Add `aria-live` and explicit headings for Delivery, Answer, and Verification rails.
+- [x] Add CSS assertions for 320-pixel reflow and print-safe ordering.
+- [x] Commit `refactor: split Pilot rendering into focused sections`.
 
 ### Task 15 / Cycle 45: Repeatable Isolated Release Evidence
 
@@ -293,16 +293,16 @@
 - PowerShell parameters: `-ExtensionPath`, `-EvidenceDirectory`, `-BrowserPath`, `-SkipLiveAnswer`.
 - Evidence schema: `{ version, isolatedProfile, extensions, session, selfTest, finals, batches, ledger, outbox, gap, answerCapability, cleanup, ok, limitations }`.
 
-- [ ] Write static tests for isolation flags, synthetic-only questions, exact extension identity, cleanup, and structured evidence.
-- [ ] Implement temporary-profile launch with quoted paths, unique debugging port, and exact process-tree ownership.
-- [ ] Implement registration, self-test, Q1 plus accumulated Q2/Q3, rendered proof, outbox/gap, and cleanup checks.
-- [ ] Distinguish anonymous-provider answer unavailability from delivery failure.
-- [ ] Document all 15 cycles under Bug fixes, New features, and Implementation.
-- [ ] Run the complete validator for the first time after Task 15 source completion.
-- [ ] Resolve failures from exact output and rerun the entire validator.
-- [ ] Run isolated release smoke and record structured evidence.
-- [ ] Verify original checkout and normal Edge remain untouched; verify no push/merge/tag.
-- [ ] Commit `test: add isolated PMIA release evidence gate`.
+- [x] Write static tests for isolation flags, synthetic-only questions, exact extension identity, cleanup, and structured evidence.
+- [x] Implement temporary-profile launch with quoted paths, unique debugging port, and exact process-tree ownership.
+- [x] Implement registration, self-test, Q1 plus accumulated Q2/Q3, rendered proof, outbox/gap, and cleanup checks.
+- [x] Distinguish anonymous-provider answer unavailability from delivery failure.
+- [x] Document all 15 cycles under Bug fixes, New features, and Implementation.
+- [x] Run the complete validator for the first time after Task 15 source completion.
+- [x] Resolve failures from exact output and rerun the entire validator.
+- [x] Run isolated release smoke and record structured evidence.
+- [x] Verify original checkout and normal Edge remain untouched; verify no push/merge/tag.
+- [x] Commit `test: add isolated PMIA release evidence gate`.
 
 ## Final HTML Atlas Update
 

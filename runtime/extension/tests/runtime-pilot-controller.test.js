@@ -373,19 +373,18 @@ test('heartbeat telemetry cannot clear repair without reconciliation', async () 
 });
 
 
-test('repair schedules durable bounded verification without activating tabs', async () => {
+test('repair coordinator schedules durable bounded verification without activating tabs', async () => {
   const { readFile } = await import('node:fs/promises');
   const { dirname, resolve } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-  const source = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
-  assert.match(source, /async function scheduleRecoveryVerification\(sessionId, pilot, attempt = 0\)/);
-  assert.match(source, /if \(attempt >= 4\) return false/);
-  const helper = source.slice(source.indexOf('async function scheduleRecoveryVerification'), source.indexOf('async function scheduleRecoveryTimeout'));
-  assert.match(helper, /scheduleRecoveryAlarm/);
-  assert.doesNotMatch(helper, /setTimeout|active:\s*true|focused:\s*true/);
+  const controller = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
+  const coordinator = await readFile(resolve(extensionRoot, 'shared/runtime-recovery-coordinator.js'), 'utf8');
+  assert.match(controller, /recoveryCoordinator\.scheduleVerification/);
+  assert.match(coordinator, /if \(attempt >= 4\) return false/);
+  assert.match(coordinator, /scheduleRecoveryAlarm/);
+  assert.doesNotMatch(coordinator, /setTimeout|active:\s*true|focused:\s*true/);
 });
-
 
 test('duplicate dashboard request returns the original command result', async () => {
   const { controller, registry } = setup();

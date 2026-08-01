@@ -22,6 +22,17 @@ const questions = Object.freeze({
   q2: 'Synthetic PMIA release Q2: Explain activation versus engagement in exactly three bullets.',
   q3: 'Synthetic PMIA release Q3: Name two guardrail metrics for onboarding.'
 });
+const chatGptComposerSelector = [
+  'textarea[name="prompt-textarea"]',
+  '#prompt-textarea',
+  'textarea[aria-label="Chat with ChatGPT"]',
+  'div[contenteditable="true"][role="textbox"]'
+].join(',');
+const chatGptSendSelector = [
+  'button[aria-label="Send prompt"]',
+  'button[data-testid="send-button"]',
+  'button[aria-label^="Send"]'
+].join(',');
 
 class CDP {
   constructor(url) { this.url = url; this.socket = null; this.sequence = 0; this.pending = new Map(); }
@@ -130,7 +141,7 @@ async function pilotState() {
   return JSON.parse(raw);
 }
 async function pageState(client) {
-  const raw = await client.evaluate(`JSON.stringify({title:document.title,url:location.href,composer:[...document.querySelectorAll('[contenteditable="true"]')].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length)?.innerText||'',users:[...document.querySelectorAll('[data-message-author-role="user"]')].map(node=>node.innerText.trim()),assistants:[...document.querySelectorAll('[data-message-author-role="assistant"]')].map(node=>node.innerText.trim()),stopAvailable:[...document.querySelectorAll('button')].some(button=>/stop generating|stop response|stop streaming/i.test([button.getAttribute('aria-label'),button.getAttribute('data-testid'),button.innerText].join(' ')))})`);
+  const raw = await client.evaluate(`(()=>{const composer=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);return JSON.stringify({title:document.title,url:location.href,composer:composer?String('value' in composer?composer.value:composer.innerText||'').trim():'',users:[...document.querySelectorAll('[data-message-author-role="user"]')].map(node=>node.innerText.trim()),assistants:[...document.querySelectorAll('[data-message-author-role="assistant"]')].map(node=>node.innerText.trim()),stopAvailable:[...document.querySelectorAll('button')].some(button=>/stop generating|stop response|stop streaming/i.test([button.getAttribute('aria-label'),button.getAttribute('data-testid'),button.innerText].join(' ')))})})()`);
   return JSON.parse(raw);
 }
 async function manualCopy(text) {
@@ -161,8 +172,9 @@ try {
   await waitFor('managed lifecycle ready', async () => {
     const values = await targets();
     const selected = values.filter(value => createdTargets.includes(value.id));
-    const senderReady = selected.some(value => value.id === senderTarget && /PMIA_SENDER_CHATGPT_READY_/.test(value.title));
-    const receiverReady = selected.some(value => value.id === receiverTarget && /PMIA_RECEIVER_CHATGPT_READY_/.test(value.title));
+    const suffix = session.replace(/[^A-Za-z0-9]+/g, '_').toUpperCase();
+    const senderReady = selected.some(value => value.id === senderTarget && value.title === `PMIA_SENDER_CHATGPT_${suffix}`);
+    const receiverReady = selected.some(value => value.id === receiverTarget && value.title === `PMIA_RECEIVER_CHATGPT_${suffix}`);
     const dashboardReady = selected.some(value => value.id === dashboardTarget && value.url === dashboardUrl);
     return { ok: senderReady && receiverReady && dashboardReady, value: selected.map(value => ({ id: value.id, title: value.title, url: value.url })) };
   }, 60000, 500);
@@ -178,10 +190,16 @@ try {
   }, 20000, 250);
   evidence.selfTest = selfTest.value;
 
-  await sender.evaluate(`(()=>{const editor=[...document.querySelectorAll('[contenteditable="true"]')].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);if(!editor)return false;editor.focus();editor.innerHTML='<p><br></p>';editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'deleteContentBackward'}));return true})()`, { userGesture: true });
+  const focused = await sender.evaluate(`(()=>{const editor=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);if(!editor)return false;editor.focus();return true})()`, { userGesture: true });
+  if (!focused) throw new Error('Synthetic Q1 composer was unavailable');
   await sender.send('Input.insertText', { text: questions.q1 });
-  const submitted = await sender.evaluate(`(()=>{const button=document.querySelector('[data-testid="send-button"],button[aria-label="Send prompt"]');if(!button||button.disabled)return false;button.click();return true})()`, { userGesture: true });
-  if (!submitted) throw new Error('Synthetic Q1 send control was unavailable');
+  await waitFor('Q1 send control ready', async () => {
+    const raw = await sender.evaluate(`(()=>{const composer=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);const button=[...document.querySelectorAll(${JSON.stringify(chatGptSendSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);return JSON.stringify({composer:composer?String('value' in composer?composer.value:composer.innerText||'').trim():'',sendReady:Boolean(button&&!button.disabled)})})()`);
+    const value = JSON.parse(raw);
+    return { ok: value.composer === questions.q1 && value.sendReady, value };
+  }, 20000, 200);
+  const submitted = await sender.evaluate(`(()=>{const button=[...document.querySelectorAll(${JSON.stringify(chatGptSendSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);if(!button||button.disabled)return false;button.click();return true})()`, { userGesture: true });
+  if (!submitted) throw new Error('Synthetic Q1 send control disappeared before click');
 
   await waitFor('Q1 rendered in receiver', async () => {
     const state = await pageState(receiver);

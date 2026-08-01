@@ -68,6 +68,6 @@ Implementation Cycles 11-20 are source-complete. The candidate now includes per-
 
 A second evidence-driven phase, Cycles 31-45, begins only after this phase passes its full automated and isolated-browser gate. The condensed technical systems atlas will be updated once after Cycle 45.
 
-## 2026-08-01 reliability cycles 31-45 candidate
+## 2026-08-01 reliability cycles 31-45 verified
 
-Cycles 31-45 are source-complete on `improvement/pmia-0.7.0`. The candidate now separates rendered delivery proof from answer lifecycle, reconciles generation truth, uses adaptive answer deadlines, keeps answer waits outside Delivery SLA, coalesces repair and registration churn, fuses active verification evidence, separates delivery and answer metrics, presents independent Delivery/Answer/Verification truth rails, isolates recovery and answer orchestration, splits dashboard rendering ownership, and includes a repository-owned isolated release smoke. Automated and live verification are pending and no verified-release claim should be inferred yet.
+Cycles 31-45 are verified on `improvement/pmia-0.7.0`. The complete automated gate passed 664/664 tests, validated 197 JavaScript files, 18 required runtime surfaces, 98 reachable production modules, and both AutoHotkey programs. The isolated Edge smoke passed with direct sender/receiver probes, three proven synthetic finals, ordered Q2/Q3 accumulation behind Q1, a clear sender outbox, no sequence gap, two observed answers, and complete temporary-profile/process cleanup. The final technical atlas remains deferred until the requested Cycles 46-70 phase is complete.

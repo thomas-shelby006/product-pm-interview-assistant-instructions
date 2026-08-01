@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { catchUpLabel, deriveLatencyRail, deriveLiveInbox } from '../dashboard/live-inbox-model.js';
 
@@ -38,7 +38,8 @@ test('live inbox reports caught up only when no unresolved finals remain', () =>
 
 test('live inbox reports accumulation behind a generating receiver', () => {
   const view = deriveLiveInbox(snapshot({
-    receiver: { connected: true, phase: 'ready', composerReady: true, generating: true },
+    receiver: { connected: true, phase: 'ready', composerReady: true, generationState: { state: 'streaming', generating: true } },
+    answerState: { batchId: 'b1', state: 'streaming', startedAt: 500 },
     ledger: [entry('q1', 1, 'submitting'), entry('q2', 2, 'staged'), entry('q3', 3, 'staged')],
     batchState: {
       active: { batchId: 'b1', memberIds: ['q1'], questionCount: 1 },
