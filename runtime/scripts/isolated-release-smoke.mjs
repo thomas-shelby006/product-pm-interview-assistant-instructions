@@ -123,6 +123,11 @@ const evidence = {
   outbox: {},
   gap: {},
   answerCapability: { state: 'unknown' },
+  transportDrill: {},
+  transportDrillOk: false,
+  pilotUi: {},
+  pilotUiOk: false,
+  failureDetails: null,
   cleanup: { processTreeClosed: false, profileRemoved: false },
   limitations: [],
   deliveryProofOk: false,
@@ -231,12 +236,83 @@ try {
     evidence.answerCapability = { state: 'anonymous_answer_unavailable', assistantCount: receiverState.assistants.length };
     evidence.limitations.push('The isolated anonymous provider session did not expose answer text; rendered delivery proof remained fully verifiable.');
   }
+  await dashboard.evaluate(`document.querySelector('[data-view="review"]')?.click(); true`, { userGesture: true });
+  await dashboard.evaluate(`document.querySelector('[data-command="run_transport_drill"]')?.click(); true`, { userGesture: true });
+  const drill = await waitFor('no-content transport drill', async () => {
+    const current = await pilotState();
+    const report = current?.lastTransportDrill || null;
+    return { ok: Boolean(report && Array.isArray(report.checks) && report.checks.length === 7), value: report };
+  }, 30000, 250);
+  evidence.transportDrill = drill.value;
+  evidence.transportDrillOk = drill.value?.ok === true
+    && drill.value?.contentAccessed === false
+    && drill.value.checks.every(check => check.ok === true);
+
+  async function dashboardUiState(width, height, label) {
+    await dashboard.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await sleep(180);
+    const raw = await dashboard.evaluate(`(()=>{
+      const required=['forecastRisk','forecastDrain','forecastP95','forecastThroughput','recoveryBudgetState','runTransportDrill','transportDrillReport','traceSearch','traceResults','traceDetail'];
+      const mechanics=document.querySelector('.mechanics-grid');
+      const traces=document.querySelector('.trace-layout');
+      const panel=document.querySelector('[data-view-panel="review"]');
+      return JSON.stringify({
+        viewport:{width:innerWidth,height:innerHeight},
+        scrollWidth:document.documentElement.scrollWidth,
+        horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1,
+        required:Object.fromEntries(required.map(id=>[id,Boolean(document.getElementById(id))])),
+        reviewActive:Boolean(panel?.classList.contains('active')),
+        mechanicsColumns:mechanics?getComputedStyle(mechanics).gridTemplateColumns:'',
+        traceColumns:traces?getComputedStyle(traces).gridTemplateColumns:'',
+        traceResultCount:document.querySelectorAll('[data-trace-id]').length,
+        drillReportReady:(document.getElementById('transportDrillReport')?.textContent||'').includes('handshake'),
+        forecastRisk:(document.getElementById('forecastRisk')?.textContent||'').trim(),
+        recoveryBudgetState:(document.getElementById('recoveryBudgetState')?.textContent||'').trim()
+      });
+    })()`);
+    const value = JSON.parse(raw);
+    const screenshot = await dashboard.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    const screenshotPath = path.join(path.dirname(evidencePath), `pilot-${label}.png`);
+    await fs.writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+    return { ...value, screenshotPath };
+  }
+
+  const desktopUi = await dashboardUiState(1200, 900, 'desktop');
+  const mobileUi = await dashboardUiState(320, 900, '320px');
+  await dashboard.send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 900, deviceScaleFactor: 1, mobile: false });
+  evidence.pilotUi = { desktop: desktopUi, mobile: mobileUi };
+  evidence.pilotUiOk = [desktopUi, mobileUi].every(value => (
+    !value.horizontalOverflow
+    && value.reviewActive
+    && Object.values(value.required).every(Boolean)
+    && value.drillReportReady
+    && value.traceResultCount >= 3
+  ));
+
   evidence.deliveryProofOk = proof.value.deliveryProofOk && evidence.outbox.count === 0 && evidence.gap.clear;
-  evidence.ok = evidence.deliveryProofOk;
+  evidence.ok = evidence.deliveryProofOk && evidence.transportDrillOk && evidence.pilotUiOk;
 } catch (error) {
   failure = error;
   evidence.error = String(error?.stack || error);
   evidence.limitations.push(`Smoke failure: ${String(error?.message || error)}`);
+  let sendControls = [];
+  try {
+    if (sender) {
+      const raw = await sender.evaluate(`(()=>JSON.stringify([...document.querySelectorAll('button')].map(button=>({
+        ariaLabel:String(button.getAttribute('aria-label')||''),
+        testId:String(button.getAttribute('data-testid')||''),
+        text:String(button.innerText||'').trim().slice(0,80),
+        disabled:Boolean(button.disabled),
+        visible:Boolean(button.offsetWidth||button.offsetHeight||button.getClientRects().length)
+      })).filter(value=>/send/i.test([value.ariaLabel,value.testId,value.text].join(' '))).slice(0,12)))()`);
+      sendControls = JSON.parse(raw);
+    }
+  } catch {}
+  evidence.failureDetails = {
+    message: String(error?.message || error),
+    lastSample: error?.last?.value || error?.last || null,
+    sendControls
+  };
   try {
     const pilot = await pilotState();
     evidence.ledger = pilot?.ledger || [];
@@ -254,5 +330,5 @@ try {
   await fs.writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
 }
 
-console.log(JSON.stringify({ ok: evidence.ok, evidencePath, deliveryProofOk: evidence.deliveryProofOk, selfTest: evidence.selfTest?.ok === true, outbox: evidence.outbox, gap: evidence.gap, answerCapability: evidence.answerCapability, limitations: evidence.limitations }, null, 2));
+console.log(JSON.stringify({ ok: evidence.ok, evidencePath, deliveryProofOk: evidence.deliveryProofOk, transportDrillOk: evidence.transportDrillOk, pilotUiOk: evidence.pilotUiOk, selfTest: evidence.selfTest?.ok === true, outbox: evidence.outbox, gap: evidence.gap, answerCapability: evidence.answerCapability, limitations: evidence.limitations }, null, 2));
 if (failure || !evidence.ok) process.exit(1);

@@ -38,6 +38,32 @@ test('isolated smoke writes structured evidence and distinguishes answer limitat
   assert.match(runner, /deliveryProofOk/);
 });
 
+test('isolated smoke runs the complete no-content transport drill', () => {
+  assert.match(runner, /run_transport_drill/);
+  assert.match(runner, /checks\.length === 7/);
+  assert.match(runner, /contentAccessed === false/);
+  assert.match(runner, /transportDrillOk/);
+});
+
+test('isolated smoke validates Pilot mechanics at desktop and 320 CSS pixels', () => {
+  assert.match(runner, /Emulation\.setDeviceMetricsOverride/);
+  assert.match(runner, /dashboardUiState\(1200, 900, 'desktop'\)/);
+  assert.match(runner, /dashboardUiState\(320, 900, '320px'\)/);
+  assert.match(runner, /horizontalOverflow/);
+  assert.match(runner, /Page\.captureScreenshot/);
+  assert.match(runner, /pilotUiOk/);
+});
+
+test('cleanup preserves every release gate in final evidence', () => {
+  assert.match(powershell, /deliveryProofOk[\s\S]*transportDrillOk[\s\S]*pilotUiOk[\s\S]*processClosed[\s\S]*profileRemoved/);
+});
+
+test('smoke failure evidence preserves the final readiness sample', () => {
+  assert.match(runner, /failureDetails/);
+  assert.match(runner, /error\?\.last/);
+  assert.match(runner, /sendControls/);
+});
+
 test('complete validator requires the repository-owned smoke surfaces', () => {
   assert.match(validator, /run-isolated-release-smoke\.ps1/);
   assert.match(validator, /isolated-release-smoke\.mjs/);

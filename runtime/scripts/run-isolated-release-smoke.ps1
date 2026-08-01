@@ -108,7 +108,13 @@ finally {
                 profileRemoved = $profileRemoved
                 completedAt = (Get-Date).ToUniversalTime().ToString('o')
             }
-            $evidence.ok = [bool]($evidence.deliveryProofOk -and $processClosed -and $profileRemoved)
+            $evidence.ok = [bool](
+                $evidence.deliveryProofOk `
+                -and $evidence.transportDrillOk `
+                -and $evidence.pilotUiOk `
+                -and $processClosed `
+                -and $profileRemoved
+            )
             [IO.File]::WriteAllText(
                 $evidencePath,
                 (($evidence | ConvertTo-Json -Depth 40) + [Environment]::NewLine),
