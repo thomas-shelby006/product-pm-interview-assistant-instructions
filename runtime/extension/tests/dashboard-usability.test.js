@@ -268,3 +268,18 @@ test('dashboard uses reconciled generation state instead of raw receiver boolean
   assert.match(dashboard, /answerStatus\.label/);
   assert.doesNotMatch(dashboard, /receiverGenerating', role\?\.generating \?/);
 });
+
+test('dashboard rendering owners are split and narrow', async () => {
+  const live = await readFile(new URL('../dashboard/render-live-status.js', import.meta.url), 'utf8');
+  const health = await readFile(new URL('../dashboard/render-runtime-health.js', import.meta.url), 'utf8');
+  assert.match(dashboard, /renderTruthRail/);
+  assert.match(dashboard, /renderRuntimeRole/);
+  assert.doesNotMatch(live, /queueBody|timelineCanvas|sendCommand|chrome\.runtime/);
+  assert.doesNotMatch(health, /queueBody|timelineCanvas|sendCommand|chrome\.runtime/);
+});
+
+test('dashboard supports 320 CSS pixel reflow and print ordering', () => {
+  assert.match(styles, /@media \(max-width: 320px\)/);
+  assert.match(styles, /@media print/);
+  assert.match(styles, /truth-rail/);
+});

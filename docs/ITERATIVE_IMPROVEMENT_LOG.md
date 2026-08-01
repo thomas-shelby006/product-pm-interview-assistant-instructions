@@ -305,3 +305,8 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Bug fixes:** answer cancellation, generation reconciliation and terminal reporting now have one owner instead of scattered tokens in content entry orchestration.
 - **New features:** focused answer orchestrator with text-free state snapshots, one terminal callback and evidence-driven deadlines.
 - **Implementation:** `entry.js` retains provider wiring and batch submission while the orchestrator owns tracker, lifecycle, generation truth, wake waits and timeout policy.
+
+## Cycle 44 - Dashboard Rendering Boundary and Accessibility
+- **Bug fixes:** truth-summary and role-health updates no longer depend on the monolithic queue/timeline renderer.
+- **New features:** focused live-status and runtime-health render modules, 320 CSS-pixel reflow and print-safe ordering.
+- **Implementation:** connection, commands, queue, timeline and diagnostics remain in `dashboard.js`; extracted renderers mutate only their owned IDs and expose no browser or transport APIs.

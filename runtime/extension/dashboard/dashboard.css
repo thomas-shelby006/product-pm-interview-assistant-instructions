@@ -274,3 +274,23 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 .verification-truth[data-state="failed"], .verification-truth[data-state="stale"] { border-left-color: var(--danger); }
 .self-test-panel[data-state="active"], .self-test-panel[data-state="evidence_fresh"] { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
 @media (min-width: 720px) { .truth-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+@media (max-width: 320px) {
+  body { min-width: 0; }
+  main, .shell, .view, .truth-rail, .live-command-center, .role-grid, .latest-grid, .control-grid { min-width: 0; width: 100%; }
+  .control-grid, .truth-rail, .live-command-center, .role-grid, .latest-grid, .metrics { grid-template-columns: minmax(0, 1fr); }
+  .session-strip { grid-template-columns: minmax(0, 1fr); }
+  .session-strip div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .panel-title, .section-heading, .card-head { align-items: flex-start; flex-direction: column; gap: .2rem; }
+  button, select { max-width: 100%; white-space: normal; }
+  .queue-wrap, .timeline-viewport { overflow-x: auto; }
+}
+
+@media print {
+  .control-grid, .footer, .toast, button, .shortcut-help, .view-tabs { display: none !important; }
+  body, .shell, main { background: white !important; color: black !important; box-shadow: none !important; }
+  .truth-rail { display: grid; grid-template-columns: repeat(3, 1fr); break-inside: avoid; }
+  .live-command-center, .role-grid, .latest-grid { display: block; }
+  .truth-card, .live-panel, .role-card, .latency-section, .warnings, .metrics { box-shadow: none !important; break-inside: avoid; margin-bottom: .5rem; }
+  [data-view-panel] { display: block !important; }
+}

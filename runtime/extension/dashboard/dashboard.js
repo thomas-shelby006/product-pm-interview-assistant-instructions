@@ -5,11 +5,10 @@ import {
   formatDuration,
   latestReceiverProof,
   primaryTransportAction,
-  roleHealth,
   virtualSlice,
   warningLabel
 } from './dashboard-model.js';
-import { catchUpLabel, deriveLatencyRail, deriveLiveInbox } from './live-inbox-model.js';
+import { catchUpLabel, deriveLatencyRail } from './live-inbox-model.js';
 import { derivePaceGuard, paceLabel } from './pace-guard-model.js';
 import { diagnosticTone, groupRuntimeWarnings } from './diagnostics-model.js';
 import { deriveGapWatch } from './gap-watch-model.js';
@@ -27,8 +26,8 @@ import { deriveDeliverySlaView } from './delivery-sla-model.js';
 import { deriveRecoverySchedule } from './recovery-schedule-model.js';
 import { deriveSessionEndView } from './session-end-model.js';
 import { deriveSelfTestView } from './self-test-model.js';
-import { deriveSelfTestTrust } from './self-test-trust-model.js';
-import { deriveAnswerStatus } from './answer-status-model.js';
+import { renderTruthRail } from './render-live-status.js';
+import { renderRuntimeRole } from './render-runtime-health.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -315,12 +314,7 @@ function renderLiveCommandCenter(snapshot, now) {
     text('catchUpDetail', state.sessionEnded
       ? 'The lossless session state was cleared after managed shutdown.'
       : 'Waiting for the first authoritative ledger snapshot.');
-    text('deliveryTruthState', state.sessionEnded ? 'Session ended' : 'Connecting');
-    text('deliveryTruthDetail', state.sessionEnded ? 'The managed lossless ledger was cleared.' : 'Waiting for the lossless ledger.');
-    text('answerTruthState', 'Idle');
-    text('answerTruthDetail', 'No answer state is available yet.');
-    text('verificationTruthState', 'Not run');
-    text('verificationTruthDetail', 'Waiting for active verification evidence.');
+    renderTruthRail({ document, snapshot: null, now, text, sessionEnded: state.sessionEnded });
     for (const id of ['inboxPending', 'inboxInFlight', 'inboxProven']) text(id, '0');
     text('currentAnswerBadge', 'Idle');
     text('currentBatchTitle', 'No active batch');
@@ -374,28 +368,11 @@ function renderLiveCommandCenter(snapshot, now) {
     renderLatencyRail(null);
     return;
   }
-  const inbox = deriveLiveInbox(snapshot, now);
+  const { inbox, answerStatus } = renderTruthRail({ document, snapshot, now, text, sessionEnded: state.sessionEnded });
   const stateCard = document.querySelector('.live-state-card');
   if (stateCard) stateCard.dataset.catchUp = inbox.catchUpState;
   text('catchUpState', catchUpLabel(inbox.catchUpState));
   text('catchUpDetail', catchUpDetail(inbox));
-  text('deliveryTruthState', catchUpLabel(inbox.catchUpState));
-  text('deliveryTruthDetail', catchUpDetail(inbox));
-  const answerStatus = deriveAnswerStatus(snapshot, now);
-  text('answerTruthState', answerStatus.label);
-  text('answerTruthDetail', `${answerStatus.title}. ${answerStatus.detail}`);
-  const verificationTrust = deriveSelfTestTrust(snapshot, now);
-  const verificationLabels = { active: 'Actively verified', evidence_fresh: 'Evidence fresh', stale: 'Stale', failed: 'Failed', missing: 'Not run' };
-  text('verificationTruthState', verificationLabels[verificationTrust.state] || 'Unknown');
-  text('verificationTruthDetail', verificationTrust.detail);
-  for (const [selector, value] of [
-    ['.delivery-truth', inbox.catchUpState],
-    ['.answer-truth', answerStatus.state],
-    ['.verification-truth', verificationTrust.state]
-  ]) {
-    const node = document.querySelector(selector);
-    if (node) node.dataset.state = value;
-  }
   text('inboxPending', String(inbox.pendingCount));
   text('inboxInFlight', String(inbox.inFlightCount));
   text('inboxProven', String(inbox.provenCount));
@@ -611,39 +588,6 @@ function renderLiveCommandCenter(snapshot, now) {
   renderLatencyRail(snapshot);
 }
 
-function renderRole(roleName, role, now) {
-  const health = roleHealth(role, now);
-  const prefix = roleName;
-  const healthNode = byId(`${prefix}Health`);
-  healthNode.textContent = health.label;
-  healthNode.dataset.tone = health.tone;
-  text(`${prefix}Provider`, role?.provider || '--');
-  text(`${prefix}Phase`, role?.phase || '--');
-  text(`${prefix}Composer`, role?.composerReady ? 'Ready' : 'Waiting');
-  text(`${prefix}Heartbeat`, health.ageMs === null ? '--' : `${formatDuration(health.ageMs)} ago`);
-  const capabilities = role?.adapterCapabilities;
-  text(`${prefix}Adapter`, !capabilities
-    ? 'Unknown'
-    : capabilities.complete
-      ? 'Complete'
-      : `Missing: ${(capabilities.missingRequired || []).join(', ')}`);
-  if (roleName === 'sender') {
-    text('senderVoice', role?.voiceActive ? 'Active' : 'Idle');
-    text('senderSilence', role?.sourceSilenceMs ? formatDuration(role.sourceSilenceMs) : '0s');
-  } else {
-    const generation = role?.generationState || {};
-    const generationLabel = generation.state === 'streaming'
-      ? `Streaming (${generation.confidence || 'unknown'})`
-      : generation.state === 'starting'
-        ? 'Starting'
-        : generation.state === 'complete'
-          ? 'Complete'
-          : 'Idle';
-    text('receiverGenerating', `${generationLabel}${generation.reason ? ` - ${String(generation.reason).replaceAll('_', ' ')}` : ''}`);
-    text('receiverScroll', role?.scrollLocked ? 'Locked' : 'Free');
-  }
-}
-
 function renderWarnings(snapshot) {
   const container = byId('warningList');
   const groupsContainer = byId('diagnosticGroups');
@@ -699,8 +643,8 @@ function renderOverview(snapshot, now) {
   renderEfficiency();
   renderReadiness(snapshot, now);
   renderLiveCommandCenter(snapshot, now);
-  renderRole('sender', snapshot?.sender, now);
-  renderRole('receiver', snapshot?.receiver, now);
+  renderRuntimeRole({ roleName: 'sender', role: snapshot?.sender, now, text, healthNode: byId('senderHealth') });
+  renderRuntimeRole({ roleName: 'receiver', role: snapshot?.receiver, now, text, healthNode: byId('receiverHealth') });
   renderWarnings(snapshot);
   text('deliverySuccess', snapshot ? `${snapshot.metrics?.deliverySuccessRate ?? 100}%` : '--');
   text('averageProof', snapshot ? formatDuration(snapshot.metrics?.averageDeliveryProofMs || 0) : '--');
