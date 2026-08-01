@@ -919,3 +919,32 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** the existing tokenized two-phase end guard now includes the live-session phase.
 
 **Source-complete status:** Cycles 131–135 are implemented. Executable verification remains deferred until Cycle 145 source completion.
+
+## Live interview UX cycles 136–140
+
+### Cycle 136 — Operational Event Filters
+- **Bug fixes:** review no longer mixes every heartbeat, control, answer, recovery, and delivery event in one undifferentiated stream.
+- **New features:** Delivery, Answer, Recovery, Operator, and System filters with severity and text search.
+- **Implementation:** one pure classifier decorates bounded timeline events without changing the source log.
+
+### Cycle 137 — Plain-Language Trace Explanation
+- **Bug fixes:** raw per-final spans no longer require knowledge of internal stage names.
+- **New features:** ordered explanations from observation through rendered proof and answer terminal state.
+- **Implementation:** trace explanation is a presentation projection over existing immutable spans.
+
+### Cycle 138 — SLO History and Trend
+- **Bug fixes:** delivery health no longer depends only on the latest point-in-time forecast.
+- **New features:** bounded trend, breach streak, p50/p95, backlog slope, and drain estimate.
+- **Implementation:** semantically identical samples coalesce and the history is capped at 120 entries.
+
+### Cycle 139 — Stabilization Runbook
+- **Bug fixes:** complex degraded sessions no longer require guessing the safe repair sequence.
+- **New features:** one verified step at a time across self-test, live check, consistency, reconciliation, repair, and final verification.
+- **Implementation:** the runbook reuses existing allow-listed command owners and persists metadata only.
+
+### Cycle 140 — Performance Health
+- **Bug fixes:** harmless background cost is no longer reported as equivalent to delivery-impacting degradation.
+- **New features:** user-impact classification across storage, commit wait, cache efficiency, transport RTT, and delivery SLO.
+- **Implementation:** one pure health model produces reason-coded watch/degraded states and a safe recommendation.
+
+**Source-complete status:** Cycles 136–140 are implemented. Executable verification remains deferred until Cycle 145 source completion.

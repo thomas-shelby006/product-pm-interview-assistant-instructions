@@ -1229,6 +1229,20 @@ function renderMechanics(snapshot) {
     ? JSON.stringify(snapshot.lastTransportDrill, null, 2)
     : 'No drill has been run.';
 
+  const operational = snapshot?.operationalReview || {};
+  const health = operational.performanceHealth || {};
+  const healthCard = document.querySelector('.operational-health-card');
+  if (healthCard) healthCard.dataset.state = health.state || 'unknown';
+  text('operationalHealthState', humanizeCode(health.state || 'unknown'));
+  text('operationalHealthDetail', health.userImpact ? 'Current performance evidence can affect delivery or operator response.' : health.issues?.length ? `${health.issues.length} condition(s) should be watched.` : 'No user-impacting performance issue is detected.');
+  text('sloTrendState', humanizeCode(operational.sloTrend?.state || 'unknown'));
+  text('commitWaitState', formatDuration(health.commitWaitMs || 0));
+  text('operationalCacheState', `${Math.round(Number(health.cacheHitRate ?? 1) * 100)}%`);
+  const runbook = operational.stabilization;
+  text('stabilizationState', humanizeCode(runbook?.state || 'not_started'));
+  const currentStep = runbook?.steps?.[runbook.current || 0];
+  text('stabilizationDetail', currentStep ? `Current: ${humanizeCode(currentStep.id)} (${Number(runbook.current || 0) + 1}/${runbook.steps.length}).` : runbook?.state === 'complete' ? 'All stabilization checks completed.' : 'Start only when runtime evidence needs stabilization.');
+
   const index = buildTraceIndex(snapshot);
   const results = searchDeliveryTraces(index, state.traceQuery);
   if (!state.selectedTraceId || !results.some(item => item.traceId === state.selectedTraceId)) {
@@ -1257,7 +1271,7 @@ function renderMechanics(snapshot) {
     }
   }
   const selected = inspectDeliveryTrace(index.find(item => item.traceId === state.selectedTraceId));
-  byId('traceDetail').textContent = selected ? JSON.stringify(selected, null, 2) : 'No trace selected.';
+  byId('traceDetail').textContent = selected ? JSON.stringify({ ...selected, explanation: explainTrace(selected) }, null, 2) : 'No trace selected.';
 }
 function renderReview(snapshot) {
   const review = deriveReview(snapshot);

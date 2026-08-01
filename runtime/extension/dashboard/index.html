@@ -463,6 +463,18 @@
             <button id="exportSupportBundle">Download support bundle</button>
             <p id="supportBundleStatus">No support bundle has been exported.</p>
           </article>
+          <article class="mechanics-card operational-health-card" data-state="unknown">
+            <div class="section-heading"><div><h3>Operational health</h3><p>Separates user-impacting slowdown from safe background work.</p></div></div>
+            <p class="mechanics-primary" id="operationalHealthState">Waiting</p>
+            <p id="operationalHealthDetail">No performance-health evidence.</p>
+            <dl class="mechanics-stats"><div><dt>SLO trend</dt><dd id="sloTrendState">Unknown</dd></div><div><dt>Commit wait</dt><dd id="commitWaitState">--</dd></div><div><dt>Cache hit</dt><dd id="operationalCacheState">--</dd></div></dl>
+          </article>
+          <article class="mechanics-card stabilization-card">
+            <div class="section-heading"><div><h3>Stabilization runbook</h3><p>Runs one verified safe step at a time.</p></div></div>
+            <p class="mechanics-primary" id="stabilizationState">Not started</p>
+            <p id="stabilizationDetail">Start only when runtime evidence needs stabilization.</p>
+            <div class="inline-actions"><button data-command="start_stabilization">Start</button><button data-command="run_stabilization_step">Run current step</button><button data-command="cancel_stabilization">Cancel</button></div>
+          </article>
           <article class="mechanics-card accessibility-card">
             <div class="section-heading"><div><h3>Accessibility</h3><p>Session-scoped visual and announcement preferences.</p></div></div>
             <div class="accessibility-controls accessibility-settings">

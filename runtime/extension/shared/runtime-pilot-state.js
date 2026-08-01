@@ -227,6 +227,8 @@ function normalizeSession(item) {
     incidentControls: normalizeIncidentControls(item.incidentControls || {}),
     operatorMarkers: Array.isArray(item.operatorMarkers) ? item.operatorMarkers.map(value => ({ ...value })).slice(-100) : [],
     checkpoint: item.checkpoint && typeof item.checkpoint === 'object' ? normalizeSessionCheckpoint(item.checkpoint) : null,
+    sloHistory: Array.isArray(item.sloHistory) ? item.sloHistory.slice(-120).map(value => ({ ...value })) : [],
+    stabilizationRunbook: item.stabilizationRunbook && typeof item.stabilizationRunbook === 'object' ? JSON.parse(JSON.stringify(item.stabilizationRunbook)) : null,
     crashResumeDismissedAt: Math.max(0, Number(item.crashResumeDismissedAt || 0)),
     uiPreferences: {
       shortcutBindings: normalizeShortcutBindings(item.uiPreferences?.shortcutBindings || {}),
@@ -473,6 +475,22 @@ export class RuntimePilotState {
     return { ...session.senderOutboxState };
   }
 
+
+
+  setSloHistory(sessionId, history = [], now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.sloHistory = Array.isArray(history) ? history.slice(-120).map(value => ({ ...value })) : [];
+    session.updatedAt = now;
+    return session.sloHistory.map(value => ({ ...value }));
+  }
+
+  setStabilizationRunbook(sessionId, value = null, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.stabilizationRunbook = value ? JSON.parse(JSON.stringify(value)) : null;
+    session.updatedAt = now;
+    this.record(sessionId, 'stabilization_runbook_updated', { state: value?.state || 'cleared', current: Number(value?.current || 0) }, now);
+    return session.stabilizationRunbook ? JSON.parse(JSON.stringify(session.stabilizationRunbook)) : null;
+  }
 
   dismissCrashResume(sessionId, now = Date.now()) {
     const session = this.ensure(sessionId, now);
@@ -1237,6 +1255,8 @@ export class RuntimePilotState {
       incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false })),
       operatorMarkers: JSON.parse(JSON.stringify(session.operatorMarkers || [])),
       checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null,
+      sloHistory: session.sloHistory.map(value => ({ ...value })),
+      stabilizationRunbook: session.stabilizationRunbook ? JSON.parse(JSON.stringify(session.stabilizationRunbook)) : null,
       crashResumeDismissedAt: Math.max(0, Number(session.crashResumeDismissedAt || 0)),
       uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() }))
     };
@@ -1284,6 +1304,8 @@ export class RuntimePilotState {
       incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false })),
       operatorMarkers: JSON.parse(JSON.stringify(session.operatorMarkers || [])),
       checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null,
+      sloHistory: session.sloHistory.map(value => ({ ...value })),
+      stabilizationRunbook: session.stabilizationRunbook ? JSON.parse(JSON.stringify(session.stabilizationRunbook)) : null,
       crashResumeDismissedAt: Math.max(0, Number(session.crashResumeDismissedAt || 0)),
       uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() }))
     }));

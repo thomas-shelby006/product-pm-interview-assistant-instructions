@@ -46,6 +46,10 @@ import { validateFocusGesture } from './focus-gesture-token.js';
 import { derivePreflightWizard } from './preflight-wizard.js';
 import { deriveResumeGuard, validateResumeBoundary } from './resume-guard.js';
 import { deriveCrashResume } from './crash-resume-model.js';
+import { addSloSample, deriveSloTrend } from './slo-history.js';
+import { advanceRunbook, cancelRunbook, startRunbook } from './stabilization-runbook.js';
+import { filterOperationalEvents } from './operational-event-filter.js';
+import { derivePerformanceHealth } from './performance-health.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -297,6 +301,12 @@ export function createRuntimePilotController({
       preflightWizard: derivePreflightWizard(enrichedBase),
       resumeGuard: deriveResumeGuard(enrichedBase),
       crashResume: deriveCrashResume(enrichedBase, Date.now()),
+      operationalReview: {
+        events: filterOperationalEvents(enrichedBase.timeline || [], { limit: 80 }),
+        sloTrend: deriveSloTrend(enrichedBase.sloHistory || []),
+        stabilization: enrichedBase.stabilizationRunbook || null,
+        performanceHealth: derivePerformanceHealth(enrichedBase)
+      },
       performanceBudget: {
         ...(snapshotBase.performanceBudget || {}),
         cacheHits: localPerformance.cacheHits,
@@ -1661,6 +1671,30 @@ export function createRuntimePilotController({
         break;
       case 'run_self_test':
         result = await activeSelfTest(sessionId, registry, pilot);
+        break;
+      case 'start_stabilization': {
+        const runbook = startRunbook(pilot.snapshot(sessionId), Date.now());
+        pilot.setStabilizationRunbook(sessionId, runbook);
+        result = { ok: true, runbook };
+        break;
+      }
+      case 'run_stabilization_step': {
+        const current = pilot.snapshot(sessionId)?.stabilizationRunbook;
+        if (!current || !current.steps?.length) { result = { ok: false, error: 'stabilization_missing' }; break; }
+        const step = current.steps[current.current || 0];
+        let stepResult = { ok: true };
+        if (step.command === 'run_self_test') stepResult = await activeSelfTest(sessionId, registry, pilot);
+        else if (step.command === 'check_live') stepResult = await liveCheck(sessionId, registry, pilot);
+        else if (step.command === 'resume_catch_up') stepResult = await reconcileSession(sessionId, registry, pilot);
+        else if (step.command === 'repair_runtime') stepResult = await repair(sessionId, registry, pilot, { source: 'stabilization' });
+        else if (step.command === 'audit_consistency') stepResult = await auditConsistency(sessionId);
+        const runbook = advanceRunbook(current, stepResult, Date.now());
+        pilot.setStabilizationRunbook(sessionId, runbook);
+        result = { ok: stepResult?.ok !== false, runbook, stepResult };
+        break;
+      }
+      case 'cancel_stabilization':
+        result = { ok: true, runbook: pilot.setStabilizationRunbook(sessionId, cancelRunbook(pilot.snapshot(sessionId)?.stabilizationRunbook || {}, Date.now())) };
         break;
       case 'repair_runtime':
         result = await repair(sessionId, registry, pilot, { source: 'manual' });
