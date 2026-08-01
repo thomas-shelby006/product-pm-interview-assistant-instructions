@@ -478,3 +478,31 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** the controller emits a metadata-only blocked snapshot; the dashboard derives compatible, migrated, recovered, or blocked state without state payloads.
 
 **Block A verification:** 81/81 focused integration tests passed across schema, migrations, quarantine, integrity, store, invariants, compatibility, dashboard, health report, and controller. HTML atlas remains deferred.
+
+
+## Cycle 76 - Ledger Identity Indexes
+- **Bug fixes:** ledger ID and provider-sequence duplicate checks no longer rescan the complete ordered ledger on every final or lease operation.
+- **New features:** exact ID and provider-sequence maps with deterministic rebuild statistics.
+- **Implementation:** persist, get, lease acquire/release, targeted ID transitions, and compaction removal use maintained indexes while the ordered array remains the sole export/proof order.
+
+## Cycle 77 - Batch and State Ledger Indexes
+- **Bug fixes:** batch proof, state counts, and batch transitions no longer depend on repeated whole-ledger scans or duplicated audit logic.
+- **New features:** batch/state membership sets, indexed counts, transition-aware updates, and deterministic mismatch audit/rebuild.
+- **Implementation:** every accepted state/batch transition updates the index atomically; `ledger-index-audit` is the production audit owner.
+
+## Cycle 78 - Indexed Rendered Proof Reconciliation
+- **Bug fixes:** reconciliation no longer performs a nested pending-batch by rendered-message scan during restart or repair.
+- **New features:** one-pass rendered-user index with exact fingerprints, token shingles, query statistics, and collision rejection.
+- **Implementation:** candidates are indexed once per reconcile call and still pass the existing strict rendered-batch matcher before proof acceptance.
+
+## Cycle 79 - Starvation-Free Delivery Deadlines
+- **Bug fixes:** protected partitions now expose deterministic deadlines and cannot remain indefinitely invisible behind normal urgency.
+- **New features:** stable deadline, age, urgency, selected partition, and reason-coded blockers.
+- **Implementation:** sequence remains the primary order, `BatchPlanner` still freezes the first protected partition, and hold/active answer/auto-submit/draft conflict remain authoritative.
+
+## Cycle 80 - Receiver Credit Hysteresis
+- **Bug fixes:** short receiver bursts no longer make credits oscillate between available and backpressure, and follow-up branches now normalize `capacity` consistently.
+- **New features:** immediate drop, stable recovery window, critical state, raw credit evidence, and precise retry-after metadata.
+- **Implementation:** one receiver-local hysteresis owner wraps every credit response without changing selective ACK/NACK identity.
+
+**Block B verification:** 116/116 focused integration tests passed across ledger indexes, proof reconciliation, batch planning, deadlines, sequence buffering, burst safety, flow control, and production validation. HTML atlas remains deferred.
