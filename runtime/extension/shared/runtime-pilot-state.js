@@ -77,7 +77,8 @@ function normalizeSession(item) {
       next: item.batchState?.next || null,
       hold: Boolean(item.batchState?.hold),
       autoSubmit: item.batchState?.autoSubmit !== false,
-      lastEvent: item.batchState?.lastEvent || null
+      lastEvent: item.batchState?.lastEvent || null,
+      lastCompleted: item.batchState?.lastCompleted || null
     },
     queue: new DeliveryLedger(item.ledger || item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
@@ -334,7 +335,8 @@ export class RuntimePilotState {
         batchId: String(event.batchId || ''),
         memberIds,
         questionCount: Number(event.questionCount || memberIds.length),
-        submitted: type === 'batch_submitted'
+        submitted: type === 'batch_submitted',
+        proof: type === 'batch_submitted' ? (event.proof || null) : null
       };
     } else if (type === 'next_batch_draft') {
       session.batchState.next = {
@@ -343,6 +345,13 @@ export class RuntimePilotState {
         written: event.written !== false
       };
     } else if (type === 'batch_answer_complete' || type === 'batch_answer_timeout') {
+      session.batchState.lastCompleted = {
+        ...(session.batchState.active || {}),
+        answer: event.answer || null,
+        proof: event.proof || session.batchState.active?.proof || null,
+        completedAt: now,
+        timeout: type === 'batch_answer_timeout'
+      };
       session.batchState.active = null;
     } else if (type === 'batch_submit_failed') {
       session.batchState.active = null;

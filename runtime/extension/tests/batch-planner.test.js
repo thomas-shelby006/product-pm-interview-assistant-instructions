@@ -1,6 +1,6 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BatchPlanner, composeBatchPrompt } from '../shared/batch-planner.js';
+import { BatchPlanner, composeBatchPrompt, matchesRenderedBatch } from '../shared/batch-planner.js';
 
 function envelope(id, seq, text = `Question ${seq}`) {
   return { id, sessionId: 's', sourceProvider: 'chatgpt', kind: 'question', seq, text, metadata: {}, createdAt: seq };
@@ -39,4 +39,37 @@ test('batch prompt preserves arrival order', () => {
   const prompt = composeBatchPrompt({ entries });
   assert.deepEqual(prompt.memberIds, ['q1', 'q2', 'q3']);
   assert.match(prompt.text, /Question 1:[\s\S]*Question 2:[\s\S]*Question 3:/);
+});
+
+
+test('single-question batch is not wrapped with latest-focus instructions', () => {
+  const prompt = composeBatchPrompt({ entries: [{ id: 'q1', envelope: envelope('q1', 1, 'What is activation?') }] });
+  assert.equal(prompt.text, 'What is activation?');
+  assert.equal(prompt.questionCount, 1);
+  assert.equal(prompt.focusId, 'q1');
+});
+
+test('multi-question batch preserves all questions and prioritizes only the latest', () => {
+  const entries = [
+    { id: 'q1', envelope: envelope('q1', 1, 'What is activation?') },
+    { id: 'q2', envelope: envelope('q2', 2, 'How would you measure retention?') },
+    { id: 'q3', envelope: envelope('q3', 3, 'Which metric would you prioritize?') }
+  ];
+  const prompt = composeBatchPrompt({ entries });
+  assert.match(prompt.text, /EARLIER QUESTION 1:[\s\S]*What is activation\?/);
+  assert.match(prompt.text, /EARLIER QUESTION 2:[\s\S]*How would you measure retention\?/);
+  assert.match(prompt.text, /LATEST QUESTION \(HIGHEST PRIORITY\):[\s\S]*Which metric would you prioritize\?/);
+  assert.equal(prompt.focusId, 'q3');
+  assert.equal(prompt.questionCount, 3);
+  assert.match(prompt.fingerprint, /^[a-f0-9]{8}$/);
+});
+
+test('rendered batch reconciliation matches the frozen prompt', () => {
+  const prompt = composeBatchPrompt({ entries: [
+    { id: 'q1', envelope: envelope('q1', 1, 'First?') },
+    { id: 'q2', envelope: envelope('q2', 2, 'Latest?') }
+  ] });
+  assert.equal(matchesRenderedBatch(prompt.text, prompt), true);
+  assert.equal(matchesRenderedBatch(`You said: ${prompt.text}`, prompt), true);
+  assert.equal(matchesRenderedBatch('Different question', prompt), false);
 });

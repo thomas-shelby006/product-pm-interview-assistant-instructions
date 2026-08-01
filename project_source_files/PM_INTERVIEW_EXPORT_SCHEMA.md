@@ -710,3 +710,8 @@ The bridge now enforces the privacy rule above instead of only documenting it:
 - `summary` now includes `session_armed_fired` (boolean) and a `session_metadata` snapshot, so the review file shows whether the session was correctly armed and with what emphasis/round/mode.
 
 `Avoid mentioning` and `Answer mode` remain prompt-level behaviors (model-followed, logged), not deterministic runtime redaction or length enforcement.
+
+
+## Batch delivery proof
+
+PMIA 0.7+ exports may include `batchId`, ordered `memberIds`, `focusId`, `questionCount`, `fingerprint`, and one provider-rendered proof mapped to every member final. A multi-question batch preserves every question while marking only the latest as highest priority.

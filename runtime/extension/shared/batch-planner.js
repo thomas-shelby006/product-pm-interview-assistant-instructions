@@ -1,4 +1,4 @@
-﻿function cloneEntry(entry) {
+function cloneEntry(entry) {
   return {
     id: String(entry?.id || entry?.envelope?.id || ''),
     envelope: entry?.envelope ? { ...entry.envelope, metadata: { ...(entry.envelope.metadata || {}) } } : null,
@@ -12,22 +12,55 @@ function batchId(entries) {
   return `batch-${Number(first?.seq || 0)}-${Number(last?.seq || 0)}-${String(last?.id || '').slice(-8)}`;
 }
 
+function normalizedText(value) {
+  return String(value || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+}
+
+function stableFingerprint(value) {
+  let hash = 0x811c9dc5;
+  for (const character of String(value || '')) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
 export function composeBatchPrompt({ entries = [] } = {}) {
-  const questions = entries
-    .map(entry => String(entry?.envelope?.text || '').trim())
-    .filter(Boolean);
-  if (!questions.length) return { text: '', memberIds: [], focusId: '', questionCount: 0, fingerprint: '' };
-  const text = questions.length === 1
-    ? questions[0]
-    : questions.map((question, index) => `Question ${index + 1}:\n${question}`).join('\n\n');
-  const memberIds = entries.map(entry => String(entry.id));
+  const valid = entries
+    .map(cloneEntry)
+    .filter(entry => entry.id && normalizedText(entry.envelope?.text));
+  const memberIds = valid.map(entry => entry.id);
+  if (!valid.length) return { text: '', memberIds: [], focusId: '', questionCount: 0, fingerprint: '' };
+  const latest = valid.at(-1);
+  const text = valid.length === 1
+    ? String(latest.envelope.text).trim()
+    : [
+        'MULTIPLE INTERVIEWER QUESTIONS WERE RECEIVED WHILE THE PREVIOUS ANSWER WAS IN PROGRESS.',
+        'Answer all questions, but focus primarily on the latest question. Keep responses to earlier questions brief unless they are needed for context.',
+        '',
+        ...valid.slice(0, -1).flatMap((entry, index) => [
+          `EARLIER QUESTION ${index + 1}:`,
+          String(entry.envelope.text).trim(),
+          ''
+        ]),
+        'LATEST QUESTION (HIGHEST PRIORITY):',
+        String(latest.envelope.text).trim()
+      ].join('\n');
   return {
     text,
     memberIds,
-    focusId: memberIds.at(-1) || '',
-    questionCount: questions.length,
-    fingerprint: `${memberIds.join('|')}::${text}`
+    focusId: latest.id,
+    questionCount: valid.length,
+    fingerprint: stableFingerprint(`${memberIds.join('|')}::${text}`)
   };
+}
+
+export function matchesRenderedBatch(renderedText, prompt) {
+  const rendered = normalizedText(renderedText);
+  if (!rendered || !prompt?.questionCount) return false;
+  const expected = normalizedText(prompt.text);
+  if (rendered === expected || rendered.includes(expected) || expected.includes(rendered)) return true;
+  return (prompt.memberIds || []).length === 1 && rendered.includes(expected);
 }
 
 export class BatchPlanner {
