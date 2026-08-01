@@ -1,4 +1,4 @@
-import { BatchPlanner } from '../shared/batch-planner.js';
+import { BatchPlanner, matchesRenderedBatch } from '../shared/batch-planner.js';
 
 export function createReceiverBatchRuntime({
   adapter,
@@ -112,6 +112,36 @@ export function createReceiverBatchRuntime({
         };
       }
       return submitNext();
+    },
+
+    async reconcile({ batches = [], pending = [] } = {}) {
+      const messages = adapter.getConversationMessages?.() || [];
+      const renderedUsers = messages.filter(message => message.role === 'user');
+      const proven = [];
+      for (const batch of Array.isArray(batches) ? batches : []) {
+        const matched = renderedUsers.some(message => matchesRenderedBatch(message.text, batch.prompt));
+        if (!matched) continue;
+        proven.push(String(batch.id));
+        emit('batch_reconciled', {
+          batchId: String(batch.id),
+          memberIds: Array.isArray(batch.memberIds) ? batch.memberIds.map(String) : [],
+          proof: { ok: true, verified: true, proof: 'existing_rendered_batch' }
+        });
+      }
+      const provenMembers = new Set(
+        (Array.isArray(batches) ? batches : [])
+          .filter(batch => proven.includes(String(batch.id)))
+          .flatMap(batch => batch.memberIds || [])
+          .map(String)
+      );
+      const replayed = [];
+      for (const envelope of (Array.isArray(pending) ? pending : [])
+        .filter(item => item?.id && !provenMembers.has(String(item.id)))
+        .sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0))) {
+        const result = await this.accept(envelope);
+        replayed.push({ envelopeId: envelope.id, result });
+      }
+      return { ok: true, proven, replayed };
     },
 
     async answerComplete(batchId = '') {

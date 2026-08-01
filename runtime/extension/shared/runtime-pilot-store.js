@@ -1,4 +1,4 @@
-﻿import { RuntimePilotState } from './runtime-pilot-state.js';
+import { RuntimePilotState } from './runtime-pilot-state.js';
 
 export function createRuntimePilotStore({
   storageArea,
@@ -27,6 +27,11 @@ export function createRuntimePilotStore({
         throw new TypeError('Invalid PMIA runtime pilot state');
       }
       await storageArea.set({ [key]: state.exportState() });
+    },
+
+    async bytesInUse() {
+      if (typeof storageArea.getBytesInUse !== 'function') return 0;
+      return Number(await storageArea.getBytesInUse(null)) || 0;
     },
 
     async clear() {

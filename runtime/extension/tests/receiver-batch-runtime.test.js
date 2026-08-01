@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createReceiverBatchRuntime } from '../content/receiver-batch-runtime.js';
 
@@ -72,4 +72,43 @@ test('hold preserves the next draft until explicit submit', async () => {
   assert.equal(submitted.length, 0);
   await runtime.submitNext({ force: true });
   assert.equal(submitted.length, 1);
+});
+
+
+test('receiver reconciliation proves an already rendered batch without resubmission', async () => {
+  const provider = adapter();
+  provider.getConversationMessages = () => [{ id: 'u1', role: 'user', text: 'Rendered batch prompt' }];
+  const events = [];
+  const submitted = [];
+  const runtime = createReceiverBatchRuntime({
+    adapter: provider,
+    async submitBatch(batch) { submitted.push(batch); return { ok: true }; },
+    onEvent: event => events.push(event)
+  });
+  const result = await runtime.reconcile({
+    batches: [{
+      id: 'batch-1',
+      memberIds: ['q1', 'q2'],
+      prompt: { text: 'Rendered batch prompt', questionCount: 2, memberIds: ['q1', 'q2'] }
+    }],
+    pending: [envelope('q1', 1), envelope('q2', 2)]
+  });
+  assert.deepEqual(result.proven, ['batch-1']);
+  assert.equal(result.replayed.length, 0);
+  assert.equal(submitted.length, 0);
+  assert.equal(events.some(event => event.type === 'batch_reconciled'), true);
+});
+
+test('receiver reconciliation replays only unresolved finals in sequence order', async () => {
+  const provider = adapter();
+  provider.getConversationMessages = () => [];
+  const submitted = [];
+  const runtime = createReceiverBatchRuntime({
+    adapter: provider,
+    async submitBatch(batch) { submitted.push(batch); return { ok: true }; }
+  });
+  const result = await runtime.reconcile({ pending: [envelope('q2', 2), envelope('q1', 1)] });
+  assert.equal(result.replayed.length, 2);
+  assert.deepEqual(submitted[0].prompt.memberIds, ['q1']);
+  assert.deepEqual(runtime.snapshot().next.prompt.memberIds, ['q2']);
 });

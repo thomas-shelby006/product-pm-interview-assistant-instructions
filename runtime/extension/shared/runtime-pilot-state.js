@@ -93,7 +93,9 @@ function normalizeSession(item) {
       hidden: Boolean(item.layout?.hidden)
     },
     lastRepair: item.lastRepair || null,
-    endedAt: Number.isFinite(item.endedAt) ? item.endedAt : 0
+    endedAt: Number.isFinite(item.endedAt) ? item.endedAt : 0,
+    storagePressure: item.storagePressure || { bytes: 0, quotaBytes: 10485760, percent: 0, level: 'normal' },
+    proofArchive: item.proofArchive || { count: 0, lastProvenAt: 0 }
   };
 }
 
@@ -369,6 +371,32 @@ export class RuntimePilotState {
     return { ...session.batchState };
   }
 
+  setStoragePressure(sessionId, pressure, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.storagePressure = { ...(pressure || {}) };
+    session.updatedAt = now;
+    return { ...session.storagePressure };
+  }
+
+  compactProvenHistory(sessionId, retain = 80, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const removed = session.queue.compactProven(retain);
+    if (!removed.length) return 0;
+    session.proofArchive = {
+      count: Number(session.proofArchive?.count || 0) + removed.length,
+      lastProvenAt: Math.max(
+        Number(session.proofArchive?.lastProvenAt || 0),
+        ...removed.map(item => Number(item.proof?.at || item.updatedAt || 0))
+      )
+    };
+    this.record(sessionId, 'proven_history_compacted', {
+      count: removed.length,
+      retained: retain,
+      archiveCount: session.proofArchive.count
+    }, now);
+    return removed.length;
+  }
+
   setLayout(sessionId, layout, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     session.layout = { ...session.layout, ...(layout || {}) };
@@ -472,6 +500,9 @@ export class RuntimePilotState {
       });
     }
     if (session.batchState.draftConflict) warnings.push({ code: 'receiver_draft_conflict', severity: 'warn' });
+    if (session.storagePressure?.level === 'critical') warnings.push({ code: 'session_storage_critical', severity: 'error', percent: session.storagePressure.percent });
+    else if (session.storagePressure?.level === 'high') warnings.push({ code: 'session_storage_high', severity: 'warn', percent: session.storagePressure.percent });
+    else if (session.storagePressure?.level === 'elevated') warnings.push({ code: 'session_storage_elevated', severity: 'warn', percent: session.storagePressure.percent });
     if (session.mode === 'repairing') warnings.push({ code: 'repair_in_progress', severity: 'warn' });
     if (session.mode === 'degraded') warnings.push({ code: 'runtime_degraded', severity: 'error' });
     if (session.mode === 'paused') warnings.push({ code: 'transport_paused', severity: 'warn' });
@@ -504,7 +535,9 @@ export class RuntimePilotState {
       dashboardConnections: session.dashboardConnections,
       layout: { ...session.layout },
       lastRepair: session.lastRepair ? { ...session.lastRepair } : null,
-      endedAt: session.endedAt
+      endedAt: session.endedAt,
+      storagePressure: { ...session.storagePressure },
+      proofArchive: { ...session.proofArchive }
     };
   }
 
@@ -527,7 +560,9 @@ export class RuntimePilotState {
       processedCommandIds: session.processedCommandIds,
       layout: session.layout,
       lastRepair: session.lastRepair,
-      endedAt: session.endedAt
+      endedAt: session.endedAt,
+      storagePressure: { ...session.storagePressure },
+      proofArchive: { ...session.proofArchive }
     }));
   }
 }

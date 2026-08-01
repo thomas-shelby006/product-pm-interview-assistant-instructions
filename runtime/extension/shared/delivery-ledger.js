@@ -1,4 +1,4 @@
-﻿import { isEnvelope } from './protocol.js';
+import { isEnvelope } from './protocol.js';
 
 const ACTIVE_STATES = new Set(['persisted', 'staged', 'submitting', 'failed']);
 const ALL_STATES = new Set([...ACTIVE_STATES, 'proven', 'archived']);
@@ -175,6 +175,17 @@ export class DeliveryLedger {
 
   snapshot() {
     return this.#entries.map(cloneEntry);
+  }
+
+  compactProven(retain = 80) {
+    const keep = Math.max(0, Number(retain) || 0);
+    const proven = this.#entries.filter(entry => entry.state === 'proven');
+    const removeCount = Math.max(0, proven.length - keep);
+    if (!removeCount) return [];
+    const removeIds = new Set(proven.slice(0, removeCount).map(entry => entry.id));
+    const removed = this.#entries.filter(entry => removeIds.has(entry.id)).map(cloneEntry);
+    this.#entries = this.#entries.filter(entry => !removeIds.has(entry.id));
+    return removed;
   }
 
   counts() {

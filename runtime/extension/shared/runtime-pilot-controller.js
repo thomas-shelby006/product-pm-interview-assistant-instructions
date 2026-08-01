@@ -2,6 +2,8 @@ import { normalizeDashboardCommand, parseDashboardPortName } from './dashboard-p
 import { createRuntimePilotStore } from './runtime-pilot-store.js';
 import { getRuntimeWindowLayout, windowUpdateForBounds } from './window-layout.js';
 import { hasMeaningfulTelemetryChange, heartbeatPatch } from './telemetry-coalescer.js';
+import { classifyStoragePressure, DEFAULT_SESSION_QUOTA_BYTES } from './storage-pressure.js';
+import { composeBatchPrompt } from './batch-planner.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -66,6 +68,16 @@ export function createRuntimePilotController({
   async function commit(sessionId, pilot = null) {
     const current = pilot || await state();
     await store.save(current);
+    const bytes = await store.bytesInUse().catch(() => 0);
+    const quota = Number(storageArea?.QUOTA_BYTES || DEFAULT_SESSION_QUOTA_BYTES);
+    const pressure = classifyStoragePressure(bytes, quota);
+    const prior = current.snapshot(sessionId)?.storagePressure;
+    if (!prior || prior.level !== pressure.level || Math.abs(Number(prior.percent || 0) - pressure.percent) >= 1) {
+      current.setStoragePressure(sessionId, pressure);
+      if (pressure.level === 'high') current.compactProvenHistory(sessionId, 80);
+      if (pressure.level === 'critical') current.compactProvenHistory(sessionId, 30);
+      await store.save(current);
+    }
     return broadcast(sessionId, current);
   }
 
@@ -102,6 +114,46 @@ export function createRuntimePilotController({
     }
   }
 
+  function reconciliationPayload(snapshot) {
+    const ledger = Array.isArray(snapshot?.ledger) ? snapshot.ledger : [];
+    const unresolved = ledger.filter(item => ['persisted', 'staged', 'submitting', 'failed'].includes(item.state));
+    const grouped = new Map();
+    for (const item of unresolved) {
+      const batchId = String(item.batchId || '');
+      if (!batchId || batchId === 'next' || batchId.startsWith('single-')) continue;
+      if (!grouped.has(batchId)) grouped.set(batchId, []);
+      grouped.get(batchId).push(item);
+    }
+    const batches = [...grouped.entries()].map(([id, items]) => {
+      const entries = items
+        .sort((a, b) => Number(a.envelope?.seq || 0) - Number(b.envelope?.seq || 0))
+        .map(item => ({ id: item.id, envelope: item.envelope }));
+      return { id, memberIds: entries.map(entry => entry.id), prompt: composeBatchPrompt({ entries }) };
+    });
+    return {
+      batches,
+      pending: unresolved.map(item => item.envelope).filter(Boolean)
+    };
+  }
+
+  async function reconcileSession(sessionId) {
+    const registry = await registryProvider();
+    const pilot = await state();
+    const snapshot = pilot.snapshot(sessionId);
+    if (!snapshot?.receiver?.connected) return { ok: false, error: 'receiver_missing' };
+    const payload = reconciliationPayload(snapshot);
+    if (!payload.pending.length) return { ok: true, reason: 'ledger_clean' };
+    const result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'reconcile_delivery', payload);
+    pilot.record(sessionId, 'delivery_reconciliation', {
+      ok: Boolean(result.ok),
+      pendingCount: payload.pending.length,
+      batchCount: payload.batches.length,
+      error: result.error || ''
+    });
+    await commit(sessionId, pilot);
+    return result;
+  }
+
   async function syncRegistration(registration) {
     const pilot = await state();
     const tab = await tabState(registration.tabId);
@@ -117,6 +169,9 @@ export function createRuntimePilotController({
       tabId: registration.tabId
     });
     await commit(registration.sessionId, pilot);
+    if (registration.role === 'receiver') {
+      setTimeout(() => { void reconcileSession(registration.sessionId); }, 0);
+    }
   }
 
   async function handlePreview({ preview, deliver }) {
@@ -222,7 +277,7 @@ export function createRuntimePilotController({
     if (value.type === 'batch_submitting' && batchId) {
       pilot.markLedgerStaged(sessionId, memberIds, batchId);
       pilot.markLedgerSubmitting(sessionId, batchId);
-    } else if (value.type === 'batch_submitted' && batchId) {
+    } else if ((value.type === 'batch_submitted' || value.type === 'batch_reconciled') && batchId) {
       pilot.markLedgerStaged(sessionId, memberIds, batchId);
       pilot.markLedgerSubmitting(sessionId, batchId);
       pilot.markLedgerProven(sessionId, batchId, value.proof || {});
@@ -740,6 +795,7 @@ export function createRuntimePilotController({
     afterForward,
     telemetry,
     batchEvent,
+    reconcileSession,
     syncRegistration,
     recordRegistrationRecovery,
     disconnectTab,

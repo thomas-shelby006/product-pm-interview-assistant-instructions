@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DeliveryLedger } from '../shared/delivery-ledger.js';
 
@@ -51,4 +51,22 @@ test('delivery ledger compatibility queue never supersedes older finals automati
   ledger.enqueue(envelope('q-2', 2));
   assert.deepEqual(ledger.supersedeBefore(2), []);
   assert.deepEqual(ledger.list().map(item => item.id), ['q-1', 'q-2']);
+});
+
+
+test('proven compaction never removes unresolved finals', () => {
+  const ledger = new DeliveryLedger();
+  for (let seq = 1; seq <= 120; seq += 1) {
+    ledger.persist(envelope(`q-${seq}`, seq));
+    if (seq <= 100) {
+      ledger.markStaged([`q-${seq}`], `b-${seq}`);
+      ledger.markSubmitting(`b-${seq}`);
+      ledger.markProven(`b-${seq}`, { verified: true, at: seq });
+    }
+  }
+  const removed = ledger.compactProven(30);
+  assert.equal(removed.length, 70);
+  assert.equal(ledger.counts().proven, 30);
+  assert.equal(ledger.counts().pending, 20);
+  assert.deepEqual(ledger.pending().map(item => item.id), Array.from({ length: 20 }, (_, index) => `q-${index + 101}`));
 });

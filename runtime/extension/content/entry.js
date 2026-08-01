@@ -649,6 +649,9 @@ async function startRuntime(runtimeConfig) {
         overlay.setStatus('FORWARDING ACTIVE', 'ok', 1600);
         telemetry.event('transport_resumed');
         return { ok: true, transportPaused };
+      case 'reconcile_delivery':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.reconcile(payload);
       case 'recover': {
         const scheduled = runtimeRecovery?.trigger('dashboard_repair') || false;
         senderObserver?.refresh();
