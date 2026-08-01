@@ -430,6 +430,26 @@ export class RuntimePilotState {
     return { ...session.storagePressure };
   }
 
+  compactTransientHistory(sessionId, { timelineRetain = 80, metricRetain = 20, commandRetain = 64 } = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const before = {
+      timeline: session.timeline.length,
+      commands: session.processedCommandIds.length,
+      proofSamples: session.metrics.deliveryProofMs.length,
+      answerSamples: session.metrics.answerElapsedMs.length
+    };
+    session.timeline = session.timeline.slice(-Math.max(20, Number(timelineRetain) || 80));
+    session.processedCommandIds = session.processedCommandIds.slice(-Math.max(16, Number(commandRetain) || 64));
+    session.metrics.deliveryProofMs = session.metrics.deliveryProofMs.slice(-Math.max(10, Number(metricRetain) || 20));
+    session.metrics.answerElapsedMs = session.metrics.answerElapsedMs.slice(-Math.max(10, Number(metricRetain) || 20));
+    const removed = (before.timeline - session.timeline.length)
+      + (before.commands - session.processedCommandIds.length)
+      + (before.proofSamples - session.metrics.deliveryProofMs.length)
+      + (before.answerSamples - session.metrics.answerElapsedMs.length);
+    if (removed > 0) this.record(sessionId, 'transient_history_compacted', { removed, before }, now);
+    return removed;
+  }
+
   compactProvenHistory(sessionId, retain = 80, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     const removed = session.ledger.compactProven(retain);

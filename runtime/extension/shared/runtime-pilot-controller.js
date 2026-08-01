@@ -5,6 +5,7 @@ import { hasMeaningfulTelemetryChange, heartbeatPatch } from './telemetry-coales
 import { classifyStoragePressure, DEFAULT_SESSION_QUOTA_BYTES } from './storage-pressure.js';
 import { buildReconciliationPayload } from './delivery-reconciler.js';
 import { shouldPersistBatchEvent } from './batch-event-policy.js';
+import { utf8Bytes } from './storage-accounting.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 
 function safeError(error) {
@@ -74,12 +75,21 @@ export function createRuntimePilotController({
     await store.save(current);
     const bytes = await store.bytesInUse().catch(() => 0);
     const quota = Number(storageArea?.QUOTA_BYTES || DEFAULT_SESSION_QUOTA_BYTES);
-    const pressure = classifyStoragePressure(bytes, quota);
+    let breakdown = store.estimate(current);
+    const pressure = classifyStoragePressure(bytes, quota, breakdown);
     const prior = current.snapshot(sessionId)?.storagePressure;
     if (!prior || prior.level !== pressure.level || Math.abs(Number(prior.percent || 0) - pressure.percent) >= 1) {
       current.setStoragePressure(sessionId, pressure);
-      if (pressure.level === 'high') current.compactProvenHistory(sessionId, 80);
-      if (pressure.level === 'critical') current.compactProvenHistory(sessionId, 30);
+      if (pressure.level === 'high') {
+        current.compactTransientHistory(sessionId, { timelineRetain: 100, metricRetain: 24 });
+        current.compactProvenHistory(sessionId, 80);
+      }
+      if (pressure.level === 'critical') {
+        current.compactTransientHistory(sessionId, { timelineRetain: 50, metricRetain: 12, commandRetain: 32 });
+        current.compactProvenHistory(sessionId, 20);
+      }
+      breakdown = store.estimate(current);
+      current.setStoragePressure(sessionId, classifyStoragePressure(bytes, quota, breakdown));
       await store.save(current);
     }
     return broadcast(sessionId, current);
@@ -189,14 +199,45 @@ export function createRuntimePilotController({
   }
 
   async function beforeForward(envelope) {
-    const pilot = await state();
+    let pilot = await state();
     if (envelope.kind === 'boot') {
       pilot.recordFinal(envelope.sessionId, envelope);
       await commit(envelope.sessionId, pilot);
       return { paused: false, persisted: true, duplicate: false, response: null };
     }
+    const snapshot = pilot.snapshot(envelope.sessionId);
+    const quota = Number(storageArea?.QUOTA_BYTES || DEFAULT_SESSION_QUOTA_BYTES);
+    const bytes = await store.bytesInUse().catch(() => 0);
+    const projected = bytes + utf8Bytes(envelope) + 1024;
+    if (snapshot?.storagePressure?.level === 'critical' || projected >= quota * .985) {
+      pilot.setStoragePressure(envelope.sessionId, classifyStoragePressure(projected, quota, store.estimate(pilot)));
+      await broadcast(envelope.sessionId, pilot);
+      return {
+        paused: true,
+        persisted: false,
+        duplicate: false,
+        response: { ok: false, persisted: false, error: 'storage_pressure' }
+      };
+    }
+    const priorState = pilot.exportState();
     const persisted = pilot.persistFinal(envelope.sessionId, envelope);
-    await commit(envelope.sessionId, pilot);
+    try {
+      await commit(envelope.sessionId, pilot);
+    } catch (error) {
+      store.resetCache();
+      pilot = null;
+      return {
+        paused: true,
+        persisted: false,
+        duplicate: false,
+        response: {
+          ok: false,
+          persisted: false,
+          error: /quota|space|storage/i.test(safeError(error)) ? 'storage_pressure' : 'persist_failed',
+          rollbackState: priorState.length
+        }
+      };
+    }
     if (!persisted.accepted) {
       return {
         paused: true,
@@ -225,13 +266,7 @@ export function createRuntimePilotController({
         paused: true,
         persisted: true,
         duplicate: false,
-        response: {
-          ok: true,
-          persisted: true,
-          delivered: false,
-          queued: true,
-          reason: 'transport_paused'
-        }
+        response: { ok: true, persisted: true, delivered: false, queued: true, reason: 'transport_paused' }
       };
     }
     return { paused: false, persisted: true, duplicate: false, response: null };
@@ -724,6 +759,14 @@ export function createRuntimePilotController({
       case 'archive_all':
         result = { ok: true, archived: pilot.archiveAllUnresolved(sessionId).length };
         break;
+      case 'compact_proven': {
+        const transient = pilot.compactTransientHistory(sessionId, {
+          timelineRetain: 60, metricRetain: 16, commandRetain: 48
+        });
+        const proven = pilot.compactProvenHistory(sessionId, 20);
+        result = { ok: true, transientCompacted: transient, provenCompacted: proven };
+        break;
+      }
       case 'archive_proven':
         result = { ok: true, archived: pilot.archiveProven(sessionId).length };
         break;

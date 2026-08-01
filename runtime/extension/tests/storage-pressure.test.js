@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyStoragePressure } from '../shared/storage-pressure.js';
 
@@ -19,4 +19,11 @@ test('storage pressure reports stable byte and percentage diagnostics', () => {
     percent: 87.5,
     level: 'high'
   });
+});
+
+
+test('storage pressure preserves a safe category breakdown', () => {
+  const result = classifyStoragePressure(90, 100, { actionable: 40, proven: 20 });
+  assert.equal(result.level, 'high');
+  assert.deepEqual(result.breakdown, { actionable: 40, proven: 20 });
 });

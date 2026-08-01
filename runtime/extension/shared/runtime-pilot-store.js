@@ -1,4 +1,5 @@
 import { RuntimePilotState } from './runtime-pilot-state.js';
+import { estimateStorageCategories } from './storage-accounting.js';
 
 export function createRuntimePilotStore({
   storageArea,
@@ -27,6 +28,11 @@ export function createRuntimePilotStore({
         throw new TypeError('Invalid PMIA runtime pilot state');
       }
       await storageArea.set({ [key]: state.exportState() });
+    },
+
+    estimate(state) {
+      if (!(state instanceof RuntimePilotState)) throw new TypeError('Invalid PMIA runtime pilot state');
+      return estimateStorageCategories(state.exportState());
     },
 
     async bytesInUse() {

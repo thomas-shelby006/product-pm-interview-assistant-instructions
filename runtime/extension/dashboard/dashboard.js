@@ -15,6 +15,7 @@ import { diagnosticTone, groupRuntimeWarnings } from './diagnostics-model.js';
 import { deriveGapWatch } from './gap-watch-model.js';
 import { deriveOutboxStatus } from './outbox-status-model.js';
 import { deriveProofInspector } from './proof-inspector-model.js';
+import { deriveMemoryGuard } from './memory-guard-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -168,6 +169,13 @@ function handlePortMessage(message) {
     renderOperationActivity();
     updateControlAvailability();
   }
+}
+
+function formatBytes(value) {
+  const bytes = Math.max(0, Number(value) || 0);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 function operationLabel(command) {
@@ -367,6 +375,19 @@ function renderLiveCommandCenter(snapshot, now) {
       : inbox.storage.level === 'high'
         ? 'Proven history is compacting; unresolved finals are untouched.'
         : 'Critical pressure. Unresolved finals remain protected; export or end the session soon.');
+  const memory = deriveMemoryGuard(snapshot);
+  const memoryBreakdown = byId('memoryBreakdown');
+  memoryBreakdown.replaceChildren();
+  for (const [label, bytes] of [
+    ['Protected', memory.actionableBytes],
+    ['Proven', memory.provenBytes],
+    ['Telemetry', memory.telemetryBytes],
+    ['Snapshots', memory.snapshotBytes]
+  ]) {
+    const item = document.createElement('span');
+    item.textContent = `${label} ${formatBytes(bytes)}`;
+    memoryBreakdown.append(item);
+  }
   renderLatencyRail(snapshot);
 }
 
@@ -624,6 +645,7 @@ function updateControlAvailability() {
     byId('interruptLatest').disabled ||= !nextCount || !(active || generating);
     byId('copyLatest').disabled ||= !state.snapshot?.latestFinal?.text;
     byId('retryOutbox').disabled ||= deriveOutboxStatus(state.snapshot).count === 0;
+    byId('compactProven').disabled ||= deriveMemoryGuard(state.snapshot).reclaimableBytes === 0;
     byId('submitSelected').disabled ||= !state.selectedQueueId;
     byId('archiveSelected').disabled ||= !state.selectedQueueId;
   }

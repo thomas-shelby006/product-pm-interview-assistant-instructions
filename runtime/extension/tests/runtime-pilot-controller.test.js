@@ -312,3 +312,19 @@ test('controller serializes external mutations by session without a global state
   assert.doesNotMatch(source, /operationQueue/);
   assert.doesNotMatch(source, /serializeOperation/);
 });
+
+
+test('failed durable persistence resets the mutated Pilot cache before sender retry', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { dirname, resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
+  const beforeForward = source.slice(
+    source.indexOf('async function beforeForward'),
+    source.indexOf('function applyDeliveryOutcome')
+  );
+  assert.match(beforeForward, /try \{[\s\S]*await commit\(envelope\.sessionId, pilot\)/);
+  assert.match(beforeForward, /catch \(error\) \{[\s\S]*store\.resetCache\(\)/);
+  assert.match(beforeForward, /persisted:\s*false[\s\S]*storage_pressure/);
+});

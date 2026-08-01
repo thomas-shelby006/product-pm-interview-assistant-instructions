@@ -134,3 +134,9 @@ test('Pilot exposes exact batch proof inspection', () => {
   assert.match(markup, /id="proofState"/);
   assert.match(markup, /id="proofDetail"/);
 });
+
+
+test('Pilot exposes Memory Guard and safe proven-history compaction', () => {
+  assert.match(markup, /id="memoryBreakdown"/);
+  assert.match(markup, /data-command="compact_proven"/);
+});

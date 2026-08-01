@@ -175,6 +175,9 @@ tbody tr.superseded td.question { text-decoration: line-through; }
 .storage-panel { border-left: 4px solid var(--olive); }
 .storage-panel[data-pressure="elevated"] { border-left-color: var(--ochre); }
 .storage-panel[data-pressure="high"], .storage-panel[data-pressure="critical"] { border-left-color: var(--danger); }
+.memory-breakdown { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+.memory-breakdown span { padding: .24rem .38rem; border: 1px solid var(--line); border-radius: 999px; font-size: .58rem; background: var(--surface-2); }
+.storage-panel button { margin-top: .55rem; width: 100%; border-radius: var(--radius); }
 .latency-section { padding: .8rem; margin-bottom: .75rem; box-shadow: none; }
 .latency-section .section-heading > span { color: var(--muted); font-size: .66rem; }
 .latency-rail { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .35rem; margin-top: .68rem; }
