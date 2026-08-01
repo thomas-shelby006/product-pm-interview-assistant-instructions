@@ -1,4 +1,4 @@
-﻿import { OperatorQueue } from './operator-queue.js';
+import { OperatorQueue } from './operator-queue.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -330,6 +330,13 @@ export class RuntimePilotState {
       }
       else if (state.phase === 'unresponsive') {
         warnings.push({ code: `${role}_unresponsive`, role, severity: 'error' });
+      } else if (state.phase && state.phase !== 'ready') {
+        warnings.push({
+          code: `${role}_lifecycle_not_ready`,
+          role,
+          severity: 'warn',
+          phase: state.phase
+        });
       } else if (state.heartbeatAt && now - state.heartbeatAt > 15_000) {
         warnings.push({ code: `${role}_heartbeat_stale`, role, severity: 'error', ageMs: now - state.heartbeatAt });
       } else if (!state.composerReady) {

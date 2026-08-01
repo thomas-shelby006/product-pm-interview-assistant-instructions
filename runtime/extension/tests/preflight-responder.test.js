@@ -9,6 +9,7 @@ test('preflight responder reports runtime identity and reads composer availabili
   const respond = responderModule.createPreflightResponder({
     runtimeConfig: { sessionId: 's1', role: 'receiver', provider: 'claude' },
     version: '0.5.1',
+    instanceId: 'runtime-1',
     adapter: {
       findComposer() { calls.push('findComposer'); return { focus() {} }; },
       getConversationMessages() { throw new Error('must not read messages'); },
@@ -20,7 +21,7 @@ test('preflight responder reports runtime identity and reads composer availabili
   });
   assert.deepEqual(respond(), {
     ok: true, sessionId: 's1', role: 'receiver', provider: 'claude',
-    version: '0.5.1', composerAvailable: true,
+    version: '0.5.1', instanceId: 'runtime-1', composerAvailable: true,
     capabilities: {
       composerFinder: true, messageReader: true, composerWriter: true, submit: true,
       generationState: true, stopGeneration: true, microphoneToggle: false, voiceState: false,
@@ -39,4 +40,5 @@ test('preflight responder tolerates a missing provider composer', () => {
     adapter: { findComposer: () => null }
   });
   assert.equal(respond().composerAvailable, false);
+  assert.equal(respond().instanceId, '');
 });

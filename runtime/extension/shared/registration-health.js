@@ -24,7 +24,8 @@ export async function probeRegistrationOwner({
     const matches = response?.ok === true
       && response.sessionId === registration.sessionId
       && response.role === registration.role
-      && response.provider === registration.provider;
+      && response.provider === registration.provider
+      && (!registration.instanceId || response.instanceId === registration.instanceId);
     return matches
       ? { responsive: true, reason: 'healthy' }
       : { responsive: false, reason: 'invalid_runtime_response' };

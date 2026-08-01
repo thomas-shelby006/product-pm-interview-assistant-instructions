@@ -29,6 +29,8 @@ import { renderRuntimeFatal } from './runtime-fatal.js';
 import { createRecentTranscriptCache, isActionableTranscript, sanitizeTranscriptCandidate } from '../shared/transcript-filter.js';
 import { createPreflightResponder } from './preflight-responder.js';
 import { createRuntimeTelemetry } from './runtime-telemetry.js';
+import { getOrCreateRuntimeInstanceId, shouldApplyRoleRevocation } from './role-revocation.js';
+import { sendWithRegistrationRecovery } from './registration-recovery.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -80,10 +82,13 @@ async function startRuntime(runtimeConfig) {
     ? createClaudeAdapter(document)
     : createChatGptAdapter(document);
   const runtimeVersion = chrome.runtime.getManifest().version;
+  const runtimeInstanceKey = `pmia_runtime_instance_${runtimeConfig.sessionId}_${runtimeConfig.role}`;
+  const runtimeInstanceId = getOrCreateRuntimeInstanceId(sessionStorage, runtimeInstanceKey);
   const respondToPreflight = createPreflightResponder({
     runtimeConfig,
     adapter,
-    version: runtimeVersion
+    version: runtimeVersion,
+    instanceId: runtimeInstanceId
   });
   const overlay = createStatusOverlay(document, runtimeConfig);
   const removeOverflowSafety = installOverflowSafety(document);
@@ -132,7 +137,7 @@ async function startRuntime(runtimeConfig) {
 
   const message = async payload => {
     try {
-      return await chrome.runtime.sendMessage(payload);
+      return await chrome.runtime.sendMessage({ ...payload, runtimeInstanceId });
     } catch (error) {
       const detail = String(error?.message || error);
       const invalidated = /extension context invalidated/i.test(detail);
@@ -169,7 +174,7 @@ async function startRuntime(runtimeConfig) {
   async function register() {
     const response = await message({
       type: 'PMIA_REGISTER',
-      registration: runtimeConfig
+      registration: { ...runtimeConfig, instanceId: runtimeInstanceId }
     });
     if (response?.ok) {
       runtimeRegistered = true;
@@ -229,7 +234,7 @@ async function startRuntime(runtimeConfig) {
     previewSequence = nextPreviewSequence;
     telemetry.preview(preview);
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'PMIA_PREVIEW', preview });
+      const response = await message({ type: 'PMIA_PREVIEW', preview });
       if (!response?.ok && phase !== 'clear') outboundTranscriptCache.forget(text, 'preview', transcriptIdentity);
       return Boolean(response?.ok);
     } catch {
@@ -268,7 +273,18 @@ async function startRuntime(runtimeConfig) {
       return false;
     }
     telemetry.final(envelope);
-    const response = await message({ type: 'PMIA_FORWARD', envelope });
+    const forwarding = await sendWithRegistrationRecovery({
+      send: payload => message(payload),
+      register,
+      payload: { type: 'PMIA_FORWARD', envelope }
+    });
+    const response = forwarding.response;
+    if (forwarding.recovered) {
+      telemetry.event('registration_recovered_before_forward', {
+        envelopeId: envelope.id,
+        attempts: forwarding.attempts
+      });
+    }
     if (!response?.ok && transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
     if (response?.terminal) {
       runtimeRegistered = false;
@@ -617,7 +633,7 @@ async function startRuntime(runtimeConfig) {
         .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
       return true;
     }
-    if (incoming?.type === 'PMIA_ROLE_REVOKED') {
+    if (shouldApplyRoleRevocation(runtimeConfig, runtimeInstanceId, incoming)) {
       registrationActive = false;
       paused = true;
       answerCaptureToken += 1;

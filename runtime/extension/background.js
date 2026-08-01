@@ -8,6 +8,7 @@ import { runCounterpartPreflight } from './shared/preflight.js';
 import { exportManagedSession, exportManagedSessionForTab } from './shared/session-control.js';
 import { probeRegistrationOwner } from './shared/registration-health.js';
 import { createRuntimePilotController } from './shared/runtime-pilot-controller.js';
+import { shouldAllowRuntimeLeaseMigration } from './shared/registration-migration.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -102,14 +103,22 @@ async function deliver(route, registry) {
   };
 }
 
-async function handleRegistration(message, tabId, registry) {
+async function handleRegistration(message, incomingTab, registry) {
+  const tabId = incomingTab?.id;
   const registration = { ...message.registration, tabId };
+  const existing = registry.getSession(registration.sessionId)?.[registration.role] || null;
+  const allowInstanceMigration = await shouldAllowRuntimeLeaseMigration({
+    existing,
+    incomingTab,
+    getTab: existingTabId => chrome.tabs.get(existingTabId)
+  });
   let result = registry.register(
     registration,
-    { now: Date.now(), staleAfterMs: STALE_AFTER_MS }
+    { now: Date.now(), staleAfterMs: STALE_AFTER_MS, allowInstanceMigration }
   );
   let recoveryReason = '';
   let displacedTabId = null;
+  let displacedRegistration = null;
 
   if (!result.accepted && result.conflict && result.registration) {
     const health = await probeRegistrationOwner({
@@ -118,11 +127,12 @@ async function handleRegistration(message, tabId, registry) {
       sendToTab: (existingTabId, outgoing) => chrome.tabs.sendMessage(existingTabId, outgoing)
     });
     if (!health.responsive) {
+      displacedRegistration = { ...result.registration };
       displacedTabId = result.registration.tabId;
       registry.unregister(displacedTabId);
       result = registry.register(
         registration,
-        { now: Date.now(), staleAfterMs: STALE_AFTER_MS }
+        { now: Date.now(), staleAfterMs: STALE_AFTER_MS, allowInstanceMigration: true }
       );
       recoveryReason = health.reason;
     }
@@ -147,12 +157,14 @@ async function handleRegistration(message, tabId, registry) {
     // Registration remains valid even if this browser cannot change discard policy.
   }
 
-  const replacedTabId = result.replacedTabId || displacedTabId;
+  const replacedRegistration = result.replacedRegistration || displacedRegistration;
+  const replacedTabId = replacedRegistration?.tabId || result.replacedTabId || displacedTabId;
   if (replacedTabId) {
     chrome.tabs.sendMessage(replacedTabId, {
       type: 'PMIA_ROLE_REVOKED',
       sessionId: message.registration.sessionId,
-      role: message.registration.role
+      role: message.registration.role,
+      instanceId: String(replacedRegistration?.instanceId || '')
     }).catch(() => {});
   }
 
@@ -203,7 +215,7 @@ async function handleForward(message, tabId, registry) {
   if (!isEnvelope(message.envelope)) {
     return { ok: false, error: 'invalid_envelope' };
   }
-  if (!registry.canForward(message.envelope.sessionId, tabId)) {
+  if (!registry.canForward(message.envelope.sessionId, tabId, message.runtimeInstanceId)) {
     return { ok: false, terminal: true, error: 'sender_not_registered' };
   }
 
@@ -264,9 +276,12 @@ async function handleForward(message, tabId, registry) {
   return { ok: true, ...outcome };
 }
 
-function authorizeSessionMessage(registry, sessionId, tabId) {
-  return Boolean(sessionId && Number.isInteger(tabId) && registry.ownsTab(sessionId, tabId));
+function authorizeSessionMessage(registry, sessionId, tabId, instanceId = '') {
+  return Boolean(
+    sessionId && Number.isInteger(tabId) && registry.ownsTab(sessionId, tabId, instanceId)
+  );
 }
+
 
 function currentSessionStatus(registry, sessionId) {
   return buildSessionStatus(
@@ -323,7 +338,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'PMIA_PREVIEW') {
     loadRegistry()
       .then(registry => {
-        const route = routePreview(registry, message.preview, tabId);
+        const route = routePreview(registry, message.preview, tabId, message.runtimeInstanceId);
         if (!route.accepted) {
           return { ok: false, delivered: false, dropped: true, reason: route.reason };
         }
@@ -333,6 +348,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             registry,
             preview: message.preview,
             senderTabId: tabId,
+            senderInstanceId: message.runtimeInstanceId,
             sendToTab: (targetTabId, outgoing) => chrome.tabs.sendMessage(targetTabId, outgoing)
           })
         });
@@ -346,7 +362,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const registry = await loadRegistry();
 
     if (message?.type === 'PMIA_REGISTER') {
-      sendResponse(await handleRegistration(message, tabId, registry));
+      sendResponse(await handleRegistration(message, sender.tab, registry));
       return;
     }
 
@@ -356,7 +372,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message?.type === 'PMIA_DASHBOARD_COMMAND') {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
         sendResponse({ ok: false, error: 'session_not_owned' });
         return;
       }
@@ -365,11 +381,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message?.type === 'PMIA_RUNTIME_TELEMETRY') {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
         sendResponse({ ok: false, error: 'session_not_owned' });
         return;
       }
-      const role = registry.roleForTab(message.sessionId, tabId);
+      const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
       sendResponse(await pilotController.telemetry({
         sessionId: message.sessionId,
         role,
@@ -380,33 +396,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message?.type === 'PMIA_LOG_EVENT') {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
         sendResponse({ ok: false, error: 'session_not_owned' });
         return;
       }
-      const role = registry.roleForTab(message.sessionId, tabId);
+      const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
       await appendLog(message.sessionId, role, message.event);
       sendResponse({ ok: true });
       return;
     }
 
     if (message?.type === 'PMIA_GET_LOG') {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
         sendResponse({ ok: false, error: 'session_not_owned' });
         return;
       }
-      const role = registry.roleForTab(message.sessionId, tabId);
+      const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
       const events = await logStore.read(message.sessionId, role);
       sendResponse({ ok: true, role, events });
       return;
     }
 
     if (message?.type === 'PMIA_CLEAR_LOG') {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
         sendResponse({ ok: false, error: 'session_not_owned' });
         return;
       }
-      const role = registry.roleForTab(message.sessionId, tabId);
+      const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
       await logStore.clearRole(message.sessionId, role);
       sendResponse({ ok: true });
       return;
@@ -417,6 +433,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         registry,
         sessionId: message.sessionId,
         requesterTabId: tabId,
+        requesterInstanceId: message.runtimeInstanceId,
         sendToTab: (targetTabId, outgoing) => chrome.tabs.sendMessage(targetTabId, outgoing),
         now: Date.now(),
         staleAfterMs: STALE_AFTER_MS
@@ -425,7 +442,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message?.type === 'PMIA_END_SESSION') {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
         sendResponse({ ok: false, error: 'session_not_owned' });
         return;
       }
@@ -444,7 +461,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message?.type === 'PMIA_GET_STATUS') {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
         sendResponse({ ok: false, error: 'session_not_owned' });
         return;
       }

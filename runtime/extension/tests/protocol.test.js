@@ -257,3 +257,66 @@ test('unregister reports affected sessions for lifecycle cleanup', () => {
   assert.deepEqual(registry.unregister(1), ['s1']);
   assert.deepEqual(registry.unregister(999), []);
 });
+
+test('same-tab replacement runtime takes ownership without revoking the new instance', () => {
+  const registry = new registryModule.SessionRegistry();
+  const first = registry.register({
+    sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 5, instanceId: 'old-runtime'
+  }, { now: 1000 });
+  const replacement = registry.register({
+    sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 5, instanceId: 'new-runtime'
+  }, { now: 2000 });
+  assert.equal(first.changed, true);
+  assert.equal(replacement.accepted, true);
+  assert.equal(replacement.changed, true);
+  assert.equal(replacement.replacedTabId, 5);
+  assert.equal(replacement.replacedRegistration.instanceId, 'old-runtime');
+  assert.equal(registry.getSession('s1').sender.instanceId, 'new-runtime');
+  assert.equal(registry.canForward('s1', 5, 'old-runtime'), false);
+  assert.equal(registry.canForward('s1', 5, 'new-runtime'), true);
+});
+
+test('same runtime instance remains a heartbeat and survives service-worker restart', () => {
+  const registry = new registryModule.SessionRegistry();
+  registry.register({
+    sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 5, instanceId: 'runtime-1'
+  }, { now: 1000 });
+  const heartbeat = registry.register({
+    sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 5, instanceId: 'runtime-1'
+  }, { now: 2000 });
+  assert.equal(heartbeat.changed, false);
+  const restored = new registryModule.SessionRegistry(registry.exportState());
+  assert.equal(restored.getSession('s1').sender.instanceId, 'runtime-1');
+  assert.equal(restored.ownsTab('s1', 5, 'runtime-1'), true);
+  assert.equal(restored.ownsTab('s1', 5, 'other-runtime'), false);
+});
+
+test('runtime lease migrates ownership to a replacement tab without a live-role conflict', () => {
+  const registry = new registryModule.SessionRegistry();
+  registry.register({
+    sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 5, instanceId: 'lease-1'
+  }, { now: 1000 });
+  const migrated = registry.register({
+    sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 9, instanceId: 'lease-1'
+  }, { now: 1100 });
+  assert.equal(migrated.accepted, true);
+  assert.equal(migrated.changed, true);
+  assert.equal(migrated.replacedTabId, 5);
+  assert.equal(registry.getSession('s1').sender.tabId, 9);
+  assert.equal(registry.canForward('s1', 5, 'lease-1'), false);
+  assert.equal(registry.canForward('s1', 9, 'lease-1'), true);
+});
+
+
+test('runtime lease migration can be denied for an inactive duplicate tab', () => {
+  const registry = new registryModule.SessionRegistry();
+  registry.register({
+    sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 5, instanceId: 'lease-1'
+  }, { now: 1000 });
+  const duplicate = registry.register({
+    sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 9, instanceId: 'lease-1'
+  }, { now: 1100, allowInstanceMigration: false });
+  assert.equal(duplicate.accepted, false);
+  assert.equal(duplicate.conflict, true);
+  assert.equal(registry.getSession('s1').sender.tabId, 5);
+});

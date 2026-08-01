@@ -539,3 +539,67 @@ test('boot telemetry exports safe metadata but never raw setup text', async () =
   assert.match(runtime, /\[Session setup redacted from session log\]/);
   assert.doesNotMatch(runtime, /Resume and Job Description redacted/);
 });
+
+test('runtime registrations and revocations are scoped to one content instance', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  assert.match(entry, /getOrCreateRuntimeInstanceId/);
+  assert.match(entry, /registration: \{ \.\.\.runtimeConfig, instanceId: runtimeInstanceId \}/);
+  assert.match(entry, /shouldApplyRoleRevocation\(runtimeConfig, runtimeInstanceId, incoming\)/);
+  assert.match(background, /instanceId: String\(replacedRegistration\?\.instanceId/);
+  assert.match(background, /registry\.canForward\([^)]*message\.runtimeInstanceId/);
+  assert.match(background, /authorizeSessionMessage\([^)]*message\.runtimeInstanceId/);
+});
+
+test('sender final forwarding performs one bounded ownership recovery before revocation', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  assert.match(entry, /sendWithRegistrationRecovery/);
+  assert.match(entry, /payload: \{ type: 'PMIA_FORWARD', envelope \}/);
+  assert.match(entry, /registration_recovered_before_forward/);
+});
+
+test('runtime lease migrates across provider tab replacement through session storage', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const registry = await readFile(resolve(extensionRoot, 'shared/session-registry.js'), 'utf8');
+  assert.match(entry, /pmia_runtime_instance_/);
+  assert.match(entry, /getOrCreateRuntimeInstanceId\(sessionStorage/);
+  assert.match(registry, /sameRuntimeLease/);
+  assert.match(registry, /existing\.tabId = tabId/);
+});
+
+
+test('background gates lease migration by active-tab ownership', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  assert.match(background, /shouldAllowRuntimeLeaseMigration/);
+  assert.match(background, /handleRegistration\(message, sender\.tab, registry\)/);
+  assert.match(background, /allowInstanceMigration/);
+});
+
+test('ChatGPT adapter supports the compact semantic conversation transcript', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const chatgpt = await readFile(resolve(extensionRoot, 'content/adapters/chatgpt.js'), 'utf8');
+  const shared = await readFile(resolve(extensionRoot, 'content/adapters/shared.js'), 'utf8');
+  assert.match(chatgpt, /data-conversation-transcript/);
+  assert.match(chatgpt, /data-message-role=\"user\"/);
+  assert.match(chatgpt, /data-message-role=\"assistant\"/);
+  assert.match(chatgpt, /data-message-attribution/);
+  assert.match(chatgpt, /data-message-actions/);
+  assert.match(shared, /element\.id/);
+});
+
+test('receiver delivery terminality cannot revoke an authorized sender', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const delivery = await readFile(resolve(extensionRoot, 'shared/delivery.js'), 'utf8');
+  assert.doesNotMatch(delivery, /delivered: true,[\s\S]{0,80}terminal: true/);
+  assert.match(delivery, /outcome\.delivered \|\| outcome\.superseded/);
+});

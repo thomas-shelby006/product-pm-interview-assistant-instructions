@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { probeRegistrationOwner } from '../shared/registration-health.js';
 
 const registration = {
-  sessionId: 's1', role: 'receiver', provider: 'claude', tabId: 22
+  sessionId: 's1', role: 'receiver', provider: 'claude', tabId: 22, instanceId: 'runtime-1'
 };
 
 test('registration health accepts only the expected PMIA runtime identity', async () => {
@@ -14,7 +14,8 @@ test('registration health accepts only the expected PMIA runtime identity', asyn
       ok: true,
       sessionId: 's1',
       role: 'receiver',
-      provider: 'claude'
+      provider: 'claude',
+      instanceId: 'runtime-1'
     })
   });
   assert.deepEqual(result, { responsive: true, reason: 'healthy' });
@@ -51,4 +52,15 @@ test('registration health replaces an unresponsive or mismatched runtime', async
     responsive: false,
     reason: 'invalid_runtime_response'
   });
+});
+
+test('registration health rejects a different runtime instance in the same tab', async () => {
+  const result = await probeRegistrationOwner({
+    registration,
+    getTab: async () => ({ id: 22 }),
+    sendToTab: async () => ({
+      ok: true, sessionId: 's1', role: 'receiver', provider: 'claude', instanceId: 'runtime-2'
+    })
+  });
+  assert.deepEqual(result, { responsive: false, reason: 'invalid_runtime_response' });
 });

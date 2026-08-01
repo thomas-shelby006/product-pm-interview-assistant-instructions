@@ -46,11 +46,11 @@ export function isPreview(value) {
     (value.seq === undefined || (Number.isSafeInteger(value.seq) && value.seq > 0)));
 }
 
-export function routePreview(registry, preview, senderTabId) {
+export function routePreview(registry, preview, senderTabId, senderInstanceId = '') {
   if (!isPreview(preview)) {
     return { accepted: false, tabId: null, reason: 'invalid_preview' };
   }
-  if (!registry?.canForward?.(preview.sessionId, senderTabId)) {
+  if (!registry?.canForward?.(preview.sessionId, senderTabId, senderInstanceId)) {
     return { accepted: false, tabId: null, reason: 'sender_not_registered' };
   }
   const receiver = registry.getSession?.(preview.sessionId)?.receiver || null;
@@ -60,14 +60,14 @@ export function routePreview(registry, preview, senderTabId) {
   return { accepted: true, tabId: receiver.tabId, reason: 'receiver_ready' };
 }
 
-export async function deliverPreview({ registry, preview, senderTabId, sendToTab }) {
+export async function deliverPreview({ registry, preview, senderTabId, senderInstanceId = '', sendToTab }) {
   const phase = String(preview?.phase || 'interim');
   const text = phase === 'clear' ? '' : sanitizeTranscriptCandidate(preview?.text);
   if (phase !== 'clear' && !text) {
     return { ok: true, delivered: false, dropped: true, reason: 'transient_preview' };
   }
   const sanitizedPreview = { ...preview, text };
-  const route = routePreview(registry, sanitizedPreview, senderTabId);
+  const route = routePreview(registry, sanitizedPreview, senderTabId, senderInstanceId);
   if (!route.accepted) {
     return { ok: false, delivered: false, dropped: true, reason: route.reason };
   }

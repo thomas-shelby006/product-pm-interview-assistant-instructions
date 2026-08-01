@@ -11,7 +11,6 @@ export function classifyDelivery({ route, response, error } = {}) {
       return {
         delivered: false,
         queued: false,
-        terminal: true,
         superseded: true,
         reason
       };
@@ -19,7 +18,6 @@ export function classifyDelivery({ route, response, error } = {}) {
     const outcome = {
       delivered: true,
       queued: false,
-      terminal: true,
       reason
     };
     if (response.duplicate === true) outcome.duplicate = true;
@@ -53,12 +51,12 @@ export async function deliverWithWakeRetry({
   };
 
   let outcome = await attempt();
-  if (outcome.delivered || outcome.terminal) return outcome;
+  if (outcome.delivered || outcome.superseded) return outcome;
   await wakeTab(route.tabId);
   for (const delay of retryDelaysMs) {
     await wait(Math.max(0, Number(delay) || 0));
     outcome = await attempt();
-    if (outcome.delivered || outcome.terminal) return outcome;
+    if (outcome.delivered || outcome.superseded) return outcome;
   }
   return outcome;
 }

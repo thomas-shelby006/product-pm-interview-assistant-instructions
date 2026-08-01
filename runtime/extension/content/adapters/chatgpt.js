@@ -46,17 +46,83 @@ const ACTIVE_VOICE_SELECTORS = [
   'button[aria-label="End voice mode"]',
   ...MUTE_SELECTORS
 ];
-const OBSERVATION_ROOT_SELECTORS = ['main', '[role="main"]'];
-const USER_SELECTORS = ['[data-message-author-role="user"]'];
-const ASSISTANT_SELECTORS = ['[data-message-author-role="assistant"]'];
-const MESSAGE_SELECTOR = '[data-message-author-role="user"],[data-message-author-role="assistant"]';
+const OBSERVATION_ROOT_SELECTORS = [
+  '[data-conversation-transcript]',
+  'main',
+  '[role="main"]'
+];
+const LEGACY_USER_SELECTOR = '[data-message-author-role="user"]';
+const LEGACY_ASSISTANT_SELECTOR = '[data-message-author-role="assistant"]';
+const COMPACT_USER_SELECTOR = '[data-conversation-transcript] [data-message-role="user"]';
+const COMPACT_ASSISTANT_SELECTOR = '[data-conversation-transcript] [data-message-role="assistant"]';
+const MESSAGE_SELECTOR = [
+  LEGACY_USER_SELECTOR,
+  LEGACY_ASSISTANT_SELECTOR,
+  COMPACT_USER_SELECTOR,
+  COMPACT_ASSISTANT_SELECTOR
+].join(',');
+
+function messageRole(element) {
+  return String(
+    element?.getAttribute?.('data-message-author-role')
+    || element?.getAttribute?.('data-message-role')
+    || ''
+  ).trim().toLowerCase();
+}
+
+function isMessageChrome(element) {
+  return Boolean(
+    element?.getAttribute?.('data-message-attribution') !== null
+    || element?.getAttribute?.('data-message-actions') !== null
+    || element?.getAttribute?.('data-assistant-message-actions') !== null
+    || element?.getAttribute?.('data-conversation-inline-beacon-slot') !== null
+  );
+}
+
+function compactMessageText(element) {
+  const preferred = [
+    '[data-user-message-copy]',
+    '[data-user-message-bubble]',
+    '[data-submit-message-animation-target]'
+  ];
+  for (const selector of preferred) {
+    const candidate = element?.querySelector?.(selector);
+    const text = composerText(candidate);
+    if (text) return text;
+  }
+
+  const candidates = Array.from(element?.children || [])
+    .filter(child => !isMessageChrome(child))
+    .map(child => composerText(child))
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length);
+  return candidates[0] || composerText(element);
+}
+
+function messageText(element) {
+  if (element?.getAttribute?.('data-message-role')) return compactMessageText(element);
+  return composerText(element);
+}
 
 export function createChatGptAdapter(doc = document) {
   const findComposer = () => firstInteractiveMatch(doc, COMPOSER_SELECTORS);
   const findSendButton = () => firstVisibleMatch(doc, SEND_SELECTORS);
   const getComposerCandidate = () => firstNonEmptyCandidate(doc, COMPOSER_SELECTORS);
-  const getLatestUserText = () => latestText(doc, USER_SELECTORS);
-  const getConversationMessages = createConversationMessageReader(doc, { selector: MESSAGE_SELECTOR });
+  const getConversationMessages = createConversationMessageReader(doc, {
+    selector: MESSAGE_SELECTOR,
+    roleOf: messageRole,
+    textOf: messageText
+  });
+  const latestRoleText = role => {
+    const fromConversation = [...getConversationMessages()]
+      .reverse()
+      .find(message => message.role === role)?.text || '';
+    if (fromConversation) return fromConversation;
+    return latestText(doc, role === 'user'
+      ? [LEGACY_USER_SELECTOR, COMPACT_USER_SELECTOR]
+      : [LEGACY_ASSISTANT_SELECTOR, COMPACT_ASSISTANT_SELECTOR]);
+  };
+  const getLatestUserText = () => latestRoleText('user');
 
   return {
     provider: 'chatgpt',
@@ -79,7 +145,7 @@ export function createChatGptAdapter(doc = document) {
     stopGenerating() { return clickFirst(doc, STOP_SELECTORS); },
     getLatestUserText,
     getConversationMessages,
-    getLatestAssistantText() { return latestText(doc, ASSISTANT_SELECTORS); },
+    getLatestAssistantText() { return latestRoleText('assistant'); },
     getSenderCandidateInfo() {
       const composer = getComposerCandidate();
       if (composer) return { text: composer.text, source: 'composer' };

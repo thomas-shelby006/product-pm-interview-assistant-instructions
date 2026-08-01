@@ -166,7 +166,9 @@ export function createConversationMessageReader(doc, { selector, roleOf, textOf 
       const previous = logical.at(-1);
       if (previous?.role === role && previous.text === text) continue;
 
-      const stableId = String(element.getAttribute?.('data-message-id') || turnId || '').trim();
+      const stableId = String(
+        element.getAttribute?.('data-message-id') || turnId || element.id || ''
+      ).trim();
       const logicalIndex = logical.length;
       let id = stableId || elementIds.get(element) || '';
       if (!id) {

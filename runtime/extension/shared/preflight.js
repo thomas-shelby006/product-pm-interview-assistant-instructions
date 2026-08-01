@@ -15,11 +15,12 @@ export async function runCounterpartPreflight({
   registry,
   sessionId,
   requesterTabId,
+  requesterInstanceId = '',
   sendToTab,
   now = Date.now(),
   staleAfterMs = 45_000
 }) {
-  const requesterRole = registry?.roleForTab?.(sessionId, requesterTabId);
+  const requesterRole = registry?.roleForTab?.(sessionId, requesterTabId, requesterInstanceId);
   if (!requesterRole) return { ok: false, error: 'session_not_owned' };
 
   const session = registry.getSession(sessionId);

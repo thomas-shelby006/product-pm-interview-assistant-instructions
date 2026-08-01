@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RuntimePilotState } from '../shared/runtime-pilot-state.js';
 
@@ -89,4 +89,15 @@ test('pilot state exposes repair progress and degraded warnings', () => {
   assert.ok(state.snapshot('pmia_session', 1001).warnings.some(item => item.code === 'repair_in_progress'));
   state.setMode('pmia_session', 'degraded', 1002);
   assert.ok(state.snapshot('pmia_session', 1003).warnings.some(item => item.code === 'runtime_degraded'));
+});
+
+test('pilot state warns when a connected role regresses below READY', () => {
+  const state = new RuntimePilotState();
+  state.updateRole('pmia_session', 'sender', {
+    provider: 'chatgpt', phase: 'boot', composerReady: true, heartbeatAt: 1000
+  }, 1000);
+  const snapshot = state.snapshot('pmia_session', 1100);
+  assert.ok(snapshot.warnings.some(item => (
+    item.code === 'sender_lifecycle_not_ready' && item.phase === 'boot'
+  )));
 });

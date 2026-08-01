@@ -14,6 +14,9 @@ export function roleHealth(role, now = Date.now()) {
   const heartbeatAt = Number(role.heartbeatAt || 0);
   const ageMs = heartbeatAt ? Math.max(0, now - heartbeatAt) : null;
   if (role.phase === 'unresponsive') return { label: 'Unresponsive', tone: 'error', ageMs };
+  if (role.phase === 'boot') return { label: 'Starting', tone: 'warn', ageMs };
+  if (role.phase === 'registered') return { label: 'Registering', tone: 'warn', ageMs };
+  if (role.phase && role.phase !== 'ready') return { label: 'Not ready', tone: 'warn', ageMs };
   if (ageMs !== null && ageMs > 15000) return { label: 'Stale', tone: 'error', ageMs };
   if (!role.composerReady) return { label: 'Composer waiting', tone: 'warn', ageMs };
   if (role.generating) return { label: 'Generating', tone: 'info', ageMs };
@@ -30,6 +33,8 @@ export function warningLabel(warning) {
     receiver_unresponsive: 'Receiver runtime did not respond',
     sender_composer_missing: 'Sender composer is not ready',
     receiver_composer_missing: 'Receiver composer is not ready',
+    sender_lifecycle_not_ready: 'Sender runtime has not reached READY',
+    receiver_lifecycle_not_ready: 'Receiver runtime has not reached READY',
     queue_waiting: 'Final questions are waiting in the queue',
     queue_oldest_stale: 'The oldest actionable queued question has waited over two minutes',
     sender_voice_transcript_slow: 'Voice is active but transcript updates are delayed',

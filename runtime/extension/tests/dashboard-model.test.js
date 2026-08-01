@@ -78,3 +78,15 @@ test('command feedback describes the actual operator outcome', () => {
     '3 superseded final(s) cleared'
   );
 });
+
+test('transitional lifecycle phases are never reported healthy', () => {
+  assert.deepEqual(roleHealth({
+    connected: true, phase: 'boot', heartbeatAt: 900, composerReady: true
+  }, 1000), { label: 'Starting', tone: 'warn', ageMs: 100 });
+  assert.equal(roleHealth({
+    connected: true, phase: 'registered', heartbeatAt: 900, composerReady: true
+  }, 1000).label, 'Registering');
+  assert.equal(roleHealth({
+    connected: true, phase: 'ready', heartbeatAt: 900, composerReady: true
+  }, 1000).label, 'Healthy');
+});

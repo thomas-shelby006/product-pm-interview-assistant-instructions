@@ -267,12 +267,67 @@ function roleMessage({ id, role, text, turnId = '' }) {
 test('ChatGPT adapter returns ordered messages with captured stable identities', () => {
   const user = roleMessage({ id: 'u-1', role: 'user', text: 'Full question', turnId: 'turn-1' });
   const assistant = roleMessage({ id: 'a-1', role: 'assistant', text: 'Answer', turnId: 'turn-2' });
-  const selector = '[data-message-author-role="user"],[data-message-author-role="assistant"]';
+  const selector = '[data-message-author-role="user"],[data-message-author-role="assistant"],[data-conversation-transcript] [data-message-role="user"],[data-conversation-transcript] [data-message-role="assistant"]';
   const adapter = chatgptModule.createChatGptAdapter(fakeDocument({}, { [selector]: [user, assistant] }));
   assert.deepEqual(adapter.getConversationMessages().map(({ id, turnId, role, text }) => ({ id, turnId, role, text })), [
     { id: 'u-1', turnId: 'turn-1', role: 'user', text: 'Full question' },
     { id: 'a-1', turnId: 'turn-2', role: 'assistant', text: 'Answer' }
   ]);
+});
+
+
+function compactChatGptTurn({ id, role, text }) {
+  const attribution = fakeElement({
+    innerText: role === 'user' ? 'You said:' : 'ChatGPT said:',
+    getAttribute(name) { return name === 'data-message-attribution' ? '' : null; }
+  });
+  const content = fakeElement({
+    innerText: text,
+    textContent: text,
+    getAttribute() { return null; }
+  });
+  const actions = fakeElement({
+    innerText: 'Copy',
+    getAttribute(name) { return name === 'data-message-actions' ? '' : null; }
+  });
+  return fakeElement({
+    id,
+    children: [attribution, content, actions],
+    getAttribute(name) {
+      if (name === 'data-message-role') return role;
+      return null;
+    },
+    querySelector(selector) {
+      if (role === 'user' && selector === '[data-user-message-copy]') return content;
+      return null;
+    },
+    closest() { return null; }
+  });
+}
+
+test('ChatGPT adapter reads compact semantic transcript turns without attribution or actions', () => {
+  const user = compactChatGptTurn({
+    id: 'compact-u-1', role: 'user', text: 'What is the activation metric?'
+  });
+  const assistant = compactChatGptTurn({
+    id: 'compact-a-1', role: 'assistant', text: 'Use first-value completion rate.'
+  });
+  const selector = '[data-message-author-role="user"],[data-message-author-role="assistant"],[data-conversation-transcript] [data-message-role="user"],[data-conversation-transcript] [data-message-role="assistant"]';
+  const transcript = fakeElement();
+  const doc = fakeDocument({ '[data-conversation-transcript]': transcript }, {
+    [selector]: [user, assistant]
+  });
+  const adapter = chatgptModule.createChatGptAdapter(doc);
+  assert.deepEqual(
+    adapter.getConversationMessages().map(({ id, role, text }) => ({ id, role, text })),
+    [
+      { id: 'compact-u-1', role: 'user', text: 'What is the activation metric?' },
+      { id: 'compact-a-1', role: 'assistant', text: 'Use first-value completion rate.' }
+    ]
+  );
+  assert.equal(adapter.getLatestUserText(), 'What is the activation metric?');
+  assert.equal(adapter.getLatestAssistantText(), 'Use first-value completion rate.');
+  assert.ok(adapter.getObservationTargets().includes(transcript));
 });
 
 test('Claude adapter returns ordered typed conversation messages', () => {

@@ -8,7 +8,7 @@ const emptySession = () => ({
 
 function cloneRegistration(value) {
   if (!value || typeof value !== 'object') return null;
-  const { sessionId, role, provider, tabId, registeredAt } = value;
+  const { sessionId, role, provider, tabId, registeredAt, instanceId } = value;
   if (!sessionId || !['sender', 'receiver'].includes(role) || !provider || !Number.isInteger(tabId)) {
     return null;
   }
@@ -17,7 +17,8 @@ function cloneRegistration(value) {
     role,
     provider,
     tabId,
-    registeredAt: Number.isFinite(registeredAt) ? registeredAt : Date.now()
+    registeredAt: Number.isFinite(registeredAt) ? registeredAt : Date.now(),
+    instanceId: String(instanceId || '').trim()
   };
 }
 
@@ -58,14 +59,70 @@ export class SessionRegistry {
     const staleAfterMs = Number.isFinite(options.staleAfterMs)
       ? options.staleAfterMs
       : DEFAULT_STALE_AFTER_MS;
+    const allowInstanceMigration = options.allowInstanceMigration !== false;
     const { sessionId, role, provider, tabId } = registration;
     const session = this.#sessions.get(sessionId) || emptySession();
     const existing = session[role];
 
-    if (existing && existing.tabId === tabId && existing.provider === provider) {
+    const incomingInstanceId = String(registration.instanceId || '').trim();
+    const sameRuntimeLease = Boolean(
+      existing && existing.provider === provider && incomingInstanceId
+      && String(existing.instanceId || '').trim() === incomingInstanceId
+    );
+    if (sameRuntimeLease && existing.tabId !== tabId && !allowInstanceMigration) {
+      return {
+        accepted: false,
+        changed: false,
+        conflict: true,
+        registration: existing,
+        pending: null
+      };
+    }
+    if (sameRuntimeLease) {
+      const changed = existing.tabId !== tabId;
+      const replacedRegistration = changed ? { ...existing } : null;
+      existing.tabId = tabId;
       existing.registeredAt = now;
       const pending = role === 'receiver' ? session.pending : null;
       if (role === 'receiver') session.pending = null;
+      this.#sessions.set(sessionId, session);
+      return {
+        accepted: true,
+        changed,
+        conflict: false,
+        replacedTabId: replacedRegistration?.tabId || null,
+        replacedRegistration,
+        registration: existing,
+        pending
+      };
+    }
+    if (existing && existing.tabId === tabId && existing.provider === provider) {
+      const existingInstanceId = String(existing.instanceId || '').trim();
+      const replacementInstance = Boolean(
+        incomingInstanceId && existingInstanceId && incomingInstanceId !== existingInstanceId
+      );
+      const pending = role === 'receiver' ? session.pending : null;
+      if (role === 'receiver') session.pending = null;
+      if (replacementInstance) {
+        const replacedRegistration = { ...existing };
+        const next = {
+          sessionId, role, provider, tabId, registeredAt: now,
+          instanceId: incomingInstanceId
+        };
+        session[role] = next;
+        this.#sessions.set(sessionId, session);
+        return {
+          accepted: true,
+          changed: true,
+          conflict: false,
+          replacedTabId: tabId,
+          replacedRegistration,
+          registration: next,
+          pending
+        };
+      }
+      existing.registeredAt = now;
+      if (incomingInstanceId && !existingInstanceId) existing.instanceId = incomingInstanceId;
       this.#sessions.set(sessionId, session);
       return {
         accepted: true,
@@ -87,7 +144,7 @@ export class SessionRegistry {
       };
     }
 
-    const next = { sessionId, role, provider, tabId, registeredAt: now };
+    const next = { sessionId, role, provider, tabId, registeredAt: now, instanceId: incomingInstanceId };
     session[role] = next;
     this.#sessions.set(sessionId, session);
     const pending = role === 'receiver' ? session.pending : null;
@@ -97,6 +154,7 @@ export class SessionRegistry {
       changed: true,
       conflict: false,
       replacedTabId: existing?.tabId || null,
+      replacedRegistration: existing ? { ...existing } : null,
       registration: next,
       pending
     };
@@ -131,19 +189,34 @@ export class SessionRegistry {
     return { accepted: true, reason: 'new', lastAcceptedSeq: seq };
   }
 
-  canForward(sessionId, tabId) {
-    return this.#sessions.get(sessionId)?.sender?.tabId === tabId;
+  canForward(sessionId, tabId, instanceId = '') {
+    const sender = this.#sessions.get(sessionId)?.sender;
+    if (sender?.tabId !== tabId) return false;
+    const ownerInstanceId = String(sender.instanceId || '').trim();
+    const requesterInstanceId = String(instanceId || '').trim();
+    return !ownerInstanceId || !requesterInstanceId || ownerInstanceId === requesterInstanceId;
   }
 
-  ownsTab(sessionId, tabId) {
+  ownsTab(sessionId, tabId, instanceId = '') {
     const session = this.#sessions.get(sessionId);
-    return session?.sender?.tabId === tabId || session?.receiver?.tabId === tabId;
+    return ['sender', 'receiver'].some(role => {
+      const owner = session?.[role];
+      if (owner?.tabId !== tabId) return false;
+      const ownerInstanceId = String(owner.instanceId || '').trim();
+      const requesterInstanceId = String(instanceId || '').trim();
+      return !ownerInstanceId || !requesterInstanceId || ownerInstanceId === requesterInstanceId;
+    });
   }
 
-  roleForTab(sessionId, tabId) {
+  roleForTab(sessionId, tabId, instanceId = '') {
     const session = this.#sessions.get(sessionId);
-    if (session?.sender?.tabId === tabId) return 'sender';
-    if (session?.receiver?.tabId === tabId) return 'receiver';
+    for (const role of ['sender', 'receiver']) {
+      const owner = session?.[role];
+      if (owner?.tabId !== tabId) continue;
+      const ownerInstanceId = String(owner.instanceId || '').trim();
+      const requesterInstanceId = String(instanceId || '').trim();
+      if (!ownerInstanceId || !requesterInstanceId || ownerInstanceId === requesterInstanceId) return role;
+    }
     return null;
   }
 

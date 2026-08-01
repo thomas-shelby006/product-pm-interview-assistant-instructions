@@ -3,7 +3,8 @@ import { describeAdapterCapabilities } from './adapter-health.js';
 export function createPreflightResponder({
   runtimeConfig,
   adapter,
-  version = ''
+  version = '',
+  instanceId = ''
 }) {
   return function respondToPreflight() {
     let composerAvailable = false;
@@ -18,6 +19,7 @@ export function createPreflightResponder({
       role: String(runtimeConfig?.role || ''),
       provider: String(runtimeConfig?.provider || ''),
       version: String(version || ''),
+      instanceId: String(instanceId || ''),
       composerAvailable,
       capabilities: describeAdapterCapabilities(adapter, runtimeConfig?.role)
     };

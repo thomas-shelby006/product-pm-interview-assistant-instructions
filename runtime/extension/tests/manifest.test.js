@@ -83,6 +83,8 @@ test('manifest exposes all dynamically imported sender and answer modules', asyn
   assert.ok(resources.includes('content/preflight-responder.js'));
   assert.ok(resources.includes('content/runtime-telemetry.js'));
   assert.ok(resources.includes('content/adapter-health.js'));
+  assert.ok(resources.includes('content/role-revocation.js'));
+  assert.ok(resources.includes('content/registration-recovery.js'));
   assert.ok(resources.includes('shared/*.js'));
 });
 
