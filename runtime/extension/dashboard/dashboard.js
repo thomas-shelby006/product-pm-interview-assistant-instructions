@@ -47,6 +47,11 @@ import { applyAccessibilityPreferences, normalizeAccessibilityPreferences } from
 import { createLiveAnnouncer } from './live-announcer.js';
 import { createDialogFocusCoordinator } from './dialog-focus-coordinator.js';
 import { normalizeShortcutBindings, resolveShortcutCommand } from '../shared/shortcut-bindings.js';
+import { deriveManagedWindowModel } from './managed-window-model.js';
+import { virtualItems } from './virtual-list-model.js';
+import { createRenderScheduler } from './render-scheduler.js';
+import { createIdleWorkCoordinator } from './idle-work-coordinator.js';
+import { explainTrace } from '../shared/trace-explanation.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -80,7 +85,7 @@ const toast = byId('toast');
 const timelineViewport = byId('timelineViewport');
 const timelineCanvas = byId('timelineCanvas');
 const dialogFocus = createDialogFocusCoordinator();
-const liveAnnouncer = createLiveAnnouncer({ polite: byId('screenReaderPolite'), assertive: byId('screenReaderAssertive') });
+const liveAnnouncer = createLiveAnnouncer({ politeNode: byId('screenReaderPolite'), assertiveNode: byId('screenReaderAssertive') });
 const shortcutBindings = normalizeShortcutBindings();
 const idleWork = createIdleWorkCoordinator();
 const renderScheduler = createRenderScheduler();
@@ -94,7 +99,7 @@ function showToast(message, tone = 'info') {
   toast.textContent = message;
   toast.dataset.tone = tone;
   toast.classList.add('show');
-  if (state.snapshot?.accessibilityPreferences?.announcements !== false) {
+  if (state.snapshot?.uiPreferences?.accessibility?.announcements !== false) {
     liveAnnouncer.announce(message, { priority: ['error', 'warn'].includes(tone) ? 'assertive' : 'polite' });
   }
   clearTimeout(showToast.timer);

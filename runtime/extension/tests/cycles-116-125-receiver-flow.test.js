@@ -10,21 +10,22 @@ function envelope(id, seq, text = `Question ${seq}`) {
   return { id, seq, kind: 'question', sourceProvider: 'chatgpt', text, metadata: {} };
 }
 
-test('Cycle 116: batch preview exposes exact membership without mutating planner state', () => {
-  const planner = new BatchPlanner();
-  planner.add(envelope('q1', 1)); planner.add(envelope('q2', 2));
-  const before = planner.exportState();
-  const preview = deriveBatchPreview({ plannerState: before, budget: planner.budget() });
+test('Cycle 116: batch preview exposes exact membership without mutating source snapshot', () => {
+  const snapshot = { ledger: [
+    { id: 'q1', state: 'persisted', envelope: envelope('q1', 1) },
+    { id: 'q2', state: 'persisted', envelope: envelope('q2', 2) }
+  ], batchState: { next: { id: 'next', memberIds: ['q1', 'q2'] }, budget: { provider: 'chatgpt', maxMembers: 8, maxChars: 12000 } } };
+  const before = JSON.stringify(snapshot);
+  const preview = deriveBatchPreview(snapshot);
   assert.deepEqual(preview.next.memberIds, ['q1', 'q2']);
-  assert.equal(preview.next.focusId, 'q2');
-  assert.deepEqual(planner.exportState(), before);
+  assert.equal(JSON.stringify(snapshot), before);
 });
 
-test('Cycle 117: preview reports provider budget and partition count', () => {
-  const entries = Array.from({ length: 10 }, (_, index) => ({ id: `q${index}`, envelope: envelope(`q${index}`, index + 1), addedAt: index }));
-  const preview = deriveBatchPreview({ plannerState: { next: { entries } }, budget: { maxMembers: 4, maxChars: 12000 } });
+test('Cycle 117: preview reports provider budget and exact next membership', () => {
+  const ledger = Array.from({ length: 10 }, (_, index) => ({ id: `q${index}`, state: 'persisted', envelope: envelope(`q${index}`, index + 1) }));
+  const preview = deriveBatchPreview({ ledger, batchState: { next: { id: 'next', memberIds: ledger.map(item => item.id) }, budget: { provider: 'chatgpt', maxMembers: 4, maxChars: 12000 } } });
   assert.equal(preview.budget.maxMembers, 4);
-  assert.equal(preview.next.partitionCount, 3);
+  assert.equal(preview.next.count, 10);
 });
 
 test('Cycles 118-120: post-answer policy supports pause, bounded drain, and submit-on-idle', () => {

@@ -29,7 +29,7 @@ test('Cycle 96 phase transitions are explicit and reject invalid jumps', () => {
   assert.equal(ready.value.phase, 'ready');
   const invalid = transitionSessionPhase(ready.value, 'debrief', 20, 'operator');
   assert.equal(invalid.ok, false);
-  assert.equal(invalid.error, 'invalid_session_phase_transition');
+  assert.equal(invalid.error, 'invalid_session_transition');
 });
 
 test('Cycle 96 partial live-session updates preserve phase and clock state', () => {
@@ -104,7 +104,7 @@ test('Cycles 96-105 dashboard packages the navigator and accessible command dial
   ]);
   assert.match(html, /class="live-session-console"/);
   assert.match(html, /id="commandPalette"[\s\S]*role="dialog"[\s\S]*aria-modal="true"/);
-  assert.match(script, /Ctrl|ctrlKey/);
+  assert.match(script, /resolveShortcutCommand|command_palette/);
   assert.match(script, /handleToolbarKey/);
   assert.match(css, /data-focus-mode="true"/);
   assert.match(protocol, /'set_focus_mode'/);

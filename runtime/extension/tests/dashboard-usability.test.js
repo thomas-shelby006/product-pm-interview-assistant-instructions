@@ -7,6 +7,7 @@ const markup = await readFile(new URL('../dashboard/index.html', import.meta.url
 const status = await readFile(new URL('../shared/session-status.js', import.meta.url), 'utf8');
 const validator = await readFile(new URL('../scripts/validate-extension.mjs', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../dashboard/dashboard.css', import.meta.url), 'utf8');
+const protocol = await readFile(new URL('../shared/dashboard-protocol.js', import.meta.url), 'utf8');
 
 test('dashboard ends cleanly without reconnecting or leaving controls active', () => {
   assert.match(dashboard, /state\.sessionEnded = true/);
@@ -84,7 +85,10 @@ test('Pilot exposes meaningful real-time inbox controls without removing legacy 
   assert.match(markup, /Resume &amp; catch up/);
   assert.match(markup, /Archive selected/);
   assert.match(dashboard, /set_auto_submit/);
-  assert.match(dashboard, /interrupt_latest/);
+  assert.match(markup, /id="previewInterrupt"/);
+  assert.match(markup, /id="confirmInterrupt"/);
+  assert.match(protocol, /preview_interrupt_latest/);
+  assert.match(protocol, /interrupt_latest/);
   assert.match(dashboard, /navigator\.clipboard\.writeText\(latest\)/);
 });
 
@@ -162,7 +166,7 @@ test('heartbeat updates use the lightweight role-only render path', () => {
     source.indexOf("message?.type === 'PMIA_DASHBOARD_HEARTBEAT'"),
     source.indexOf("message?.type === 'PMIA_DASHBOARD_COMMAND_RESULT'")
   );
-  assert.match(branch, /render\(\[message\.role\]\)/);
+  assert.match(branch, /scheduleRender\(\[message\.role\]\)/);
   assert.doesNotMatch(branch, /render\(\);/);
 });
 

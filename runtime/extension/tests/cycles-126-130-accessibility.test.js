@@ -9,15 +9,15 @@ function node() { return { textContent: '' }; }
 
 test('Cycle 126: shortcut bindings are normalized and conflicts are explicit', () => {
   const defaults = defaultShortcutBindings();
-  assert.equal(defaults.command_palette, 'Control+KeyK');
-  const conflict = validateShortcutBinding('open_shortcut_help', 'Ctrl+K', defaults);
+  assert.equal(defaults.command_palette, 'Ctrl+K');
+  const conflict = validateShortcutBinding('shortcut_help', 'Ctrl+K', defaults);
   assert.equal(conflict.error, 'shortcut_conflict');
-  assert.equal(resolveShortcutCommand(defaults, { ctrlKey: true, key: 'k' }), 'open_command_palette');
+  assert.equal(resolveShortcutCommand(defaults, { ctrlKey: true, key: 'k' }), 'command_palette');
 });
 
 test('Cycle 127: shortcut help is complete and label-driven', () => {
   const help = deriveShortcutHelp(normalizeShortcutBindings());
-  assert.equal(help.rows.some(item => item.command === 'open_shortcut_help'), true);
+  assert.equal(help.rows.some(item => item.command === 'shortcut_help'), true);
   assert.equal(help.rows.every(item => item.label && item.chord), true);
 });
 

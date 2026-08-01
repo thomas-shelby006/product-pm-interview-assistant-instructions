@@ -8,10 +8,9 @@ import { applyPriorityEmphasis } from '../shared/priority-emphasis.js';
 import { buildQuestionQueryIndex, queryQuestions } from '../shared/question-query-index.js';
 
 test('Cycle 111 pin priority and defer metadata never mutate delivery sequence', () => {
-  const state = new RuntimePilotState([{ sessionId: 's1', ledger: [
-    { id: 'q1', state: 'persisted', envelope: { id: 'q1', seq: 1, text: 'one' } },
-    { id: 'q2', state: 'persisted', envelope: { id: 'q2', seq: 2, text: 'two' } }
-  ] }]);
+  const state = new RuntimePilotState([{ sessionId: 's1' }]);
+  state.persistFinal('s1', { id: 'q1', sessionId: 's1', sourceProvider: 'chatgpt', kind: 'question', seq: 1, text: 'one', metadata: {} }, 1);
+  state.persistFinal('s1', { id: 'q2', sessionId: 's1', sourceProvider: 'chatgpt', kind: 'question', seq: 2, text: 'two', metadata: {} }, 2);
   state.updateQuestionMetadata('s1', 'q2', { pinned: true, priority: 'critical', deferCondition: 'manual' }, 'triage', 10);
   const snapshot = state.snapshot('s1', 20);
   const derived = deriveQuestionOperations(snapshot, 20);
@@ -68,7 +67,8 @@ test('Cycle 115 priority emphasis highlights urgency but preserves immutable ord
 });
 
 test('question metadata undo is single-use and state-export safe', () => {
-  const state = new RuntimePilotState([{ sessionId: 's1', ledger: [{ id: 'q1', state: 'persisted', envelope: { id: 'q1', seq: 1, text: 'one' } }] }]);
+  const state = new RuntimePilotState([{ sessionId: 's1' }]);
+  state.persistFinal('s1', { id: 'q1', sessionId: 's1', sourceProvider: 'chatgpt', kind: 'question', seq: 1, text: 'one', metadata: {} }, 1);
   const change = state.updateQuestionMetadata('s1', 'q1', { priority: 'high' }, 'priority', 10);
   const undo = state.undoQuestionMetadata('s1', change.undo.id, 11);
   assert.equal(undo.ok, true);

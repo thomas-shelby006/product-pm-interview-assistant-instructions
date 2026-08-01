@@ -18,7 +18,7 @@ export function recordUndo(journal = [], change = {}, now = Date.now(), ttlMs = 
   const entry = {
     id: String(change.id || `${action}:${itemId}:${now}`), action, itemId,
     before: JSON.parse(JSON.stringify(change.before)), after: JSON.parse(JSON.stringify(change.after)),
-    createdAt: now, expiresAt: now + Math.max(10_000, Number(ttlMs) || DEFAULT_TTL_MS), usedAt: 0
+    createdAt: now, expiresAt: now + Math.max(1, Number(ttlMs) || DEFAULT_TTL_MS), usedAt: 0
   };
   return [...normalizeUndoJournal(journal), entry].slice(-MAX_ENTRIES);
 }

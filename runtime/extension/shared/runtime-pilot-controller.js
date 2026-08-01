@@ -43,6 +43,7 @@ import { deriveSessionCheckpoint } from './session-checkpoint.js';
 import { deriveInterruptionRecoveryCard } from './interruption-recovery-card.js';
 import { deriveSessionLandmarks } from './session-landmarks.js';
 import { validateFocusGesture } from './focus-gesture-token.js';
+import { normalizeWindowNavigationIntent } from './window-navigation-intent.js';
 import { derivePreflightWizard } from './preflight-wizard.js';
 import { deriveResumeGuard, validateResumeBoundary } from './resume-guard.js';
 import { deriveCrashResume } from './crash-resume-model.js';
@@ -1314,6 +1315,11 @@ export function createRuntimePilotController({
   }
 
   async function focusManagedWindow(sessionId, target, action, registry, pilot, focusIntent) {
+    const intent = normalizeWindowNavigationIntent({ target, action, focusIntent });
+    if (!intent.target || !intent.action) return { ok: false, error: 'invalid_window_navigation_intent' };
+    target = intent.target;
+    action = intent.action;
+    focusIntent = intent.focusIntent;
     const validation = validateFocusGesture(focusIntent, {
       sessionId,
       target,

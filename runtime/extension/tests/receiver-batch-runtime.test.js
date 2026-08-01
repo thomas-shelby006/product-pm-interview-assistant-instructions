@@ -133,7 +133,8 @@ test('explicit interrupt stops generation and submits only the latest waiting fi
   provider.generating = true;
   await runtime.accept(envelope('q2', 2));
   await runtime.accept(envelope('q3', 3));
-  const result = await runtime.interruptLatest();
+  const plan = runtime.previewInterrupt();
+  const result = await runtime.interruptLatest(plan.token);
   assert.equal(result.delivered, true);
   assert.equal(stops, 1);
   assert.deepEqual(submitted.map(batch => batch.prompt.memberIds), [['q1'], ['q3']]);
@@ -152,7 +153,8 @@ test('failed interrupt preserves the complete next batch', async () => {
   provider.generating = true;
   await runtime.accept(envelope('q2', 2));
   await runtime.accept(envelope('q3', 3));
-  const result = await runtime.interruptLatest();
+  const plan = runtime.previewInterrupt();
+  const result = await runtime.interruptLatest(plan.token);
   assert.equal(result.error, 'stop_failed');
   assert.deepEqual(runtime.snapshot().next.prompt.memberIds, ['q2', 'q3']);
   assert.equal(submitted.length, 1);
@@ -225,7 +227,11 @@ test('terminal no-response releases proven active batch and advances next once',
   await runtime.accept(envelope('q2', 2));
   provider.generating = false;
   const activeId = runtime.snapshot().active.id;
-  await runtime.answerComplete(activeId, { answerState: { state: 'no_response', reason: 'answer_never_started' } });
+  const waiting = await runtime.answerComplete(activeId, { answerState: { state: 'no_response', reason: 'answer_never_started' } });
+  assert.equal(waiting.reason, 'no_response');
+  assert.equal(submitted.length, 1);
+  assert.equal(runtime.snapshot().next.count, 1);
+  await runtime.resolveNoResponseAction('continue');
   assert.equal(submitted.length, 2);
   assert.equal(runtime.snapshot().active.id, submitted[1]);
 });
