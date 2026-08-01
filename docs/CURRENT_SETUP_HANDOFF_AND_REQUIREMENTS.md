@@ -4,14 +4,14 @@ Last updated: 2026-08-01
 
 ## Objective
 
-Operate a low-latency, exactly-once Product Management mock-interview assistant with a managed sender, receiver and Runtime Pilot Dashboard, structured in-memory setup context, bounded operator queue, fast operational recovery, and an explicit post-session review loop.
+Operate a low-latency, exactly-once Product Management mock-interview assistant with a managed sender, receiver and Runtime Pilot Dashboard, structured in-memory setup context, lossless final ledger, non-preemptive receiver batching, fast operational recovery, and an explicit post-session review loop.
 
 ## Active architecture
 
 - **Browser:** Microsoft Edge Stable, one selected profile verified by Profile Doctor.
 - **Launcher:** `runtime/Final_2_Window_Extension.ahk`.
 - **Provider/dashboard runtime:** `runtime/extension/`, Manifest V3 version 0.7.0.
-- **Transport:** disposable preview plus durable sequenced final, session-level pause and bounded 20-final operator queue through the extension service worker.
+- **Transport:** disposable preview plus sender outbox, durable lossless final ledger, session-level pause, direct role ports and active/next receiver batching through the extension service worker.
 - **Dashboard:** `runtime/extension/dashboard/`, a session-scoped third Edge app window connected by a long-lived runtime port.
 - **Providers:** ChatGPT and Claude independently selectable as sender or receiver.
 - **Session setup:** Resume, Job Description, Target company, Target role, Interview round, Emphasis, Avoid mentioning, Answer mode, and Additional notes.
@@ -23,13 +23,13 @@ The old Edge Beta/Tampermonkey runtime, fixed launcher, and archives are preserv
 
 - Session Studio stores sensitive context only in the running AutoHotkey process.
 - `settings.ini` contains only profile directory, sender provider, receiver provider, and layout mode.
-- Extension registry, transcript logs, Runtime Pilot state, queue and timeline use `chrome.storage.session`.
+- Extension registry, transcript logs, Runtime Pilot state, delivery ledger, safe batch checkpoint and timeline use `chrome.storage.session`.
 - No transcript or answer log falls back to `chrome.storage.local`.
 - Service-worker startup removes legacy `pmia_log_*` local records.
 - Boot/setup event text is fully replaced by a redaction placeholder before logging.
 - Review metadata permits only company, target role, interview round, emphasis, answer mode, and missing Resume/JD flags.
 - Explicit export is the only action that writes role-scoped transcript/answer material to files.
-- End-session and final-provider cleanup remove registry, pending final, queue, pilot state, sequence state, both role logs, dashboard window and AHK in-memory setup context.
+- End-session and final-provider cleanup remove registry, sender outbox, delivery ledger, batch state, pilot state, receiver sequence state, both role logs, dashboard window and AHK in-memory setup context.
 
 ## Runtime lifecycle
 
@@ -38,13 +38,15 @@ The old Edge Beta/Tampermonkey runtime, fixed launcher, and archives are preserv
 3. Receiver opens only after sender READY and progresses through the same phases.
 4. Dashboard opens after both roles are READY and must reach `PMIA_DASHBOARD_<SESSION>`.
 5. Boot context is sent only after all three managed windows exist.
-6. Preview updates are disposable and never enter the queue or submit.
-7. Provider-specific final boundaries create one sequence-gated envelope.
-8. When active, the final follows normal delivery; when paused/unavailable, question finals enter the operator queue.
-9. Receiver success requires a newly rendered matching provider user turn.
-10. Duplicate replay is acknowledged without resubmission. Stale acknowledgement marks the older final superseded, not delivered.
-11. Restore events and heartbeats re-register managed tabs; dashboard reconnect receives a full snapshot.
-12. A role conflict probes the current owner; only a missing or non-responsive owner is replaced.
+6. Preview updates are disposable and never enter the lossless ledger or submit.
+7. Each authoritative final enters the sender outbox and is removed only after the service worker returns `persisted: true`.
+8. The delivery ledger retains every non-duplicate final without count eviction. Paused, unavailable and busy-receiver finals remain unresolved.
+9. Window 2 keeps one immutable active batch and one mutable next batch. New arrivals during generation update the next composer draft without stopping the active answer.
+10. A single waiting question is submitted unchanged. Multiple questions preserve all text and explicitly mark the latest question as highest priority.
+11. Receiver success requires a newly rendered matching provider user turn; one batch proof maps to every frozen member ID.
+12. Duplicate identity is acknowledged without resubmission. A newer proof never deletes an older unresolved final.
+13. Restore events and heartbeats re-register managed tabs, restore safe batch identity, reconcile existing rendered batches, and replay unresolved finals in sequence order.
+14. A role conflict probes the current owner; only a missing or non-responsive owner is replaced.
 
 ## Recovery and health
 
@@ -71,7 +73,7 @@ The old Edge Beta/Tampermonkey runtime, fixed launcher, and archives are preserv
 
 ## Export and review contract
 
-The dashboard Review view and Copy Diagnostics exclude transcript/setup text. Schema 2.1 preserves the existing Markdown `Session:` and `Window:` headers. Each role export includes safe context, arm state, question/answer counts, answer-length statistics, receiver delivery timing, queued finals, ignored duplicate/stale deliveries, answer timeouts, and bounded role events. Full setup text, Resume, JD, avoid text, and freeform notes are not exported as event text.
+The dashboard Review view and Copy Diagnostics exclude transcript/setup text. Schema 2.1 preserves the existing Markdown `Session:` and `Window:` headers. Each role export includes safe context, arm state, question/answer counts, answer-length statistics, receiver delivery timing, ledger and batch counts, duplicates, explicit archives, answer timeouts, Pace Guard evidence, and bounded role events. Full setup text, Resume, JD, avoid text, and freeform notes are not exported as event text.
 
 Review Studio detects one exact READY pair, exports both roles through `PMIA_RUNTIME_CONTROL_V1`, validates one fresh matching Markdown pair, and pushes to the private tracker only after explicit user action.
 

@@ -176,3 +176,22 @@ test('batch policy controls emit state and drain only when released', async () =
   assert.equal(submitted.length, 1);
   assert.equal(events.filter(event => event.type === 'batch_policy_changed').length, 4);
 });
+
+
+test('unverified submit action remains staged until rendered proof arrives', async () => {
+  const provider = adapter();
+  const events = [];
+  const runtime = createReceiverBatchRuntime({
+    adapter: provider,
+    onEvent: event => events.push(event),
+    async submitBatch() {
+      return { ok: true, proof: { ok: true, verified: false, proof: 'submit_action_only' } };
+    }
+  });
+  const result = await runtime.accept(envelope('q1', 1));
+  assert.equal(result.ok, true);
+  assert.equal(result.delivered, false);
+  assert.equal(result.staged, true);
+  assert.equal(result.reason, 'proof_pending');
+  assert.equal(events.find(event => event.type === 'batch_submitted').verified, false);
+});

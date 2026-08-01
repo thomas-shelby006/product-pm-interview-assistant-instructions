@@ -70,7 +70,7 @@ test('project upload bundle identifies the active extension runtime', async () =
 });
 
 
-test('active release documents dashboard queue and legacy parity', async () => {
+test('active release documents lossless delivery batching and legacy parity', async () => {
   const docs = [
     await read('README.md'),
     await read('runtime/README_INSTALL_TEST.md'),
@@ -78,10 +78,11 @@ test('active release documents dashboard queue and legacy parity', async () => {
     await read('docs/LEGACY_FEATURE_PARITY.md')
   ].join('\n');
   assert.match(docs, /Pause forwarding/i);
-  assert.match(docs, /Resume Latest/i);
-  assert.match(docs, /bounded 20/i);
-  assert.match(docs, /stale_ack/i);
+  assert.match(docs, /Resume & Catch Up/i);
+  assert.match(docs, /lossless (delivery )?ledger|lossless inbox/i);
+  assert.match(docs, /focus primarily on the latest|highest priority/i);
   assert.match(docs, /provider-rendered/i);
+  assert.doesNotMatch(docs, /bounded 20/i);
   assert.match(docs, /screenshot injection[\s\S]*Rejected/i);
   assert.match(docs, /localStorage[\s\S]*Rejected/i);
 });

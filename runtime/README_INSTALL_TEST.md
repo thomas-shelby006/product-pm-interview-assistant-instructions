@@ -37,7 +37,7 @@ Session Studio persists only profile, route, and layout preferences. Resume, JD,
 3. Choose the initial layout.
 4. Launch. The sender reaches READY before the receiver opens. After both providers are READY, Session Studio opens and verifies the Runtime Pilot Dashboard.
 5. Boot context is sent only after all three managed windows are present.
-6. Use the dashboard for live health, pause/queue/resume, selected sending, recovery, layouts, export, safe diagnostics and shutdown.
+6. Use the dashboard for Live Inbox health, pause/catch-up, selected submission, auto-submit, hold, submit-now, explicit interrupt, archive, recovery, layouts, export, safe diagnostics and shutdown.
 7. Press `Alt+D` to reopen/focus the dashboard without restarting providers. Use `Alt+H` for the active health check and `Alt+Shift+R` for the strongest full-route repair.
 
 ## Shortcut map
@@ -61,31 +61,41 @@ Alt+Shift+E    Open or focus Review Studio
 
 ## Runtime Pilot Dashboard operations
 
-- **Pause forwarding** keeps sender capture active, suppresses provisional preview delivery, and queues authoritative finals.
-- **Resume + latest** sends the newest valid persisted final through the normal sequence and provider-rendered proof path.
-- **Resume only** re-enables transport without sending queued work.
-- **Send selected** rejects superseded items; **Discard selected/all** changes queue state only and never edits provider conversations.
-- **Check live** separates role reachability, heartbeat freshness, composer readiness, receiver generation, and sender source silence.
+- **Pause forwarding** keeps sender capture active, suppresses provisional preview delivery, and persists every authoritative final in the lossless ledger.
+- **Resume & Catch Up** reconciles every unresolved final in sequence order. It never selects only the newest final.
+- **Resume only** re-enables normal transport without forcing the current inbox to submit.
+- **Submit selected** sends one pending or failed ledger item through the normal batch and provider-rendered proof path.
+- **Auto-submit** controls whether an idle receiver submits its next protected draft automatically.
+- **Hold after answer** keeps accumulated questions staged after the active answer finishes.
+- **Submit next draft now** submits the complete accumulated batch when Window 2 is idle.
+- **Interrupt for latest** is the only normal operation allowed to stop the current Window 2 generation. It submits only the newest waiting final and leaves every earlier waiting final protected.
+- **Archive selected/proven/unresolved** is explicit removal from the delivery workflow; destructive archive actions require confirmation and remain represented in session history.
+- **Copy latest question** copies only the latest final text for operator use.
+- **Check live** separates role reachability, heartbeat freshness, composer readiness, receiver generation, sender source silence, draft conflict and storage pressure.
 - **Repair runtime** requests semantic recovery, reloads an unresponsive owned tab, or reopens a missing role when a known provider URL exists. Full AHK repair remains the fallback when setup context must be restaged.
 - Layout controls show three windows, sender + dashboard, receiver + dashboard, or dashboard only. Closing the dashboard alone does not stop transport.
 - **Copy diagnostics** contains identifiers, health and metrics only. It excludes setup and transcript text.
 
 ## Runtime expectations
 
-- Preview updates are disposable, coalesced, and never submit.
-- ChatGPT and Claude use provider-specific authoritative final boundaries.
-- Finals are sequenced and accepted once. Unavailable/paused question finals enter a bounded 20-item lossless inbox; boot context never enters it.
-- Receiver acknowledgement requires a newly rendered matching user turn.
-- A newer question supersedes older generating receiver work. After a newer persisted final is proven, older retained finals are marked superseded and cannot be sent.
+- Preview updates are disposable, coalesced, and never enter the lossless ledger or submit.
+- Every authoritative question final first enters the sender outbox. Window 1 removes its copy only after the service worker returns `persisted: true`.
+- The session ledger retains every non-duplicate final without count eviction. Unavailable, paused, busy-receiver and failed items remain unresolved.
+- Window 2 owns one immutable active batch and one mutable next batch. New finals arriving during generation update the next composer draft without stopping or mutating the active answer.
+- A single waiting question is submitted unchanged. When multiple questions accumulate, every question remains in the submitted text and the latest is marked `HIGHEST PRIORITY`.
+- A batch is proven only after a newly rendered matching provider user turn appears. One rendered batch proof maps to every frozen member ID.
+- Duplicate identity is acknowledged without resubmission. A newer proven final never supersedes or deletes an older unresolved final.
+- Receiver/service-worker restart reconciliation checks existing rendered batches before replaying unresolved finals in sequence order.
+- Storage pressure is reported at 70%, 85% and 95%. Automatic compaction touches proven history only; unresolved finals remain protected.
 - Dead role registrations are replaced only after an active probe fails.
-- Discard recovery does not activate a tab or focus an Edge window.
-- Closing both provider tabs or ending the session removes registry, queue, pilot state, role logs, dashboard, and AHK in-memory setup context.
+- Recovery and dashboard operations do not activate a provider tab or focus an Edge window.
+- Closing both provider tabs or ending the session removes registry, sender outbox, lossless ledger, batch state, Pilot state, role logs, dashboard, and AHK in-memory setup context.
 
 ## Privacy and export
 
 Active role logs use `chrome.storage.session`; they disappear with browser-session cleanup and are explicitly removed when the PMIA session ends. Service-worker startup purges legacy `pmia_log_*` records from local storage. Full setup text is never retained in role events.
 
-`Alt+E` exports schema 2.1 JSON and Markdown for both roles. The summary includes safe session metadata, answer length, receiver delivery timing, queue/duplicate/stale counts, and timeouts. The setup event remains redacted.
+`Alt+E` exports schema 2.1 JSON and Markdown for both roles. The summary includes safe session metadata, answer length, receiver delivery timing, ledger/batch counts, duplicate acknowledgements, explicit archives, Pace Guard evidence, and timeouts. The setup event remains redacted.
 
 ## Review Studio
 
@@ -109,25 +119,30 @@ This runs the Node suite, extension JavaScript validation, main-launcher silent 
 
 ## Browser release evidence
 
-For material browser claims, use Browser Evidence Capture with synthetic context. Verify:
+For material browser claims, use an isolated Edge profile with synthetic context and keep the user?s normal browser windows untouched. Verify:
 
-- all four provider routes as applicable;
-- dashboard connects, refreshes, reconnects after service-worker suspension, and reports both roles;
-- pause â†’ queue â†’ resume latest and selected send create one provider-rendered user turn per final;
-- stale queue items become superseded rather than delivered;
+- all applicable sender/receiver provider routes;
+- dashboard connect, refresh, reconnect after service-worker suspension, and exact sender/receiver registration;
+- one-at-a-time final delivery with provider-rendered proof;
+- multiple finals arriving while Window 2 generates remain visible in the next composer draft without interrupting the active answer;
+- the eventual multi-question submission preserves every question and marks the latest as highest priority;
+- every non-duplicate member ID reaches proven state, with zero unexplained missing ledger entries;
+- duplicate replay does not create another provider user turn;
+- Pause, Resume & Catch Up, Submit Selected, Hold, Submit Now and explicit Interrupt Latest use the same authoritative state;
+- Live Inbox, Current Answer, Next Draft, Pace Guard, latency rail and storage pressure render without horizontal overflow;
 - Check Live reports sender, receiver, dashboard and source-silence state;
 - Fast Repair reuses context and returns both roles to READY;
-- receiver recovery does not steal foreground focus;
+- receiver recovery and all background validation avoid foreground focus changes;
 - export files contain schema 2.1 summary and no raw setup content;
-- end-session removes only the three task-created PMIA windows and clears session-only queue/log/pilot state;
+- end-session removes only the three task-created PMIA windows and clears session-only ledger/log/Pilot state;
 - unrelated Edge tabs and the original checkout remain untouched.
 
 ## Recovery states
 
 - `LINK OK`: both roles registered and reachable.
 - `FORWARDING PAUSED`: sender observation continues but transport is suspended.
-- `N FINALS QUEUED`: authoritative question finals are awaiting operator action.
-- `FINAL QUEUED`: service-worker recovery pending state exists.
+- `N FINALS PERSISTED`: unresolved authoritative finals are protected in the lossless inbox.
+- `FINAL PERSISTED`: the final is durably owned but not yet proven in Window 2.
 - `RUNTIME UNREACHABLE`: registered counterpart did not respond.
 - `COMPOSER NOT READY`: runtime responds but provider composer is unavailable.
 - `ROLE CONFLICT`: a healthy owner already holds the role.

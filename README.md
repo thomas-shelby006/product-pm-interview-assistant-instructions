@@ -20,15 +20,15 @@ The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retai
 - Transcript and answer logs use `chrome.storage.session`; they are no longer written to disk-backed extension local storage.
 - Startup removes legacy `pmia_log_*` local-storage records using key-only enumeration when supported, without materializing their values.
 - AutoHotkey disk debug logging is disabled by default. Set `PMIA_DEBUG_LOG=1` only for explicit diagnostics; session IDs are redacted.
-- Ending a session or closing its final managed tab clears registrations, pending work, sequence state, and both role logs.
+- Ending a session or closing its final managed tab clears registrations, the lossless ledger, batch state, role logs, dashboard state, and AHK in-memory context.
 - A new managed tab can immediately replace a closed or unreachable stale owner instead of waiting for the 45-second heartbeat window.
 - Receiver recovery no longer activates a tab or focuses an Edge window.
 - **Check Live** / `Alt+H` runs the real sender-receiver preflight in both managed windows.
 - **Fast Repair** / `Alt+Shift+R` relaunches the current route using the existing in-memory context.
-- Exports use schema 2.1 and include safe session metadata plus answer-length, delivery-latency, queue, duplicate/stale, and timeout summaries.
-- The third Runtime Pilot Dashboard shows live role health, source silence, generation state, previews, finals, queue state, delivery proof, answers, warnings, repair reports, and bounded timeline history.
-- Pause keeps sender observation running while suppressing previews and queuing authoritative finals; Resume & Catch Up sends only the newest valid item through normal proof.
-- Stale persisted finals become superseded instead of being submitted after a newer question has already rendered.
+- Exports use schema 2.1 and include safe session metadata plus answer-length, delivery-latency, ledger, batch, duplicate, archive, and timeout summaries.
+- The third Runtime Pilot Dashboard shows Live Inbox state, Current Answer, Next Draft, Pace Guard, latency rail, role health, delivery proof, storage pressure, warnings, repair reports, and bounded timeline history.
+- Pause keeps sender observation running while suppressing previews and persisting every authoritative final; Resume & Catch Up reconciles every unresolved final in sequence order.
+- A newer rendered question never supersedes an older unresolved final. Every non-duplicate final remains until provider-rendered proof or explicit operator archive.
 
 ## Session flow
 
@@ -39,7 +39,7 @@ The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retai
 5. Boot context is delivered only after sender, receiver, and dashboard are present.
 6. Provisional transcript growth uses the disposable preview lane; one authoritative final uses the sequenced durable lane.
 7. The receiver acknowledges success only after the matching provider user turn renders.
-8. Use the dashboard for live health, pause/queue/resume, selected sending, recovery, layouts and safe diagnostics. `Alt+D` restores it without restarting providers.
+8. Use the dashboard for live health, pause/catch-up, submit selected, auto-submit, hold, submit now, explicit interrupt, archive, recovery, layouts and safe diagnostics. `Alt+D` restores it without restarting providers.
 
 ## Privacy boundary
 

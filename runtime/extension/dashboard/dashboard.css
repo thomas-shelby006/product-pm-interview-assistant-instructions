@@ -173,7 +173,7 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
   .storage-panel { grid-column: 1 / -1; }
 }
 @media (min-width: 1120px) {
-  .live-command-center { grid-template-columns: 1.2fr 1fr 1fr .72fr; }
+  .live-command-center { grid-template-columns: 1.2fr 1fr 1fr .82fr .72fr; }
   .live-state-card, .storage-panel { grid-column: auto; }
 }
 @media (max-width: 560px) {
@@ -182,3 +182,9 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
   .latency-step.complete { border-left-color: var(--olive); }
   .latency-step.current { border-left-color: var(--rust); }
 }
+
+.pace-panel { border-left: 4px solid var(--olive); }
+.pace-panel[data-pace="falling_behind"] { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
+.pace-panel[data-pace="recovering"] { border-left-color: var(--olive); background: var(--olive-soft); }
+.pace-panel[data-pace="steady_backlog"], .pace-panel[data-pace="answering"] { border-left-color: var(--ochre); }
+.pace-panel[data-pace="blocked"] { border-left-color: var(--danger); }

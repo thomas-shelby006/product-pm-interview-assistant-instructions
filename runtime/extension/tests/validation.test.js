@@ -605,3 +605,33 @@ test('receiver delivery terminality cannot revoke an authorized sender', async (
   assert.doesNotMatch(delivery, /delivered: true,[\s\S]{0,80}terminal: true/);
   assert.match(delivery, /outcome\.delivered \|\| outcome\.staged/);
 });
+
+
+test('lossless runtime packages direct role controls and Pace Guard', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const controller = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
+  const telemetry = await readFile(resolve(extensionRoot, 'content/runtime-telemetry.js'), 'utf8');
+  const dashboard = await readFile(resolve(extensionRoot, 'dashboard/dashboard.js'), 'utf8');
+  assert.match(background, /rolePortHub\.request\(sessionId, role/);
+  assert.match(controller, /typeof requestRole === 'function'/);
+  assert.match(controller, /shouldPersistBatchEvent\(value\)/);
+  assert.match(telemetry, /getBatchState/);
+  assert.match(dashboard, /derivePaceGuard/);
+});
+
+test('production runtime contains no latest-only delivery authority', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const files = [
+    'background.js',
+    'shared/session-registry.js',
+    'shared/runtime-pilot-controller.js',
+    'shared/runtime-pilot-state.js'
+  ];
+  const source = (await Promise.all(files.map(file => readFile(resolve(extensionRoot, file), 'utf8')))).join('
+');
+  assert.doesNotMatch(source, /queueLatest|acceptSequence|lastAcceptedSeq|supersedeBefore|resume_latest/);
+  assert.match(source, /persistFinal|DeliveryLedger|resume_catch_up/);
+});

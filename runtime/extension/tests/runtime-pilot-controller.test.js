@@ -25,7 +25,7 @@ function envelope(id, seq) {
   };
 }
 
-function setup() {
+function setup({ requestRole = null } = {}) {
   const registry = new SessionRegistry();
   registry.register({ sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 1 }, { now: 1 });
   registry.register({ sessionId: 's1', role: 'receiver', provider: 'claude', tabId: 2 }, { now: 1 });
@@ -75,7 +75,8 @@ function setup() {
     appendLog: async () => {},
     broadcastLinkStatus: async () => {},
     exportManagedSession: async () => ({ ok: true }),
-    clearSessionLogs: async () => {}
+    clearSessionLogs: async () => {},
+    requestRole
   });
   return { controller, registry, deliveries, runtimeCommands };
 }
@@ -230,4 +231,70 @@ test('heartbeat-only telemetry is coalesced after semantic state is established'
   });
   assert.equal(first.coalesced, false);
   assert.equal(heartbeat.coalesced, true);
+});
+
+
+test('dashboard runtime commands prefer the direct role request path', async () => {
+  const direct = [];
+  const { controller, registry, runtimeCommands } = setup({
+    async requestRole(frame) {
+      direct.push([frame.role, frame.command, frame.payload]);
+      return { ok: true, hold: Boolean(frame.payload.value) };
+    }
+  });
+  await ready(controller, registry);
+  const result = await controller.handleCommand({
+    sessionId: 's1', requestId: 'hold-direct', command: 'set_hold', payload: { value: true }
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(direct, [['receiver', 'set_hold', { value: true }]]);
+  assert.equal(runtimeCommands.some(([, command]) => command === 'set_hold'), false);
+});
+
+test('receiver batch checkpoint restores Pilot state after volatile draft events', async () => {
+  const { controller, registry } = setup();
+  await controller.syncRegistration(registry.getSession('s1').receiver);
+  const result = await controller.telemetry({
+    sessionId: 's1', role: 'receiver', tabId: 2,
+    telemetry: {
+      composerReady: true,
+      phase: 'ready',
+      batchState: {
+        active: { batchId: 'b1', memberIds: ['q1'], questionCount: 1 },
+        next: { memberIds: ['q2', 'q3'], questionCount: 2 },
+        hold: true,
+        autoSubmit: false
+      }
+    }
+  });
+  assert.equal(result.coalesced, false);
+  assert.deepEqual((await controller.snapshot('s1')).batchState.next.memberIds, ['q2', 'q3']);
+  assert.equal((await controller.snapshot('s1')).batchState.hold, true);
+});
+
+
+test('unverified batch submission does not close ledger members', async () => {
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  await controller.beforeForward(envelope('q1', 1));
+  await controller.batchEvent({
+    sessionId: 's1',
+    event: {
+      type: 'batch_submitted',
+      batchId: 'batch-1',
+      memberIds: ['q1'],
+      proof: { ok: true, verified: false, proof: 'submit_action_only' }
+    }
+  });
+  assert.equal((await controller.snapshot('s1')).ledger[0].state, 'submitting');
+  await controller.batchEvent({
+    sessionId: 's1',
+    event: {
+      type: 'batch_reconciled',
+      batchId: 'batch-1',
+      memberIds: ['q1'],
+      proof: { ok: true, verified: true, proof: 'existing_rendered_batch' }
+    }
+  });
+  assert.equal((await controller.snapshot('s1')).ledger[0].state, 'proven');
 });

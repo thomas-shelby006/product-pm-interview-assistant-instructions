@@ -339,6 +339,34 @@ export class RuntimePilotState {
     this.record(sessionId, event.timeout ? 'answer_timeout' : 'answer_captured', safeEventData(event), now);
   }
 
+  restoreBatchState(sessionId, checkpoint = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const next = checkpoint && typeof checkpoint === 'object' ? checkpoint : {};
+    const incomingActive = next.active || null;
+    const currentActive = session.batchState.active;
+    const active = incomingActive && currentActive
+      && String(incomingActive.batchId || incomingActive.id || '') === String(currentActive.batchId || currentActive.id || '')
+      ? { ...currentActive, ...incomingActive, proof: currentActive.proof || incomingActive.proof || null }
+      : incomingActive;
+    const normalized = {
+      active,
+      next: next.next || null,
+      hold: Boolean(next.hold),
+      autoSubmit: next.autoSubmit !== false
+    };
+    const previous = JSON.stringify({
+      active: session.batchState.active,
+      next: session.batchState.next,
+      hold: session.batchState.hold,
+      autoSubmit: session.batchState.autoSubmit
+    });
+    const changed = previous !== JSON.stringify(normalized);
+    if (!changed) return false;
+    session.batchState = { ...session.batchState, ...normalized };
+    session.updatedAt = now;
+    return true;
+  }
+
   updateBatchState(sessionId, event = {}, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     const type = String(event.type || 'batch_event');

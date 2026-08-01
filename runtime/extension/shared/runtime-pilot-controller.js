@@ -4,6 +4,7 @@ import { getRuntimeWindowLayout, windowUpdateForBounds } from './window-layout.j
 import { hasMeaningfulTelemetryChange, heartbeatPatch } from './telemetry-coalescer.js';
 import { classifyStoragePressure, DEFAULT_SESSION_QUOTA_BYTES } from './storage-pressure.js';
 import { buildReconciliationPayload } from './delivery-reconciler.js';
+import { shouldPersistBatchEvent } from './batch-event-policy.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -29,11 +30,13 @@ export function createRuntimePilotController({
   deliverFinal,
   exportManagedSession,
   clearSessionLogs,
+  requestRole = null,
   serializeOperation = operation => operation()
 } = {}) {
   const store = createRuntimePilotStore({ storageArea });
   const ports = new Map();
   const previewTimers = new Map();
+  const batchCommitTimers = new Map();
 
   function sessionPorts(sessionId) {
     return ports.get(sessionId) || new Set();
@@ -259,6 +262,27 @@ export function createRuntimePilotController({
     await commit(envelope.sessionId, pilot);
   }
 
+  function cancelBatchCheckpoint(sessionId) {
+    const timer = batchCommitTimers.get(sessionId);
+    if (!timer) return false;
+    clearTimeout(timer);
+    batchCommitTimers.delete(sessionId);
+    return true;
+  }
+
+  function scheduleBatchCheckpoint(sessionId) {
+    cancelBatchCheckpoint(sessionId);
+    const timer = setTimeout(() => {
+      batchCommitTimers.delete(sessionId);
+      void serializeOperation(async () => {
+        const pilot = await state();
+        if (!pilot.snapshot(sessionId)) return;
+        await commit(sessionId, pilot);
+      });
+    }, 60);
+    batchCommitTimers.set(sessionId, timer);
+  }
+
   async function batchEvent({ sessionId, event }) {
     const pilot = await state();
     const value = event && typeof event === 'object' ? { ...event } : {};
@@ -271,12 +295,21 @@ export function createRuntimePilotController({
     } else if ((value.type === 'batch_submitted' || value.type === 'batch_reconciled') && batchId) {
       pilot.markLedgerStaged(sessionId, memberIds, batchId);
       pilot.markLedgerSubmitting(sessionId, batchId);
-      pilot.markLedgerProven(sessionId, batchId, value.proof || {});
+      if (value.type === 'batch_reconciled' || value.proof?.verified === true) {
+        pilot.markLedgerProven(sessionId, batchId, value.proof || {});
+      }
     } else if (value.type === 'batch_submit_failed') {
       pilot.markLedgerFailed(sessionId, memberIds, value.reason || 'batch_submit_failed');
     }
-    await commit(sessionId, pilot);
-    return { ok: true, batchId, memberIds };
+    const persistent = shouldPersistBatchEvent(value);
+    if (persistent) {
+      cancelBatchCheckpoint(sessionId);
+      await commit(sessionId, pilot);
+    } else {
+      await broadcast(sessionId, pilot);
+      scheduleBatchCheckpoint(sessionId);
+    }
+    return { ok: true, batchId, memberIds, persisted: persistent };
   }
 
   async function telemetry({ sessionId, role, tabId, telemetry: value }) {
@@ -286,6 +319,11 @@ export function createRuntimePilotController({
     const event = value?.event;
     const telemetryState = value && typeof value === 'object' ? { ...value } : {};
     delete telemetryState.event;
+    const batchCheckpoint = role === 'receiver' ? telemetryState.batchState : null;
+    delete telemetryState.batchState;
+    const batchChanged = batchCheckpoint
+      ? pilot.restoreBatchState(sessionId, batchCheckpoint)
+      : false;
     const nextRole = {
       ...previousRole,
       ...tab,
@@ -293,7 +331,7 @@ export function createRuntimePilotController({
       connected: true,
       heartbeatAt: Date.now()
     };
-    const meaningful = Boolean(event) || hasMeaningfulTelemetryChange(previousRole, nextRole);
+    const meaningful = Boolean(event) || batchChanged || hasMeaningfulTelemetryChange(previousRole, nextRole);
     const updatedRole = pilot.updateRole(sessionId, role, nextRole);
     const refreshed = pilot.snapshot(sessionId);
     if (
@@ -336,18 +374,36 @@ export function createRuntimePilotController({
   async function sendRuntimeCommand(registry, sessionId, role, command, payload = {}) {
     const registration = registry.getSession(sessionId)?.[role];
     if (!registration?.tabId) return { ok: false, error: `${role}_missing` };
+    const fallback = () => chromeApi.tabs.sendMessage(registration.tabId, {
+      type: 'PMIA_RUNTIME_COMMAND',
+      sessionId,
+      command,
+      payload
+    });
     try {
-      const response = await chromeApi.tabs.sendMessage(registration.tabId, {
-        type: 'PMIA_RUNTIME_COMMAND',
-        sessionId,
-        command,
-        payload
-      });
+      const response = typeof requestRole === 'function'
+        ? await requestRole({
+            sessionId,
+            role,
+            tabId: registration.tabId,
+            instanceId: registration.instanceId || '',
+            command,
+            payload,
+            fallback
+          })
+        : await fallback();
       return response?.ok === false
         ? { ok: false, error: response.error || 'command_rejected', response }
         : { ok: true, ...(response || {}), response };
     } catch (error) {
-      return { ok: false, error: safeError(error) };
+      try {
+        const response = await fallback();
+        return response?.ok === false
+          ? { ok: false, error: response.error || 'command_rejected', response }
+          : { ok: true, ...(response || {}), response, fallback: true };
+      } catch (fallbackError) {
+        return { ok: false, error: safeError(fallbackError || error) };
+      }
     }
   }
 
@@ -569,6 +625,7 @@ export function createRuntimePilotController({
   }
 
   async function endSession(sessionId, registry, pilot) {
+    cancelBatchCheckpoint(sessionId);
     const session = registry.getSession(sessionId);
     const tabIds = ['sender', 'receiver']
       .map(role => session?.[role]?.tabId)
@@ -775,6 +832,7 @@ export function createRuntimePilotController({
   }
 
   async function removeSession(sessionId) {
+    cancelBatchCheckpoint(sessionId);
     const dashboardTabIds = [...sessionPorts(sessionId)]
       .map(entry => entry.tabId)
       .filter(Number.isInteger);

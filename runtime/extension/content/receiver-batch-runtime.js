@@ -1,4 +1,4 @@
-﻿import { BatchPlanner, matchesRenderedBatch } from '../shared/batch-planner.js';
+import { BatchPlanner, matchesRenderedBatch } from '../shared/batch-planner.js';
 
 export function createReceiverBatchRuntime({
   adapter,
@@ -94,6 +94,8 @@ export function createReceiverBatchRuntime({
     }
     planner.markSubmitted(nowFn());
     draftArbiter?.release?.('batch');
+    const proof = result.proof || null;
+    const verified = proof?.ok !== false && proof?.verified === true;
     emit('batch_submitted', {
       batchId: batch.id,
       memberIds: batch.prompt.memberIds,
@@ -101,16 +103,18 @@ export function createReceiverBatchRuntime({
       focusId: batch.prompt.focusId,
       fingerprint: batch.prompt.fingerprint,
       source,
-      proof: result.proof || null
+      proof,
+      verified
     });
     return {
       ok: true,
-      delivered: true,
-      staged: false,
+      delivered: verified,
+      staged: !verified,
+      reason: verified ? 'accepted' : 'proof_pending',
       batchId: batch.id,
       memberIds: batch.prompt.memberIds,
       batch,
-      proof: result.proof || null
+      proof
     };
   }
 

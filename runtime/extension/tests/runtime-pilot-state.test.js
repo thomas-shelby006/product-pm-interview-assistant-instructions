@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RuntimePilotState } from '../shared/runtime-pilot-state.js';
 
@@ -111,4 +111,27 @@ test('pilot state warns when a connected role regresses below READY', () => {
   assert.ok(snapshot.warnings.some(item => (
     item.code === 'sender_lifecycle_not_ready' && item.phase === 'boot'
   )));
+});
+
+
+test('safe heartbeat checkpoint preserves richer active batch proof metadata', () => {
+  const state = new RuntimePilotState();
+  state.updateBatchState('pmia_session', {
+    type: 'batch_submitted',
+    batchId: 'batch-1',
+    memberIds: ['q1'],
+    questionCount: 1,
+    proof: { ok: true, verified: true, proof: 'new_rendered_turn' }
+  }, 1000);
+  state.restoreBatchState('pmia_session', {
+    active: { batchId: 'batch-1', memberIds: ['q1'], questionCount: 1 },
+    next: null,
+    hold: false,
+    autoSubmit: true
+  }, 1100);
+  assert.deepEqual(state.snapshot('pmia_session', 1200).batchState.active.proof, {
+    ok: true,
+    verified: true,
+    proof: 'new_rendered_turn'
+  });
 });

@@ -1,4 +1,4 @@
-# PMIA Lossless Delivery and Live Pilot Implementation Plan
+﻿# PMIA Lossless Delivery and Live Pilot Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Tests are authored during tasks but executed only in Task 10 per the user's explicit final-only verification constraint.
 
@@ -35,14 +35,14 @@
 
 **Interfaces:** `DeliveryLedger.persist(envelope)`, `markStaged(ids)`, `markSubmitting(batchId)`, `markProven(batchId, proof)`, `retryable()`, `snapshot()`; `SenderOutbox.enqueue(envelope)`, `ackPersisted(id)`, `replay()`.
 
-- [ ] Write ledger tests for ID/sequence dedupe, repeated identical wording at later sequence, no count eviction, retry states, proof archive, and quota-write rejection.
-- [ ] Write sender-outbox tests proving a final remains until `persisted: true` and replays after port/message failure.
-- [ ] Implement immutable ledger transitions and compact proven-history aggregates.
-- [ ] Change sender forwarding acknowledgement from delivered to persisted ownership.
-- [ ] Add storage byte-pressure telemetry using `getBytesInUse`.
-- [ ] Remove automatic oldest-item dropping from the authoritative path.
-- [ ] Review source and diff without executing tests.
-- [ ] Commit `feat: add lossless delivery ledger and sender outbox`.
+- [x] Write ledger tests for ID/sequence dedupe, repeated identical wording at later sequence, no count eviction, retry states, proof archive, and quota-write rejection.
+- [x] Write sender-outbox tests proving a final remains until `persisted: true` and replays after port/message failure.
+- [x] Implement immutable ledger transitions and compact proven-history aggregates.
+- [x] Change sender forwarding acknowledgement from delivered to persisted ownership.
+- [x] Add storage byte-pressure telemetry using `getBytesInUse`.
+- [x] Remove automatic oldest-item dropping from the authoritative path.
+- [x] Review source and diff without executing tests.
+- [x] Commit `feat: add lossless delivery ledger and sender outbox`.
 
 ### Task 2: Non-preemptive receiver batch scheduler
 
@@ -50,14 +50,14 @@
 
 **Interfaces:** `BatchPlanner.add(entry)`, `freezeNext()`, `completeActive(proof)`, `setHold(value)`, `snapshot()`; receiver accepts complete batch snapshots rather than independent stop-and-submit calls.
 
-- [ ] Write tests for one active batch plus one accumulating next batch.
-- [ ] Prove arrivals during generation append to next batch and never mutate active submission.
-- [ ] Implement event-driven idle scheduling with a bounded watchdog.
-- [ ] Mirror next batch to the composer while generation continues.
-- [ ] Preserve existing explicit stop capability only for the new interrupt command.
-- [ ] Remove default stop-generation/supersede behavior for ordinary finals.
-- [ ] Review source and diff without executing tests.
-- [ ] Commit `feat: accumulate finals behind active receiver answers`.
+- [x] Write tests for one active batch plus one accumulating next batch.
+- [x] Prove arrivals during generation append to next batch and never mutate active submission.
+- [x] Implement event-driven idle scheduling with a bounded watchdog.
+- [x] Mirror next batch to the composer while generation continues.
+- [x] Preserve existing explicit stop capability only for the new interrupt command.
+- [x] Remove default stop-generation/supersede behavior for ordinary finals.
+- [x] Review source and diff without executing tests.
+- [x] Commit `feat: accumulate finals behind active receiver answers`.
 
 ### Task 3: Deterministic multi-question prompt and proof mapping
 
@@ -65,14 +65,14 @@
 
 **Interfaces:** `composeBatchPrompt({ context, entries })` returns `{ text, memberIds, focusId, questionCount, fingerprint }`.
 
-- [ ] Write exact prompt tests for zero, one, and multiple pending questions.
-- [ ] Mark the latest question and add the latest-focus instruction only when multiple finals exist.
-- [ ] Freeze member IDs and fingerprint before submission.
-- [ ] Map one rendered user-turn proof to every batch member.
-- [ ] Reconcile existing rendered batch turns after receiver reload.
-- [ ] Surface per-member batch proof in Pilot state and export.
-- [ ] Review source and diff without executing tests.
-- [ ] Commit `feat: submit deterministic latest-focused question batches`.
+- [x] Write exact prompt tests for zero, one, and multiple pending questions.
+- [x] Mark the latest question and add the latest-focus instruction only when multiple finals exist.
+- [x] Freeze member IDs and fingerprint before submission.
+- [x] Map one rendered user-turn proof to every batch member.
+- [x] Reconcile existing rendered batch turns after receiver reload.
+- [x] Surface per-member batch proof in Pilot state and export.
+- [x] Review source and diff without executing tests.
+- [x] Commit `feat: submit deterministic latest-focused question batches`.
 
 ### Task 4: Fast long-lived runtime ports
 
@@ -80,84 +80,84 @@
 
 **Interfaces:** named ports `pmia-role:<session>:<role>:<instance>` carrying `final`, `persisted`, `batch_snapshot`, `receiver_event`, and `heartbeat_patch` messages.
 
-- [ ] Write port lifecycle tests for connect, disconnect, duplicate frames, reconnect, and fallback.
-- [ ] Implement sender and receiver ports without relying on them as state storage.
-- [ ] Use the port fast path for finals and batch snapshots.
-- [ ] Keep one-time messages as idempotent fallback after disconnect.
-- [ ] Fail pending port requests immediately and replay from ledger/outbox.
-- [ ] Coalesce heartbeats without delaying finals or proofs.
-- [ ] Review source and diff without executing tests.
-- [ ] Commit `perf: add direct runtime ports with lossless fallback`.
+- [x] Write port lifecycle tests for connect, disconnect, duplicate frames, reconnect, and fallback.
+- [x] Implement sender and receiver ports without relying on them as state storage.
+- [x] Use the port fast path for finals and batch snapshots.
+- [x] Keep one-time messages as idempotent fallback after disconnect.
+- [x] Fail pending port requests immediately and replay from ledger/outbox.
+- [x] Coalesce heartbeats without delaying finals or proofs.
+- [x] Review source and diff without executing tests.
+- [x] Commit `perf: add direct runtime ports with lossless fallback`.
 
 ### Task 5: Immediate sender finalization and preview arbitration
 
 **Files:** Modify sender tracker, ChatGPT/Claude adapters, preview scheduler, receiver draft runtime, and tests.
 
-- [ ] Add tests for immediate final emission when a new rendered user turn appears.
-- [ ] Retain stable-tail fallback only where no rendered turn boundary exists.
-- [ ] Prevent previews from replacing a persisted batch or manual receiver edit.
-- [ ] Detect receiver composer divergence and raise a draft-conflict state.
-- [ ] Reduce safe finalization and delivery delays based on rendered semantic evidence.
-- [ ] Review source and diff without executing tests.
-- [ ] Commit `perf: forward rendered sender turns immediately`.
+- [x] Add tests for immediate final emission when a new rendered user turn appears.
+- [x] Retain stable-tail fallback only where no rendered turn boundary exists.
+- [x] Prevent previews from replacing a persisted batch or manual receiver edit.
+- [x] Detect receiver composer divergence and raise a draft-conflict state.
+- [x] Reduce safe finalization and delivery delays based on rendered semantic evidence.
+- [x] Review source and diff without executing tests.
+- [x] Commit `perf: forward rendered sender turns immediately`.
 
 ### Task 6: Restart reconciliation and storage pressure
 
 **Files:** Modify ledger store/controller, registration recovery, receiver runtime, Pilot warnings, and tests.
 
-- [ ] Write worker-restart, sender-reload, receiver-reload, and interrupted-submit reconciliation tests.
-- [ ] Reconstruct ledger, batches, and ports from session storage and runtime telemetry.
-- [ ] Query rendered receiver turns before retrying an uncertain active batch.
-- [ ] Add 70/85/95 percent storage-pressure states and proven-history compaction.
-- [ ] Keep unpersisted finals in sender outbox when storage writes reject.
-- [ ] Add dashboard recovery actions scoped to exact blocked state.
-- [ ] Review source and diff without executing tests.
-- [ ] Commit `fix: reconcile lossless delivery across runtime restarts`.
+- [x] Write worker-restart, sender-reload, receiver-reload, and interrupted-submit reconciliation tests.
+- [x] Reconstruct ledger, batches, and ports from session storage and runtime telemetry.
+- [x] Query rendered receiver turns before retrying an uncertain active batch.
+- [x] Add 70/85/95 percent storage-pressure states and proven-history compaction.
+- [x] Keep unpersisted finals in sender outbox when storage writes reject.
+- [x] Add dashboard recovery actions scoped to exact blocked state.
+- [x] Review source and diff without executing tests.
+- [x] Commit `fix: reconcile lossless delivery across runtime restarts`.
 
 ### Task 7: Pilot Live Inbox redesign
 
 **Files:** Create `dashboard/live-inbox-model.js`; modify dashboard HTML, CSS, JS, dashboard model, and tests.
 
-- [ ] Add model tests for live inbox grouping, active/next batch, latency milestones, catch-up state, and warnings.
-- [ ] Replace queue-first layout with Live Inbox, Current Answer, Next Draft, and Latency Rail.
-- [ ] Preserve compact health cards and every existing control.
-- [ ] Display exact counts and states without requiring provider-window focus.
-- [ ] Make the layout responsive for narrow third-window and dashboard-only modes.
-- [ ] Keep full setup context out of dashboard diagnostics.
-- [ ] Review source and diff without executing tests.
-- [ ] Commit `feat: redesign Pilot around live delivery truth`.
+- [x] Add model tests for live inbox grouping, active/next batch, latency milestones, catch-up state, and warnings.
+- [x] Replace queue-first layout with Live Inbox, Current Answer, Next Draft, and Latency Rail.
+- [x] Preserve compact health cards and every existing control.
+- [x] Display exact counts and states without requiring provider-window focus.
+- [x] Make the layout responsive for narrow third-window and dashboard-only modes.
+- [x] Keep full setup context out of dashboard diagnostics.
+- [x] Review source and diff without executing tests.
+- [x] Commit `feat: redesign Pilot around live delivery truth`.
 
 ### Task 8: Real-time operator controls
 
 **Files:** Modify dashboard protocol/controller/UI, batch planner/runtime, status overlays, and tests.
 
-- [ ] Add commands for auto-submit, hold-after-answer, interrupt-latest, submit-now, copy-latest, and archive-selected.
-- [ ] Preserve earlier finals when interrupting; only the latest moves to the interrupt batch.
-- [ ] Confirm destructive archive actions and retain audit state.
-- [ ] Add keyboard shortcuts that use the same semantic command path.
-- [ ] Show command acknowledgement and resulting authoritative state.
-- [ ] Review source and diff without executing tests.
-- [ ] Commit `feat: add live batch controls to Runtime Pilot`.
+- [x] Add commands for auto-submit, hold-after-answer, interrupt-latest, submit-now, copy-latest, and archive-selected.
+- [x] Preserve earlier finals when interrupting; only the latest moves to the interrupt batch.
+- [x] Confirm destructive archive actions and retain audit state.
+- [x] Add keyboard shortcuts that use the same semantic command path.
+- [x] Show command acknowledgement and resulting authoritative state.
+- [x] Review source and diff without executing tests.
+- [x] Commit `feat: add live batch controls to Runtime Pilot`.
 
 ### Task 9: Architecture cleanup and stale-code removal
 
 **Files:** Split `runtime-pilot-controller.js` and `entry.js` responsibilities; remove obsolete queue/supersede paths; update imports, manifest, validator, docs, and tests.
 
-- [ ] Inventory every production module and exported symbol referenced by manifest or imports.
-- [ ] Move command routing, port routing, ledger orchestration, and repair into focused modules.
-- [ ] Remove the dropping OperatorQueue after compatibility migration.
-- [ ] Remove default supersede-on-generation code and duplicated command implementations.
-- [ ] Remove unused imports, obsolete tests, stale documentation, and dead compatibility branches.
-- [ ] Keep public extension messages and export schema backward compatible where still active.
-- [ ] Review source, dependency graph, and diff without executing tests.
-- [ ] Commit `refactor: simplify lossless runtime ownership boundaries`.
+- [x] Inventory every production module and exported symbol referenced by manifest or imports.
+- [x] Move command routing, port routing, ledger orchestration, and repair into focused modules.
+- [x] Remove the dropping OperatorQueue after compatibility migration.
+- [x] Remove default supersede-on-generation code and duplicated command implementations.
+- [x] Remove unused imports, obsolete tests, stale documentation, and dead compatibility branches.
+- [x] Keep public extension messages and export schema backward compatible where still active.
+- [x] Review source, dependency graph, and diff without executing tests.
+- [x] Commit `refactor: simplify lossless runtime ownership boundaries`.
 
 ### Task 10: Performance hardening and final verification
 
 **Files:** Modify latency constants, validator, release docs, improvement ledger, implementation plan checkboxes, and any failing owner-boundary code.
 
-- [ ] Add final scenarios for rapid sequential finals, accumulation during generation, multiple-question latest focus, duplicates, hold/resume, interrupt, worker restart, receiver reload, quota rejection, and dashboard reconnect.
-- [ ] Review all timeouts and replace avoidable polling with semantic events plus bounded watchdogs.
+- [x] Add final scenarios for rapid sequential finals, accumulation during generation, multiple-question latest focus, duplicates, hold/resume, interrupt, worker restart, receiver reload, quota rejection, and dashboard reconnect.
+- [x] Review all timeouts and replace avoidable polling with semantic events plus bounded watchdogs.
 - [ ] Run the complete Node suite once.
 - [ ] Run extension validation and both AutoHotkey silent validators.
 - [ ] Fix every failure at its owning boundary and rerun the entire gate from the beginning.

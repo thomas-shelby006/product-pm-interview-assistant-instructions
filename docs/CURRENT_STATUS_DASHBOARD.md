@@ -6,15 +6,15 @@ Last updated: 2026-08-01
 
 | Area | Status | Notes |
 |---|---|---|
-| Runtime release | PMIA 0.7.0 worktree candidate | Reliability, Runtime Pilot Dashboard, operator queue, legacy parity and iterative improvement release based on verified 0.6.1 main. |
+| Runtime release | PMIA 0.7.0 worktree candidate | Lossless delivery ledger, non-preemptive receiver batching, Runtime Pilot Live Inbox, Pace Guard, legacy parity and iterative hardening based on verified 0.6.1 main. |
 | Worktree | Isolated | `C:\Users\Sundar\Documents\product-pm-interview-assistant-improvement`, branch `improvement/pmia-0.7.0`. |
 | Original checkout | Preserved | `product-pm-interview-assistant-instructions` remains unchanged. |
 | Browser | Microsoft Edge Stable | Selected profile verified by Profile Doctor. |
 | Launcher | Active candidate | Session Studio launches sender, receiver and session-scoped dashboard; five initial layouts, Check Live, Alt+D recovery, Fast Repair, memory cleanup and PM-only hotkeys. |
-| Transport | Active candidate | Disposable preview plus sequenced durable final, session pause, bounded 20-final operator queue, selected sending and stale supersession through the Manifest V3 service worker. |
-| Runtime state | Ephemeral | Registry, role logs, dashboard snapshot, timeline and queue use `chrome.storage.session`; cleanup removes complete session state. |
+| Transport | Active candidate | Disposable preview plus sender outbox, persisted delivery ledger, direct role ports, non-preemptive active/next batching, full catch-up and rendered batch proof through the Manifest V3 service worker. |
+| Runtime state | Ephemeral | Registry, role logs, dashboard snapshot, timeline, lossless ledger and safe batch checkpoint use `chrome.storage.session`; cleanup removes complete session state. |
 | Recovery | Hardened | Dead-owner replacement, dashboard reconnect, semantic runtime repair, background-safe tab recovery, Alt+D dashboard reopen and full AHK relaunch fallback. |
-| Dashboard | Active candidate | Live role health, source silence, queue, delivery/answer metrics, virtualized timeline, safe review, diagnostics and controls. |
+| Dashboard | Active candidate | Live Inbox, Current Answer, Next Draft, Pace Guard, latency rail, role health, delivery/answer metrics, virtualized timeline, safe review, diagnostics and controls. |
 | Export | Schema 2.1 | Safe context and review statistics; full setup event text redacted. |
 | Review Studio | Active | Exact READY-pair export, resolver, private tracker push, and exact-session shutdown. |
 | Legacy runtime | Preserved, inactive | Edge Beta, Tampermonkey, fixed launcher, and archives remain rollback/reference only. |

@@ -16,7 +16,7 @@ Normal ChatGPT and Claude tabs without PMIA runtime configuration are untouched.
 ## PMIA 0.7 state, recovery, and operator controls
 
 - Registry and role-scoped transcript logs use `chrome.storage.session`. Transcript and answer events are never written to disk-backed extension local storage.
-- Startup removes legacy `pmia_log_*` local-storage records. Explicit end-session and final-tab closure remove the complete session registry, pending final, sequence state, and both role logs.
+- Startup removes legacy `pmia_log_*` local-storage records. Explicit end-session and final-tab closure remove the complete session registry, sender outbox, lossless ledger, batch state, receiver sequence state, Pilot state and both role logs.
 - A fresh registration probes a conflicting owner. Missing or non-responsive owners are replaced immediately; healthy duplicate roles remain blocked.
 - Receiver wake recovery is background-safe: it disables discard and reloads only a discarded tab without activating the tab or focusing Edge.
 - Session Studio exposes **Check Live** (`Alt+H`) and **Fast Repair** (`Alt+Shift+R`). Check Live uses the authorized counterpart preflight in both managed windows; Fast Repair reuses the current in-memory route and context.
@@ -27,7 +27,7 @@ Normal ChatGPT and Claude tabs without PMIA runtime configuration are untouched.
 
 Session Studio opens `dashboard/index.html?session=<SESSION>` as the third managed Edge app window after both provider roles are ready. Its defended title is `PMIA_DASHBOARD_<SESSION>`.
 
-- Overview shows route, transport mode, uptime, role health, heartbeat, source silence, composer/generation/microphone/scroll state, warnings, delivery metrics and latest artifacts.
+- Live shows catch-up state, Current Answer, Next Draft, Pace Guard, latency rail, storage pressure, route, role health, heartbeat, source silence, composer/generation/microphone/scroll state, warnings and delivery metrics.
 - Lossless Inbox shows every session final with age, sequence, ledger state, batch ID and text. Previews never enter the ledger.
 - Timeline virtualizes the latest 200 operational events.
 - Review shows only safe session metadata and runtime outcomes. Resume, JD, avoid text and notes are excluded.
@@ -90,8 +90,8 @@ Binary microphone and playback frames are ignored.
 
 ## Runtime health and diagnostics
 
-- Each managed tab shows a stable link state: `LINK OK`, a missing sender/receiver, `FINAL QUEUED`, or an explicit runtime/composer fault.
-- Transient states such as `FORWARDED`, `QUEUED`, and `SENT` return to the latest stable link state instead of assuming `READY`.
+- Each managed tab shows a stable link state: `LINK OK`, a missing sender/receiver, `FINAL PERSISTED`, or an explicit runtime/composer fault.
+- Transient states such as `PERSISTED`, `STAGED`, and `SENT` return to the latest stable link state instead of assuming `READY`.
 - `Ctrl+Shift+F11` actively pings the opposite content runtime through the authorized service worker. A registered but non-responsive tab reports `RUNTIME UNREACHABLE`.
 - Closing either managed tab immediately updates the remaining tab instead of waiting for the registration heartbeat.
 - Dynamic-import and startup exceptions render an assertive on-page fatal banner with the runtime version and recovery action. Error details are reduced to the error class so transcript or credential text is not exposed.
@@ -144,7 +144,7 @@ No Resume, Job Description, notes, prompt, answer, session identifier, cookie, t
 - `Ctrl+Shift+F8`: export the current role's JSON and Markdown log.
 - `Ctrl+Shift+F9`: focus the receiver composer.
 - `Ctrl+Shift+F10`: toggle receiver auto-scroll.
-- `Ctrl+Shift+F11`: actively ping the opposite managed runtime and report `LINK OK`, a missing role, `FINAL QUEUED`, `RUNTIME UNREACHABLE`, or `COMPOSER NOT READY`.
+- `Ctrl+Shift+F11`: actively ping the opposite managed runtime and report `LINK OK`, a missing role, `FINAL PERSISTED`, `RUNTIME UNREACHABLE`, or `COMPOSER NOT READY`.
 - `Ctrl+Alt+0`: pause or resume the session-level transport through the same dashboard command path.
 
 ## Session tracker companion
@@ -175,6 +175,6 @@ npm run validate
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-Manual release checks should cover all four sender/receiver provider combinations, dashboard connect/reconnect, pause/queue/resume, selected send, stale supersession, context resend, repair, layouts, export, full three-window shutdown, native-voice senders, receiver reload and a long-session soak.
+Manual release checks should cover applicable provider combinations, dashboard connect/reconnect, one-at-a-time delivery, accumulation during generation, latest-focused multi-question submission, duplicate suppression, pause/catch-up, selected submission, hold, submit-now, explicit interrupt, context resend, repair, layouts, export, full three-window shutdown, receiver reload and a long-session soak.
 
 The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.7.0 runtime.

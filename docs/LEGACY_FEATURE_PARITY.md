@@ -2,14 +2,14 @@
 
 ## Decision rule
 
-The upgraded runtime ports useful operator capabilities, not obsolete mechanisms. Manifest V3 remains the authority for identity, ordering, queueing, recovery and provider-rendered delivery proof.
+The upgraded runtime ports useful operator capabilities, not obsolete mechanisms. Manifest V3 remains the authority for identity, lossless persistence, ordering, batching, recovery and provider-rendered delivery proof.
 
 | Older capability | Decision | PMIA 0.7 implementation |
 |---|---|---|
 | Pause and resume forwarding | Ported and improved | Session-level transport mode. Sender observation continues, previews are suppressed, and authoritative finals enter a lossless ledger. |
 | PM buffer | Ported and redesigned | `chrome.storage.session` lossless delivery ledger with envelope identity, sequence, age, attempts and state. |
 | Force/manual buffer flush | Replaced | Resume & Catch Up or Submit Selected uses normal sequence gates and rendered-turn proof; no unsafe forced finalization. |
-| Queue while receiver generates | Already superior, exposed | Receiver supersession remains authoritative; dashboard shows generation and queue state. |
+| Queue while receiver generates | Ported and redesigned | Window 2 keeps one immutable active batch and one mutable next draft. New finals accumulate without interrupting the active answer; all accumulated questions are preserved and the latest is marked highest priority. |
 | Silence warning | Ported and improved | Source silence, runtime heartbeat and composer readiness are separate health markers. |
 | Status indicator | Ported and expanded | Compact role overlays plus complete dashboard health. |
 | Scroll lock | Ported | Existing shortcut and dashboard command share one semantic receiver action. |
@@ -26,14 +26,14 @@ The upgraded runtime ports useful operator capabilities, not obsolete mechanisms
 
 ## Active controls
 
-- Dashboard: pause, resume latest, resume without sending, send/discard selected, discard all, health check, runtime repair, context resend, microphone, scroll lock, composer focus, export, layout, hide/restore and end session.
+- Dashboard: pause, Resume & Catch Up, resume without sending, submit selected, auto-submit, hold, submit now, explicit interrupt for latest, copy latest, archive, health check, runtime repair, context resend, microphone, scroll lock, composer focus, export, layout, hide/restore and end session.
 - Global shortcuts: `Alt+R`, `Alt+D`, `Alt+H`, `Alt+Shift+R`, `Alt+Esc`, `Alt+Delete`, `Alt+Tab`, `Alt+CapsLock`, `CapsLock`, `Alt+Q`, `Alt+W`, `Alt+E`, and `Alt+Shift+E`.
 
 ## Safety invariants
 
-- Previews are disposable and never queued.
-- Only validated final envelopes enter the operator queue.
+- Previews are disposable and never enter the lossless ledger.
+- Every validated non-duplicate final enters the sender outbox and lossless delivery ledger without count eviction.
 - A duplicate acknowledgement closes delivery without resubmitting.
-- A stale acknowledgement keeps the older unresolved item protected until duplicate or rendered proof.
-- A provider-rendered matching user turn is the delivery proof.
+- A newer rendered proof never supersedes or deletes an older unresolved final.
+- A provider-rendered matching user turn is the delivery proof; one multi-question batch proof maps to every frozen member ID.
 - Resume, JD, notes and setup text never enter disk-backed extension storage or safe diagnostics.

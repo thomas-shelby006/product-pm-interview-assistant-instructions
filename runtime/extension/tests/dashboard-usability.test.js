@@ -91,3 +91,13 @@ test('dangerous interrupt and archive controls require confirmation', () => {
   assert.match(markup, /id="discardSelected"[^>]*data-confirm=/);
   assert.match(markup, /id="discardAll"[^>]*data-confirm=/);
 });
+
+
+test('Pilot exposes Pace Guard without adding provider focus operations', () => {
+  for (const id of ['paceState', 'paceRates', 'paceForecast']) {
+    assert.match(markup, new RegExp(`id="${id}"`));
+  }
+  assert.match(dashboard, /derivePaceGuard\(snapshot, now\)/);
+  assert.match(styles, /\.pace-panel/);
+  assert.doesNotMatch(dashboard, /chrome\.tabs\.update|chrome\.windows\.update|window\.focus\(/);
+});

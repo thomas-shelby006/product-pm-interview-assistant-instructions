@@ -46,6 +46,17 @@ const pilotController = createRuntimePilotController({
   deliverFinal: deliver,
   exportManagedSession,
   clearSessionLogs: sessionId => logStore.clearSession(sessionId),
+  async requestRole({ sessionId, role, command, payload, fallback }) {
+    if (!rolePortHub.has(sessionId, role)) return fallback();
+    try {
+      return await rolePortHub.request(sessionId, role, {
+        operation: 'command',
+        payload: { command, payload }
+      }, { timeout: 500 });
+    } catch {
+      return fallback();
+    }
+  },
   serializeOperation: serialize
 });
 

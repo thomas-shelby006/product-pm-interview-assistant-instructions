@@ -35,6 +35,7 @@ import { createSenderOutbox } from './sender-outbox.js';
 import { createReceiverBatchRuntime } from './receiver-batch-runtime.js';
 import { createRuntimeRolePort } from './runtime-role-port.js';
 import { createComposerArbiter } from './composer-arbiter.js';
+import { safeBatchTelemetry } from '../shared/batch-event-policy.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -229,7 +230,8 @@ async function startRuntime(runtimeConfig) {
     getPhase: refreshLifecycleTitle,
     getTransportPaused: () => transportPaused,
     getScrollLocked: () => scrollLocked,
-    getVoiceActive: isCombinedVoiceActive
+    getVoiceActive: isCombinedVoiceActive,
+    getBatchState: () => safeBatchTelemetry(receiverBatchRuntime?.snapshot())
   });
 
   async function register() {
@@ -484,7 +486,6 @@ async function startRuntime(runtimeConfig) {
     adapter,
     onConflict(conflict) {
       overlay.setStatus('DRAFT CONFLICT', 'warn', 2400);
-      telemetry.event('draft_conflict', { owner: conflict.owner });
       void message({
         type: 'PMIA_BATCH_EVENT',
         sessionId: runtimeConfig.sessionId,
@@ -551,7 +552,6 @@ async function startRuntime(runtimeConfig) {
         return { ok: true, proof };
       },
       onEvent(event) {
-        telemetry.event(event.type, event);
         void message({
           type: 'PMIA_BATCH_EVENT',
           sessionId: runtimeConfig.sessionId,

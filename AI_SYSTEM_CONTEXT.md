@@ -8,8 +8,8 @@ The system converts a live interviewer question into a fast, speakable PM answer
 
 The engineering priority order is:
 
-1. do not lose or duplicate the latest actionable question;
-2. do not submit stale or partial transcript text;
+1. do not lose any non-duplicate authoritative question final;
+2. preserve sequence and batch membership while preventing partial transcript submission;
 3. keep sender, receiver, and dashboard recoverable without disturbing unrelated browser windows;
 4. keep Resume, JD, notes, prompts, answers, and session identifiers out of persistent runtime storage;
 5. make operational failure visible and repairable in one action;
@@ -22,7 +22,7 @@ The engineering priority order is:
 - **Provider/dashboard runtime:** `runtime/extension/`, Manifest V3.
 - **Providers:** ChatGPT and Claude independently selectable as sender or receiver.
 - **Windows:** one managed sender, one managed receiver, and one session-scoped Runtime Pilot Dashboard.
-- **Transport:** disposable preview lane plus durable sequenced final lane, session-level pause, and bounded final queue through the extension service worker.
+- **Transport:** disposable preview lane plus sender outbox, durable lossless final ledger, direct role ports, session-level pause, and active/next receiver batching through the extension service worker.
 - **Review:** `runtime/Session_Tracker_End_Session.ahk` plus exact Markdown pairing and private tracker push scripts.
 
 Edge Beta, Tampermonkey, `Final_2_Window_Fixed.ahk`, and archives are inactive rollback/reference assets.
@@ -35,11 +35,11 @@ Owns Session Studio, profile/route/layout preferences, three-window Edge launch,
 
 ### Extension service worker
 
-Owns role registration, ownership conflict resolution, durable sequence admission, transport mode, bounded operator queue, final routing, Runtime Pilot state/ports, counterpart status, browser-native recovery/layout commands, ephemeral role logs, export control, and deterministic cleanup.
+Owns role registration, ownership conflict resolution, persisted-final admission, lossless ledger, batch reconciliation, transport mode, direct role ports, final routing, Runtime Pilot state/ports, counterpart status, browser-native recovery/layout commands, ephemeral role logs, export control, and deterministic cleanup.
 
 ### Content runtime
 
-Owns provider observation, provisional preview, authoritative finalization, receiver staging/submission/proof, generation supersede, answer capture, source-silence/heartbeat telemetry, semantic runtime commands, compact status overlay, health response, and role-scoped export.
+Owns provider observation, provisional preview, authoritative finalization, sender outbox, composer arbitration, receiver accumulation/submission/proof, explicit-only generation interruption, answer capture, source-silence/heartbeat/batch telemetry, semantic runtime commands, compact status overlay, health response, and role-scoped export.
 
 ### Provider adapters
 
@@ -65,7 +65,9 @@ Provisional transcript growth is disposable, in-memory, coalesced, and never que
 
 ### Final lane
 
-Authoritative provider boundaries create a sequenced envelope. When active, the service worker routes it normally. When paused or unavailable, question finals enter a bounded 20-item operator queue while previews remain disposable. A replay is duplicate-acknowledged. `stale_ack` marks an older item superseded and is not counted as delivery.
+Every authoritative provider boundary creates a sequenced envelope and stores it in the sender outbox. Window 1 retains the envelope until the service worker confirms `persisted: true`. The service worker persists every non-duplicate final in the lossless delivery ledger before attempting Window 2 delivery. No count-based eviction, latest-only replacement or automatic supersession is permitted.
+
+When transport is active and Window 2 is idle, the final can submit immediately. When paused, unavailable or generating, the final remains unresolved and is accumulated into the next batch. Duplicate identity is acknowledged without resubmission. A newer proof never deletes an older unresolved final.
 
 ### ChatGPT boundary
 
@@ -77,18 +79,22 @@ Rendered user-turn growth is preview-only. The following assistant turn is the p
 
 ## Receiver behavior
 
-The receiver stages boot context without submitting it. For a question, it stops an older generating answer when possible, waits for the provider to become idle, writes/submits the latest question, and acknowledges only after a new matching user turn renders. A newer delivery invalidates older receiver work.
+Window 2 owns one immutable active batch and one mutable next batch. Ordinary new finals never stop or mutate an active answer. They are added to the next batch and mirrored into the receiver composer under composer ownership arbitration; a manual edit blocks automatic overwrite and raises a draft conflict.
+
+A single waiting question submits unchanged. When multiple questions accumulate, all are preserved in sequence order and the prompt tells the answer model to answer all while focusing primarily on the latest question. A batch is acknowledged only after a matching provider user turn renders; one frozen batch proof maps to every member final.
+
+**Interrupt for latest** is the sole normal path allowed to stop active generation. It submits only the newest waiting final and preserves every earlier waiting final in the next batch. Restart reconciliation checks already-rendered receiver turns before replaying unresolved ledger entries.
 
 Delivery recovery is background-safe. The service worker disables tab discard and reloads only an actually discarded managed tab; it does not activate the tab or focus the Edge window.
 
 ## Runtime privacy
 
 - Session Studio persists only profile directory, sender provider, receiver provider, and layout mode.
-- Registry, role logs, queue, dashboard snapshot and timeline use `chrome.storage.session`, not disk-backed extension local storage.
+- Registry, role logs, lossless ledger, safe batch checkpoint, dashboard snapshot and timeline use `chrome.storage.session`, not disk-backed extension local storage.
 - Legacy `pmia_log_*` local records are removed at service-worker startup.
 - Setup events are replaced by `[Session setup redacted from session log]`.
 - Only company, target role, interview round, emphasis, answer mode, and missing Resume/JD flags are allowed into review metadata.
-- Ending the session or closing both provider tabs removes registrations, pending final, queue, pilot state, sequence state, both role logs, dashboard, and AHK setup context.
+- Ending the session or closing both provider tabs removes registrations, sender outbox, lossless ledger, batch state, Pilot state, receiver sequence state, both role logs, dashboard, and AHK setup context.
 - Explicit export is the only supported path that writes transcript or answer material to files.
 
 ## User-facing operations
@@ -103,7 +109,7 @@ Delivery recovery is background-safe. The service worker disables tab discard an
 - `Alt+Q` controls sender microphone; `Alt+W` controls receiver auto-scroll.
 - `Alt+E` exports both role records; `Alt+Shift+E` opens Review Studio.
 
-Normal health states include `LINK OK`, `FORWARDING PAUSED`, queue count, missing/unresponsive sender/receiver, source silence, `FINAL QUEUED`, and `COMPOSER NOT READY`. Session Studio launch states include `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `WAITING_DASHBOARD`, `READY`, and `ERROR`.
+Normal health states include `LINK OK`, `FORWARDING PAUSED`, lossless inbox counts, Current Answer, Next Draft, Pace Guard, storage pressure, missing/unresponsive sender/receiver, source silence, `FINAL PERSISTED`, and `COMPOSER NOT READY`. Session Studio launch states include `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `WAITING_DASHBOARD`, `READY`, and `ERROR`.
 
 ## Export and review
 
@@ -114,7 +120,7 @@ Each role exports JSON and Markdown schema 2.1. The existing `Session:` and `Win
 - observed question and captured-answer counts;
 - average/maximum answer word count and answers over 180 words;
 - average/maximum receiver delivery time;
-- queued final, duplicate/stale, and answer-timeout counts;
+- ledger and batch counts, duplicate acknowledgements, explicit archives, Pace Guard evidence, and answer-timeout counts;
 - bounded role events with full setup text redacted.
 
 Review Studio detects exactly one complete READY pair, requests both role exports through the launcher control channel, validates fresh matching files, and pushes only after explicit user action.
@@ -131,7 +137,7 @@ Review Studio detects exactly one complete READY pair, requests both role export
 8. Health or repair controls use a separate workaround rather than the production lifecycle.
 9. Launcher or dashboard layout actions affect unrelated Edge windows.
 10. Dashboard reconnect, service-worker restart, or command idempotency recreates stale/ghost state.
-11. An older queued final remains sendable after a newer final is proven.
+11. Any non-duplicate final disappears, is archived automatically, or is marked proven without matching batch/rendered proof.
 
 ## Verification contract
 

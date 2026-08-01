@@ -10,6 +10,7 @@ import {
   warningLabel
 } from './dashboard-model.js';
 import { catchUpLabel, deriveLatencyRail, deriveLiveInbox } from './live-inbox-model.js';
+import { derivePaceGuard, paceLabel } from './pace-guard-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -229,6 +230,9 @@ function renderLiveCommandCenter(snapshot, now) {
     text('nextDraftBadge', '0 questions');
     text('nextDraftTitle', 'Nothing waiting');
     text('nextDraftText', 'Waiting for lossless inbox state.');
+    text('paceState', '--');
+    text('paceRates', '--');
+    text('paceForecast', 'Waiting for delivery-rate evidence.');
     text('storagePressureBadge', '--');
     text('storagePressureValue', '--');
     text('storagePressureDetail', 'Session memory status is not available yet.');
@@ -272,6 +276,19 @@ function renderLiveCommandCenter(snapshot, now) {
       ? latestQuestionText(nextEntries) || 'One persisted question is staged for Window 2.'
       : `${inbox.nextCount - 1} earlier question(s) preserved. Latest focus: ${latestQuestionText(nextEntries) || 'latest member'}`)
     : 'New questions will accumulate here while Window 2 is answering.');
+
+  const pace = derivePaceGuard(snapshot, now);
+  const pacePanel = document.querySelector('.pace-panel');
+  if (pacePanel) pacePanel.dataset.pace = pace.state;
+  text('paceState', paceLabel(pace.state));
+  text('paceRates', `${pace.intakePerMinute} in / ${pace.proofPerMinute} proven per min`);
+  text('paceForecast', pace.unresolved === 0
+    ? 'No unresolved finals.'
+    : pace.estimatedCatchUpMs !== null
+      ? `${pace.unresolved} unresolved - estimated catch-up ${formatDuration(pace.estimatedCatchUpMs)}.`
+      : pace.state === 'falling_behind'
+        ? `${pace.unresolved} unresolved - intake is exceeding rendered proof.`
+        : `${pace.unresolved} unresolved - waiting for a positive recovery rate.`);
 
   const storagePanel = document.querySelector('.storage-panel');
   if (storagePanel) storagePanel.dataset.pressure = inbox.storage.level || 'normal';
@@ -597,13 +614,13 @@ document.addEventListener('click', event => {
 });
 
 byId('submitSelected').addEventListener('click', event => {
-  if (!state.selectedQueueId) return showToast('Select a queued final.', 'warn');
+  if (!state.selectedQueueId) return showToast('Select an unresolved final.', 'warn');
   const item = state.snapshot?.ledger?.find(candidate => candidate.id === state.selectedQueueId);
   if (!['persisted', 'failed'].includes(item?.state)) return showToast('Only pending or failed finals can be submitted manually.', 'warn');
   void runCommand(event.currentTarget, 'submit_selected', { queueItemId: state.selectedQueueId });
 });
 byId('archiveSelected').addEventListener('click', event => {
-  if (!state.selectedQueueId) return showToast('Select a queued final.', 'warn');
+  if (!state.selectedQueueId) return showToast('Select an unresolved final.', 'warn');
   void runCommand(event.currentTarget, 'archive_selected', { queueItemId: state.selectedQueueId });
 });
 byId('archiveProven').addEventListener('click', event => {

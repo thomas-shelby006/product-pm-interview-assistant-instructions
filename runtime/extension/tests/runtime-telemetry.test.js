@@ -56,3 +56,38 @@ test('source silence classifier distinguishes active voice stalls from ordinary 
     role: 'sender', voiceActive: false, lastSourceActivityAt: 1000, now: 92000
   }).state, 'idle_silent');
 });
+
+
+test('receiver telemetry checkpoints safe batch identity for worker restart recovery', () => {
+  const telemetry = createRuntimeTelemetry({
+    runtimeConfig: { sessionId: 's1', role: 'receiver', provider: 'chatgpt' },
+    adapter: adapter(),
+    send: async () => ({ ok: true }),
+    getBatchState: () => ({
+      active: { batchId: 'b1', memberIds: ['q1'], questionCount: 1 },
+      next: { memberIds: ['q2', 'q3'], questionCount: 2 },
+      hold: true,
+      autoSubmit: false
+    }),
+    setIntervalFn: () => 1,
+    clearIntervalFn: () => {}
+  });
+  assert.deepEqual(telemetry.snapshot().batchState, {
+    active: { batchId: 'b1', memberIds: ['q1'], questionCount: 1 },
+    next: { memberIds: ['q2', 'q3'], questionCount: 2 },
+    hold: true,
+    autoSubmit: false
+  });
+});
+
+test('sender telemetry never includes receiver batch state', () => {
+  const telemetry = createRuntimeTelemetry({
+    runtimeConfig: { sessionId: 's1', role: 'sender', provider: 'chatgpt' },
+    adapter: adapter(),
+    send: async () => ({ ok: true }),
+    getBatchState: () => ({ active: { batchId: 'should-not-leak' } }),
+    setIntervalFn: () => 1,
+    clearIntervalFn: () => {}
+  });
+  assert.equal('batchState' in telemetry.snapshot(), false);
+});
