@@ -11,7 +11,7 @@
   <div class="shell">
     <header class="topbar">
       <div>
-        <p class="kicker">PMIA Â· Runtime Pilot</p>
+        <p class="kicker">PMIA - Runtime Pilot</p>
         <h1>Live interview control</h1>
       </div>
       <div class="connection" id="connectionState" data-tone="warn">
@@ -20,21 +20,21 @@
     </header>
 
     <section class="session-strip" aria-label="Session overview">
-      <div><span>Session</span><strong id="sessionId">â€”</strong></div>
-      <div><span>Route</span><strong id="route">â€”</strong></div>
-      <div><span>Mode</span><strong id="transportMode">â€”</strong></div>
-      <div><span>Uptime</span><strong id="uptime">â€”</strong></div>
+      <div><span>Session</span><strong id="sessionId">--</strong></div>
+      <div><span>Route</span><strong id="route">--</strong></div>
+      <div><span>Mode</span><strong id="transportMode">--</strong></div>
+      <div><span>Uptime</span><strong id="uptime">--</strong></div>
     </section>
 
-    <nav class="tabs" aria-label="Dashboard views">
-      <button class="tab active" data-view="overview">Overview</button>
-      <button class="tab" data-view="queue">Queue <span id="queueBadge">0</span></button>
-      <button class="tab" data-view="timeline">Timeline</button>
-      <button class="tab" data-view="review">Review</button>
+    <nav class="tabs" aria-label="Dashboard views" role="tablist">
+      <button class="tab active" data-view="overview" role="tab" aria-selected="true" aria-controls="panelOverview">Overview</button>
+      <button class="tab" data-view="queue" role="tab" aria-selected="false" aria-controls="panelQueue">Queue <span id="queueBadge">0</span></button>
+      <button class="tab" data-view="timeline" role="tab" aria-selected="false" aria-controls="panelTimeline">Timeline</button>
+      <button class="tab" data-view="review" role="tab" aria-selected="false" aria-controls="panelReview">Review</button>
     </nav>
 
     <main>
-      <section class="view active" data-view-panel="overview">
+      <section class="view active" id="panelOverview" data-view-panel="overview" role="tabpanel">
         <div class="control-grid" aria-label="Runtime controls">
           <button class="primary" id="primaryTransportAction" data-command="pause">Pause forwarding</button>
           <button data-command="resume_latest">Resume + latest</button>
@@ -53,38 +53,38 @@
             <div class="card-head"><span>Window 1</span><b>Sender</b></div>
             <div class="health" id="senderHealth" data-tone="warn">Waiting</div>
             <dl>
-              <div><dt>Provider</dt><dd id="senderProvider">â€”</dd></div>
-              <div><dt>Phase</dt><dd id="senderPhase">â€”</dd></div>
-              <div><dt>Composer</dt><dd id="senderComposer">â€”</dd></div>
-              <div><dt>Voice</dt><dd id="senderVoice">â€”</dd></div>
-              <div><dt>Source silence</dt><dd id="senderSilence">â€”</dd></div>
-              <div><dt>Heartbeat</dt><dd id="senderHeartbeat">â€”</dd></div>
-              <div><dt>Adapter</dt><dd id="senderAdapter">â€”</dd></div>
+              <div><dt>Provider</dt><dd id="senderProvider">--</dd></div>
+              <div><dt>Phase</dt><dd id="senderPhase">--</dd></div>
+              <div><dt>Composer</dt><dd id="senderComposer">--</dd></div>
+              <div><dt>Voice</dt><dd id="senderVoice">--</dd></div>
+              <div><dt>Source silence</dt><dd id="senderSilence">--</dd></div>
+              <div><dt>Heartbeat</dt><dd id="senderHeartbeat">--</dd></div>
+              <div><dt>Adapter</dt><dd id="senderAdapter">--</dd></div>
             </dl>
           </article>
           <article class="role-card" id="receiverCard">
             <div class="card-head"><span>Window 2</span><b>Receiver</b></div>
             <div class="health" id="receiverHealth" data-tone="warn">Waiting</div>
             <dl>
-              <div><dt>Provider</dt><dd id="receiverProvider">â€”</dd></div>
-              <div><dt>Phase</dt><dd id="receiverPhase">â€”</dd></div>
-              <div><dt>Composer</dt><dd id="receiverComposer">â€”</dd></div>
-              <div><dt>Generation</dt><dd id="receiverGenerating">â€”</dd></div>
-              <div><dt>Scroll</dt><dd id="receiverScroll">â€”</dd></div>
-              <div><dt>Heartbeat</dt><dd id="receiverHeartbeat">â€”</dd></div>
-              <div><dt>Adapter</dt><dd id="receiverAdapter">â€”</dd></div>
+              <div><dt>Provider</dt><dd id="receiverProvider">--</dd></div>
+              <div><dt>Phase</dt><dd id="receiverPhase">--</dd></div>
+              <div><dt>Composer</dt><dd id="receiverComposer">--</dd></div>
+              <div><dt>Generation</dt><dd id="receiverGenerating">--</dd></div>
+              <div><dt>Scroll</dt><dd id="receiverScroll">--</dd></div>
+              <div><dt>Heartbeat</dt><dd id="receiverHeartbeat">--</dd></div>
+              <div><dt>Adapter</dt><dd id="receiverAdapter">--</dd></div>
             </dl>
           </article>
         </div>
 
         <section class="warnings" aria-labelledby="warningsTitle">
-          <div class="section-heading"><h2 id="warningsTitle">Health markers</h2><span id="healthScore">â€”</span></div>
+          <div class="section-heading"><h2 id="warningsTitle">Health markers</h2><span id="healthScore">--</span></div>
           <div id="warningList" class="warning-list"><p class="empty">No live snapshot yet.</p></div>
         </section>
 
         <section class="metrics" aria-label="Runtime metrics">
-          <article><span>Delivery success</span><strong id="deliverySuccess">â€”</strong></article>
-          <article><span>Average proof</span><strong id="averageProof">â€”</strong></article>
+          <article><span>Delivery success</span><strong id="deliverySuccess">--</strong></article>
+          <article><span>Average proof</span><strong id="averageProof">--</strong></article>
           <article><span>Queued finals</span><strong id="queuedFinals">0</strong></article>
           <article><span>Answer timeouts</span><strong id="answerTimeouts">0</strong></article>
         </section>
@@ -97,15 +97,15 @@
         </section>
       </section>
 
-      <section class="view" data-view-panel="queue">
+      <section class="view" id="panelQueue" data-view-panel="queue" role="tabpanel" hidden>
         <div class="section-heading">
           <div><h2>Operator queue</h2><p>Only authoritative finals appear here.</p></div>
           <div class="inline-actions">
             <select id="queueFilter" aria-label="Queue filter"><option value="actionable">Actionable</option><option value="all">All items</option></select>
             <button id="sendSelected">Send selected</button>
-            <button id="discardSelected">Discard selected</button>
+            <button id="discardSelected" data-confirm="Discard the selected queued final?">Discard selected</button>
             <button id="discardSuperseded">Clear superseded</button>
-            <button class="danger" id="discardAll">Discard all</button>
+            <button class="danger" id="discardAll" data-confirm="Discard every queued final?">Discard all</button>
           </div>
         </div>
         <div class="queue-wrap">
@@ -116,7 +116,7 @@
         </div>
       </section>
 
-      <section class="view" data-view-panel="timeline">
+      <section class="view" id="panelTimeline" data-view-panel="timeline" role="tabpanel" hidden>
         <div class="section-heading">
           <div><h2>Runtime timeline</h2><p>Bounded to the latest 200 operational events.</p></div>
           <select id="timelineFilter" aria-label="Filter timeline">
@@ -132,7 +132,7 @@
         </div>
       </section>
 
-      <section class="view" data-view-panel="review">
+      <section class="view" id="panelReview" data-view-panel="review" role="tabpanel" hidden>
         <div class="section-heading"><div><h2>Session review</h2><p>Safe metadata and runtime outcomes only.</p></div></div>
         <div class="review-grid" id="reviewGrid"></div>
         <article class="repair-report">
@@ -152,7 +152,7 @@
         <button data-command="restore_managed">Restore</button>
       </div>
       <div class="footer-actions">
-        <details class="shortcut-help"><summary>Keys</summary><p><b>Space</b> pause/resume Â· <b>L</b> resume latest Â· <b>H</b> health Â· <b>R</b> repair Â· <b>E</b> export Â· <b>M</b> mic Â· <b>S</b> scroll Â· <b>D</b> diagnostics</p></details>
+        <details class="shortcut-help"><summary>Keys</summary><p><b>Space</b> pause/resume - <b>L</b> resume latest - <b>H</b> health - <b>R</b> repair - <b>E</b> export - <b>M</b> mic - <b>S</b> scroll - <b>D</b> diagnostics</p></details>
         <button id="copyDiagnostics">Copy diagnostics</button>
         <button class="danger" data-command="end_session" data-confirm="End this managed PMIA session?">End session</button>
       </div>

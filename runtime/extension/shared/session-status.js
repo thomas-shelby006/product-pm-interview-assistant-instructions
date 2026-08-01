@@ -26,7 +26,7 @@ export function describeRuntimeStatus(status, counterpart = null) {
   const queueCount = Math.max(0, Number(status?.queueCount) || 0);
   if (status?.transportMode === 'paused') {
     return {
-      text: queueCount ? `PAUSED Â· ${queueCount} QUEUED` : 'FORWARDING PAUSED',
+      text: queueCount ? `PAUSED - ${queueCount} QUEUED` : 'FORWARDING PAUSED',
       tone: 'warn'
     };
   }

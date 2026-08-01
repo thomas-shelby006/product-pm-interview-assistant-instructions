@@ -1,0 +1,47 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const dashboard = await readFile(new URL('../dashboard/dashboard.js', import.meta.url), 'utf8');
+const markup = await readFile(new URL('../dashboard/index.html', import.meta.url), 'utf8');
+const status = await readFile(new URL('../shared/session-status.js', import.meta.url), 'utf8');
+const validator = await readFile(new URL('../scripts/validate-extension.mjs', import.meta.url), 'utf8');
+
+test('dashboard ends cleanly without reconnecting or leaving controls active', () => {
+  assert.match(dashboard, /state\.sessionEnded = true/);
+  assert.match(dashboard, /if \(state\.sessionEnded\)[\s\S]*return;/);
+  assert.match(dashboard, /Runtime controls are disabled/);
+  assert.match(dashboard, /updateControlAvailability/);
+});
+
+test('destructive dashboard actions require explicit confirmation', () => {
+  assert.match(markup, /id="discardSelected" data-confirm=/);
+  assert.match(markup, /id="discardAll" data-confirm=/);
+  assert.match(markup, /data-command="end_session" data-confirm=/);
+});
+
+test('dashboard tabs expose accessible selected and panel state', () => {
+  assert.match(markup, /role="tablist"/);
+  assert.match(markup, /role="tab" aria-selected="true"/);
+  assert.match(markup, /role="tabpanel"/);
+  assert.match(dashboard, /setAttribute\('aria-selected'/);
+  assert.match(dashboard, /node\.hidden = !active/);
+});
+
+test('keyboard controls use normal command feedback and ignore repeats', () => {
+  assert.match(dashboard, /function runKeyboardCommand/);
+  assert.match(dashboard, /event\.repeat/);
+  assert.match(dashboard, /commandResultLabel/);
+});
+
+test('active visible runtime surfaces contain no known mojibake sequences', () => {
+  const combined = `${dashboard}
+${markup}
+${status}`;
+  assert.doesNotMatch(combined, /�|?|???|???|??/u);
+  assert.match(validator, /mojibakeMarkers/);
+});
+test('delivery success preserves the nullish fallback instead of arithmetic', () => {
+  assert.match(dashboard, /deliverySuccessRate \?\? 100/);
+  assert.doesNotMatch(dashboard, /deliverySuccessRate - 100/);
+});

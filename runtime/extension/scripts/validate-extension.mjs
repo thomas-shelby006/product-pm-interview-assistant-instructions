@@ -39,11 +39,29 @@ for (const file of files) {
 }
 
 const forbidden = ['/backend-api/conversation', '/api/chat_conversations/', 'Authorization: Bearer'];
-const runtimeFiles = files.filter(file => !relative(root, file).startsWith('scripts'));
+const runtimeFiles = files.filter(file => {
+  const path = relative(root, file);
+  return !path.startsWith('scripts') && !path.startsWith('tests');
+});
 for (const file of runtimeFiles) {
   const source = await readFile(file, 'utf8');
   for (const marker of forbidden) {
     if (source.includes(marker)) throw new Error(`Private provider API marker found in ${relative(root, file)}: ${marker}`);
+  }
+}
+
+const visibleRuntimeFiles = [
+  ...runtimeFiles,
+  resolve(root, 'dashboard/index.html'),
+  resolve(root, 'dashboard/dashboard.css')
+];
+const mojibakeMarkers = ['\uFFFD', '\u00C2', '\u00E2'];
+for (const file of visibleRuntimeFiles) {
+  const source = await readFile(file, 'utf8');
+  for (const marker of mojibakeMarkers) {
+    if (source.includes(marker)) {
+      throw new Error(`Mojibake marker found in ${relative(root, file)}: U+${marker.codePointAt(0).toString(16).toUpperCase()}`);
+    }
   }
 }
 

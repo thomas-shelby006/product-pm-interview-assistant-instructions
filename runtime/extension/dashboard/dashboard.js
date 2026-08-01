@@ -1,6 +1,7 @@
 import {
   actionableQueue,
   buildDiagnostics,
+  commandResultLabel,
   deriveReview,
   formatDuration,
   latestReceiverProof,
@@ -21,6 +22,7 @@ const state = {
   queueFilter: 'actionable',
   timelineFilter: 'all',
   activeView: 'overview',
+  sessionEnded: false,
   pending: new Map()
 };
 
@@ -85,7 +87,12 @@ function connect() {
     port.onMessage.addListener(handlePortMessage);
     port.onDisconnect.addListener(() => {
       state.port = null;
-      failPendingCommands();
+      failPendingCommands(state.sessionEnded ? 'session_ended' : 'dashboard_disconnected');
+      if (state.sessionEnded) {
+        setConnection('Session ended', 'error');
+        updateControlAvailability();
+        return;
+      }
       setConnection('Reconnecting', 'warn');
       scheduleReconnect();
     });
@@ -111,13 +118,17 @@ function scheduleReconnect() {
 function handlePortMessage(message) {
   if (message?.type === 'PMIA_DASHBOARD_SNAPSHOT') {
     state.reconnectAttempt = 0;
+    state.sessionEnded = false;
     state.snapshot = message.snapshot;
     setConnection('Live', 'ok');
     render();
     return;
   }
   if (message?.type === 'PMIA_DASHBOARD_SESSION_ENDED') {
+    state.sessionEnded = true;
     state.snapshot = null;
+    failPendingCommands('session_ended');
+    clearTimeout(state.reconnectTimer);
     setConnection('Session ended', 'error');
     render();
     return;
@@ -160,10 +171,10 @@ function renderRole(roleName, role, now) {
   const healthNode = byId(`${prefix}Health`);
   healthNode.textContent = health.label;
   healthNode.dataset.tone = health.tone;
-  text(`${prefix}Provider`, role?.provider || 'â€”');
-  text(`${prefix}Phase`, role?.phase || 'â€”');
+  text(`${prefix}Provider`, role?.provider || '--');
+  text(`${prefix}Phase`, role?.phase || '--');
   text(`${prefix}Composer`, role?.composerReady ? 'Ready' : 'Waiting');
-  text(`${prefix}Heartbeat`, health.ageMs === null ? 'â€”' : `${formatDuration(health.ageMs)} ago`);
+  text(`${prefix}Heartbeat`, health.ageMs === null ? '--' : `${formatDuration(health.ageMs)} ago`);
   const capabilities = role?.adapterCapabilities;
   text(`${prefix}Adapter`, !capabilities
     ? 'Unknown'
@@ -182,7 +193,17 @@ function renderRole(roleName, role, now) {
 function renderWarnings(snapshot) {
   const container = byId('warningList');
   container.replaceChildren();
-  const warnings = [...(snapshot?.warnings || [])];
+  if (!snapshot) {
+    const item = document.createElement('p');
+    item.className = 'empty';
+    item.textContent = state.sessionEnded
+      ? 'This managed session has ended. Runtime controls are disabled.'
+      : 'Waiting for the first live runtime snapshot.';
+    container.append(item);
+    text('healthScore', state.sessionEnded ? 'Ended' : 'Connecting');
+    return;
+  }
+  const warnings = [...(snapshot.warnings || [])];
   if (!warnings.length) {
     const item = document.createElement('p');
     item.className = 'empty';
@@ -202,15 +223,15 @@ function renderWarnings(snapshot) {
 }
 
 function renderOverview(snapshot, now) {
-  text('sessionId', snapshot?.sessionId || sessionId || 'â€”');
-  text('route', snapshot ? `${snapshot.sender?.provider || '?'} â†’ ${snapshot.receiver?.provider || '?'}` : 'â€”');
-  text('transportMode', snapshot?.mode || 'â€”');
-  text('uptime', snapshot ? formatDuration(now - snapshot.createdAt) : 'â€”');
+  text('sessionId', snapshot?.sessionId || sessionId || '--');
+  text('route', snapshot ? `${snapshot.sender?.provider || '?'} -> ${snapshot.receiver?.provider || '?'}` : '--');
+  text('transportMode', snapshot?.mode || '--');
+  text('uptime', snapshot ? formatDuration(now - snapshot.createdAt) : '--');
   renderRole('sender', snapshot?.sender, now);
   renderRole('receiver', snapshot?.receiver, now);
   renderWarnings(snapshot);
-  text('deliverySuccess', snapshot ? `${snapshot.metrics?.deliverySuccessRate ?? 100}%` : 'â€”');
-  text('averageProof', snapshot ? formatDuration(snapshot.metrics?.averageDeliveryProofMs || 0) : 'â€”');
+  text('deliverySuccess', snapshot ? `${snapshot.metrics?.deliverySuccessRate ?? 100}%` : '--');
+  text('averageProof', snapshot ? formatDuration(snapshot.metrics?.averageDeliveryProofMs || 0) : '--');
   text('queuedFinals', String(snapshot?.queue?.length || 0));
   text('answerTimeouts', String(snapshot?.metrics?.answerTimeouts || 0));
   text('latestPreview', snapshot?.latestPreview?.text || 'No preview observed.');
@@ -219,8 +240,8 @@ function renderOverview(snapshot, now) {
   const proof = snapshot?.latestProof || latestReceiverProof(snapshot?.timeline)?.data || null;
   text('latestProof', proof
     ? (proof.ok
-      ? `${proof.proof || 'rendered_turn'} Â· ${proof.verified === false ? 'unverified' : 'verified'} Â· ${proof.envelopeId || ''}`
-      : `${proof.reason || 'proof_failed'} Â· ${proof.envelopeId || ''}`)
+      ? `${proof.proof || 'rendered_turn'} - ${proof.verified === false ? 'unverified' : 'verified'} - ${proof.envelopeId || ''}`
+      : `${proof.reason || 'proof_failed'} - ${proof.envelopeId || ''}`)
     : 'No receiver proof recorded.');
   const activeQueue = actionableQueue(snapshot?.queue, false);
   text('queueBadge', String(activeQueue.length));
@@ -292,7 +313,7 @@ function eventSummary(event) {
     if (data[key] !== undefined && data[key] !== '') parts.push(`${key}: ${data[key]}`);
   }
   if (data.ok !== undefined) parts.push(`ok: ${data.ok}`);
-  return parts.join(' Â· ') || 'State updated';
+  return parts.join(' - ') || 'State updated';
 }
 
 function filteredTimeline(snapshot) {
@@ -327,7 +348,7 @@ function reviewItem(label, value) {
   const name = document.createElement('span');
   name.textContent = label;
   const result = document.createElement('strong');
-  result.textContent = String(value ?? 'â€”');
+  result.textContent = String(value ?? '--');
   item.append(name, result);
   return item;
 }
@@ -352,33 +373,66 @@ function renderReview(snapshot) {
     : 'No repair has been run.';
 }
 
+function updateControlAvailability() {
+  const unavailable = !state.snapshot || state.sessionEnded;
+  document.querySelectorAll('[data-command], #sendSelected, #discardSelected, #discardSuperseded, #discardAll').forEach(node => {
+    const busy = node.dataset.busy === 'true';
+    node.disabled = unavailable || busy;
+  });
+  document.body.dataset.sessionEnded = state.sessionEnded ? 'true' : 'false';
+}
+
 function render() {
   const now = Date.now();
   renderOverview(state.snapshot, now);
   renderQueue(state.snapshot, now);
   renderTimeline(state.snapshot);
   renderReview(state.snapshot);
+  updateControlAvailability();
 }
 
 async function runCommand(button, command, payload = {}) {
+  if (state.sessionEnded) {
+    showToast('This session has ended.', 'warn');
+    return { ok: false, error: 'session_ended' };
+  }
   const confirmation = button?.dataset?.confirm;
-  if (confirmation && !globalThis.confirm(confirmation)) return;
-  button?.setAttribute('disabled', '');
+  if (confirmation && !globalThis.confirm(confirmation)) {
+    return { ok: false, cancelled: true };
+  }
+  if (button) {
+    button.dataset.busy = 'true';
+    button.setAttribute('aria-busy', 'true');
+  }
+  updateControlAvailability();
   const result = await sendCommand(command, payload);
-  button?.removeAttribute('disabled');
+  if (button) {
+    button.dataset.busy = 'false';
+    button.removeAttribute('aria-busy');
+  }
+  updateControlAvailability();
   if (result?.ok) {
-    showToast(command.replaceAll('_', ' '), 'ok');
-  } else {
+    showToast(commandResultLabel(command, result), 'ok');
+  } else if (!result?.cancelled) {
     showToast(result?.error || `${command} failed`, 'error');
   }
+  return result;
 }
 
 document.addEventListener('click', event => {
   const tab = event.target.closest('[data-view]');
   if (tab) {
     state.activeView = tab.dataset.view;
-    document.querySelectorAll('[data-view]').forEach(node => node.classList.toggle('active', node === tab));
-    document.querySelectorAll('[data-view-panel]').forEach(node => node.classList.toggle('active', node.dataset.viewPanel === state.activeView));
+    document.querySelectorAll('[data-view]').forEach(node => {
+      const active = node === tab;
+      node.classList.toggle('active', active);
+      node.setAttribute('aria-selected', String(active));
+    });
+    document.querySelectorAll('[data-view-panel]').forEach(node => {
+      const active = node.dataset.viewPanel === state.activeView;
+      node.classList.toggle('active', active);
+      node.hidden = !active;
+    });
     render();
     return;
   }
@@ -400,7 +454,6 @@ byId('discardSuperseded').addEventListener('click', event => {
   void runCommand(event.currentTarget, 'discard_superseded');
 });
 byId('discardAll').addEventListener('click', event => {
-  event.currentTarget.dataset.confirm = 'Discard every queued final?';
   void runCommand(event.currentTarget, 'discard_all');
 });
 byId('queueFilter').addEventListener('change', event => {
@@ -423,18 +476,27 @@ byId('copyDiagnostics').addEventListener('click', async () => {
   }
 });
 
+function commandButton(command) {
+  return document.querySelector(`[data-command="${command}"]`);
+}
+
+function runKeyboardCommand(command) {
+  return runCommand(commandButton(command), command);
+}
+
 document.addEventListener('keydown', event => {
-  if (event.target.matches('input,select,textarea')) return;
+  if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+  if (event.target.matches('input,select,textarea,button')) return;
   const key = event.key.toLowerCase();
   if (key === ' ') {
     event.preventDefault();
-    void sendCommand(state.snapshot?.mode === 'paused' ? 'resume_without_send' : 'pause');
-  } else if (key === 'l') void sendCommand('resume_latest');
-  else if (key === 'h') void sendCommand('check_live');
-  else if (key === 'r') void sendCommand('repair_runtime');
-  else if (key === 'e') void sendCommand('export_session');
-  else if (key === 'm') void sendCommand('toggle_mic');
-  else if (key === 's') void sendCommand('toggle_scroll');
+    void runKeyboardCommand(state.snapshot?.mode === 'paused' ? 'resume_without_send' : 'pause');
+  } else if (key === 'l') void runKeyboardCommand('resume_latest');
+  else if (key === 'h') void runKeyboardCommand('check_live');
+  else if (key === 'r') void runKeyboardCommand('repair_runtime');
+  else if (key === 'e') void runKeyboardCommand('export_session');
+  else if (key === 'm') void runKeyboardCommand('toggle_mic');
+  else if (key === 's') void runKeyboardCommand('toggle_scroll');
   else if (key === 'd') byId('copyDiagnostics').click();
 });
 

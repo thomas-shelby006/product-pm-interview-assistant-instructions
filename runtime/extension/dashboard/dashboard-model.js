@@ -135,3 +135,34 @@ export function latestReceiverProof(timeline) {
   }
   return null;
 }
+
+export function commandResultLabel(command, result = {}) {
+  const labels = {
+    pause: 'Forwarding paused',
+    resume_without_send: 'Forwarding resumed',
+    resume_latest: result.reason === 'queue_empty'
+      ? 'Forwarding resumed; queue empty'
+      : 'Forwarding resumed; latest final handled',
+    send_selected: result.delivered ? 'Selected final delivered' : 'Selected final remains queued',
+    discard_selected: 'Selected final discarded',
+    discard_superseded: `${Math.max(0, Number(result.discarded) || 0)} superseded final(s) cleared`,
+    discard_all: `${Math.max(0, Number(result.discarded) || 0)} queued final(s) discarded`,
+    check_live: result.ok ? 'Live check passed' : 'Live check found issues',
+    repair_runtime: result.pendingVerification
+      ? 'Repair started; verifying both roles'
+      : result.ok ? 'Runtime repair verified' : 'Runtime repair incomplete',
+    resend_context: 'Context resend scheduled',
+    toggle_mic: 'Sender microphone toggled',
+    toggle_scroll: 'Receiver scroll lock toggled',
+    focus_composer: 'Receiver composer focused',
+    export_session: 'Session export started',
+    layout_both: 'Three-window layout applied',
+    layout_sender: 'Sender layout applied',
+    layout_receiver: 'Receiver layout applied',
+    layout_dashboard: 'Dashboard layout applied',
+    hide_managed: 'Managed windows hidden',
+    restore_managed: 'Managed windows restored',
+    end_session: 'Session ended'
+  };
+  return labels[command] || String(command || 'Command').replaceAll('_', ' ');
+}

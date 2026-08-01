@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   actionableQueue,
   buildDiagnostics,
+  commandResultLabel,
   deriveReview,
   primaryTransportAction,
   roleHealth,
@@ -64,4 +65,16 @@ test('primary transport action reflects authoritative session mode', () => {
     command: 'pause',
     label: 'Pause forwarding'
   });
+});
+
+test('command feedback describes the actual operator outcome', () => {
+  assert.equal(commandResultLabel('pause', { ok: true }), 'Forwarding paused');
+  assert.equal(
+    commandResultLabel('repair_runtime', { ok: true, pendingVerification: true }),
+    'Repair started; verifying both roles'
+  );
+  assert.equal(
+    commandResultLabel('discard_superseded', { ok: true, discarded: 3 }),
+    '3 superseded final(s) cleared'
+  );
 });

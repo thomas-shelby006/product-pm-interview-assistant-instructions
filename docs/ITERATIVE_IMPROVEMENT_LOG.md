@@ -163,3 +163,22 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** Queue, timeline, and metric bounds remain unchanged. Lightweight patches contain no transcript, queue, timeline, or setup payload.
 
 **Why this is superior:** It cuts steady-state session-storage writes and full-snapshot traffic by roughly the heartbeat frequency while preserving immediate semantic updates and restart-safe state.
+
+
+## Cycle 10 - End-to-end dashboard usability and release polish
+
+**Evidence inspected:** Dashboard visible text, session-ended lifecycle, reconnect behavior, destructive actions, keyboard commands, command-result feedback, tab accessibility, and extension validation scope.
+
+**Issue/opportunity:** Active dashboard/status strings contained genuine mojibake. A session-ended dashboard could reconnect and present controls as usable, keyboard commands bypassed normal feedback, and destructive queue actions were not consistently confirmed.
+
+**Classification:** Release-blocking UI correctness, accessibility, and operator-safety improvement.
+
+**Implementation:** Normalized active visible runtime strings to ASCII-safe text, added a mojibake release guard, made session end terminal for reconnect/control state, added explicit destructive confirmations, unified keyboard and button command feedback, and exposed tab/tabpanel selection semantics.
+
+**Files changed:** Dashboard model/controller/markup, session status, extension validator, and adjacent regression tests.
+
+**Coverage added:** Command-result labels, terminal session-end behavior, confirmation contracts, keyboard repeat prevention, tab accessibility, and active-surface mojibake rejection.
+
+**Source review:** The new validator scans packaged runtime surfaces but excludes tests and scripts that intentionally contain negative-test markers. No transport, provider, queue, or privacy ownership boundary changed.
+
+**Why this is superior:** It removes a visible release defect and makes control outcomes safer and clearer without adding a second UI or runtime path.
