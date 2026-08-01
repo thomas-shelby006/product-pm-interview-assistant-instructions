@@ -15,7 +15,10 @@ export function liveUxFaultScenarios() { return SCENARIOS.map(item => ({ ...item
 export async function runLiveUxFaultMatrix({ inject, observe, cleanup, now = Date.now } = {}) {
   const results = [];
   for (const scenario of SCENARIOS) {
-    const result = await runFaultScenario({ id: scenario.id, inject: () => inject?.(scenario), observe: () => observe?.(scenario), cleanup: () => cleanup?.(scenario), now });
+    const result = await runFaultScenario(scenario.id, [
+      { name: 'inject', run: () => inject?.(scenario) || { ok: true } },
+      { name: 'observe', run: () => observe?.(scenario) || { ok: true } }
+    ], { cleanup: () => cleanup?.(scenario), evidence: { owner: scenario.owner, expected: scenario.expected }, now });
     results.push({ ...scenario, ...result });
     if (!result.ok) break;
   }

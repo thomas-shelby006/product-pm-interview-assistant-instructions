@@ -1039,3 +1039,65 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 **Implementation:** test-only matrices plus stricter deterministic evidence builder; normal-profile access remains forbidden.
 
 **Source-complete status:** Cycles 146–170 are implemented. Executable verification remains deferred until Cycles 171–195 are source-complete.
+
+## Mechanics hardening cycles 171–175
+
+- **171:** prerender/inactive hidden pages cannot register or write providers.
+- **172:** one document-generation fence rejects duplicate or stale content runtimes.
+- **173:** bounded semantic wake history distinguishes startup, alarm, lifecycle, and recovery wakes.
+- **174:** alarm names carry session, kind, generation, and due-time identity.
+- **175:** startup immediately catches up current-generation overdue deadlines in deterministic order.
+
+**Bug fixes:** lifecycle suspension and duplicate injections cannot silently create parallel owners.
+**New features:** visible wake/generation continuity evidence.
+**Implementation:** pure guards extend existing lifecycle and alarm owners.
+
+## Mechanics hardening cycles 176–180
+
+- **176:** named selector probes report every fallback attempt.
+- **177:** fallback sets merge and promote proven selectors deterministically.
+- **178:** DOM drift reports exact removed/restored provider surfaces.
+- **179:** composer fingerprints distinguish node replacement from manual text change.
+- **180:** Send readiness requires repeated stable visible/enabled/connected samples.
+
+**Bug fixes:** provider DOM drift and transient Send controls no longer collapse into one optimistic readiness Boolean.
+**New features:** selector/drift/readiness diagnostics in Mechanics Hardening.
+**Implementation:** provider-facing proofs remain metadata-only.
+
+## Mechanics hardening cycles 181–185
+
+- **181:** canonical rendered-turn identity survives provider replacement IDs without merging genuine repeats.
+- **182:** partial proof reports exact proven, missing, and mismatched members.
+- **183:** proof retry uses bounded exponential deadlines and stops when the rendered batch disappears.
+- **184:** durable tombstones suppress replay after proven entries are compacted.
+- **185:** compaction horizon includes only old proven/archived entries outside recent and actionable protection.
+
+**Bug fixes:** partial proof and compaction can no longer lose member-level accountability or reaccept old finals.
+**New features:** proof durability diagnostics and replay tombstones.
+**Implementation:** ledger proof remains the authority; compacted history retains minimal identity.
+
+## Mechanics hardening cycles 186–190
+
+- **186:** fair scheduling prevents one source from monopolizing receiver batches.
+- **187:** overdue partitions receive starvation promotion without changing internal sequence.
+- **188:** session isolation detects shared tabs or runtime instances across sessions.
+- **189:** cleanup becomes a resumable eight-step transaction journal.
+- **190:** orphan collection closes only stale unowned PMIA windows.
+
+**Bug fixes:** burst traffic, cleanup failure, and stale windows no longer create silent starvation or cross-session leakage.
+**New features:** fairness, isolation, cleanup-progress, and orphan evidence.
+**Implementation:** scheduling metadata and cleanup journals extend existing delivery/session owners.
+
+## Mechanics hardening cycles 191–195
+
+- **191:** searchable fault catalog maps reason codes to owners, explanations, and safe actions.
+- **192:** deterministic reproducibility seeds make load/fault order repeatable.
+- **193:** one reason-code registry detects namespace collisions and unknown runtime codes.
+- **194:** architecture budgets report oversized owners and import-boundary growth.
+- **195:** active runtime moves to PMIA 0.8.0 candidate with commit, manifest, and evidence identity.
+
+**Bug fixes:** support and release evidence no longer depend on undocumented codes, unseeded scenarios, or unbounded owner growth.
+**New features:** fault search, reproducible evidence, architecture budget, and explicit 0.8.0 release identity.
+**Implementation:** one Mechanics Hardening report imports every Cycle 171–195 owner and exposes metadata only.
+
+**Source-complete status:** Cycles 96–195 are implemented. The final consolidated repository and isolated-browser gates are now required before the technical HTML is updated.

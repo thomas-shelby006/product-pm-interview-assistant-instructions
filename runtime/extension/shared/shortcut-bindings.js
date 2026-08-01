@@ -7,7 +7,7 @@ const DEFAULT_BINDINGS = Object.freeze({
   toggle_mic: 'M',
   toggle_scroll: 'S',
   submit_now: 'N',
-  interrupt_latest: 'I',
+  interrupt_latest: 'Ctrl+I',
   copy_latest: 'C',
   copy_health_report: 'G',
   copy_diagnostics: 'D',

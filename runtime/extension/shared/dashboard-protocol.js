@@ -42,6 +42,7 @@ const COMMANDS = new Set([
   'check_live',
   'run_self_test',
   'repair_runtime',
+  'repair_live_metadata',
   'start_stabilization',
   'run_stabilization_step',
   'cancel_stabilization',

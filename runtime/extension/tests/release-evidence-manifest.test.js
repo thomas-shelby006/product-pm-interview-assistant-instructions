@@ -14,7 +14,7 @@ async function fixture({ cleanup = true, normalProfileTouched = false, smokeComm
   const repo = await mkdtemp(path.join(tmpdir(), 'pmia-release-evidence-'));
   await mkdir(path.join(repo, 'runtime/extension'), { recursive: true });
   await mkdir(path.join(repo, 'runtime/scripts'), { recursive: true });
-  await writeFile(path.join(repo, 'runtime/extension/manifest.json'), JSON.stringify({ name: 'PMIA', version: '0.7.0' }));
+  await writeFile(path.join(repo, 'runtime/extension/manifest.json'), JSON.stringify({ name: 'PMIA', version: '0.8.0' }));
   await writeFile(path.join(repo, 'runtime/extension/background.js'), 'export const ready = true;\n');
   await writeFile(path.join(repo, 'runtime/scripts/helper.mjs'), 'export const helper = true;\n');
   git(repo, ['init']); git(repo, ['config', 'user.email', 'pmia@example.invalid']); git(repo, ['config', 'user.name', 'PMIA Test']);
@@ -27,6 +27,7 @@ async function fixture({ cleanup = true, normalProfileTouched = false, smokeComm
     ok: true, deliveryProofOk: true, transportDrillOk: true, pilotUiOk: true,
     commit: smokeCommit || commit,
     finals: [{ id: 'q1' }], gap: { clear: true }, outbox: { count: 0 },
+    pilotUi: Object.fromEntries(['desktop','mobile','tiny','print'].map(key => [key, { viewport: { width: key === 'mobile' ? 320 : key === 'tiny' ? 280 : 1200 }, horizontalOverflow: false, accessibility: { polite: true, assertive: true, shortcutDialog: true } }])),
     cleanup: { processTreeClosed: cleanup, profileRemoved: cleanup },
     isolatedProfile: { normalProfileTouched }
   }));

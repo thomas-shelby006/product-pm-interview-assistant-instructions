@@ -1240,6 +1240,11 @@ function renderMechanics(snapshot) {
     ? JSON.stringify(snapshot.lastTransportDrill, null, 2)
     : 'No drill has been run.';
 
+  const mechanics = snapshot?.mechanicsHardening || {};
+  const mechanicsIssues = [mechanics.prerender?.blocked, mechanics.selectorDrift?.critical?.length, mechanics.partialProof?.missingIds?.length, mechanics.isolation?.issues?.length, mechanics.reasonCodes?.unknown?.length, mechanics.architectureBudget?.violations?.length].filter(Boolean).length;
+  text('mechanicsHardeningState', mechanicsIssues ? 'Attention' : 'Healthy');
+  text('mechanicsHardeningDetail', `${mechanicsIssues} active hardening issue(s) ? ${mechanics.selectorSurfaces || 0} selector surface(s) ? ${mechanics.starvation?.promotedCount || 0} promoted partition(s).`);
+
   const shortcutAudit = auditShortcutConflicts(snapshot?.uiPreferences?.shortcutBindings || {});
   const accessibilityAudit = auditDashboardAccessibility(document);
   const visualProof = buildVisualPreferenceProof({ width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth, preferences: snapshot?.uiPreferences?.accessibility || {}, controlsVisible: document.querySelectorAll('button:not([hidden])').length, dialogs: document.querySelectorAll('[role="dialog"],dialog').length });

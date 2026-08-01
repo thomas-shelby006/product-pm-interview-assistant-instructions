@@ -1,95 +1,95 @@
 {
-    "manifest_version":  3,
-    "name":  "PM Interview Dual-Provider Runtime",
-    "version":  "0.7.0",
-    "description":  "Lossless low-latency self-healing PM interview runtime with provisional previews, a live Runtime Pilot Dashboard, ephemeral session state, non-preemptive batching, background-safe recovery, active readiness self-tests, and provider-rendered delivery proof.",
-    "permissions":  [
-                        "storage",
-                        "alarms",
-                        "tabs",
-                        "windows"
-                    ],
-    "host_permissions":  [
-                             "https://chatgpt.com/*",
-                             "https://chat.openai.com/*",
-                             "https://claude.ai/*"
-                         ],
-    "background":  {
-                       "service_worker":  "background.js",
-                       "type":  "module"
-                   },
-    "content_scripts":  [
-                            {
-                                "matches":  [
-                                                "https://claude.ai/*"
-                                            ],
-                                "js":  [
-                                           "content/signals/claude-main.js"
-                                       ],
-                                "run_at":  "document_start",
-                                "world":  "MAIN"
-                            },
-                            {
-                                "matches":  [
-                                                "https://chatgpt.com/*",
-                                                "https://chat.openai.com/*",
-                                                "https://claude.ai/*"
-                                            ],
-                                "js":  [
-                                           "content/main.js"
-                                       ],
-                                "run_at":  "document_idle",
-                                "world":  "ISOLATED"
-                            }
-                        ],
-    "web_accessible_resources":  [
-                                     {
-                                         "resources":  [
-                                                           "content/entry.js",
-                                                           "content/runtime.js",
-                                                           "content/answer-tracker.js",
-                                                           "content/status-overlay.js",
-                                                           "content/adapters/*.js",
-                                                           "shared/*.js",
-                                                           "content/signals/*.js",
-                                                           "content/observation/*.js",
-                                                           "content/senders/*.js",
-                                                           "content/preview-scheduler.js",
-                                                           "content/runtime-recovery.js",
-                                                           "content/runtime-fatal.js",
-                                                           "content/preflight-responder.js",
-                                                           "content/runtime-telemetry.js",
-                                                           "content/adapter-health.js",
-                                                           "content/role-revocation.js",
-                                                           "content/registration-recovery.js",
-                                                           "content/sender-outbox.js",
-                                                           "content/session-storage-adapter.js",
-                                                           "content/receiver-batch-runtime.js",
-                                                           "content/runtime-role-port.js",
-                                                           "content/composer-arbiter.js",
-                                                           "content/generation-truth.js",
-                                                           "content/answer-lifecycle.js",
-                                                           "content/answer-timeout-policy.js",
-                                                           "content/receiver-answer-orchestrator.js",
-                                                           "content/composer-fingerprint.js",
-                                                           "content/adapter-capability-drift.js",
-                                                           "content/capability-probation.js",
-                                                           "content/page-lifecycle-coordinator.js",
-                                                           "content/runtime-instance-fence.js"
-                                                       ],
-                                         "matches":  [
-                                                         "https://chatgpt.com/*",
-                                                         "https://chat.openai.com/*",
-                                                         "https://claude.ai/*"
-                                                     ]
-                                     }
-                                 ],
-    "commands":  {
-                     "export-active-pmia-session":  {
-                                                        "suggested_key":  {
-                                                                              "default":  "Ctrl+Shift+8"
-                                                                          },
-                                                        "description":  "Export the active managed PMIA session"
-                                                    }
-                 }
+  "manifest_version": 3,
+  "name": "PM Interview Dual-Provider Runtime",
+  "version": "0.8.0",
+  "description": "Low-latency dual-provider PM interview runtime with provisional previews, lossless final delivery, provider-rendered delivery proof, non-preemptive batching, self-healing background-safe recovery, ephemeral session state, live interview navigation, accessibility, and the Runtime Pilot Dashboard.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs",
+    "windows"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*"
+      ],
+      "js": [
+        "content/signals/claude-main.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*"
+      ],
+      "js": [
+        "content/main.js"
+      ],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/entry.js",
+        "content/runtime.js",
+        "content/answer-tracker.js",
+        "content/status-overlay.js",
+        "content/adapters/*.js",
+        "shared/*.js",
+        "content/signals/*.js",
+        "content/observation/*.js",
+        "content/senders/*.js",
+        "content/preview-scheduler.js",
+        "content/runtime-recovery.js",
+        "content/runtime-fatal.js",
+        "content/preflight-responder.js",
+        "content/runtime-telemetry.js",
+        "content/adapter-health.js",
+        "content/role-revocation.js",
+        "content/registration-recovery.js",
+        "content/sender-outbox.js",
+        "content/session-storage-adapter.js",
+        "content/receiver-batch-runtime.js",
+        "content/runtime-role-port.js",
+        "content/composer-arbiter.js",
+        "content/generation-truth.js",
+        "content/answer-lifecycle.js",
+        "content/answer-timeout-policy.js",
+        "content/receiver-answer-orchestrator.js",
+        "content/composer-fingerprint.js",
+        "content/adapter-capability-drift.js",
+        "content/capability-probation.js",
+        "content/page-lifecycle-coordinator.js",
+        "content/runtime-instance-fence.js"
+      ],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*"
+      ]
+    }
+  ],
+  "commands": {
+    "export-active-pmia-session": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+8"
+      },
+      "description": "Export the active managed PMIA session"
+    }
+  }
 }

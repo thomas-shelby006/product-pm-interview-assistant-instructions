@@ -52,6 +52,7 @@ import { advanceRunbook, cancelRunbook, startRunbook } from './stabilization-run
 import { filterOperationalEvents } from './operational-event-filter.js';
 import { derivePerformanceHealth } from './performance-health.js';
 import { deriveLiveUxMemoryBudget } from './live-ux-memory-budget.js';
+import { deriveMechanicsHardeningReport } from './mechanics-hardening-report.js';
 import { auditLiveCommandIntegrity, repairLiveCommandMetadata } from './live-command-integrity.js';
 import { buildRestartContinuity } from './restart-continuity.js';
 import { monotonicElapsed, normalizeMonotonicClock } from './monotonic-session-clock.js';
@@ -321,6 +322,7 @@ export function createRuntimePilotController({
         elapsedMs: monotonicElapsed(enrichedBase.liveSession?.monotonicClock || {}, globalThis.performance?.now?.() || 0)
       },
       restoredLayoutPreview: restoreManagedLayout(enrichedBase.layout || {}, [{ left: 0, top: 0, width: 1920, height: 1080 }]),
+      mechanicsHardening: deriveMechanicsHardeningReport(enrichedBase, { sessions: [enrichedBase], windows: [] }),
       performanceBudget: {
         ...(snapshotBase.performanceBudget || {}),
         cacheHits: localPerformance.cacheHits,
@@ -1715,6 +1717,14 @@ export function createRuntimePilotController({
       case 'cancel_stabilization':
         result = { ok: true, runbook: pilot.setStabilizationRunbook(sessionId, cancelRunbook(pilot.snapshot(sessionId)?.stabilizationRunbook || {}, Date.now())) };
         break;
+      case 'repair_live_metadata': {
+        const snapshot = pilot.snapshot(sessionId);
+        const audit = auditLiveCommandIntegrity(snapshot, Date.now());
+        if (!audit.repairable) { result = { ok: false, error: 'live_metadata_ambiguous', audit }; break; }
+        const repaired = repairLiveCommandMetadata(snapshot, Date.now());
+        result = { ...pilot.repairLiveCommandMetadata(sessionId, repaired), audit: auditLiveCommandIntegrity({ ...snapshot, questionOperations: { ...(snapshot.questionOperations || {}), metadata: repaired.metadata, undoJournal: repaired.undoJournal }, operatorMarkers: repaired.markers, incidentControls: { ...(snapshot.incidentControls || {}), controls: repaired.controls } }, Date.now()) };
+        break;
+      }
       case 'repair_runtime':
         result = await repair(sessionId, registry, pilot, { source: 'manual' });
         break;

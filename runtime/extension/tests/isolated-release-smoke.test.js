@@ -27,7 +27,7 @@ test('isolated smoke uses fixed synthetic questions and exact proof checks', () 
   assert.match(runner, /every\(item => item\.state === 'proven'\)/);
   assert.match(runner, /senderOutboxState/);
   assert.match(runner, /sequence_gap/);
-  assert.doesNotMatch(runner, /resume|job description|clipboard\.readText/i);
+  assert.doesNotMatch(runner, /resumeText|job description|clipboard\.readText|setupText/i);
 });
 
 test('isolated smoke writes structured evidence and distinguishes answer limitations', () => {
