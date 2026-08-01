@@ -13,6 +13,9 @@ test('isolated smoke owns a temporary profile and exact Edge process tree', () =
   assert.match(powershell, /remote-debugging-port/);
   assert.match(powershell, /finally/);
   assert.match(powershell, /taskkill[\s\S]*\/T[\s\S]*\/F/i);
+  assert.match(powershell, /Get-OwnedEdgeProcesses/);
+  assert.match(powershell, /CommandLine[\s\S]*OwnedProfile/);
+  assert.match(powershell, /processClosed = @\(Get-OwnedEdgeProcesses \$profile\)\.Count -eq 0/);
   assert.match(powershell, /Remove-Item[\s\S]*profile/i);
   assert.doesNotMatch(powershell, /Edge\\User Data\\Default|--profile-directory=Default/);
 });

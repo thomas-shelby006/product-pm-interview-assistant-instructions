@@ -32,6 +32,15 @@ $edgeProcess = $null
 $nodeExit = 1
 $processClosed = $false
 $profileRemoved = $false
+function Get-OwnedEdgeProcesses([string]$OwnedProfile) {
+    try {
+        return @(Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object {
+            $_.CommandLine -and $_.CommandLine.IndexOf($OwnedProfile, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        })
+    } catch {
+        return @()
+    }
+}
 $arguments = @(
     "--user-data-dir=`"$profile`"",
     "--remote-debugging-port=$port",
@@ -74,13 +83,17 @@ try {
 }
 finally {
     if ($edgeProcess) {
-        try {
-            & taskkill /PID $edgeProcess.Id /T /F 2>$null | Out-Null
-            $processClosed = $true
-        } catch {
-            $processClosed = -not (Get-Process -Id $edgeProcess.Id -ErrorAction SilentlyContinue)
-        }
+        try { & taskkill /PID $edgeProcess.Id /T /F 2>$null | Out-Null } catch {}
     }
+    for ($attempt = 0; $attempt -lt 10; $attempt += 1) {
+        $ownedProcesses = @(Get-OwnedEdgeProcesses $profile)
+        if ($ownedProcesses.Count -eq 0) { break }
+        foreach ($owned in $ownedProcesses) {
+            try { & taskkill /PID $owned.ProcessId /T /F 2>$null | Out-Null } catch {}
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    $processClosed = @(Get-OwnedEdgeProcesses $profile).Count -eq 0
     Start-Sleep -Milliseconds 500
     for ($attempt = 0; $attempt -lt 6 -and (Test-Path $profile); $attempt += 1) {
         try { Remove-Item -Recurse -Force $profile -ErrorAction Stop } catch { Start-Sleep -Milliseconds 500 }
