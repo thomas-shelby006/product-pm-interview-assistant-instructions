@@ -27,8 +27,8 @@
     </section>
 
     <nav class="tabs" aria-label="Dashboard views" role="tablist">
-      <button class="tab active" data-view="overview" role="tab" aria-selected="true" aria-controls="panelOverview">Overview</button>
-      <button class="tab" data-view="queue" role="tab" aria-selected="false" aria-controls="panelQueue">Queue <span id="queueBadge">0</span></button>
+      <button class="tab active" data-view="overview" role="tab" aria-selected="true" aria-controls="panelOverview">Live</button>
+      <button class="tab" data-view="queue" role="tab" aria-selected="false" aria-controls="panelQueue">Inbox <span id="queueBadge">0</span></button>
       <button class="tab" data-view="timeline" role="tab" aria-selected="false" aria-controls="panelTimeline">Timeline</button>
       <button class="tab" data-view="review" role="tab" aria-selected="false" aria-controls="panelReview">Review</button>
     </nav>
@@ -47,6 +47,45 @@
           <button data-command="focus_composer">Focus receiver</button>
           <button data-command="export_session">Export session</button>
         </div>
+
+        <section class="live-command-center" aria-label="Live delivery command center">
+          <article class="live-state-card" data-catch-up="live">
+            <span class="eyebrow">Delivery state</span>
+            <strong id="catchUpState">Waiting for runtime</strong>
+            <p id="catchUpDetail">No delivery state is available yet.</p>
+            <div class="state-counts">
+              <span><b id="inboxPending">0</b> pending</span>
+              <span><b id="inboxInFlight">0</b> in flight</span>
+              <span><b id="inboxProven">0</b> proven</span>
+            </div>
+          </article>
+
+          <article class="live-panel current-answer-panel">
+            <div class="panel-title"><span class="eyebrow">Current answer</span><b id="currentAnswerBadge">Idle</b></div>
+            <strong id="currentBatchTitle">No active batch</strong>
+            <p id="currentBatchMembers">Window 2 is ready for the next question.</p>
+          </article>
+
+          <article class="live-panel next-draft-panel">
+            <div class="panel-title"><span class="eyebrow">Next draft</span><b id="nextDraftBadge">0 questions</b></div>
+            <strong id="nextDraftTitle">Nothing waiting</strong>
+            <p id="nextDraftText">New questions will accumulate here while Window 2 is answering.</p>
+          </article>
+
+          <article class="live-panel storage-panel">
+            <div class="panel-title"><span class="eyebrow">Session memory</span><b id="storagePressureBadge">Normal</b></div>
+            <strong id="storagePressureValue">0%</strong>
+            <p id="storagePressureDetail">Lossless ledger storage is healthy.</p>
+          </article>
+        </section>
+
+        <section class="latency-section" aria-labelledby="latencyTitle">
+          <div class="section-heading">
+            <div><h2 id="latencyTitle">Latency rail</h2><p>Latest final from persistence through answer completion.</p></div>
+            <span id="oldestInboxAge">Caught up</span>
+          </div>
+          <div class="latency-rail" id="latencyRail"></div>
+        </section>
 
         <div class="role-grid">
           <article class="role-card" id="senderCard">
@@ -99,7 +138,7 @@
 
       <section class="view" id="panelQueue" data-view-panel="queue" role="tabpanel" hidden>
         <div class="section-heading">
-          <div><h2>Operator queue</h2><p>Only authoritative finals appear here.</p></div>
+          <div><h2>Lossless inbox</h2><p>Every unique final remains until rendered proof or explicit archive.</p></div>
           <div class="inline-actions">
             <select id="queueFilter" aria-label="Queue filter"><option value="actionable">Actionable</option><option value="all">All items</option></select>
             <button id="sendSelected">Send selected</button>
@@ -110,8 +149,8 @@
         </div>
         <div class="queue-wrap">
           <table>
-            <thead><tr><th></th><th>Age</th><th>Seq</th><th>Status</th><th>Question</th></tr></thead>
-            <tbody id="queueBody"><tr><td colspan="5" class="empty">Queue is empty.</td></tr></tbody>
+            <thead><tr><th></th><th>Age</th><th>Seq</th><th>State</th><th>Batch</th><th>Question</th></tr></thead>
+            <tbody id="queueBody"><tr><td colspan="6" class="empty">Inbox is caught up.</td></tr></tbody>
           </table>
         </div>
       </section>

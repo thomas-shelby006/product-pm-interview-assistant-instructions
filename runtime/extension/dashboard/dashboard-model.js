@@ -46,7 +46,11 @@ export function warningLabel(warning) {
     runtime_degraded: 'Runtime repair could not restore full health',
     sender_adapter_incomplete: 'Sender provider adapter is missing required capabilities',
     receiver_adapter_incomplete: 'Receiver provider adapter is missing required capabilities',
-    transport_paused: 'Forwarding is paused'
+    transport_paused: 'Forwarding is paused',
+    receiver_draft_conflict: 'Window 2 composer was edited manually; automatic draft updates are paused',
+    session_storage_elevated: 'Session memory is above 70%; proven history may be compacted if pressure rises',
+    session_storage_high: 'Session memory is above 85%; proven history is being compacted',
+    session_storage_critical: 'Session memory is above 95%; unresolved finals remain protected but action is required'
   };
   return labels[warning?.code] || String(warning?.code || 'Runtime warning');
 }
@@ -91,7 +95,23 @@ export function buildDiagnostics(snapshot, now = Date.now()) {
     uptimeMs: snapshot.uptimeMs,
     sender: role(snapshot.sender),
     receiver: role(snapshot.receiver),
-    queueCount: snapshot.queue?.length || 0,
+    inbox: {
+      total: snapshot.ledgerCounts?.total || snapshot.ledger?.length || 0,
+      pending: snapshot.ledgerCounts?.pending || 0,
+      inFlight: snapshot.ledgerCounts?.inFlight || 0,
+      proven: snapshot.ledgerCounts?.proven || 0
+    },
+    batch: {
+      activeId: snapshot.batchState?.active?.batchId || '',
+      activeCount: snapshot.batchState?.active?.questionCount || 0,
+      nextCount: snapshot.batchState?.next?.questionCount || 0,
+      hold: Boolean(snapshot.batchState?.hold),
+      autoSubmit: snapshot.batchState?.autoSubmit !== false,
+      draftConflict: Boolean(snapshot.batchState?.draftConflict)
+    },
+    storagePressure: snapshot.storagePressure
+      ? { level: snapshot.storagePressure.level, percent: snapshot.storagePressure.percent }
+      : null,
     warningCodes: (snapshot.warnings || []).map(item => item.code),
     metrics: {
       delivered: snapshot.metrics?.delivered || 0,

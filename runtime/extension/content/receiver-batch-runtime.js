@@ -144,14 +144,16 @@ export function createReceiverBatchRuntime({
       return { ok: true, proven, replayed };
     },
 
-    async answerComplete(batchId = '') {
+    async answerComplete(batchId = '', result = {}) {
       const active = planner.active();
       if (!active) return { ok: true, reason: 'no_active_batch' };
       if (batchId && active.id !== batchId) return { ok: false, error: 'batch_mismatch' };
       const completed = planner.completeActive();
-      emit('batch_answer_complete', {
+      emit(result?.timeout ? 'batch_answer_timeout' : 'batch_answer_complete', {
         batchId: completed.id,
-        memberIds: completed.prompt.memberIds
+        memberIds: completed.prompt.memberIds,
+        answer: result?.answer || result || null,
+        proof: result?.proof || null
       });
       return submitNext();
     },

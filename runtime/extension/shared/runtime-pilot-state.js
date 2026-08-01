@@ -341,6 +341,7 @@ export class RuntimePilotState {
         submitted: type === 'batch_submitted',
         proof: type === 'batch_submitted' ? (event.proof || null) : null
       };
+      session.batchState.next = null;
     } else if (type === 'next_batch_draft') {
       session.batchState.next = {
         memberIds,

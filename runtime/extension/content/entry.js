@@ -543,20 +543,11 @@ async function startRuntime(runtimeConfig) {
           proof: 'submit_action_only'
         };
         void captureAnswer(batchEnvelope, beforeText, token, hintVersionAtStart)
-          .then(async answer => {
-            await message({
-              type: 'PMIA_BATCH_EVENT',
-              sessionId: runtimeConfig.sessionId,
-              event: {
-                type: answer?.timeout ? 'batch_answer_timeout' : 'batch_answer_complete',
-                batchId: batch.id,
-                memberIds: batch.prompt.memberIds,
-                answer: answer || null,
-                proof
-              }
-            });
-            await receiverBatchRuntime?.answerComplete(batch.id);
-          });
+          .then(answer => receiverBatchRuntime?.answerComplete(batch.id, {
+            answer: answer || null,
+            timeout: Boolean(answer?.timeout),
+            proof
+          }));
         return { ok: true, proof };
       },
       onEvent(event) {

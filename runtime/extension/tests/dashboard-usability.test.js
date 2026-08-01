@@ -6,6 +6,7 @@ const dashboard = await readFile(new URL('../dashboard/dashboard.js', import.met
 const markup = await readFile(new URL('../dashboard/index.html', import.meta.url), 'utf8');
 const status = await readFile(new URL('../shared/session-status.js', import.meta.url), 'utf8');
 const validator = await readFile(new URL('../scripts/validate-extension.mjs', import.meta.url), 'utf8');
+const styles = await readFile(new URL('../dashboard/dashboard.css', import.meta.url), 'utf8');
 
 test('dashboard ends cleanly without reconnecting or leaving controls active', () => {
   assert.match(dashboard, /state\.sessionEnded = true/);
@@ -53,4 +54,22 @@ test('dashboard control grid remains bounded in the operational window', async (
   assert.match(css, /\.control-grid button \{[^}]*min-width: 0;[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/s);
   assert.match(css, /@media \(min-width: 720px\)[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(min-width: 1200px\)[\s\S]*repeat\(5, minmax\(0, 1fr\)\)/);
+});
+
+
+test('Pilot live view exposes lossless inbox current answer next draft and latency rail', () => {
+  assert.match(markup, /id="catchUpState"/);
+  assert.match(markup, /id="currentBatchTitle"/);
+  assert.match(markup, /id="nextDraftText"/);
+  assert.match(markup, /id="latencyRail"/);
+  assert.match(markup, /Lossless inbox/);
+  assert.match(styles, /\.live-command-center/);
+  assert.match(styles, /\.latency-rail/);
+});
+
+test('Pilot live rendering is ledger and batch-state driven', () => {
+  assert.match(dashboard, /deriveLiveInbox\(snapshot, now\)/);
+  assert.match(dashboard, /snapshot\?\.ledger/);
+  assert.match(dashboard, /snapshot\?\.batchState/);
+  assert.match(dashboard, /storagePressure/);
 });
