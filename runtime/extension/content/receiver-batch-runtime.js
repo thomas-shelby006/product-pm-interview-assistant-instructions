@@ -1,4 +1,4 @@
-import { BatchPlanner, matchesRenderedBatch } from '../shared/batch-planner.js';
+﻿import { BatchPlanner, matchesRenderedBatch } from '../shared/batch-planner.js';
 
 export function createReceiverBatchRuntime({
   adapter,
@@ -6,7 +6,10 @@ export function createReceiverBatchRuntime({
   draftArbiter = null,
   submitBatch,
   onEvent = () => {},
-  nowFn = Date.now
+  nowFn = Date.now,
+  waitFn = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  interruptTimeoutMs = 800,
+  interruptPollMs = 25
 } = {}) {
   if (!adapter || typeof submitBatch !== 'function') {
     throw new TypeError('Receiver batch runtime requires adapter and submitBatch');
@@ -22,33 +25,47 @@ export function createReceiverBatchRuntime({
   const mirrorNext = () => {
     const next = planner.next();
     if (!next.count) return false;
-    const written = Boolean(draftArbiter?.writeBatch?.(next.prompt.text) ?? adapter.setComposerText?.(next.prompt.text));
+    const written = Boolean(
+      draftArbiter?.writeBatch?.(next.prompt.text)
+      ?? adapter.setComposerText?.(next.prompt.text)
+    );
     emit('next_batch_draft', {
       memberIds: next.prompt.memberIds,
       questionCount: next.prompt.questionCount,
+      focusId: next.prompt.focusId,
+      fingerprint: next.prompt.fingerprint,
       written
     });
     return written;
   };
 
-  async function submitNext({ force = false } = {}) {
-    if (submitting || planner.active()) return { ok: true, staged: true, reason: 'active_batch' };
-    if (!planner.nextSize) return { ok: true, staged: false, reason: 'batch_empty' };
-    if (!force && (planner.hold || !planner.autoSubmit)) {
-      mirrorNext();
-      return { ok: true, staged: true, reason: planner.hold ? 'hold_enabled' : 'auto_submit_disabled' };
+  const hasManualConflict = () => draftArbiter?.snapshot?.().owner === 'manual';
+
+  async function executeBatch(batch, source = 'automatic') {
+    if (!batch) return { ok: false, staged: true, error: 'batch_missing' };
+    if (hasManualConflict()) {
+      planner.failActive();
+      emit('batch_submit_blocked', {
+        batchId: batch.id,
+        memberIds: batch.prompt.memberIds,
+        reason: 'draft_conflict'
+      });
+      return {
+        ok: false,
+        staged: true,
+        batchId: batch.id,
+        memberIds: batch.prompt.memberIds,
+        error: 'draft_conflict'
+      };
     }
-    if (adapter.isGenerating?.()) {
-      mirrorNext();
-      return { ok: true, staged: true, reason: 'receiver_generating' };
-    }
-    const batch = planner.freezeNext(nowFn());
-    if (!batch) return { ok: true, staged: true, reason: 'batch_not_ready' };
     submitting = true;
     emit('batch_submitting', {
       batchId: batch.id,
       memberIds: batch.prompt.memberIds,
-      questionCount: batch.prompt.questionCount
+      questionCount: batch.prompt.questionCount,
+      focusId: batch.prompt.focusId,
+      fingerprint: batch.prompt.fingerprint,
+      source
     });
     let result;
     try {
@@ -64,9 +81,16 @@ export function createReceiverBatchRuntime({
       emit('batch_submit_failed', {
         batchId: batch.id,
         memberIds: batch.prompt.memberIds,
-        reason: result?.error || 'submit_failed'
+        reason: result?.error || 'submit_failed',
+        source
       });
-      return { ok: false, staged: true, batchId: batch.id, memberIds: batch.prompt.memberIds, error: result?.error || 'submit_failed' };
+      return {
+        ok: false,
+        staged: true,
+        batchId: batch.id,
+        memberIds: batch.prompt.memberIds,
+        error: result?.error || 'submit_failed'
+      };
     }
     planner.markSubmitted(nowFn());
     draftArbiter?.release?.('batch');
@@ -74,6 +98,9 @@ export function createReceiverBatchRuntime({
       batchId: batch.id,
       memberIds: batch.prompt.memberIds,
       questionCount: batch.prompt.questionCount,
+      focusId: batch.prompt.focusId,
+      fingerprint: batch.prompt.fingerprint,
+      source,
       proof: result.proof || null
     });
     return {
@@ -87,13 +114,48 @@ export function createReceiverBatchRuntime({
     };
   }
 
+  async function submitNext({ force = false } = {}) {
+    if (submitting || planner.active()) {
+      return { ok: true, staged: true, reason: 'active_batch' };
+    }
+    if (!planner.nextSize) return { ok: true, staged: false, reason: 'batch_empty' };
+    if (hasManualConflict()) {
+      return { ok: false, staged: true, error: 'draft_conflict' };
+    }
+    if (!force && (planner.hold || !planner.autoSubmit)) {
+      mirrorNext();
+      return {
+        ok: true,
+        staged: true,
+        reason: planner.hold ? 'hold_enabled' : 'auto_submit_disabled'
+      };
+    }
+    if (adapter.isGenerating?.()) {
+      mirrorNext();
+      return { ok: true, staged: true, reason: 'receiver_generating' };
+    }
+    const batch = planner.freezeNext(nowFn());
+    return executeBatch(batch, force ? 'operator_submit_now' : 'automatic');
+  }
+
+  async function waitUntilIdle() {
+    const attempts = Math.max(1, Math.ceil(interruptTimeoutMs / interruptPollMs));
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if (!adapter.isGenerating?.()) return true;
+      await waitFn(interruptPollMs);
+    }
+    return !adapter.isGenerating?.();
+  }
+
   return {
     planner,
 
     async accept(envelope) {
       const added = planner.add(envelope, nowFn());
       if (!added.accepted) return { ok: false, error: added.reason };
-      if (added.duplicate) return { ok: true, duplicate: true, staged: true, reason: 'duplicate' };
+      if (added.duplicate) {
+        return { ok: true, duplicate: true, staged: true, reason: 'duplicate' };
+      }
       emit('batch_accumulated', {
         envelopeId: envelope.id,
         seq: envelope.seq || 0,
@@ -158,11 +220,51 @@ export function createReceiverBatchRuntime({
       return submitNext();
     },
 
+    async interruptLatest() {
+      if (submitting) return { ok: false, error: 'submission_in_progress' };
+      if (!planner.nextSize) return { ok: false, error: 'no_waiting_final' };
+      if (hasManualConflict()) return { ok: false, error: 'draft_conflict' };
+      if (adapter.isGenerating?.()) {
+        if (!adapter.stopGenerating?.()) return { ok: false, error: 'stop_failed' };
+        emit('answer_interrupt_requested', { nextCount: planner.nextSize });
+        if (!await waitUntilIdle()) return { ok: false, error: 'stop_timeout' };
+      }
+      const selected = planner.interruptLatest(nowFn());
+      if (!selected?.batch) return { ok: false, error: 'no_waiting_final' };
+      emit('batch_interrupted', {
+        interruptedBatchId: selected.interrupted?.id || '',
+        batchId: selected.batch.id,
+        memberIds: selected.batch.prompt.memberIds,
+        preservedNextIds: planner.next().prompt.memberIds
+      });
+      return executeBatch(selected.batch, 'operator_interrupt_latest');
+    },
+
     mirrorNext,
     submitNext,
-    draftState() { return draftArbiter?.snapshot?.() || { owner: 'none', conflict: null }; },
-    setHold(value) { planner.setHold(value); return planner.snapshot(); },
-    setAutoSubmit(value) { planner.setAutoSubmit(value); return planner.snapshot(); },
+    draftState() {
+      return draftArbiter?.snapshot?.() || { owner: 'none', conflict: null };
+    },
+    async setHold(value) {
+      planner.setHold(value);
+      emit('batch_policy_changed', {
+        hold: planner.hold,
+        autoSubmit: planner.autoSubmit
+      });
+      if (!planner.hold) return submitNext();
+      mirrorNext();
+      return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit };
+    },
+    async setAutoSubmit(value) {
+      planner.setAutoSubmit(value);
+      emit('batch_policy_changed', {
+        hold: planner.hold,
+        autoSubmit: planner.autoSubmit
+      });
+      if (planner.autoSubmit && !planner.hold) return submitNext();
+      mirrorNext();
+      return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit };
+    },
     snapshot() { return planner.snapshot(); }
   };
 }

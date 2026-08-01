@@ -73,3 +73,17 @@ test('rendered batch reconciliation matches the frozen prompt', () => {
   assert.equal(matchesRenderedBatch(`You said: ${prompt.text}`, prompt), true);
   assert.equal(matchesRenderedBatch('Different question', prompt), false);
 });
+
+
+test('interrupt selection moves only the latest waiting final and preserves earlier arrivals', () => {
+  const planner = new BatchPlanner();
+  planner.add(envelope('q1', 1));
+  const original = planner.freezeNext();
+  planner.add(envelope('q2', 2));
+  planner.add(envelope('q3', 3));
+  planner.add(envelope('q4', 4));
+  const selected = planner.interruptLatest(20);
+  assert.equal(selected.interrupted.id, original.id);
+  assert.deepEqual(selected.batch.prompt.memberIds, ['q4']);
+  assert.deepEqual(planner.next().prompt.memberIds, ['q2', 'q3']);
+});

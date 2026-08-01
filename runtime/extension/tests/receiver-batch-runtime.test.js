@@ -112,3 +112,67 @@ test('receiver reconciliation replays only unresolved finals in sequence order',
   assert.deepEqual(submitted[0].prompt.memberIds, ['q1']);
   assert.deepEqual(runtime.snapshot().next.prompt.memberIds, ['q2']);
 });
+
+
+test('explicit interrupt stops generation and submits only the latest waiting final', async () => {
+  const provider = adapter();
+  const submitted = [];
+  let stops = 0;
+  provider.stopGenerating = () => {
+    stops += 1;
+    provider.generating = false;
+    return true;
+  };
+  const runtime = createReceiverBatchRuntime({
+    adapter: provider,
+    waitFn: async () => {},
+    async submitBatch(batch) { submitted.push(batch); return { ok: true, proof: { verified: true } }; }
+  });
+  await runtime.accept(envelope('q1', 1));
+  provider.generating = true;
+  await runtime.accept(envelope('q2', 2));
+  await runtime.accept(envelope('q3', 3));
+  const result = await runtime.interruptLatest();
+  assert.equal(result.delivered, true);
+  assert.equal(stops, 1);
+  assert.deepEqual(submitted.map(batch => batch.prompt.memberIds), [['q1'], ['q3']]);
+  assert.deepEqual(runtime.snapshot().next.prompt.memberIds, ['q2']);
+});
+
+test('failed interrupt preserves the complete next batch', async () => {
+  const provider = adapter();
+  provider.stopGenerating = () => false;
+  const submitted = [];
+  const runtime = createReceiverBatchRuntime({
+    adapter: provider,
+    async submitBatch(batch) { submitted.push(batch); return { ok: true }; }
+  });
+  await runtime.accept(envelope('q1', 1));
+  provider.generating = true;
+  await runtime.accept(envelope('q2', 2));
+  await runtime.accept(envelope('q3', 3));
+  const result = await runtime.interruptLatest();
+  assert.equal(result.error, 'stop_failed');
+  assert.deepEqual(runtime.snapshot().next.prompt.memberIds, ['q2', 'q3']);
+  assert.equal(submitted.length, 1);
+});
+
+test('batch policy controls emit state and drain only when released', async () => {
+  const provider = adapter();
+  const events = [];
+  const submitted = [];
+  const runtime = createReceiverBatchRuntime({
+    adapter: provider,
+    onEvent: event => events.push(event),
+    async submitBatch(batch) { submitted.push(batch); return { ok: true }; }
+  });
+  await runtime.setHold(true);
+  await runtime.accept(envelope('q1', 1));
+  assert.equal(submitted.length, 0);
+  await runtime.setAutoSubmit(false);
+  await runtime.setHold(false);
+  assert.equal(submitted.length, 0);
+  await runtime.setAutoSubmit(true);
+  assert.equal(submitted.length, 1);
+  assert.equal(events.filter(event => event.type === 'batch_policy_changed').length, 4);
+});

@@ -73,3 +73,21 @@ test('Pilot live rendering is ledger and batch-state driven', () => {
   assert.match(dashboard, /snapshot\?\.batchState/);
   assert.match(dashboard, /storagePressure/);
 });
+
+
+test('Pilot exposes meaningful real-time inbox controls without removing legacy operations', () => {
+  for (const id of ['autoSubmitAction', 'holdAction', 'submitNow', 'interruptLatest', 'copyLatest']) {
+    assert.match(markup, new RegExp(`id="${id}"`));
+  }
+  assert.match(markup, /Resume &amp; catch up/);
+  assert.match(markup, /Archive selected/);
+  assert.match(dashboard, /set_auto_submit/);
+  assert.match(dashboard, /interrupt_latest/);
+  assert.match(dashboard, /navigator\.clipboard\.writeText\(latest\)/);
+});
+
+test('dangerous interrupt and archive controls require confirmation', () => {
+  assert.match(markup, /id="interruptLatest"[^>]*data-confirm=/);
+  assert.match(markup, /id="discardSelected"[^>]*data-confirm=/);
+  assert.match(markup, /id="discardAll"[^>]*data-confirm=/);
+});

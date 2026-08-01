@@ -206,17 +206,9 @@ ${normalizedQuestion}`;
       const deliveryId = latestDeliveryId;
 
       if (adapter.isGenerating()) {
-        if (!adapter.stopGenerating()) {
-          onStatus('STOP FAIL');
-          onProof({ envelopeId: envelope.id, ok: false, reason: 'stop_failed' });
-          return false;
-        }
-        onStatus('SUPERSEDE');
-        if (!await waitForIdle(deliveryId)) {
-          if (deliveryId === latestDeliveryId) onStatus('STOP TIMEOUT');
-          onProof({ envelopeId: envelope.id, ok: false, reason: 'stop_timeout' });
-          return false;
-        }
+        onStatus('RECEIVER BUSY');
+        onProof({ envelopeId: envelope.id, ok: false, reason: 'receiver_busy' });
+        return false;
       }
 
       if (deliveryId !== latestDeliveryId) return false;

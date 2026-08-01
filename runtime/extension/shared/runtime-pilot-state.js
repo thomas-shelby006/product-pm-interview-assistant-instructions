@@ -290,6 +290,13 @@ export class RuntimePilotState {
     return item;
   }
 
+  archiveProven(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const removed = session.queue.archiveProven(now);
+    if (removed.length) this.record(sessionId, 'proven_entries_archived', { count: removed.length }, now);
+    return removed;
+  }
+
   discardSuperseded(sessionId, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     const removed = session.queue.discardSuperseded();

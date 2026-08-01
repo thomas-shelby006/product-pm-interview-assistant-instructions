@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   dashboardPortName,
@@ -43,4 +43,28 @@ test('selected queue commands require an item id', () => {
     command: 'send_selected',
     payload: { queueItemId: 'env-1' }
   })?.payload.queueItemId, 'env-1');
+});
+
+
+test('live inbox controls are allow-listed and normalize policy values', () => {
+  for (const command of ['submit_now', 'interrupt_latest', 'archive_all', 'archive_proven']) {
+    assert.equal(normalizeDashboardCommand({
+      sessionId: 'pmia_123', requestId: `req-${command}`, command
+    })?.command, command);
+  }
+  assert.equal(normalizeDashboardCommand({
+    sessionId: 'pmia_123', requestId: 'req-auto', command: 'set_auto_submit', payload: { value: 1 }
+  })?.payload.value, true);
+  assert.equal(normalizeDashboardCommand({
+    sessionId: 'pmia_123', requestId: 'req-hold', command: 'set_hold', payload: { value: 0 }
+  })?.payload.value, false);
+});
+
+test('archive selected requires an exact ledger item id', () => {
+  assert.equal(normalizeDashboardCommand({
+    sessionId: 'pmia_123', requestId: 'req-archive', command: 'archive_selected'
+  }), null);
+  assert.equal(normalizeDashboardCommand({
+    sessionId: 'pmia_123', requestId: 'req-archive', command: 'archive_selected', payload: { queueItemId: 'q-1' }
+  })?.payload.queueItemId, 'q-1');
 });

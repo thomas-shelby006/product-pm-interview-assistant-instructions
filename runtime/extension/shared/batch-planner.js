@@ -104,6 +104,23 @@ export class BatchPlanner {
     return this.active();
   }
 
+  interruptLatest(now = Date.now()) {
+    if (!this.#next.length) return null;
+    const latest = cloneEntry(this.#next.pop());
+    const interrupted = this.active();
+    this.#active = null;
+    const entries = [latest];
+    const prompt = composeBatchPrompt({ entries });
+    this.#active = {
+      id: `interrupt-${Number(latest.envelope?.seq || 0)}-${String(latest.id).slice(-8)}`,
+      entries,
+      prompt,
+      createdAt: now,
+      submittedAt: 0
+    };
+    return { batch: this.active(), interrupted };
+  }
+
   markSubmitted(now = Date.now()) {
     if (!this.#active) return null;
     this.#active.submittedAt = now;

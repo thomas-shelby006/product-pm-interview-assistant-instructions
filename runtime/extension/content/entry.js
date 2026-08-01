@@ -568,6 +568,9 @@ async function startRuntime(runtimeConfig) {
       onChange: () => {
         refreshLifecycleTitle();
         answerWake.pulse();
+        if (!adapter.isGenerating?.()) {
+          void receiverBatchRuntime?.submitNext();
+        }
       },
       watchdogMs: 500
     });
@@ -643,6 +646,18 @@ async function startRuntime(runtimeConfig) {
       case 'reconcile_delivery':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.reconcile(payload);
+      case 'set_auto_submit':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.setAutoSubmit(Boolean(payload.value));
+      case 'set_hold':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.setHold(Boolean(payload.value));
+      case 'submit_next':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.submitNext({ force: true });
+      case 'interrupt_latest':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.interruptLatest();
       case 'recover': {
         const scheduled = runtimeRecovery?.trigger('dashboard_repair') || false;
         senderObserver?.refresh();

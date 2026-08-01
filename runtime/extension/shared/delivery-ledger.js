@@ -177,6 +177,10 @@ export class DeliveryLedger {
     return this.#entries.map(cloneEntry);
   }
 
+  archiveProven(now = Date.now()) {
+    return this.archive(this.proven().map(entry => entry.id), now);
+  }
+
   compactProven(retain = 80) {
     const keep = Math.max(0, Number(retain) || 0);
     const proven = this.#entries.filter(entry => entry.state === 'proven');

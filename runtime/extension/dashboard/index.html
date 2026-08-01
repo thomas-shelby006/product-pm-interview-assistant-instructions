@@ -37,7 +37,7 @@
       <section class="view active" id="panelOverview" data-view-panel="overview" role="tabpanel">
         <div class="control-grid" aria-label="Runtime controls">
           <button class="primary" id="primaryTransportAction" data-command="pause">Pause forwarding</button>
-          <button data-command="resume_latest">Resume + latest</button>
+          <button data-command="resume_latest">Resume &amp; catch up</button>
           <button data-command="resume_without_send">Resume only</button>
           <button data-command="check_live">Check live</button>
           <button data-command="repair_runtime">Repair runtime</button>
@@ -46,6 +46,11 @@
           <button data-command="toggle_scroll">Toggle scroll</button>
           <button data-command="focus_composer">Focus receiver</button>
           <button data-command="export_session">Export session</button>
+          <button id="autoSubmitAction" data-command="set_auto_submit">Auto-submit: On</button>
+          <button id="holdAction" data-command="set_hold">Hold after answer: Off</button>
+          <button id="submitNow" data-command="submit_now">Submit next draft now</button>
+          <button id="interruptLatest" class="danger" data-command="interrupt_latest" data-confirm="Stop the current Window 2 answer and submit only the latest waiting question now? Earlier waiting questions will remain protected.">Interrupt for latest</button>
+          <button id="copyLatest">Copy latest question</button>
         </div>
 
         <section class="live-command-center" aria-label="Live delivery command center">
@@ -140,11 +145,11 @@
         <div class="section-heading">
           <div><h2>Lossless inbox</h2><p>Every unique final remains until rendered proof or explicit archive.</p></div>
           <div class="inline-actions">
-            <select id="queueFilter" aria-label="Queue filter"><option value="actionable">Actionable</option><option value="all">All items</option></select>
-            <button id="sendSelected">Send selected</button>
-            <button id="discardSelected" data-confirm="Discard the selected queued final?">Discard selected</button>
-            <button id="discardSuperseded">Clear superseded</button>
-            <button class="danger" id="discardAll" data-confirm="Discard every queued final?">Discard all</button>
+            <select id="queueFilter" aria-label="Queue filter"><option value="actionable">Unresolved</option><option value="all">All ledger states</option></select>
+            <button id="sendSelected">Submit selected</button>
+            <button id="discardSelected" data-confirm="Archive the selected ledger final? It will remain in session history but will not be submitted automatically.">Archive selected</button>
+            <button id="discardSuperseded">Archive proven</button>
+            <button class="danger" id="discardAll" data-confirm="Archive every unresolved final? This is explicit data loss from the delivery workflow.">Archive unresolved</button>
           </div>
         </div>
         <div class="queue-wrap">
@@ -191,7 +196,7 @@
         <button data-command="restore_managed">Restore</button>
       </div>
       <div class="footer-actions">
-        <details class="shortcut-help"><summary>Keys</summary><p><b>Space</b> pause/resume - <b>L</b> resume latest - <b>H</b> health - <b>R</b> repair - <b>E</b> export - <b>M</b> mic - <b>S</b> scroll - <b>D</b> diagnostics</p></details>
+        <details class="shortcut-help"><summary>Keys</summary><p><b>Space</b> pause/resume - <b>L</b> catch up - <b>H</b> health - <b>R</b> repair - <b>E</b> export - <b>M</b> mic - <b>S</b> scroll - <b>N</b> submit now - <b>I</b> interrupt latest - <b>C</b> copy latest - <b>D</b> diagnostics</p></details>
         <button id="copyDiagnostics">Copy diagnostics</button>
         <button class="danger" data-command="end_session" data-confirm="End this managed PMIA session?">End session</button>
       </div>

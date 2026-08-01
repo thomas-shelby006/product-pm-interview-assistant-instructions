@@ -372,6 +372,10 @@ function renderOverview(snapshot, now) {
   const primaryButton = byId('primaryTransportAction');
   primaryButton.dataset.command = primary.command;
   primaryButton.textContent = primary.label;
+  const autoSubmit = snapshot?.batchState?.autoSubmit !== false;
+  const hold = Boolean(snapshot?.batchState?.hold);
+  text('autoSubmitAction', `Auto-submit: ${autoSubmit ? 'On' : 'Off'}`);
+  text('holdAction', `Hold after answer: ${hold ? 'On' : 'Off'}`);
 }
 
 function renderQueue(snapshot, now) {
@@ -508,10 +512,21 @@ function renderReview(snapshot) {
 
 function updateControlAvailability() {
   const unavailable = !state.snapshot || state.sessionEnded;
-  document.querySelectorAll('[data-command], #sendSelected, #discardSelected, #discardSuperseded, #discardAll').forEach(node => {
+  document.querySelectorAll('[data-command], #sendSelected, #discardSelected, #discardSuperseded, #discardAll, #copyLatest').forEach(node => {
     const busy = node.dataset.busy === 'true';
     node.disabled = unavailable || busy;
   });
+  if (!unavailable) {
+    const batch = state.snapshot?.batchState || {};
+    const nextCount = Number(batch.next?.questionCount || batch.next?.memberIds?.length || 0);
+    const active = Boolean(batch.active);
+    const generating = Boolean(state.snapshot?.receiver?.generating);
+    byId('submitNow').disabled ||= !nextCount || active;
+    byId('interruptLatest').disabled ||= !nextCount || !(active || generating);
+    byId('copyLatest').disabled ||= !state.snapshot?.latestFinal?.text;
+    byId('sendSelected').disabled ||= !state.selectedQueueId;
+    byId('discardSelected').disabled ||= !state.selectedQueueId;
+  }
   document.body.dataset.sessionEnded = state.sessionEnded ? 'true' : 'false';
 }
 
@@ -570,7 +585,15 @@ document.addEventListener('click', event => {
     return;
   }
   const button = event.target.closest('[data-command]');
-  if (button) void runCommand(button, button.dataset.command);
+  if (button) {
+    const command = button.dataset.command;
+    const payload = command === 'set_auto_submit'
+      ? { value: state.snapshot?.batchState?.autoSubmit === false }
+      : command === 'set_hold'
+        ? { value: !Boolean(state.snapshot?.batchState?.hold) }
+        : {};
+    void runCommand(button, command, payload);
+  }
 });
 
 byId('sendSelected').addEventListener('click', event => {
@@ -581,13 +604,23 @@ byId('sendSelected').addEventListener('click', event => {
 });
 byId('discardSelected').addEventListener('click', event => {
   if (!state.selectedQueueId) return showToast('Select a queued final.', 'warn');
-  void runCommand(event.currentTarget, 'discard_selected', { queueItemId: state.selectedQueueId });
+  void runCommand(event.currentTarget, 'archive_selected', { queueItemId: state.selectedQueueId });
 });
 byId('discardSuperseded').addEventListener('click', event => {
-  void runCommand(event.currentTarget, 'discard_superseded');
+  void runCommand(event.currentTarget, 'archive_proven');
 });
 byId('discardAll').addEventListener('click', event => {
-  void runCommand(event.currentTarget, 'discard_all');
+  void runCommand(event.currentTarget, 'archive_all');
+});
+byId('copyLatest').addEventListener('click', async () => {
+  const latest = String(state.snapshot?.latestFinal?.text || '').trim();
+  if (!latest) return showToast('No latest question is available.', 'warn');
+  try {
+    await navigator.clipboard.writeText(latest);
+    showToast('Latest question copied.', 'ok');
+  } catch {
+    showToast('Clipboard write failed.', 'error');
+  }
 });
 byId('queueFilter').addEventListener('change', event => {
   state.queueFilter = event.target.value;
@@ -630,6 +663,9 @@ document.addEventListener('keydown', event => {
   else if (key === 'e') void runKeyboardCommand('export_session');
   else if (key === 'm') void runKeyboardCommand('toggle_mic');
   else if (key === 's') void runKeyboardCommand('toggle_scroll');
+  else if (key === 'n') void runKeyboardCommand('submit_now');
+  else if (key === 'i') void runKeyboardCommand('interrupt_latest');
+  else if (key === 'c') byId('copyLatest').click();
   else if (key === 'd') byId('copyDiagnostics').click();
 });
 

@@ -354,7 +354,7 @@ export function createRuntimePilotController({
       });
       return response?.ok === false
         ? { ok: false, error: response.error || 'command_rejected', response }
-        : { ok: true, response };
+        : { ok: true, ...(response || {}), response };
     } catch (error) {
       return { ok: false, error: safeError(error) };
     }
@@ -618,15 +618,47 @@ export function createRuntimePilotController({
       case 'resume_latest': {
         pilot.setMode(sessionId, 'active');
         const roles = await sendToRoles(registry, sessionId, 'resume');
-        const queue = pilot.snapshot(sessionId)?.queue || [];
-        const latest = [...queue].reverse().find(item => item.status !== 'superseded') || null;
-        result = latest
-          ? { ...(await sendQueuedItem(sessionId, latest.id, registry, pilot)), roles }
-          : { ok: true, reason: 'queue_empty', roles };
+        const catchUp = await reconcileSession(sessionId);
+        result = { ok: catchUp?.ok !== false, reason: catchUp?.reason || 'catch_up_started', roles, catchUp };
         break;
       }
       case 'send_selected':
         result = await sendQueuedItem(sessionId, payload.queueItemId, registry, pilot);
+        break;
+      case 'set_auto_submit':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_auto_submit', {
+          value: Boolean(payload.value)
+        });
+        break;
+      case 'set_hold':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_hold', {
+          value: Boolean(payload.value)
+        });
+        break;
+      case 'submit_now':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'submit_next', {
+          source: 'dashboard'
+        });
+        break;
+      case 'interrupt_latest':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'interrupt_latest', {
+          source: 'dashboard'
+        });
+        break;
+      case 'archive_selected': {
+        const archived = pilot.discardQueueItem(sessionId, payload.queueItemId);
+        result = {
+          ok: Boolean(archived),
+          ledgerItemId: payload.queueItemId,
+          archived: archived ? 1 : 0
+        };
+        break;
+      }
+      case 'archive_all':
+        result = { ok: true, archived: pilot.clearQueue(sessionId).length };
+        break;
+      case 'archive_proven':
+        result = { ok: true, archived: pilot.archiveProven(sessionId).length };
         break;
       case 'discard_selected':
         result = {

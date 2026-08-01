@@ -165,13 +165,20 @@ export function commandResultLabel(command, result = {}) {
   const labels = {
     pause: 'Forwarding paused',
     resume_without_send: 'Forwarding resumed',
-    resume_latest: result.reason === 'queue_empty'
-      ? 'Forwarding resumed; queue empty'
-      : 'Forwarding resumed; latest final handled',
+    resume_latest: result.reason === 'ledger_clean'
+      ? 'Forwarding resumed; inbox caught up'
+      : 'Forwarding resumed; catch-up started',
     send_selected: result.delivered ? 'Selected final delivered' : 'Selected final remains queued',
     discard_selected: 'Selected final discarded',
     discard_superseded: `${Math.max(0, Number(result.discarded) || 0)} superseded final(s) cleared`,
     discard_all: `${Math.max(0, Number(result.discarded) || 0)} queued final(s) discarded`,
+    set_auto_submit: 'Auto-submit policy updated',
+    set_hold: 'Hold-after-answer policy updated',
+    submit_now: result.delivered ? 'Next draft submitted' : result.reason === 'batch_empty' ? 'No next draft to submit' : 'Next draft remains protected',
+    interrupt_latest: result.delivered ? 'Latest question submitted after interruption' : 'Interrupt could not complete',
+    archive_selected: 'Selected final archived',
+    archive_all: `${Math.max(0, Number(result.archived) || 0)} unresolved final(s) archived`,
+    archive_proven: `${Math.max(0, Number(result.archived) || 0)} proven final(s) archived`,
     check_live: result.ok ? 'Live check passed' : 'Live check found issues',
     repair_runtime: result.pendingVerification
       ? 'Repair started; verifying both roles'
