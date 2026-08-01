@@ -1,4 +1,12 @@
 const STATES = ['persisted', 'staged', 'submitting', 'failed', 'proven', 'archived'];
+const VIEW_GROUPS = {
+  pending: ['persisted', 'failed'],
+  inFlight: ['staged', 'submitting'],
+  unresolved: ['persisted', 'failed', 'staged', 'submitting'],
+  proven: ['proven'],
+  archived: ['archived'],
+  failed: ['failed']
+};
 
 function sequenceKey(provider, seq) {
   const value = Number(seq || 0);
@@ -33,35 +41,51 @@ export class DeliveryLedgerIndex {
   #bySequence = new Map();
   #byBatch = new Map();
   #byState = new Map();
+  #viewCache = new Map();
+  #viewHits = 0;
+  #viewMisses = 0;
+  #viewInvalidations = 0;
   #rebuilds = 0;
 
-  constructor(entries = []) {
-    this.rebuild(entries);
-  }
+  constructor(entries = []) { this.rebuild(entries); }
 
-  byId(id) {
-    return this.#byId.get(String(id || '')) || null;
-  }
+  byId(id) { return this.#byId.get(String(id || '')) || null; }
 
   bySequence(provider, seq) {
     const key = sequenceKey(provider, seq);
     return key ? this.#bySequence.get(key) || null : null;
   }
 
-  entriesForBatch(batchId) {
-    return sortEntries(this.#byBatch.get(String(batchId || '')) || []);
+  entriesForBatch(batchId) { return sortEntries(this.#byBatch.get(String(batchId || '')) || []); }
+  entriesForState(state) { return sortEntries(this.#byState.get(String(state || '')) || []); }
+  idsForBatch(batchId) { return this.entriesForBatch(batchId).map(entry => String(entry.id)); }
+  idsForState(state) { return this.entriesForState(state).map(entry => String(entry.id)); }
+
+  view(group = 'all') {
+    const normalized = String(group || 'all');
+    if (this.#viewCache.has(normalized)) {
+      this.#viewHits += 1;
+      return [...this.#viewCache.get(normalized)];
+    }
+    this.#viewMisses += 1;
+    const states = VIEW_GROUPS[normalized];
+    const entries = normalized === 'all'
+      ? [...this.#byId.values()]
+      : states
+        ? states.flatMap(state => [...(this.#byState.get(state) || [])])
+        : [...(this.#byState.get(normalized) || [])];
+    const ids = sortEntries(new Set(entries)).map(entry => String(entry.id));
+    this.#viewCache.set(normalized, ids);
+    return [...ids];
   }
 
-  entriesForState(state) {
-    return sortEntries(this.#byState.get(String(state || '')) || []);
-  }
-
-  idsForBatch(batchId) {
-    return this.entriesForBatch(batchId).map(entry => String(entry.id));
-  }
-
-  idsForState(state) {
-    return this.entriesForState(state).map(entry => String(entry.id));
+  viewStats() {
+    return {
+      hits: this.#viewHits,
+      misses: this.#viewMisses,
+      invalidations: this.#viewInvalidations,
+      cachedGroups: this.#viewCache.size
+    };
   }
 
   insert(entry) {
@@ -76,6 +100,7 @@ export class DeliveryLedgerIndex {
     if (key) this.#bySequence.set(key, entry);
     addToMap(this.#byState, entry?.state, entry);
     addToMap(this.#byBatch, entry?.batchId, entry);
+    this.#invalidateViews(entry?.state);
     return { accepted: true, reason: 'inserted', entry };
   }
 
@@ -84,6 +109,7 @@ export class DeliveryLedgerIndex {
     if (String(previous.state || '') !== String(entry.state || '')) {
       removeFromMap(this.#byState, previous.state, entry);
       addToMap(this.#byState, entry.state, entry);
+      this.#invalidateViews(previous.state, entry.state);
     }
     if (String(previous.batchId || '') !== String(entry.batchId || '')) {
       removeFromMap(this.#byBatch, previous.batchId, entry);
@@ -100,14 +126,13 @@ export class DeliveryLedgerIndex {
     if (key && this.#bySequence.get(key) === entry) this.#bySequence.delete(key);
     removeFromMap(this.#byState, entry?.state, entry);
     removeFromMap(this.#byBatch, entry?.batchId, entry);
+    this.#invalidateViews(entry?.state);
     return true;
   }
 
   rebuild(entries = []) {
-    this.#byId.clear();
-    this.#bySequence.clear();
-    this.#byBatch.clear();
-    this.#byState.clear();
+    this.#byId.clear(); this.#bySequence.clear(); this.#byBatch.clear(); this.#byState.clear();
+    this.#viewCache.clear();
     this.#rebuilds += 1;
     for (const entry of Array.isArray(entries) ? entries : []) this.insert(entry);
     return this.stats();
@@ -125,9 +150,7 @@ export class DeliveryLedgerIndex {
   audit(entries = []) {
     const list = Array.isArray(entries) ? entries : [];
     const findings = [];
-    if (this.#byId.size !== list.length || list.some(entry => this.byId(entry.id) !== entry)) {
-      findings.push({ code: 'identity_membership_mismatch' });
-    }
+    if (this.#byId.size !== list.length || list.some(entry => this.byId(entry.id) !== entry)) findings.push({ code: 'identity_membership_mismatch' });
     for (const entry of list) {
       const key = sequenceKey(entry?.envelope?.sourceProvider, entry?.envelope?.seq);
       if (key && this.#bySequence.get(key) !== entry) findings.push({ code: 'sequence_membership_mismatch', id: entry.id });
@@ -135,16 +158,21 @@ export class DeliveryLedgerIndex {
       if (entry.batchId && !this.#byBatch.get(String(entry.batchId))?.has(entry)) findings.push({ code: 'batch_membership_mismatch', id: entry.id });
     }
     const expectedIds = new Set(list.map(entry => String(entry.id)));
-    for (const set of this.#byState.values()) {
-      for (const entry of set) if (!expectedIds.has(String(entry.id))) findings.push({ code: 'stale_state_member', id: entry.id });
-    }
-    for (const set of this.#byBatch.values()) {
-      for (const entry of set) if (!expectedIds.has(String(entry.id))) findings.push({ code: 'stale_batch_member', id: entry.id });
-    }
+    for (const set of this.#byState.values()) for (const entry of set) if (!expectedIds.has(String(entry.id))) findings.push({ code: 'stale_state_member', id: entry.id });
+    for (const set of this.#byBatch.values()) for (const entry of set) if (!expectedIds.has(String(entry.id))) findings.push({ code: 'stale_batch_member', id: entry.id });
     return { ok: findings.length === 0, findings, stats: this.stats(), counts: this.counts() };
   }
 
-  stats() {
-    return { ids: this.#byId.size, sequences: this.#bySequence.size, rebuilds: this.#rebuilds };
+  stats() { return { ids: this.#byId.size, sequences: this.#bySequence.size, rebuilds: this.#rebuilds }; }
+
+  #invalidateViews(...states) {
+    const affected = new Set(['all']);
+    for (const state of states.map(String).filter(Boolean)) {
+      affected.add(state);
+      for (const [group, members] of Object.entries(VIEW_GROUPS)) if (members.includes(state)) affected.add(group);
+    }
+    for (const group of affected) {
+      if (this.#viewCache.delete(group)) this.#viewInvalidations += 1;
+    }
   }
 }

@@ -67,7 +67,7 @@ export class DeliveryLedger {
   }
 
   get size() {
-    return this.unresolved().length;
+    return this.#index.counts().unresolved;
   }
 
   persist(envelope, { now = Date.now() } = {}) {
@@ -271,17 +271,15 @@ export class DeliveryLedger {
   }
 
   unresolved() {
-    return this.#entries.filter(entry => ACTIVE_LEDGER_STATES.has(entry.state)).map(cloneEntry);
+    return this.#view('unresolved');
   }
 
   pending() {
-    return this.#entries
-      .filter(entry => ['persisted', 'failed'].includes(entry.state))
-      .map(cloneEntry);
+    return this.#view('pending');
   }
 
   proven() {
-    return this.#entries.filter(entry => entry.state === 'proven').map(cloneEntry);
+    return this.#view('proven');
   }
 
   snapshot() {
@@ -290,10 +288,10 @@ export class DeliveryLedger {
 
   compactProven(retain = 80) {
     const keep = Math.max(0, Number(retain) || 0);
-    const proven = this.#entries.filter(entry => entry.state === 'proven');
-    const removeCount = Math.max(0, proven.length - keep);
+    const provenIds = this.#index.view('proven');
+    const removeCount = Math.max(0, provenIds.length - keep);
     if (!removeCount) return [];
-    const removeIds = new Set(proven.slice(0, removeCount).map(entry => entry.id));
+    const removeIds = new Set(provenIds.slice(0, removeCount));
     const removedEntries = this.#entries.filter(entry => removeIds.has(entry.id));
     const removed = removedEntries.map(cloneEntry);
     for (const entry of removedEntries) this.#index.remove(entry);
@@ -311,6 +309,13 @@ export class DeliveryLedger {
 
   exportState() {
     return this.snapshot();
+  }
+
+  #view(group) {
+    return this.#index.view(group)
+      .map(id => this.#index.byId(id))
+      .filter(Boolean)
+      .map(cloneEntry);
   }
 
   #prove(entry, proof, now) {
