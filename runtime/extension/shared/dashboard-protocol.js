@@ -1,5 +1,9 @@
 const COMMANDS = new Set([
   'pause',
+  'start_mock',
+  'set_session_phase',
+  'mark_interviewer_activity',
+  'set_focus_mode',
   'resume_catch_up',
   'submit_selected',
   'resume_without_send',
@@ -69,8 +73,16 @@ export function normalizeDashboardCommand(value) {
     if (!queueItemId) return null;
     payload.queueItemId = queueItemId;
   }
-  if (['set_auto_submit', 'set_hold'].includes(command)) {
+  if (['set_auto_submit', 'set_hold', 'set_focus_mode'].includes(command)) {
     payload.value = Boolean(payload.value);
+  }
+  if (command === 'set_session_phase') {
+    payload.phase = cleanText(payload.phase, 24).toLowerCase();
+    if (!['setup','ready','active','paused','debrief','ended'].includes(payload.phase)) return null;
+    payload.reason = cleanText(payload.reason, 80) || 'operator';
+  }
+  if (command === 'start_mock') {
+    payload.plannedDurationMs = Math.max(0, Math.min(14_400_000, Number(payload.plannedDurationMs) || 0));
   }
   if (command === 'export_support_bundle') {
     for (const key of Object.keys(payload)) delete payload[key];

@@ -8,7 +8,14 @@ function readySnapshot(now = 10000) {
 }
 
 test('readiness is true only when every operational prerequisite is healthy', () => {
-  assert.deepEqual(deriveReadiness(readySnapshot(), 10000), { state: 'ready', label: 'Ready', blockers: [], actions: [], evidenceSource: 'active_pulse', evidenceExpiresAt: 40000 });
+  const result = deriveReadiness(readySnapshot(), 10000);
+  assert.equal(result.state, 'ready');
+  assert.equal(result.label, 'Ready');
+  assert.deepEqual(result.blockers, []);
+  assert.deepEqual(result.actions, []);
+  assert.equal(result.evidenceSource, 'active_pulse');
+  assert.equal(result.evidenceExpiresAt, 40000);
+  assert.equal(result.rootCause.code, 'healthy');
 });
 
 test('readiness reports exact role context and storage blockers', () => {

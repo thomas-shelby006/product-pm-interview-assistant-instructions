@@ -641,3 +641,56 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** sorted source SHA-256 hashes, gate counts, smoke proof, cleanup state, and a deterministic manifest hash form the release identity.
 
 **Development status:** source and regression contracts complete. Executable block and repository gates remain deferred until all later development cycles are source-complete.
+
+
+## Cycle 96 - Explicit Interview Phase State
+- **Bug fixes:** interview mode is no longer inferred from transport pause, answer state, or scattered readiness flags.
+- **New features:** Setup, Ready, Active, Paused, Debrief, and Ended phases with transition history.
+- **Implementation:** one normalized `liveSession` section owns phase and clock metadata; partial updates merge without resetting phase.
+
+## Cycle 97 - Ordered Interview Runbook
+- **Bug fixes:** preflight blockers are no longer distributed across unrelated cards with no owning order.
+- **New features:** seven-step runbook with completion count, next incomplete step, and exact action.
+- **Implementation:** a pure runbook model derives role, composer, capability, context, self-test, storage, and delivery prerequisites.
+
+## Cycle 98 - Start Mock Orchestration
+- **Bug fixes:** a session cannot start while prerequisites are missing or forwarding is paused.
+- **New features:** one Start mock action that verifies the runbook, enters Ready, starts the clock, enters Active, and resumes both roles.
+- **Implementation:** the controller performs one mutation-coordinated command through the existing role command path.
+
+## Cycle 99 - Session and Segment Clock
+- **Bug fixes:** elapsed time no longer advances while the mock is paused, and segment timing is no longer detached from session timing.
+- **New features:** session elapsed, planned duration, segment elapsed, and remaining time.
+- **Implementation:** pure pause/resume clock transforms adjust accumulated pause and segment origin deterministically.
+
+## Cycle 100 - Interviewer Silence Distinction
+- **Bug fixes:** interviewer pauses are no longer conflated with sender capture failure or disconnected telemetry.
+- **New features:** recent activity, quiet, long silence, inactive, and capture-issue states.
+- **Implementation:** the silence model uses explicit interviewer activity plus capture health and never treats missing capture as human silence.
+
+## Cycle 101 - Current Attention Target
+- **Bug fixes:** the operator no longer has to infer urgency from warning count or card color.
+- **New features:** one ranked attention target with reason, severity, action, evidence, and three secondary signals.
+- **Implementation:** a pure priority model ranks root cause, protected delivery, draft conflict, waiting questions, answer failure, and setup state.
+
+## Cycle 102 - Next-Best Action
+- **Bug fixes:** a warning no longer leaves the operator to map a reason code to a command manually.
+- **New features:** one context-aware recommended command and human-readable label.
+- **Implementation:** the action model combines attention ownership and runbook readiness without executing anything automatically.
+
+## Cycle 103 - Searchable Command Palette
+- **Bug fixes:** pressure-time actions no longer require scanning a large fixed control grid.
+- **New features:** Ctrl/Cmd+K search, ranked results, availability, risk preview, recent commands, and Enter execution.
+- **Implementation:** one centralized command catalog supplies labels, groups, shortcuts, risk, preconditions, and blocked reasons.
+
+## Cycle 104 - Roving Keyboard Navigation
+- **Bug fixes:** repeated Tab presses no longer traverse every phase and toolbar control.
+- **New features:** arrow, Home, and End navigation with one toolbar tab stop and focus return from the palette.
+- **Implementation:** a reusable roving-tabindex owner manages visible enabled controls and the command dialog traps focus while open.
+
+## Cycle 105 - Compact Focus Mode
+- **Bug fixes:** diagnostic and setup controls no longer dominate the screen during an active question.
+- **New features:** explicit Focus mode retaining phase, clock, delivery, current answer, next draft, and attention state.
+- **Implementation:** one persisted preference drives a CSS-only projection; hidden diagnostic state remains connected and unchanged.
+
+**Source-complete status:** Cycles 96-105 are implemented. Executable verification remains deferred until the complete Phase A source program is finished.

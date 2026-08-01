@@ -24,6 +24,14 @@ import { classifyRuntimeRootCause } from './runtime-root-cause.js';
 import { selectRecoveryAction } from './recovery-escalation-policy.js';
 import { deriveQueueOnlyPolicy } from './queue-only-policy.js';
 import { runConsistencyAudit } from './consistency-watchdog.js';
+import { transitionSessionPhase } from './session-phase-model.js';
+import { deriveInterviewRunbook } from './interview-runbook.js';
+import { pauseSessionClock, resumeSessionClock, deriveSessionClock } from './session-clock.js';
+import { deriveInterviewerSilence } from './interviewer-silence.js';
+import { deriveAttentionTarget } from './attention-model.js';
+import { deriveNextAction } from './next-action-model.js';
+import { deriveSessionPhase } from './session-phase-model.js';
+import { commandCatalog } from './operator-command-catalog.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -56,6 +64,8 @@ export function createRuntimePilotController({
   const recoveryCoordinator = createRuntimeRecoveryCoordinator({ chromeApi });
   const snapshotCaches = new Map();
   const snapshotPerformance = new Map();
+  const deliveryPolicyApplied = new Map();
+  const deliveryPolicyEstablished = new Set();
   const mutationCoordinator = createSessionMutationCoordinator();
   const coalescedCommitLane = createCoalescedCommitLane({
     delayMs: 60,
@@ -93,22 +103,36 @@ export function createRuntimePilotController({
     const rootCause = classifyRuntimeRootCause({ ...snapshot, stateAudit: store.audit() }, Date.now());
     const policy = deriveQueueOnlyPolicy(snapshot, rootCause);
     const changed = !sameDeliveryPolicy(snapshot.deliveryPolicy, policy);
+    const bothObserved = ['sender', 'receiver'].every(role => {
+      const value = snapshot?.[role] || {};
+      return Boolean(value.connected || value.tabId || value.instanceId || ['registered', 'ready'].includes(String(value.phase || '')));
+    });
+    if (bothObserved) deliveryPolicyEstablished.add(sessionId);
     if (changed) {
+      const priorActive = Boolean(snapshot.deliveryPolicy?.active);
       pilot.setDeliveryPolicy(sessionId, policy);
-      pilot.record(sessionId, policy.active ? 'queue_only_enabled' : 'queue_only_cleared', {
-        reason: policy.reason,
-        resumeWhen: policy.resumeWhen,
-        rootCause: rootCause.code
-      });
+      if (policy.active || priorActive) {
+        pilot.record(sessionId, policy.active ? 'queue_only_enabled' : 'queue_only_cleared', {
+          reason: policy.reason,
+          resumeWhen: policy.resumeWhen,
+          rootCause: rootCause.code
+        });
+      }
     }
-    if ((changed || force) && registry?.getSession) {
-      await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_queue_only', {
+    const receiverOwned = Boolean(registry?.getSession?.(sessionId)?.receiver);
+    const applied = deliveryPolicyApplied.get(sessionId) === true;
+    const shouldSync = deliveryPolicyEstablished.has(sessionId) && receiverOwned && (
+      policy.active ? (changed || force || !applied) : applied
+    );
+    if (shouldSync) {
+      const result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_queue_only', {
         value: policy.active,
         reason: policy.reason,
         source: 'runtime_policy'
       });
+      if (result?.ok) deliveryPolicyApplied.set(sessionId, policy.active);
     }
-    return { ...policy, changed, rootCause };
+    return { ...policy, changed, rootCause, synchronized: shouldSync };
   }
 
   async function runAndApplyConsistencyAudit(sessionId, pilot, registry = null) {
@@ -204,10 +228,21 @@ export function createRuntimePilotController({
     const snapshotBase = baseSnapshot ? { ...baseSnapshot, stateAudit } : null;
     const rootCause = snapshotBase ? classifyRuntimeRootCause(snapshotBase, Date.now()) : null;
     const deliveryPolicy = snapshotBase ? deriveQueueOnlyPolicy(snapshotBase, rootCause) : null;
+    const enrichedBase = snapshotBase ? { ...snapshotBase, rootCause, deliveryPolicy } : null;
+    const liveOperations = enrichedBase ? {
+      phase: deriveSessionPhase(enrichedBase),
+      runbook: deriveInterviewRunbook(enrichedBase, Date.now()),
+      clock: deriveSessionClock(enrichedBase.liveSession || {}, Date.now()),
+      silence: deriveInterviewerSilence(enrichedBase, Date.now()),
+      attention: deriveAttentionTarget(enrichedBase, Date.now()),
+      nextAction: deriveNextAction(enrichedBase, Date.now()),
+      commands: commandCatalog(enrichedBase)
+    } : null;
     const rawSnapshot = snapshotBase ? {
       ...snapshotBase,
       rootCause,
       deliveryPolicy,
+      liveOperations,
       performanceBudget: {
         ...(snapshotBase.performanceBudget || {}),
         cacheHits: localPerformance.cacheHits,
@@ -1022,13 +1057,16 @@ export function createRuntimePilotController({
     const snapshot = pilot.snapshot(sessionId);
     const rootCause = classifyRuntimeRootCause({ ...snapshot, stateAudit: store.audit() }, Date.now());
     const availableBudget = snapshot?.recoveryBudget || { remaining: 1, maxAutomatic: 1 };
-    const selected = selectRecoveryAction(rootCause, {
+    let selected = selectRecoveryAction(rootCause, {
       budget: source === 'manual'
         ? { ...availableBudget, remaining: Math.max(1, Number(availableBudget.remaining || 0)) }
         : availableBudget,
       attempts: source === 'manual' ? 0 : Number(snapshot?.lastRepair?.attempt || 0),
       roleHealth: { activeAnswer: ['waiting', 'streaming'].includes(String(snapshot?.answerState?.state || '')) }
     });
+    if (source === 'manual' && selected.action === 'none') {
+      selected = { action: 'reconcile', reason: 'manual_verification', owner: 'operator', destructive: false };
+    }
     const deliveryPolicy = deriveQueueOnlyPolicy(snapshot || {}, rootCause);
     pilot.setDeliveryPolicy(sessionId, deliveryPolicy);
 
@@ -1271,6 +1309,18 @@ export function createRuntimePilotController({
     return { ok: true, closeTabIds: [...new Set(tabIds)] };
   }
 
+  function updateLivePhase(pilot, sessionId, phase, reason = 'operator', now = Date.now()) {
+    const snapshot = pilot.snapshot(sessionId, now) || {};
+    const current = snapshot.liveSession || { phase: 'setup' };
+    const transition = transitionSessionPhase(current, phase, now, reason);
+    if (!transition.ok) return transition;
+    let value = transition.value;
+    if (phase === 'paused') value = pauseSessionClock(value, now);
+    if (phase === 'active') value = resumeSessionClock(value, now);
+    pilot.setLiveSession(sessionId, { ...value, reason }, now);
+    return { ok: true, changed: transition.changed, liveSession: value };
+  }
+
   async function handleCommand(raw) {
     const command = normalizeDashboardCommand(raw);
     if (!command) return { ok: false, error: 'invalid_dashboard_command' };
@@ -1287,16 +1337,60 @@ export function createRuntimePilotController({
     let result;
 
     switch (command.command) {
+      case 'start_mock': {
+        const snapshot = pilot.snapshot(sessionId);
+        const runbook = deriveInterviewRunbook(snapshot, Date.now());
+        if (!runbook.ready || snapshot.mode === 'paused') {
+          result = { ok: false, error: 'runbook_incomplete', runbook };
+          break;
+        }
+        const ready = snapshot.liveSession?.phase === 'setup'
+          ? updateLivePhase(pilot, sessionId, 'ready', 'runbook_complete')
+          : { ok: true };
+        if (!ready.ok) { result = ready; break; }
+        const startedAt = snapshot.liveSession?.startedAt || Date.now();
+        pilot.setLiveSession(sessionId, {
+          startedAt,
+          plannedDurationMs: payload.plannedDurationMs || snapshot.liveSession?.plannedDurationMs || 0,
+          lastInterviewerActivityAt: Date.now(),
+          reason: 'start_mock'
+        });
+        const phase = updateLivePhase(pilot, sessionId, 'active', 'start_mock');
+        pilot.setMode(sessionId, 'active');
+        result = { ok: phase.ok, liveSession: phase.liveSession, roles: await sendToRoles(registry, sessionId, 'resume') };
+        break;
+      }
+      case 'set_session_phase': {
+        if (payload.phase === 'ended') { result = { ok: false, error: 'use_end_session' }; break; }
+        result = updateLivePhase(pilot, sessionId, payload.phase, payload.reason);
+        if (result.ok && payload.phase === 'paused') {
+          pilot.setMode(sessionId, 'paused');
+          result.roles = await sendToRoles(registry, sessionId, 'pause');
+        } else if (result.ok && payload.phase === 'active') {
+          pilot.setMode(sessionId, 'active');
+          result.roles = await sendToRoles(registry, sessionId, 'resume');
+        }
+        break;
+      }
+      case 'mark_interviewer_activity':
+        result = { ok: true, liveSession: pilot.markInterviewerActivity(sessionId) };
+        break;
+      case 'set_focus_mode':
+        result = { ok: true, liveSession: pilot.setFocusMode(sessionId, Boolean(payload.value)) };
+        break;
       case 'pause':
         pilot.setMode(sessionId, 'paused');
+        if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'paused', 'transport_pause');
         result = { ok: true, roles: await sendToRoles(registry, sessionId, 'pause') };
         break;
       case 'resume_without_send':
         pilot.setMode(sessionId, 'active');
+        if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'active', 'transport_resume');
         result = { ok: true, roles: await sendToRoles(registry, sessionId, 'resume') };
         break;
       case 'resume_catch_up': {
         pilot.setMode(sessionId, 'active');
+        if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'active', 'catch_up');
         const roles = await sendToRoles(registry, sessionId, 'resume');
         const catchUp = await reconcileSession(sessionId, { registry, pilot, commitResult: false });
         result = { ok: catchUp?.ok !== false, reason: catchUp?.reason || 'catch_up_started', roles, catchUp };

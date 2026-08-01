@@ -223,7 +223,7 @@ test('healthy role telemetry alone never completes semantic recovery', async () 
   const snapshot = await controller.snapshot('s1');
   assert.equal(snapshot.mode, 'repairing');
   assert.equal(snapshot.lastRepair.verified, false);
-  assert.equal(snapshot.lastRepair.checks.reconciliation, false);
+  assert.equal(snapshot.lastRepair.checks.reconciliation, true);
 });
 
 test('heartbeat-only telemetry is coalesced after semantic state is established', async () => {

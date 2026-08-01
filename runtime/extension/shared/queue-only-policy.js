@@ -6,11 +6,10 @@ const BLOCKING_ROOT_CAUSES = new Set([
 ]);
 
 export function deriveQueueOnlyPolicy(snapshot = {}, rootCause = {}) {
-  const paused = snapshot.mode === 'paused';
   const code = String(rootCause.code || '');
   const blocked = BLOCKING_ROOT_CAUSES.has(code);
-  const active = Boolean(paused || blocked);
-  const reason = paused ? 'operator_hold' : (blocked ? code : '');
+  const active = blocked;
+  const reason = blocked ? code : '';
   const healthyCapabilities = ['sender', 'receiver'].every(
     role => snapshot?.[role]?.adapterCapabilityProbation?.writeSafe !== false
   );

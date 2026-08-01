@@ -31,6 +31,15 @@ import { renderRuntimeRole } from './render-runtime-health.js';
 import { ReconnectPolicy } from '../shared/reconnect-policy.js';
 import { buildTraceIndex, searchDeliveryTraces, inspectDeliveryTrace } from './trace-inspector-model.js';
 import { deriveStateCompatibility } from './state-compatibility-model.js';
+import { createCommandPaletteState, movePaletteSelection, recordPaletteCommand } from './command-palette-model.js';
+import { applyRovingTabIndex, handleToolbarKey } from './toolbar-navigation.js';
+import { applyFocusMode, deriveFocusMode } from './focus-mode-model.js';
+import { deriveInterviewRunbook } from '../shared/interview-runbook.js';
+import { deriveSessionClock } from '../shared/session-clock.js';
+import { deriveInterviewerSilence } from '../shared/interviewer-silence.js';
+import { deriveAttentionTarget } from '../shared/attention-model.js';
+import { deriveNextAction } from '../shared/next-action-model.js';
+import { commandCatalog, searchCommands } from '../shared/operator-command-catalog.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -49,7 +58,10 @@ const state = {
   efficiency: { full: 0, delta: 0, heartbeat: 0, lastMode: 'Waiting', changedSections: 0 },
   endPreparation: null,
   traceQuery: '',
-  selectedTraceId: ''
+  selectedTraceId: '',
+  commandPalette: { open: false, query: '', selectedIndex: 0, recent: [] },
+  commandPaletteReturnFocus: null,
+  toolbarIndex: 0
 };
 
 const byId = id => document.getElementById(id);
@@ -325,6 +337,126 @@ function renderReadiness(snapshot, now) {
       ? 'Every final remains durable until you resume forwarding.'
       : `Provider writes are blocked by ${String(policy.reason || 'runtime safety')}. Finals remain in the lossless inbox until ${String(policy.resumeWhen || 'the runtime is healthy')}.`);
   }
+}
+
+function renderLiveOperations(snapshot, now) {
+  const operations = snapshot?.liveOperations || {};
+  const liveSession = snapshot?.liveSession || {};
+  const clock = operations.clock || { elapsedMs: 0, segment: {} };
+  const runbook = operations.runbook || { completed: 0, total: 0, steps: [], ready: false };
+  const phase = String(liveSession.phase || operations.phase?.phase || 'setup');
+  text('liveSessionPhase', humanizeCode(phase));
+  text('liveSessionClock', formatDuration(clock.elapsedMs || 0));
+  const segment = clock.segment || {};
+  text('liveSessionDetail', segment.label
+    ? `${segment.label}${segment.remainingMs !== null && segment.remainingMs !== undefined ? ` - ${formatDuration(segment.remainingMs)} remaining` : ''}`
+    : phase === 'setup' ? 'Complete the preflight runbook before starting.'
+      : phase === 'ready' ? 'All prerequisites are healthy. Start when the interviewer is ready.'
+        : phase === 'paused' ? 'The session clock and forwarding are paused.'
+          : phase === 'debrief' ? 'Review delivery, answers, markers, and export evidence.'
+            : 'Live interview timing and delivery are active.');
+  document.querySelectorAll('[data-session-phase]').forEach(button => {
+    const current = button.dataset.sessionPhase === phase;
+    button.setAttribute('aria-current', current ? 'step' : 'false');
+    button.disabled = phase === 'ended';
+  });
+  text('runbookProgress', `${runbook.completed || 0} / ${runbook.total || 0}`);
+  const runbookSteps = byId('runbookSteps');
+  runbookSteps.replaceChildren();
+  for (const step of runbook.steps || []) {
+    const item = document.createElement('li');
+    item.dataset.complete = step.complete ? 'true' : 'false';
+    item.textContent = step.label;
+    if (!step.complete && step.detail) item.title = step.detail;
+    runbookSteps.append(item);
+  }
+  const start = byId('startMockAction');
+  start.disabled = !runbook.ready || ['active', 'paused', 'debrief', 'ended'].includes(phase);
+  start.textContent = phase === 'active' ? 'Mock active' : phase === 'paused' ? 'Mock paused' : 'Start mock';
+
+  const attention = operations.attention || { target: 'none', reason: 'caught_up', severity: 'none', action: '' };
+  const nextAction = operations.nextAction || { available: false };
+  const attentionPanel = document.querySelector('.attention-panel');
+  if (attentionPanel) attentionPanel.dataset.severity = attention.severity || 'none';
+  text('attentionTitle', attention.target === 'none' ? 'Caught up' : humanizeCode(attention.target));
+  text('attentionDetail', attention.reason === 'caught_up'
+    ? 'No operator action is required.'
+    : `${humanizeCode(attention.reason)}${nextAction.label ? ` - ${nextAction.label}` : ''}.`);
+  const actionButton = byId('nextBestAction');
+  actionButton.hidden = !nextAction.available;
+  actionButton.dataset.command = nextAction.command || '';
+  actionButton.textContent = nextAction.label || 'Run next action';
+
+  const silence = operations.silence || { state: 'inactive', ageMs: 0, label: 'Not timing interviewer silence' };
+  const silencePanel = document.querySelector('.silence-panel');
+  if (silencePanel) silencePanel.dataset.state = silence.state || 'inactive';
+  text('silenceState', silence.label || humanizeCode(silence.state));
+  text('silenceDetail', silence.state === 'capture_issue'
+    ? 'This is a capture/runtime issue, not interviewer silence. Run Check live.'
+    : silence.state === 'inactive' ? 'Starts when the mock interview becomes active.'
+      : `${formatDuration(silence.ageMs || 0)} since the last interviewer activity signal.`);
+  applyFocusMode(document, deriveFocusMode(snapshot));
+  const toolbar = byId('phaseRail');
+  if (toolbar) applyRovingTabIndex(toolbar, state.toolbarIndex);
+}
+
+function renderCommandPalette() {
+  state.commandPalette = createCommandPaletteState(state.snapshot || {}, state.commandPalette);
+  const dialog = byId('commandPalette');
+  dialog.hidden = !state.commandPalette.open;
+  if (!state.commandPalette.open) return;
+  const results = byId('commandPaletteResults');
+  results.replaceChildren();
+  state.commandPalette.results.forEach((command, index) => {
+    const button = document.createElement('button');
+    button.className = 'command-palette-result';
+    button.dataset.paletteIndex = String(index);
+    button.dataset.commandId = command.id;
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', String(index === state.commandPalette.selectedIndex));
+    button.disabled = command.available === false;
+    const label = document.createElement('span');
+    label.textContent = command.label;
+    const shortcut = document.createElement('kbd');
+    shortcut.textContent = command.shortcut || command.group;
+    const detail = document.createElement('small');
+    detail.textContent = command.available === false ? humanizeCode(command.blockedReason) : `${command.group} - ${humanizeCode(command.risk)}`;
+    button.append(label, shortcut, detail);
+    results.append(button);
+  });
+  const selected = state.commandPalette.selected;
+  const preview = byId('commandPalettePreview');
+  preview.replaceChildren();
+  const title = document.createElement('strong');
+  title.textContent = selected?.label || 'No command matches';
+  const detail = document.createElement('p');
+  detail.textContent = selected
+    ? `${humanizeCode(selected.risk)} risk. ${selected.available === false ? `Unavailable: ${humanizeCode(selected.blockedReason)}.` : 'Press Enter to run through the existing operation guard.'}`
+    : 'Change the search query.';
+  preview.append(title, detail);
+}
+
+function openCommandPalette(trigger = document.activeElement) {
+  state.commandPaletteReturnFocus = trigger instanceof HTMLElement ? trigger : null;
+  state.commandPalette = { ...state.commandPalette, open: true, query: '', selectedIndex: 0 };
+  byId('commandPaletteSearch').value = '';
+  renderCommandPalette();
+  queueMicrotask(() => byId('commandPaletteSearch').focus());
+}
+
+function closeCommandPalette() {
+  state.commandPalette = { ...state.commandPalette, open: false };
+  renderCommandPalette();
+  state.commandPaletteReturnFocus?.focus?.();
+  state.commandPaletteReturnFocus = null;
+}
+
+async function executePaletteSelection() {
+  const selected = state.commandPalette.selected;
+  if (!selected || selected.available === false) return;
+  const result = await runCommand(commandButton(selected.id), selected.id);
+  if (result?.ok) state.commandPalette.recent = recordPaletteCommand(state.commandPalette.recent, selected.id);
+  closeCommandPalette();
 }
 
 function renderLiveCommandCenter(snapshot, now) {
@@ -921,6 +1053,8 @@ function render(changedKeys = null) {
   const keys = changedKeys ? new Set(changedKeys) : null;
   const changed = (...values) => !keys || values.some(value => keys.has(value));
   renderOverview(state.snapshot, now);
+  renderLiveOperations(state.snapshot, now);
+  renderCommandPalette();
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
   if (changed('metrics', 'lastRepair', 'timeline', 'sender', 'receiver', 'ledger', 'deliveryForecast', 'recoveryBudget', 'lastTransportDrill')) renderReview(state.snapshot);
@@ -956,6 +1090,20 @@ async function runCommand(button, command, payload = {}) {
 }
 
 document.addEventListener('click', event => {
+  const phaseButton = event.target.closest('[data-session-phase]');
+  if (phaseButton) {
+    void runCommand(phaseButton, 'set_session_phase', { phase: phaseButton.dataset.sessionPhase, reason: 'phase_navigator' });
+    return;
+  }
+  const paletteResult = event.target.closest('[data-palette-index]');
+  if (paletteResult) {
+    state.commandPalette = { ...state.commandPalette, selectedIndex: Number(paletteResult.dataset.paletteIndex || 0) };
+    renderCommandPalette();
+    void executePaletteSelection();
+    return;
+  }
+  if (event.target.closest('#openCommandPalette')) { openCommandPalette(event.target.closest('#openCommandPalette')); return; }
+  if (event.target.closest('#closeCommandPalette')) { closeCommandPalette(); return; }
   const tab = event.target.closest('[data-view]');
   if (tab) {
     state.activeView = tab.dataset.view;
@@ -985,7 +1133,9 @@ document.addEventListener('click', event => {
       ? { value: state.snapshot?.batchState?.autoSubmit === false }
       : command === 'set_hold'
         ? { value: !Boolean(state.snapshot?.batchState?.hold) }
-        : {};
+        : command === 'set_focus_mode'
+          ? { value: !Boolean(state.snapshot?.liveSession?.focusMode) }
+          : {};
     void runCommand(button, command, payload);
   }
 });
@@ -1014,6 +1164,15 @@ byId('exportSupportBundle').addEventListener('click', async event => {
   setTimeout(() => URL.revokeObjectURL(url), 0);
   text('supportBundleStatus', 'Metadata-only support bundle exported.');
   showToast('Safe support bundle downloaded.', 'ok');
+});
+
+byId('commandPaletteSearch').addEventListener('input', event => {
+  state.commandPalette = { ...state.commandPalette, query: String(event.target.value || ''), selectedIndex: 0 };
+  renderCommandPalette();
+});
+byId('phaseRail').addEventListener('keydown', event => {
+  const result = handleToolbarKey(event.currentTarget, event, state.toolbarIndex);
+  if (result.handled) state.toolbarIndex = result.activeIndex;
 });
 
 byId('traceSearch').addEventListener('input', event => {
@@ -1122,6 +1281,31 @@ function runKeyboardCommand(command) {
 }
 
 document.addEventListener('keydown', event => {
+  const paletteOpen = state.commandPalette.open;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    paletteOpen ? closeCommandPalette() : openCommandPalette(document.activeElement);
+    return;
+  }
+  if (paletteOpen) {
+    if (event.key === 'Escape') { event.preventDefault(); closeCommandPalette(); return; }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      state.commandPalette = movePaletteSelection(state.commandPalette, event.key === 'ArrowDown' ? 1 : -1);
+      renderCommandPalette();
+      return;
+    }
+    if (event.key === 'Enter') { event.preventDefault(); void executePaletteSelection(); return; }
+    if (event.key === 'Tab') {
+      const nodes = [...byId('commandPalette').querySelectorAll('button:not([disabled]),input:not([disabled])')].filter(node => !node.hidden);
+      if (nodes.length) {
+        const first = nodes[0], last = nodes[nodes.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    }
+    return;
+  }
   if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
   if (event.target.matches('input,select,textarea,button')) return;
   const key = event.key.toLowerCase();

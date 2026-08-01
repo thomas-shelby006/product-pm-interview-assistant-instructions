@@ -4,6 +4,7 @@ import { RecoveryBudget } from './recovery-budget.js';
 import { createTraceSpan } from './delivery-trace.js';
 import { deriveBacklogForecast } from './backlog-forecast.js';
 import { RuntimePerformanceBudget } from './runtime-performance-budget.js';
+import { normalizeLiveSession, transitionLiveSession as transitionLiveSessionValue, markInterviewerActivity, setFocusMode } from './live-session-state.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -177,7 +178,8 @@ function normalizeSession(item) {
     answerState: item.answerState && typeof item.answerState === 'object' ? { ...item.answerState } : null,
     recoveryBudget: new RecoveryBudget(item.recoveryBudget || {}),
     performanceBudget: new RuntimePerformanceBudget(item.performanceBudget || {}),
-    lastTransportDrill: item.lastTransportDrill && typeof item.lastTransportDrill === 'object' ? JSON.parse(JSON.stringify(item.lastTransportDrill)) : null
+    lastTransportDrill: item.lastTransportDrill && typeof item.lastTransportDrill === 'object' ? JSON.parse(JSON.stringify(item.lastTransportDrill)) : null,
+    liveSession: normalizeLiveSession(item.liveSession, createdAt)
   };
 }
 
@@ -211,6 +213,39 @@ export class RuntimePilotState {
     session.updatedAt = now;
     this.record(sessionId, 'transport_mode', { mode: session.mode }, now);
     return session.mode;
+  }
+
+  setLiveSession(sessionId, value = {}, now = Date.now(), { record = true } = {}) {
+    const session = this.ensure(sessionId, now);
+    const previous = session.liveSession;
+    session.liveSession = normalizeLiveSession({ ...previous, ...(value && typeof value === 'object' ? value : {}) }, session.createdAt);
+    session.updatedAt = now;
+    if (record && previous.phase !== session.liveSession.phase) this.record(sessionId, 'live_session_phase', {
+      phase: session.liveSession.phase,
+      source: session.liveSession.history.at(-1)?.source || 'operator'
+    }, now);
+    return JSON.parse(JSON.stringify(session.liveSession));
+  }
+
+  transitionLiveSession(sessionId, phase, now = Date.now(), source = 'operator') {
+    const session = this.ensure(sessionId, now);
+    return this.setLiveSession(sessionId, transitionLiveSessionValue(session.liveSession, phase, now, source), now);
+  }
+
+  markInterviewerActivity(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.liveSession = markInterviewerActivity(session.liveSession, now);
+    session.updatedAt = now;
+    this.record(sessionId, 'interviewer_activity_marked', {}, now);
+    return JSON.parse(JSON.stringify(session.liveSession));
+  }
+
+  setFocusMode(sessionId, enabled, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.liveSession = setFocusMode(session.liveSession, enabled);
+    session.updatedAt = now;
+    this.record(sessionId, 'focus_mode_changed', { enabled: Boolean(enabled) }, now);
+    return JSON.parse(JSON.stringify(session.liveSession));
   }
 
   replayCommandResult(sessionId, requestId, now = Date.now()) {
@@ -961,7 +996,8 @@ export class RuntimePilotState {
       storagePressure: { ...session.storagePressure },
       proofArchive: { ...session.proofArchive },
       contextArmed: session.contextArmed,
-      contextArmedAt: session.contextArmedAt
+      contextArmedAt: session.contextArmedAt,
+      liveSession: JSON.parse(JSON.stringify(session.liveSession || {}))
     };
   }
 
@@ -998,7 +1034,8 @@ export class RuntimePilotState {
       answerState: session.answerState ? { ...session.answerState } : null,
       recoveryBudget: session.recoveryBudget.snapshot(),
       performanceBudget: session.performanceBudget.exportState(),
-      lastTransportDrill: session.lastTransportDrill ? JSON.parse(JSON.stringify(session.lastTransportDrill)) : null
+      lastTransportDrill: session.lastTransportDrill ? JSON.parse(JSON.stringify(session.lastTransportDrill)) : null,
+      liveSession: JSON.parse(JSON.stringify(session.liveSession || {}))
     }));
   }
 }

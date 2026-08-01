@@ -60,6 +60,40 @@
 
     <main>
       <section class="view active" id="panelOverview" data-view-panel="overview" role="tabpanel">
+        <section class="live-session-console" aria-label="Mock interview navigator">
+          <div class="session-phase-block">
+            <div class="panel-title"><span class="eyebrow">Mock interview</span><b id="liveSessionPhase">Setup</b></div>
+            <strong id="liveSessionClock">00:00</strong>
+            <p id="liveSessionDetail">Complete the preflight runbook before starting.</p>
+            <div class="phase-rail" id="phaseRail" role="toolbar" aria-label="Interview phase">
+              <button data-session-phase="setup">Setup</button><button data-session-phase="ready">Ready</button>
+              <button data-session-phase="active">Active</button><button data-session-phase="paused">Paused</button>
+              <button data-session-phase="debrief">Debrief</button>
+            </div>
+          </div>
+          <div class="runbook-block">
+            <div class="panel-title"><span class="eyebrow">Runbook</span><b id="runbookProgress">0 / 7</b></div>
+            <ol id="runbookSteps" class="runbook-steps"></ol>
+            <div class="live-session-actions" role="toolbar" aria-label="Interview actions">
+              <button class="primary" data-command="start_mock" id="startMockAction">Start mock</button>
+              <button data-command="mark_interviewer_activity">Mark interviewer active</button>
+              <button id="focusModeAction" data-command="set_focus_mode" aria-pressed="false">Enter Focus mode</button>
+              <button id="openCommandPalette" aria-haspopup="dialog">Commands <kbd>Ctrl K</kbd></button>
+            </div>
+          </div>
+          <article class="attention-panel" data-severity="none" aria-live="polite">
+            <span class="eyebrow">Current attention</span>
+            <strong id="attentionTitle">Caught up</strong>
+            <p id="attentionDetail">No operator action is required.</p>
+            <button id="nextBestAction" hidden>Run next action</button>
+          </article>
+          <article class="silence-panel" data-state="inactive">
+            <span class="eyebrow">Interviewer activity</span>
+            <strong id="silenceState">Not timing</strong>
+            <p id="silenceDetail">Starts when the mock interview becomes active.</p>
+          </article>
+        </section>
+
         <div class="control-grid" aria-label="Runtime controls">
           <button class="primary" id="primaryTransportAction" data-command="pause">Pause forwarding</button>
           <button data-command="resume_catch_up">Resume &amp; catch up</button>
@@ -388,6 +422,18 @@
       </div>
     </footer>
   </div>
+  <div class="command-palette" id="commandPalette" hidden role="dialog" aria-modal="true" aria-labelledby="commandPaletteTitle">
+    <div class="command-palette-card">
+      <div class="section-heading"><div><span class="eyebrow">Operator commands</span><h2 id="commandPaletteTitle">Command palette</h2></div><button id="closeCommandPalette" aria-label="Close command palette">Close</button></div>
+      <label class="command-search">Search commands<input id="commandPaletteSearch" type="search" autocomplete="off" placeholder="Pause, repair, submit, export..."></label>
+      <div class="command-palette-layout">
+        <div id="commandPaletteResults" class="command-palette-results" role="listbox" aria-label="Commands"></div>
+        <article id="commandPalettePreview" class="command-palette-preview"><strong>Select a command</strong><p>Availability and risk will appear here.</p></article>
+      </div>
+      <p class="command-palette-help">Arrow keys move. Enter runs the selected command. Escape closes and restores focus.</p>
+    </div>
+  </div>
+
   <div class="session-end-sheet" id="sessionEndSheet" hidden role="dialog" aria-modal="true" aria-labelledby="sessionEndTitle">
     <div class="session-end-card">
       <span class="eyebrow">Session safety gate</span>
