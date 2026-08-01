@@ -11,6 +11,7 @@ import {
 } from './dashboard-model.js';
 import { catchUpLabel, deriveLatencyRail, deriveLiveInbox } from './live-inbox-model.js';
 import { derivePaceGuard, paceLabel } from './pace-guard-model.js';
+import { diagnosticTone, groupRuntimeWarnings } from './diagnostics-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -331,7 +332,9 @@ function renderRole(roleName, role, now) {
 
 function renderWarnings(snapshot) {
   const container = byId('warningList');
+  const groupsContainer = byId('diagnosticGroups');
   container.replaceChildren();
+  groupsContainer.replaceChildren();
   if (!snapshot) {
     const item = document.createElement('p');
     item.className = 'empty';
@@ -341,6 +344,18 @@ function renderWarnings(snapshot) {
     container.append(item);
     text('healthScore', state.sessionEnded ? 'Ended' : 'Connecting');
     return;
+  }
+  const groups = groupRuntimeWarnings(snapshot.warnings || []);
+  for (const group of groups) {
+    const item = document.createElement('article');
+    item.className = 'diagnostic-group';
+    item.dataset.tone = diagnosticTone(group);
+    const label = document.createElement('span');
+    label.textContent = group.label;
+    const value = document.createElement('strong');
+    value.textContent = group.critical ? `${group.critical} critical` : group.count ? `${group.count} attention` : 'Healthy';
+    item.append(label, value);
+    groupsContainer.append(item);
   }
   const warnings = [...(snapshot.warnings || [])];
   if (!warnings.length) {

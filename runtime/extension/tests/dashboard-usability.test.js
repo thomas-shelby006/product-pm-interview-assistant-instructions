@@ -101,3 +101,9 @@ test('Pilot exposes Pace Guard without adding provider focus operations', () => 
   assert.match(styles, /\.pace-panel/);
   assert.doesNotMatch(dashboard, /chrome\.tabs\.update|chrome\.windows\.update|window\.focus\(/);
 });
+
+
+test('Pilot groups health markers into operational diagnostic categories', () => {
+  assert.match(markup, /id="diagnosticGroups"/);
+  assert.match(markup, /Diagnostic categories/);
+});
