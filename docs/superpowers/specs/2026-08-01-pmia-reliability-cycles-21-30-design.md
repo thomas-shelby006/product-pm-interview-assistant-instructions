@@ -98,3 +98,8 @@ After Cycle 30 is source-complete:
 ## Completion test
 
 The phase is complete only when all ten cycles are implemented under the three required buckets, the full automated gate exits zero, the isolated browser evidence proves the material live behavior, temporary task logs are removed after evidence replacement, the worktree is clean, and the updated standalone HTML atlas is verified at desktop and 320 CSS pixels.
+## Approved follow-on phase
+
+After this phase passes its complete verification contract, the work continues with fifteen additional evidence-driven cycles, numbered 31–45. Those cycles retain the same mandatory Bug fixes, New features and Implementation structure. Their exact scope will be selected from a fresh audit of the verified post–Cycle 30 runtime so the work remains meaningful rather than speculative.
+
+The standalone technical atlas is regenerated once after Cycle 45, using the current condensed atlas as its base and changing only material affected by the verified runtime improvements.

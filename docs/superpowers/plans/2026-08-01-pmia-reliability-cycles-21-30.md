@@ -204,3 +204,8 @@ Tasks 1â€“10 write their tests before implementation but do not run them individ
 ## Plan self-review
 
 All ten cycles map one-to-one to the design and include Bug fixes, New features and Implementation. The plan preserves the current owners, uses no disk-backed sensitive storage, includes the HTML update after system verification, and has no placeholders or open design decisions.
+## Follow-on phase: Cycles 31–45
+
+After Cycles 21–30 are fully implemented and verified, perform a fresh architecture, browser, failure-mode and stale-code audit against the resulting system. Define and implement fifteen additional substantive cycles, numbered 31–45, under the same three mandatory buckets: Bug fixes, New features and Implementation. Do not preselect low-value work before the post–Cycle 30 evidence is available.
+
+The technical systems atlas must be updated only once, after Cycle 45 verification. Use the current condensed atlas as the base, preserve unchanged material, and revise only sections, diagrams, comparisons, features and evidence affected by Cycles 21–45.
