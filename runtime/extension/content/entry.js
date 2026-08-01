@@ -781,6 +781,18 @@ async function startRuntime(runtimeConfig) {
 
   async function handleRuntimeCommand(command, payload = {}) {
     switch (String(command || '')) {
+      case 'self_test_probe':
+        return {
+          ok: true,
+          probe: 'pmia_self_test',
+          role: runtimeConfig.role,
+          provider: runtimeConfig.provider,
+          instanceId: runtimeInstanceId,
+          composerReady: Boolean(adapter.findComposer?.()),
+          generating: Boolean(adapter.isGenerating?.()),
+          visibilityState: String(document.visibilityState || 'unknown'),
+          at: Date.now()
+        };
       case 'pause':
         transportPaused = true;
         overlay.setStatus('FORWARDING PAUSED', 'warn');

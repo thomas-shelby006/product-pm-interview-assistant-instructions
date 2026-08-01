@@ -47,6 +47,15 @@ function setup({ requestRole = null } = {}) {
           if (message.command === 'reconcile_delivery') {
             return { ok: true, replayed: message.payload.pending.map(item => item.id) };
           }
+          if (message.command === 'self_test_probe') {
+            return {
+              ok: true,
+              probe: 'pmia_self_test',
+              role: tabId === 1 ? 'sender' : 'receiver',
+              composerReady: true,
+              visibilityState: 'hidden'
+            };
+          }
           return { ok: true };
         }
         if (message.type === 'PMIA_PREFLIGHT_PING') {
@@ -364,16 +373,17 @@ test('heartbeat telemetry cannot clear repair without reconciliation', async () 
 });
 
 
-test('repair schedules bounded background verification without activating tabs', async () => {
+test('repair schedules durable bounded verification without activating tabs', async () => {
   const { readFile } = await import('node:fs/promises');
   const { dirname, resolve } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const source = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
-  assert.match(source, /function scheduleRecoveryVerification\(sessionId, attempt = 0\)/);
+  assert.match(source, /async function scheduleRecoveryVerification\(sessionId, pilot, attempt = 0\)/);
   assert.match(source, /if \(attempt >= 4\) return false/);
-  const helper = source.slice(source.indexOf('function scheduleRecoveryVerification'), source.indexOf('async function repair'));
-  assert.doesNotMatch(helper, /active:\s*true|focused:\s*true/);
+  const helper = source.slice(source.indexOf('async function scheduleRecoveryVerification'), source.indexOf('async function scheduleRecoveryTimeout'));
+  assert.match(helper, /scheduleRecoveryAlarm/);
+  assert.doesNotMatch(helper, /setTimeout|active:\s*true|focused:\s*true/);
 });
 
 
@@ -412,4 +422,21 @@ test('end session remains blocked while durable sender outbox items exist', asyn
   assert.equal(result.ok, false);
   assert.equal(result.blocked, true);
   assert.ok(registry.getSession('s1'));
+});
+
+
+test('active runtime self-test stores safe role storage and dashboard results', async () => {
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  const result = await controller.handleCommand({
+    sessionId: 's1', requestId: 'self-test-1', command: 'run_self_test'
+  });
+  assert.equal(result.roles.sender.ok, true);
+  assert.equal(result.roles.receiver.ok, true);
+  assert.equal(result.storage.ok, true);
+  assert.equal(result.dashboard.connected, false);
+  assert.equal(result.ok, false);
+  const snapshot = await controller.snapshot('s1');
+  assert.equal(snapshot.selfTest.completedAt, result.completedAt);
+  assert.equal(JSON.stringify(snapshot.selfTest).includes('Question'), false);
 });

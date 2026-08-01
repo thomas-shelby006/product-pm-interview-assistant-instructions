@@ -6,7 +6,7 @@ test('storage accounting separates actionable text from proven and telemetry', (
   const categories = estimateStorageCategories([{ sessionId: 's1', ledger: [
     { id: 'q1', state: 'persisted', envelope: { text: 'keep me' } },
     { id: 'q2', state: 'proven', envelope: { text: 'compact me' } }
-  ], timeline: [{ type: 'heartbeat' }], metrics: {}, processedCommandIds: [] }]);
+  ], timeline: [{ type: 'heartbeat' }], metrics: {}, commandJournal: [] }]);
   assert.ok(categories.actionable > 0);
   assert.ok(categories.proven > 0);
   assert.ok(categories.telemetry > 0);

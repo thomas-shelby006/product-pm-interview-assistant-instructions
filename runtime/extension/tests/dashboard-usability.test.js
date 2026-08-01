@@ -243,3 +243,11 @@ test('Runtime Pilot uses a two-phase session-end safety sheet', () => {
   assert.match(dashboard, /prepare_end_session/);
   assert.match(dashboard, /confirmToken/);
 });
+
+
+test('Runtime Pilot exposes active no-content self-test and freshness', () => {
+  assert.match(markup, /data-command="run_self_test"/);
+  assert.match(markup, /id="selfTestState"/);
+  assert.match(markup, /id="selfTestDetail"/);
+  assert.match(dashboard, /deriveSelfTestView\(snapshot, now\)/);
+});

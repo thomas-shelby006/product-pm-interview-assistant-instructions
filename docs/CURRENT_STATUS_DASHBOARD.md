@@ -1,6 +1,6 @@
 # Current Status Dashboard
 
-Last updated: 2026-08-01
+Last updated: 2026-08-01 (Cycles 21-30 source-complete)
 
 ## Active candidate system
 
@@ -49,3 +49,21 @@ Last updated: 2026-08-01
 ## 2026-08-01 lossless hardening candidate
 
 Implementation Cycles 11-20 are source-complete. The candidate now includes per-session mutation serialization, contiguous receiver sequencing, ordered sender replay, exact batch proof identity, quota backpressure, Readiness Gate, delta updates, explicit recovery state, and Safe Health Report. Automated and isolated-browser evidence is pending the consolidated Cycle 20 gate and must not be inferred from source completion.
+
+
+## Reliability phase 21-30
+
+| Area | Source-complete capability | Verification status |
+|---|---|---|
+| Hidden runtime | Mutation-first provider scheduling and real ChatGPT Send-control readiness | Consolidated gate pending |
+| Command control | Exact result replay and recent command journal | Consolidated gate pending |
+| Transport | Direct-port circuit guard with immediate message fallback | Consolidated gate pending |
+| Batching | Ordered provider-safe partitions with complete lossless remainder | Consolidated gate pending |
+| Composer | Explicit manual/restore/merge conflict resolution | Consolidated gate pending |
+| Delivery SLA | Bounded catch-up, live-check, and repair escalation | Consolidated gate pending |
+| Recovery | Persisted `chrome.alarms` verification and timeout | Consolidated gate pending |
+| Sender outbox | Extension-session restoration with rollback and fail-closed forwarding | Consolidated gate pending |
+| Shutdown | Authoritative two-phase end-session safety gate | Consolidated gate pending |
+| Readiness | Fresh active no-content self-test required for Ready | Consolidated gate pending |
+
+A second evidence-driven phase, Cycles 31-45, begins only after this phase passes its full automated and isolated-browser gate. The condensed technical systems atlas will be updated once after Cycle 45.

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PM Interview Dual-Provider Runtime",
   "version": "0.7.0",
-  "description": "Lossless low-latency self-healing PM interview runtime with provisional previews, a live Runtime Pilot Dashboard, ephemeral session state, non-preemptive batching, background-safe recovery, readiness checks, and provider-rendered delivery proof.",
+  "description": "Lossless low-latency self-healing PM interview runtime with provisional previews, a live Runtime Pilot Dashboard, ephemeral session state, non-preemptive batching, background-safe recovery, active readiness self-tests, and provider-rendered delivery proof.",
   "permissions": [
     "storage",
     "alarms",

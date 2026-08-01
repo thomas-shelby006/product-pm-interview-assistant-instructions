@@ -9,6 +9,7 @@ import { utf8Bytes } from './storage-accounting.js';
 import { deriveDeliverySla } from './delivery-sla-policy.js';
 import { clearRecoveryAlarms, parseRecoveryAlarmName, scheduleRecoveryAlarm } from './recovery-schedule.js';
 import { prepareSessionEnd, senderOutboxStorageKey, validateSessionEnd } from './session-end-guard.js';
+import { runRuntimeSelfTest } from './runtime-self-test.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
 import { transitionRecovery } from './recovery-state-machine.js';
@@ -598,6 +599,39 @@ export function createRuntimePilotController({
     return { sender, receiver };
   }
 
+  async function activeSelfTest(sessionId, registry, pilot) {
+    const dashboardConnections = Number(pilot.snapshot(sessionId)?.dashboardConnections || 0);
+    const result = await runRuntimeSelfTest({
+      dashboardConnections,
+      async probeRole(role, nonce) {
+        return sendRuntimeCommand(registry, sessionId, role, 'self_test_probe', { nonce });
+      },
+      async storageRoundTrip(nonce) {
+        const key = `pmia_self_test:${sessionId}`;
+        const value = { nonce: String(nonce), at: Date.now() };
+        try {
+          await storageArea.set({ [key]: value });
+          const stored = await storageArea.get(key);
+          await storageArea.remove(key);
+          return { ok: true, matched: stored?.[key]?.nonce === value.nonce };
+        } catch (error) {
+          await storageArea.remove(key).catch(() => {});
+          return { ok: false, error: safeError(error), matched: false };
+        }
+      }
+    });
+    pilot.setSelfTest(sessionId, result);
+    pilot.record(sessionId, 'runtime_self_test', {
+      ok: result.ok,
+      elapsedMs: result.elapsedMs,
+      senderRttMs: result.roles.sender.rttMs,
+      receiverRttMs: result.roles.receiver.rttMs,
+      storageRttMs: result.storage.rttMs,
+      dashboardConnected: result.dashboard.connected
+    });
+    return result;
+  }
+
   async function submitLedgerItem(sessionId, itemId, registry, pilot) {
     const item = pilot.snapshot(sessionId)?.ledger?.find(candidate => candidate.id === itemId);
     if (!item) return { ok: false, error: 'ledger_item_missing' };
@@ -1015,6 +1049,9 @@ export function createRuntimePilotController({
         break;
       case 'check_live':
         result = await liveCheck(sessionId, registry, pilot);
+        break;
+      case 'run_self_test':
+        result = await activeSelfTest(sessionId, registry, pilot);
         break;
       case 'repair_runtime':
         result = await repair(sessionId, registry, pilot);

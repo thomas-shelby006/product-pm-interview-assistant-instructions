@@ -38,6 +38,7 @@
       <div class="readiness-actions">
         <button data-command="check_live">Check live</button>
         <button data-command="repair_runtime">Repair</button>
+        <button data-command="run_self_test">Run self-test</button>
       </div>
     </section>
 
@@ -157,6 +158,13 @@
             <div class="panel-title"><span class="eyebrow">Batch plan</span><b id="batchPlanState">No batches</b></div>
             <strong id="batchPlanTitle">Nothing waiting</strong>
             <p id="batchPlanDetail">Accumulated finals will be partitioned only when provider limits require it.</p>
+          </article>
+
+          <article class="live-panel self-test-panel" data-state="missing">
+            <div class="panel-title"><span class="eyebrow">Active self-test</span><b id="selfTestState">Not run</b></div>
+            <strong id="selfTestTitle">Control plane not actively verified</strong>
+            <p id="selfTestDetail">Run the no-content pulse before relying on Ready.</p>
+            <button data-command="run_self_test">Run self-test</button>
           </article>
 
           <article class="live-panel delivery-sla-panel">

@@ -11,10 +11,17 @@ test('Safe Health Report excludes question answer and setup text', () => {
     ledger: [{ envelope: { text: 'SECRET LEDGER TEXT' } }],
     ledgerCounts: { total: 1, pending: 0, inFlight: 0, proven: 1 },
     batchState: {}, storagePressure: { level: 'normal', percent: 0, breakdown: {} },
+    senderOutboxState: { count: 0 },
+    selfTest: {
+      ok: true, completedAt: 1000, elapsedMs: 30,
+      roles: { sender: { rttMs: 10 }, receiver: { rttMs: 12 } },
+      storage: { rttMs: 8 }, dashboard: { connected: true }
+    },
     warnings: [], metrics: {}, timeline: [{ type: 'session_armed', data: { text: 'SECRET SETUP' } }],
     lastRepair: null, uptimeMs: 10
   }, 1000);
   const json = JSON.stringify(report);
   assert.doesNotMatch(json, /SECRET QUESTION|SECRET ANSWER|SECRET LEDGER TEXT|SECRET SETUP/);
   assert.equal(report.readiness.state, 'ready');
+  assert.deepEqual(report.selfTest, { ok: true, completedAt: 1000, elapsedMs: 30, senderRttMs: 10, receiverRttMs: 12, storageRttMs: 8, dashboardConnected: true });
 });

@@ -38,8 +38,13 @@ export function deriveReadiness(snapshot, now = Date.now()) {
 
   const gapEvent = latestEvent(snapshot, ['sequence_gap', 'sequence_gap_cleared']);
   if (gapEvent?.type === 'sequence_gap') blockers.push(blocker('sequence_gap', `Waiting for sequence ${gapEvent.data?.expectedSeq || '?'}`, 'check_live'));
-  const outboxEvent = latestEvent(snapshot, ['outbox_state']);
-  if (Number(outboxEvent?.data?.count || 0) > 0) blockers.push(blocker('outbox_retained', `${outboxEvent.data.count} Window 1 final(s) await persistence`, 'retry_outbox'));
+  const outboxCount = Number(snapshot?.senderOutboxState?.count || 0);
+  if (outboxCount > 0) blockers.push(blocker('outbox_retained', `${outboxCount} Window 1 final(s) await persistence`, 'retry_outbox'));
+  const selfTest = snapshot?.selfTest;
+  const selfTestAge = selfTest?.completedAt ? Math.max(0, Number(now) - Number(selfTest.completedAt)) : Infinity;
+  if (!selfTest) blockers.push(blocker('self_test_missing', 'Active runtime self-test has not run', 'run_self_test'));
+  else if (selfTest.ok !== true) blockers.push(blocker('self_test_failed', 'Active runtime self-test did not pass', 'run_self_test'));
+  else if (selfTestAge > 30000) blockers.push(blocker('self_test_stale', 'Active runtime self-test is stale', 'run_self_test'));
 
   const actions = [...new Set(blockers.map(item => item.action).filter(Boolean))];
   return blockers.length

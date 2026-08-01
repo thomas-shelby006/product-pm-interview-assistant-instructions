@@ -253,3 +253,8 @@ test('dashboard protocol normalizes prepare and confirmed end payloads', () => {
   assert.equal(end.payload.confirmToken, 'token');
   assert.equal(end.payload.mode, 'archive_and_end');
 });
+
+
+test('dashboard protocol accepts active runtime self-test', () => {
+  assert.equal(protocolModule.normalizeDashboardCommand({ sessionId: 's', requestId: 'self-test', command: 'run_self_test', payload: {} })?.command, 'run_self_test');
+});

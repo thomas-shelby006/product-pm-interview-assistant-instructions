@@ -182,3 +182,61 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** The new validator scans packaged runtime surfaces but excludes tests and scripts that intentionally contain negative-test markers. No transport, provider, queue, or privacy ownership boundary changed.
 
 **Why this is superior:** It removes a visible release defect and makes control outcomes safer and clearer without adding a second UI or runtime path.
+
+
+## Reliability cycles 21-30
+
+Each cycle was constrained to **Bug fixes**, **New features**, and **Implementation**. Regression coverage was written with the source and execution was deferred until all ten cycles were source-complete.
+
+### Cycle 21 - Hidden Runtime Guard
+- **Bug fixes:** hidden Window 2 no longer depends on background-throttled animation frames or timers; ChatGPT waits for its real enabled Send control.
+- **New features:** Pilot shows visibility, submit wait reason, and the last scheduler wake source.
+- **Implementation:** DOM-mutation-first provider yield with frame/timer fallbacks and content-free scheduler telemetry.
+
+### Cycle 22 - Command Result Journal
+- **Bug fixes:** a retried dashboard request now receives its original result instead of a generic duplicate acknowledgement.
+- **New features:** Pilot shows the five latest commands, outcomes, durations, and replay counts.
+- **Implementation:** bounded session-only command-result journal with migration from legacy processed IDs.
+
+### Cycle 23 - Transport Circuit Guard
+- **Bug fixes:** repeated unhealthy direct-port waits no longer add full timeout latency.
+- **New features:** Pilot shows Direct, Fallback, Open Circuit, and Probing states with RTT.
+- **Implementation:** per-role circuit state that preserves the existing one-time-message fallback.
+
+### Cycle 24 - Lossless Batch Partitioning
+- **Bug fixes:** accumulated drafts cannot grow into one impractical provider submission.
+- **New features:** Pilot shows protected question count and sequential batch plan.
+- **Implementation:** deterministic eight-member/approximately 12,000-character partitions without splitting, truncating, reordering, or dropping a question.
+
+### Cycle 25 - Draft Conflict Resolver
+- **Bug fixes:** a manual Window 2 edit no longer leaves delivery ambiguously deadlocked.
+- **New features:** Keep Manual, Restore PMIA Draft, and Merge PMIA Below Manual.
+- **Implementation:** recoverable composer ownership with explicit operator resolution and unchanged proof membership.
+
+
+### Cycle 26 - Delivery SLA Guard
+- **Bug fixes:** protected finals no longer remain silently stalled without bounded escalation.
+- **New features:** Pilot shows oldest unresolved age, delivery target, escalation phase, and next action.
+- **Implementation:** heartbeat-driven catch-up, live-check, and repair policy with answering, pause, storage, and cooldown suppression.
+
+### Cycle 27 - Durable Recovery Scheduling
+- **Bug fixes:** recovery verification and timeout no longer disappear when the Manifest V3 worker sleeps.
+- **New features:** Pilot shows the next persisted recovery deadline, source, and attempt.
+- **Implementation:** session-persisted `chrome.alarms`, stale-alarm rejection, success cancellation, and mutation-lane execution.
+
+### Cycle 28 - Reload-Safe Sender Outbox
+- **Bug fixes:** an unpersisted Window 1 final survives sender reload and runtime-instance replacement.
+- **New features:** Pilot shows restored count, recovery source, and storage failure state.
+- **Implementation:** background-authorized extension-session adapter, async rollback-safe outbox commits, ordered replay, migration, and fail-closed forwarding.
+
+### Cycle 29 - Safe Session Termination
+- **Bug fixes:** shutdown cannot delete unresolved, in-flight, or unpersisted finals without an explicit archive-and-end decision.
+- **New features:** end-session safety sheet with exact counts, Export First, Archive and End, and Cancel.
+- **Implementation:** authoritative outbox read, short-lived confirmation token, two-phase controller cleanup, recovery-alarm cancellation, and background AHK request.
+
+### Cycle 30 - Active Runtime Self-Test
+- **Bug fixes:** passive heartbeat and capability evidence alone can no longer produce Ready.
+- **New features:** no-content Self-Test Pulse with Window 1, Window 2, storage, dashboard, RTT, and freshness results.
+- **Implementation:** role command probes, storage round trip, session-only result state, Readiness Gate integration, Safe Health Report fields, and release-validator reachability.
+
+**Source-complete status:** Cycles 21-30 are implemented. Automated and isolated-browser evidence must come from the forthcoming consolidated gate; it is not inferred from source review.

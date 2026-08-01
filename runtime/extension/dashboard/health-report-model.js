@@ -49,6 +49,15 @@ export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {
       checks: recovery.items.map(item => ({ id: item.id, complete: item.complete })),
       error: recovery.error
     },
+    selfTest: snapshot.selfTest ? {
+      ok: Boolean(snapshot.selfTest.ok),
+      completedAt: Number(snapshot.selfTest.completedAt || 0),
+      elapsedMs: Number(snapshot.selfTest.elapsedMs || 0),
+      senderRttMs: Number(snapshot.selfTest.roles?.sender?.rttMs || 0),
+      receiverRttMs: Number(snapshot.selfTest.roles?.receiver?.rttMs || 0),
+      storageRttMs: Number(snapshot.selfTest.storage?.rttMs || 0),
+      dashboardConnected: Boolean(snapshot.selfTest.dashboard?.connected)
+    } : null,
     efficiency: {
       full: Number(efficiency.full || 0),
       delta: Number(efficiency.delta || 0),

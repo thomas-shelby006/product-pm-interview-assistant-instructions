@@ -142,7 +142,8 @@ function normalizeSession(item) {
     deliverySla: item.deliverySla && typeof item.deliverySla === 'object' ? { ...item.deliverySla } : { state: 'clear', action: '', nextAction: '', oldestAgeMs: 0, targetMs: 20000, evaluatedAt: 0, lastAction: '', lastActionAt: 0, lastResult: null },
     recoverySchedules: Array.isArray(item.recoverySchedules) ? item.recoverySchedules.filter(value => value?.alarmName && value?.dueAt).map(value => ({ ...value })) : [],
     endGuard: item.endGuard && typeof item.endGuard === 'object' ? { ...item.endGuard, counts: { ...(item.endGuard.counts || {}) } } : null,
-    senderOutboxState: normalizeOutboxState(item.senderOutboxState)
+    senderOutboxState: normalizeOutboxState(item.senderOutboxState),
+    selfTest: item.selfTest && typeof item.selfTest === 'object' ? JSON.parse(JSON.stringify(item.selfTest)) : null
   };
 }
 
@@ -201,6 +202,13 @@ export class RuntimePilotState {
     };
     session.updatedAt = now;
     return { ...session[role] };
+  }
+
+  setSelfTest(sessionId, value = null, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.selfTest = value ? JSON.parse(JSON.stringify(value)) : null;
+    session.updatedAt = now;
+    return session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null;
   }
 
   setSenderOutboxState(sessionId, value = {}, now = Date.now()) {
@@ -722,6 +730,7 @@ export class RuntimePilotState {
       recoverySchedules: (session.recoverySchedules || []).map(value => ({ ...value })),
       endGuard: session.endGuard ? { ...session.endGuard, counts: { ...(session.endGuard.counts || {}) } } : null,
       senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) },
+      selfTest: session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null,
       metrics: {
         ...session.metrics,
         deliverySuccessRate: session.metrics.delivered + session.metrics.failed
@@ -767,7 +776,8 @@ export class RuntimePilotState {
       deliverySla: { ...(session.deliverySla || {}) },
       recoverySchedules: (session.recoverySchedules || []).map(value => ({ ...value })),
       endGuard: session.endGuard ? { ...session.endGuard, counts: { ...(session.endGuard.counts || {}) } } : null,
-      senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) }
+      senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) },
+      selfTest: session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null
     }));
   }
 }

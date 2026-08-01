@@ -256,3 +256,7 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 .session-end-counts span { display: grid; gap: .2rem; padding: .65rem; border: 1px solid var(--line); border-radius: .7rem; text-align: center; }
 .session-end-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
 .session-end-actions button { flex: 1 1 8rem; }
+
+.self-test-panel[data-state="passed"] { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
+.self-test-panel[data-state="failed"] { border-color: color-mix(in srgb, var(--danger) 65%, var(--line)); }
+.self-test-panel[data-state="stale"] { border-color: color-mix(in srgb, var(--amber) 60%, var(--line)); }

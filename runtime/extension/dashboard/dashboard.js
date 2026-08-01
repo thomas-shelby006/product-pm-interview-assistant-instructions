@@ -26,6 +26,7 @@ import { deriveDraftConflict } from './draft-conflict-model.js';
 import { deriveDeliverySlaView } from './delivery-sla-model.js';
 import { deriveRecoverySchedule } from './recovery-schedule-model.js';
 import { deriveSessionEndView } from './session-end-model.js';
+import { deriveSelfTestView } from './self-test-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -358,6 +359,9 @@ function renderLiveCommandCenter(snapshot, now) {
     text('deliverySlaState', '--');
     text('deliverySlaTitle', 'Waiting for delivery age');
     text('deliverySlaDetail', 'No delivery SLA evidence is available yet.');
+    text('selfTestState', '--');
+    text('selfTestTitle', 'Waiting for active self-test state');
+    text('selfTestDetail', 'No control-plane pulse is available yet.');
     text('oldestInboxAge', '--');
     renderLatencyRail(null);
     return;
@@ -475,6 +479,19 @@ function renderLiveCommandCenter(snapshot, now) {
       : inbox.storage.level === 'high'
         ? 'Proven history is compacting; unresolved finals are untouched.'
         : 'Critical pressure. Unresolved finals remain protected; export or end the session soon.');
+  const selfTest = deriveSelfTestView(snapshot, now);
+  const selfTestPanel = document.querySelector('.self-test-panel');
+  if (selfTestPanel) selfTestPanel.dataset.state = selfTest.state;
+  text('selfTestState', selfTest.label);
+  text('selfTestTitle', selfTest.state === 'passed'
+    ? `Verified ${formatDuration(selfTest.ageMs)} ago`
+    : selfTest.state === 'failed'
+      ? 'One or more active checks failed'
+      : selfTest.state === 'stale'
+        ? 'Previous pass is older than 30 seconds'
+        : 'Control plane not actively verified');
+  text('selfTestDetail', selfTest.detail);
+
   const deliverySla = deriveDeliverySlaView(snapshot, now);
   const slaPanel = document.querySelector('.delivery-sla-panel');
   if (slaPanel) slaPanel.dataset.state = deliverySla.state;

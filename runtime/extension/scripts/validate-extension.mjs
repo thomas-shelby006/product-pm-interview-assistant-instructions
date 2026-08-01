@@ -14,10 +14,12 @@ const required = [
   'dashboard/dashboard-model.js',
   'dashboard/readiness-model.js',
   'dashboard/health-report-model.js',
+  'dashboard/self-test-model.js',
   'shared/delivery-ledger.js',
   'shared/contiguous-sequence-buffer.js',
   'shared/session-mutation-coordinator.js',
   'shared/storage-accounting.js',
+  'shared/runtime-self-test.js',
   'shared/snapshot-delta.js',
   'shared/recovery-state-machine.js'
 ];

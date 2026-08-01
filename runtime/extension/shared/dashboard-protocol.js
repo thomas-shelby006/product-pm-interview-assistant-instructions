@@ -14,6 +14,7 @@ const COMMANDS = new Set([
   'archive_all',
   'archive_proven',
   'check_live',
+  'run_self_test',
   'repair_runtime',
   'resend_context',
   'toggle_mic',
