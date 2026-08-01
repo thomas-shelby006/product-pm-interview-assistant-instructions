@@ -212,3 +212,35 @@ test('receiver runtime submits partitioned batches sequentially without losing l
   await runtime.answerComplete(planner.active().id);
   assert.deepEqual(submitted, [['q1', 'q2'], ['q3', 'q4'], ['q5']]);
 });
+
+test('terminal no-response releases proven active batch and advances next once', async () => {
+  const provider = adapter();
+  const submitted = [];
+  const runtime = createReceiverBatchRuntime({
+    adapter: provider,
+    async submitBatch(batch) { submitted.push(batch.id); return { ok: true, proof: { verified: true } }; }
+  });
+  await runtime.accept(envelope('q1', 1));
+  provider.generating = true;
+  await runtime.accept(envelope('q2', 2));
+  provider.generating = false;
+  const activeId = runtime.snapshot().active.id;
+  await runtime.answerComplete(activeId, { answerState: { state: 'no_response', reason: 'answer_never_started' } });
+  assert.equal(submitted.length, 2);
+  assert.equal(runtime.snapshot().active.id, submitted[1]);
+});
+
+test('duplicate terminal answer event never advances twice', async () => {
+  const provider = adapter();
+  const submitted = [];
+  const runtime = createReceiverBatchRuntime({
+    adapter: provider,
+    async submitBatch(batch) { submitted.push(batch.id); return { ok: true, proof: { verified: true } }; }
+  });
+  await runtime.accept(envelope('q1', 1));
+  const activeId = runtime.snapshot().active.id;
+  await runtime.answerComplete(activeId, { answerState: { state: 'timed_out' } });
+  const result = await runtime.answerComplete(activeId, { answerState: { state: 'complete' } });
+  assert.equal(result.reason, 'no_active_batch');
+  assert.equal(submitted.length, 1);
+});

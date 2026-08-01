@@ -32,3 +32,29 @@ test('delivery SLA respects action cooldown', () => {
   assert.equal(decision.state, 'cooldown');
   assert.equal(decision.action, '');
 });
+
+test('proven active answer suppresses delivery repair for protected later finals', () => {
+  const result = deriveDeliverySla({
+    mode: 'active',
+    ledger: [{ id: 'q2', state: 'persisted', persistedAt: 1000 }],
+    batchState: { active: { batchId: 'b1', proof: { verified: true } } },
+    answerState: { state: 'waiting', batchId: 'b1' },
+    receiver: { generating: false },
+    storagePressure: { level: 'normal' }
+  }, 100000);
+  assert.equal(result.action, '');
+  assert.equal(result.state, 'answer_waiting');
+  assert.equal(result.reason, 'proven_batch_answer_pending');
+});
+
+test('terminal answer does not suppress genuinely unresolved delivery', () => {
+  const result = deriveDeliverySla({
+    mode: 'active',
+    ledger: [{ id: 'q2', state: 'persisted', persistedAt: 1000 }],
+    batchState: { active: null },
+    answerState: { state: 'no_response', batchId: 'b1' },
+    receiver: { generating: false },
+    storagePressure: { level: 'normal' }
+  }, 100000);
+  assert.equal(result.action, 'repair');
+});

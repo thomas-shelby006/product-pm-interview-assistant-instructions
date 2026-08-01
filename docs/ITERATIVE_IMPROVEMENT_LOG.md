@@ -240,3 +240,28 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** role command probes, storage round trip, session-only result state, Readiness Gate integration, Safe Health Report fields, and release-validator reachability.
 
 **Source-complete status:** Cycles 21-30 are implemented. Automated and isolated-browser evidence must come from the forthcoming consolidated gate; it is not inferred from source review.
+
+## Cycle 31 - Generation Truth Reconciler
+- **Bug fixes:** stale receiver `generating` state now expires when current stop, text-growth and final-hint evidence contradict it.
+- **New features:** reason-coded generation confidence and evidence timestamps.
+- **Implementation:** pure generation reconciler shared by receiver answer observation and telemetry; provider adapters expose stop-control evidence.
+
+## Cycle 32 - Explicit Answer Lifecycle
+- **Bug fixes:** rendered delivery proof is no longer treated as answer completion.
+- **New features:** text-free waiting, streaming, complete, no-response, timed-out and cancelled answer states.
+- **Implementation:** pure answer lifecycle with session-state serialization and safe telemetry checkpoints.
+
+## Cycle 33 - Adaptive Answer Deadlines
+- **Bug fixes:** pages that never begin answering no longer hold a proven batch for the full hard timeout.
+- **New features:** separate answer-start, stream-stall and hard-cap deadlines with reason codes.
+- **Implementation:** evidence-driven timeout policy integrated into answer capture while retaining a 120-second cap for genuine streams.
+
+## Cycle 34 - Delivery SLA Scope Correction
+- **Bug fixes:** a proven active batch awaiting answer observation cannot trigger delivery repair for protected later finals.
+- **New features:** explicit informational `answer_waiting` SLA state.
+- **Implementation:** delivery policy recognizes verified active proof and answer lifecycle separately from unresolved transport failure.
+
+## Cycle 35 - Answer-Safe Batch Advancement
+- **Bug fixes:** no-response, timeout and cancellation terminal states release active batch ownership exactly once.
+- **New features:** terminal answer outcome is retained beside exact delivery proof in completed-batch state.
+- **Implementation:** receiver batch runtime maps terminal answer states to distinct events and advances the next protected partition deterministically.

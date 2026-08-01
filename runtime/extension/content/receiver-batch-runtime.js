@@ -239,9 +239,17 @@ export function createReceiverBatchRuntime({
       if (!active) return { ok: true, reason: 'no_active_batch' };
       if (batchId && active.id !== batchId) return { ok: false, error: 'batch_mismatch' };
       const completed = planner.completeActive();
-      emit(result?.timeout ? 'batch_answer_timeout' : 'batch_answer_complete', {
+      const answerState = String(result?.answerState?.state || (result?.timeout ? 'timed_out' : 'complete'));
+      const eventType = {
+        complete: 'batch_answer_complete',
+        no_response: 'batch_answer_no_response',
+        timed_out: 'batch_answer_timeout',
+        cancelled: 'batch_answer_cancelled'
+      }[answerState] || 'batch_answer_complete';
+      emit(eventType, {
         batchId: completed.id,
         memberIds: completed.prompt.memberIds,
+        answerState: result?.answerState || { state: answerState },
         answer: result?.answer || result || null,
         proof: result?.proof || null
       });

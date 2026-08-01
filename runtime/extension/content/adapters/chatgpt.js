@@ -142,6 +142,7 @@ export function createChatGptAdapter(doc = document) {
       if (clickFirst(doc, SEND_SELECTORS)) return true;
       return submitWithEnter(findComposer());
     },
+    hasStopControl() { return Boolean(firstMatch(doc, STOP_SELECTORS)); },
     isGenerating() { return Boolean(firstMatch(doc, STOP_SELECTORS)); },
     stopGenerating() { return clickFirst(doc, STOP_SELECTORS); },
     getLatestUserText,

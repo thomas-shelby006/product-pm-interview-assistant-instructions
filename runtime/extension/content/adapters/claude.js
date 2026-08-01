@@ -206,6 +206,7 @@ export function createClaudeAdapter(doc = document) {
     submit() {
       return clickFirst(doc, SEND_SELECTORS);
     },
+    hasStopControl() { return Boolean(firstMatch(doc, STOP_SELECTORS)); },
     isGenerating() {
       return Boolean(firstMatch(doc, STOP_SELECTORS) || firstMatch(doc, STREAMING_SELECTORS));
     },

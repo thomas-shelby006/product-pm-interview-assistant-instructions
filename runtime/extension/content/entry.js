@@ -19,6 +19,9 @@ import { createProviderObserver } from './observation/provider-observer.js';
 import { createProviderSender } from './senders/provider-sender.js';
 import { createChatGptTurnTracker } from './senders/chatgpt-turn-tracker.js';
 import { createAnswerTracker, createWakeSignal } from './answer-tracker.js';
+import { reconcileGenerationTruth } from './generation-truth.js';
+import { createAnswerLifecycle } from './answer-lifecycle.js';
+import { deriveAnswerDeadline } from './answer-timeout-policy.js';
 import { createLatestPreviewScheduler } from './preview-scheduler.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
 import { nextSequence } from '../shared/sequence.js';
@@ -40,7 +43,7 @@ import { createComposerArbiter } from './composer-arbiter.js';
 import { safeBatchTelemetry } from '../shared/batch-event-policy.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
-const ANSWER_TIMEOUT_MS = 90000;
+const ANSWER_LIMITS = Object.freeze({ startGraceMs: 8000, streamStallMs: 20000, hardCapMs: 120000 });
 
 function actualProvider(hostname) {
   return hostname.includes('claude.ai') ? 'claude' : 'chatgpt';
@@ -152,6 +155,27 @@ async function startRuntime(runtimeConfig) {
   let sequenceDrainTimer = null;
   let sequenceDrainAttempt = 0;
   const outboundTranscriptCache = createRecentTranscriptCache();
+  let receiverGenerationTruth = reconcileGenerationTruth({ now: Date.now() });
+  let receiverAnswerState = null;
+  let lastReceiverAssistantText = String(adapter.getLatestAssistantText?.() || '');
+  let lastReceiverHintVersion = assistantFinalHintVersion;
+
+  function observeReceiverGeneration() {
+    const currentText = String(adapter.getLatestAssistantText?.() || '');
+    const textChanged = Boolean(currentText && currentText !== lastReceiverAssistantText);
+    const finalHintChanged = assistantFinalHintVersion !== lastReceiverHintVersion;
+    receiverGenerationTruth = reconcileGenerationTruth({
+      adapterGenerating: Boolean(adapter.isGenerating?.()),
+      stopAvailable: Boolean(adapter.hasStopControl?.()),
+      textChanged,
+      finalHintChanged,
+      previous: receiverGenerationTruth,
+      now: Date.now()
+    });
+    if (currentText) lastReceiverAssistantText = currentText;
+    lastReceiverHintVersion = assistantFinalHintVersion;
+    return { truth: receiverGenerationTruth, text: currentText, textChanged, finalHintChanged };
+  }
 
   function isCombinedVoiceActive() {
     return Boolean(
@@ -267,7 +291,9 @@ async function startRuntime(runtimeConfig) {
     getTransportPaused: () => transportPaused,
     getScrollLocked: () => scrollLocked,
     getVoiceActive: isCombinedVoiceActive,
-    getBatchState: () => safeBatchTelemetry(receiverBatchRuntime?.snapshot())
+    getBatchState: () => safeBatchTelemetry(receiverBatchRuntime?.snapshot()),
+    getGenerationState: () => receiverGenerationTruth,
+    getAnswerState: () => receiverAnswerState
   });
 
   async function register() {
@@ -493,6 +519,9 @@ async function startRuntime(runtimeConfig) {
 
   async function captureAnswer(envelope, beforeText, token, hintVersionAtStart) {
     const startedAt = Date.now();
+    const lifecycle = createAnswerLifecycle();
+    receiverAnswerState = lifecycle.transition({ type: 'start', batchId: envelope.id, at: startedAt });
+    telemetry.answerState(receiverAnswerState);
     const tracker = createAnswerTracker({
       beforeText,
       startedAt,
@@ -500,16 +529,33 @@ async function startRuntime(runtimeConfig) {
       stabilityMs: 250,
       noGenerationGraceMs: 600
     });
-    while (Date.now() - startedAt < ANSWER_TIMEOUT_MS) {
-      if (token !== answerCaptureToken) return { ok: false, cancelled: true };
+    while (true) {
+      if (token !== answerCaptureToken) {
+        receiverAnswerState = lifecycle.transition({ type: 'cancel', at: Date.now(), reason: 'capture_superseded' });
+        telemetry.answerState(receiverAnswerState);
+        return { ok: false, cancelled: true, answerState: receiverAnswerState };
+      }
+      const observed = observeReceiverGeneration();
+      const current = Date.now();
+      if (observed.textChanged && observed.text && observed.text !== beforeText) {
+        receiverAnswerState = lifecycle.transition({
+          type: 'stream',
+          at: current,
+          wordCount: observed.text.split(/\s+/).filter(Boolean).length,
+          reason: observed.truth.reason
+        });
+        telemetry.answerState(receiverAnswerState);
+      }
       const result = tracker.observe({
-        now: Date.now(),
-        text: adapter.getLatestAssistantText(),
-        generating: adapter.isGenerating(),
+        now: current,
+        text: observed.text,
+        generating: observed.truth.generating,
         hintVersion: assistantFinalHintVersion
       });
       if (result) {
         const words = result.text.split(/\s+/).filter(Boolean).length;
+        receiverAnswerState = lifecycle.transition({ type: 'complete', at: current, wordCount: words });
+        telemetry.answerState(receiverAnswerState);
         await logEvent('answer', {
           envelopeId: envelope.id,
           text: result.text,
@@ -524,14 +570,28 @@ async function startRuntime(runtimeConfig) {
         });
         overlay.setStatus(`ANSWER ${words}w`, 'ok', 1800);
         scrollToLatest();
-        return { ok: true, text: result.text, wordCount: words, elapsedMs: result.elapsedMs };
+        return { ok: true, text: result.text, wordCount: words, elapsedMs: result.elapsedMs, answerState: receiverAnswerState };
       }
-      await answerWake.wait(500);
+      const deadline = deriveAnswerDeadline({ ...receiverAnswerState, now: current, limits: ANSWER_LIMITS });
+      if (deadline.terminal) {
+        const eventType = deadline.state === 'no_response' ? 'no_response' : 'timeout';
+        receiverAnswerState = lifecycle.transition({ type: eventType, at: current, reason: deadline.reason });
+        telemetry.answerState(receiverAnswerState);
+        await logEvent(deadline.state === 'no_response' ? 'answer_no_response' : 'answer_timeout', {
+          envelopeId: envelope.id,
+          reason: deadline.reason
+        });
+        if (deadline.state === 'timed_out') telemetry.answerTimeout(envelope.id);
+        overlay.setStatus(deadline.state === 'no_response' ? 'NO ANSWER OBSERVED' : 'ANSWER TIMEOUT', 'warn', 2500);
+        return {
+          ok: false,
+          noResponse: deadline.state === 'no_response',
+          timeout: deadline.state === 'timed_out',
+          answerState: receiverAnswerState
+        };
+      }
+      await answerWake.wait(Math.min(500, Math.max(1, deadline.nextCheckMs)));
     }
-    await logEvent('answer_timeout', { envelopeId: envelope.id });
-    telemetry.answerTimeout(envelope.id);
-    overlay.setStatus('ANSWER TIMEOUT', 'warn', 2500);
-    return { ok: false, timeout: true };
   }
 
   const composerArbiter = createComposerArbiter({
@@ -601,6 +661,7 @@ async function startRuntime(runtimeConfig) {
         void captureAnswer(batchEnvelope, beforeText, token, hintVersionAtStart)
           .then(answer => receiverBatchRuntime?.answerComplete(batch.id, {
             answer: answer || null,
+            answerState: answer?.answerState || receiverAnswerState || null,
             timeout: Boolean(answer?.timeout),
             proof
           }));
@@ -623,7 +684,8 @@ async function startRuntime(runtimeConfig) {
       onChange: () => {
         refreshLifecycleTitle();
         answerWake.pulse();
-        if (!adapter.isGenerating?.()) {
+        observeReceiverGeneration();
+        if (!receiverGenerationTruth.generating) {
           void receiverBatchRuntime?.submitNext();
         }
       },

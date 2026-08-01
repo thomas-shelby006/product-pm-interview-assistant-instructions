@@ -143,7 +143,8 @@ function normalizeSession(item) {
     recoverySchedules: Array.isArray(item.recoverySchedules) ? item.recoverySchedules.filter(value => value?.alarmName && value?.dueAt).map(value => ({ ...value })) : [],
     endGuard: item.endGuard && typeof item.endGuard === 'object' ? { ...item.endGuard, counts: { ...(item.endGuard.counts || {}) } } : null,
     senderOutboxState: normalizeOutboxState(item.senderOutboxState),
-    selfTest: item.selfTest && typeof item.selfTest === 'object' ? JSON.parse(JSON.stringify(item.selfTest)) : null
+    selfTest: item.selfTest && typeof item.selfTest === 'object' ? JSON.parse(JSON.stringify(item.selfTest)) : null,
+    answerState: item.answerState && typeof item.answerState === 'object' ? { ...item.answerState } : null
   };
 }
 
@@ -202,6 +203,13 @@ export class RuntimePilotState {
     };
     session.updatedAt = now;
     return { ...session[role] };
+  }
+
+  setAnswerState(sessionId, value = null, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.answerState = value && typeof value === 'object' ? { ...value } : null;
+    session.updatedAt = now;
+    return session.answerState ? { ...session.answerState } : null;
   }
 
   setSelfTest(sessionId, value = null, now = Date.now()) {
@@ -520,14 +528,18 @@ export class RuntimePilotState {
         remainingCount: Math.max(0, Number(event.remainingCount || 0)),
         written: event.written !== false
       };
-    } else if (type === 'batch_answer_complete' || type === 'batch_answer_timeout') {
+    } else if (['batch_answer_complete', 'batch_answer_no_response', 'batch_answer_timeout', 'batch_answer_cancelled'].includes(type)) {
       session.batchState.lastCompleted = {
         ...(session.batchState.active || {}),
         answer: event.answer || null,
         proof: event.proof || session.batchState.active?.proof || null,
         completedAt: now,
-        timeout: type === 'batch_answer_timeout'
+        answerState: event.answerState || null,
+        timeout: type === 'batch_answer_timeout',
+        noResponse: type === 'batch_answer_no_response',
+        cancelled: type === 'batch_answer_cancelled'
       };
+      session.answerState = event.answerState ? { ...event.answerState } : session.answerState;
       session.batchState.active = null;
     } else if (type === 'batch_submit_failed') {
       session.batchState.active = null;
@@ -731,6 +743,7 @@ export class RuntimePilotState {
       endGuard: session.endGuard ? { ...session.endGuard, counts: { ...(session.endGuard.counts || {}) } } : null,
       senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) },
       selfTest: session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null,
+      answerState: session.answerState ? { ...session.answerState } : null,
       metrics: {
         ...session.metrics,
         deliverySuccessRate: session.metrics.delivered + session.metrics.failed
@@ -777,7 +790,8 @@ export class RuntimePilotState {
       recoverySchedules: (session.recoverySchedules || []).map(value => ({ ...value })),
       endGuard: session.endGuard ? { ...session.endGuard, counts: { ...(session.endGuard.counts || {}) } } : null,
       senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) },
-      selfTest: session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null
+      selfTest: session.selfTest ? JSON.parse(JSON.stringify(session.selfTest)) : null,
+      answerState: session.answerState ? { ...session.answerState } : null
     }));
   }
 }

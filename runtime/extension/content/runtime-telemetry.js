@@ -1,4 +1,5 @@
 import { describeAdapterCapabilities } from './adapter-health.js';
+import { reconcileGenerationTruth } from './generation-truth.js';
 
 export function classifySourceSilence({
   role,
@@ -44,6 +45,8 @@ export function createRuntimeTelemetry({
   getScrollLocked = () => false,
   getVoiceActive = () => false,
   getBatchState = () => null,
+  getGenerationState = null,
+  getAnswerState = () => null,
   getVisibilityState = () => String(globalThis.document?.visibilityState || 'unknown'),
   heartbeatMs = 5000,
   silenceWarningMs = 90000,
@@ -58,6 +61,9 @@ export function createRuntimeTelemetry({
   let lastSourceActivityAt = runtimeConfig?.role === 'sender' ? now() : 0;
   let micState = 'unknown';
   let schedulerState = { phase: 'idle', reason: '', wakeSource: '', visibilityState: getVisibilityState(), at: now() };
+  let latestAnswerState = null;
+  let generationState = reconcileGenerationTruth({ now: now() });
+  let lastAssistantText = String(adapter?.getLatestAssistantText?.() || '');
   const adapterCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
   let lastFingerprint = '';
   let closed = false;
@@ -72,12 +78,31 @@ export function createRuntimeTelemetry({
       idleWarningMs: silenceWarningMs
     });
     const sourceSilenceMs = sourceSilence.ageMs;
+    if (runtimeConfig?.role === 'receiver') {
+      const supplied = typeof getGenerationState === 'function' ? getGenerationState() : null;
+      if (supplied && typeof supplied === 'object') generationState = { ...supplied };
+      else {
+        const assistantText = String(adapter?.getLatestAssistantText?.() || '');
+        const textChanged = Boolean(assistantText && assistantText !== lastAssistantText);
+        generationState = reconcileGenerationTruth({
+          adapterGenerating: Boolean(adapter?.isGenerating?.()),
+          stopAvailable: Boolean(adapter?.hasStopControl?.()),
+          textChanged,
+          previous: generationState,
+          now: current
+        });
+        if (assistantText) lastAssistantText = assistantText;
+      }
+      latestAnswerState = typeof getAnswerState === 'function' ? (getAnswerState() || latestAnswerState) : latestAnswerState;
+    }
     return {
       role: runtimeConfig?.role || '',
       provider: runtimeConfig?.provider || '',
       phase: getPhase(),
       composerReady: Boolean(adapter?.findComposer?.()),
-      generating: Boolean(adapter?.isGenerating?.()),
+      generating: runtimeConfig?.role === 'receiver' ? Boolean(generationState.generating) : Boolean(adapter?.isGenerating?.()),
+      generationState: runtimeConfig?.role === 'receiver' ? { ...generationState } : null,
+      answerState: runtimeConfig?.role === 'receiver' && latestAnswerState ? { ...latestAnswerState } : null,
       voiceActive: Boolean(getVoiceActive()),
       micState,
       adapterCapabilities,
@@ -161,6 +186,15 @@ export function createRuntimeTelemetry({
     void publish({ force: true, event: value ? { type: 'answer', ...latestAnswer } : null });
   }
 
+  function answerState(value) {
+    latestAnswerState = value && typeof value === 'object' ? { ...value } : null;
+    touchActivity();
+    void publish({
+      force: true,
+      event: latestAnswerState ? { type: 'answer_state', ...latestAnswerState } : null
+    });
+  }
+
   function answerTimeout(envelopeId) {
     touchActivity();
     void publish({
@@ -209,6 +243,7 @@ export function createRuntimeTelemetry({
     preview,
     final,
     answer,
+    answerState,
     answerTimeout,
     event,
     scheduler,

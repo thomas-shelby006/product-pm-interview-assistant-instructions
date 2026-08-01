@@ -482,11 +482,14 @@ export function createRuntimePilotController({
     if (event?.type === 'session_armed') {
       pilot.setContextArmed(sessionId, true);
     }
-    if (event?.type === 'answer') {
+    if (event?.type === 'answer_state') {
+      pilot.setAnswerState(sessionId, event);
+    } else if (event?.type === 'answer') {
       pilot.recordAnswer(sessionId, {
         envelopeId: event.envelopeId,
         elapsedMs: event.elapsedMs,
-        wordCount: event.wordCount
+        wordCount: event.wordCount,
+        state: 'complete'
       });
     } else if (event?.type === 'answer_timeout') {
       pilot.recordAnswer(sessionId, {

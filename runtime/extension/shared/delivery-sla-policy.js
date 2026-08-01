@@ -32,6 +32,11 @@ export function deriveDeliverySla(snapshot, now = Date.now(), {
     reason: ''
   };
   if (!oldest) return base;
+  const activeProofVerified = snapshot?.batchState?.active?.proof?.verified === true;
+  const answerState = String(snapshot?.answerState?.state || '');
+  if (activeProofVerified && ['waiting', 'streaming'].includes(answerState)) {
+    return { ...base, state: 'answer_waiting', reason: 'proven_batch_answer_pending', nextAction: 'wait' };
+  }
   if (snapshot?.receiver?.generating) return { ...base, state: 'answering', reason: 'receiver_generating' };
   if (snapshot?.mode === 'paused' || snapshot?.storagePressure?.level === 'critical') {
     return { ...base, state: 'suppressed', reason: snapshot?.mode === 'paused' ? 'transport_paused' : 'storage_critical' };
