@@ -747,3 +747,55 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** a 32-entry metadata-only undo journal stores before/after operator state and never stores question text.
 
 **Source-complete status:** Cycles 106-115 are implemented. Executable verification remains deferred until the complete Phase A source program is finished.
+
+## Live interview UX cycles 106–115
+
+### Cycle 106 — Incident Center
+- **Bug fixes:** warnings, root cause, and consistency failures no longer require three separate inspections.
+- **New features:** one severity-ordered incident inbox with owner, role, age, and current action.
+- **Implementation:** current evidence is projected into a bounded incident model; no parallel warning authority or transcript copy is created.
+
+### Cycle 107 — Incident Acknowledge and Snooze
+- **Bug fixes:** known incidents no longer obscure new failures, and escalation reopens an acknowledged incident.
+- **New features:** acknowledge, five-minute snooze, clear, occurrence count, and first/last-seen metadata.
+- **Implementation:** only bounded control metadata is persisted in the versioned session state.
+
+### Cycle 108 — Incident Severity and Ownership
+- **Bug fixes:** generic warnings no longer hide the responsible subsystem.
+- **New features:** deterministic Info, Warning, Error, and Critical severity with Runtime, Provider, Transport, State, Delivery, or Operator ownership.
+- **Implementation:** a stable severity lattice orders incidents without mutating source warnings.
+
+### Cycle 109 — Incident Runbooks
+- **Bug fixes:** an incident code no longer leaves the operator to infer a recovery sequence.
+- **New features:** one current safe step and ordered runbook per incident class.
+- **Implementation:** runbook steps reuse existing allow-listed commands and never execute during derivation.
+
+### Cycle 110 — Quiet Attention Mode
+- **Bug fixes:** acknowledged low-priority incidents no longer distract during a live answer.
+- **New features:** quiet mode keeps critical incidents and unacknowledged actionable incidents visible.
+- **Implementation:** quiet mode filters presentation only; all incident evidence remains available and escalation always reopens visibility.
+
+### Cycle 111 — Question Triage States
+- **Bug fixes:** every captured final no longer appears equally urgent.
+- **New features:** pin, Low/Normal/High/Critical priority, and explicit defer conditions.
+- **Implementation:** operator metadata is stored beside immutable ledger identity with a bounded single-use undo journal.
+
+### Cycle 112 — Duplicate and Follow-up Linking
+- **Bug fixes:** repeated-question evidence and follow-up relationships no longer require manual timeline inspection.
+- **New features:** duplicate explanation and explicit follow-up-to-parent relationships.
+- **Implementation:** relationship validation rejects missing parents, self-links, and cycles; no final is auto-deleted or merged.
+
+### Cycle 113 — Exact Batch Preview
+- **Bug fixes:** the operator no longer submits a protected batch without knowing exact membership.
+- **New features:** current/next member IDs, counts, characters, latest member, provider budget, hold, and auto-submit state.
+- **Implementation:** the preview is derived from immutable planner membership and ledger identity.
+
+### Cycle 114 — Safe Queue Search and Filters
+- **Bug fixes:** long sessions no longer require scanning every ledger row.
+- **New features:** search by question text, ID, sequence, batch, state, priority, pinned, and actionable status.
+- **Implementation:** the text-bearing search index exists only in dashboard memory; no second durable transcript copy is created.
+
+### Cycle 115 — Priority Without Reordering
+- **Bug fixes:** visual urgency can no longer be confused with delivery order changes.
+- **New features:** pinned, due, and priority emphasis in the queue and inspector.
+- **Implementation:** emphasis decorates the original sequence and explicitly reports sequence preservation.

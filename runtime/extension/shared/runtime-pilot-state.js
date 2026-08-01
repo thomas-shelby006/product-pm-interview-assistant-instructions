@@ -7,6 +7,7 @@ import { RuntimePerformanceBudget } from './runtime-performance-budget.js';
 import { normalizeLiveSession, transitionLiveSession as transitionLiveSessionValue, markInterviewerActivity, setFocusMode } from './live-session-state.js';
 import { normalizeQuestionMetadataIndex, updateQuestionMetadata } from './question-metadata-index.js';
 import { consumeUndo, normalizeUndoJournal, recordUndo } from './operator-undo-journal.js';
+import { updateIncidentControl } from './incident-center.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -119,6 +120,23 @@ function safeEventData(data = {}) {
   return safe;
 }
 
+function normalizeIncidentControls(value = {}) {
+  const source = value && typeof value === 'object' ? value : {};
+  const controls = {};
+  for (const [id, item] of Object.entries(source.controls && typeof source.controls === 'object' ? source.controls : source)) {
+    const key = String(id || '').trim().slice(0, 200);
+    if (!key || key === 'quietMode' || !item || typeof item !== 'object') continue;
+    controls[key] = {
+      acknowledgedAt: Math.max(0, Number(item.acknowledgedAt || 0)),
+      snoozedUntil: Math.max(0, Number(item.snoozedUntil || 0))
+    };
+  }
+  const bounded = Object.fromEntries(Object.entries(controls)
+    .sort(([, a], [, b]) => Math.max(b.acknowledgedAt, b.snoozedUntil) - Math.max(a.acknowledgedAt, a.snoozedUntil))
+    .slice(0, 128));
+  return { controls: bounded, quietMode: Boolean(source.quietMode) };
+}
+
 function normalizeSession(item) {
   const sessionId = String(item?.sessionId || '').trim();
   if (!sessionId) return null;
@@ -185,7 +203,8 @@ function normalizeSession(item) {
     questionOperations: {
       metadata: normalizeQuestionMetadataIndex(item.questionOperations?.metadata || {}),
       undoJournal: normalizeUndoJournal(item.questionOperations?.undoJournal || [])
-    }
+    },
+    incidentControls: normalizeIncidentControls(item.incidentControls || {})
   };
 }
 
@@ -283,6 +302,38 @@ export class RuntimePilotState {
     session.updatedAt = now;
     this.record(sessionId, 'question_metadata_undone', { itemId: result.entry.itemId, action: result.entry.action, undoId: result.entry.id }, now);
     return { ok: true, itemId: result.entry.itemId, metadata: { ...result.entry.before }, undoId: result.entry.id };
+  }
+
+  updateIncidentControl(sessionId, incidentId, action, durationMs = 0, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const id = String(incidentId || '').trim().slice(0, 200);
+    if (!id) return { ok: false, error: 'incident_id_required' };
+    if (!['acknowledge', 'snooze', 'clear'].includes(String(action || ''))) {
+      return { ok: false, error: 'invalid_incident_control' };
+    }
+    session.incidentControls.controls = updateIncidentControl(
+      session.incidentControls.controls,
+      id,
+      action,
+      now,
+      durationMs
+    );
+    session.incidentControls = normalizeIncidentControls(session.incidentControls);
+    session.updatedAt = now;
+    this.record(sessionId, 'incident_control_changed', {
+      incidentId: id,
+      action: String(action),
+      durationMs: action === 'snooze' ? Math.max(60_000, Number(durationMs) || 300_000) : 0
+    }, now);
+    return { ok: true, incidentId: id, action, controls: JSON.parse(JSON.stringify(session.incidentControls.controls)) };
+  }
+
+  setQuietMode(sessionId, enabled, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.incidentControls.quietMode = Boolean(enabled);
+    session.updatedAt = now;
+    this.record(sessionId, 'quiet_attention_changed', { enabled: Boolean(enabled) }, now);
+    return { ok: true, enabled: session.incidentControls.quietMode };
   }
 
   replayCommandResult(sessionId, requestId, now = Date.now()) {
@@ -1038,7 +1089,8 @@ export class RuntimePilotState {
       questionOperations: {
         metadata: JSON.parse(JSON.stringify(session.questionOperations.metadata || {})),
         undoJournal: JSON.parse(JSON.stringify(session.questionOperations.undoJournal || []))
-      }
+      },
+      incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false }))
     };
   }
 
@@ -1080,7 +1132,8 @@ export class RuntimePilotState {
       questionOperations: {
         metadata: JSON.parse(JSON.stringify(session.questionOperations.metadata || {})),
         undoJournal: JSON.parse(JSON.stringify(session.questionOperations.undoJournal || []))
-      }
+      },
+      incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false }))
     }));
   }
 }

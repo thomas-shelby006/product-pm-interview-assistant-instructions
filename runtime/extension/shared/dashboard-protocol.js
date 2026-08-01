@@ -4,6 +4,10 @@ const COMMANDS = new Set([
   'set_session_phase',
   'mark_interviewer_activity',
   'set_focus_mode',
+  'acknowledge_incident',
+  'snooze_incident',
+  'clear_incident',
+  'set_quiet_mode',
   'resume_catch_up',
   'set_question_pin',
   'defer_question',
@@ -95,7 +99,14 @@ export function normalizeDashboardCommand(value) {
     payload.undoId = cleanText(payload.undoId, 200);
     if (!payload.undoId) return null;
   }
-  if (['set_auto_submit', 'set_hold', 'set_focus_mode'].includes(command)) {
+  if (['acknowledge_incident', 'snooze_incident', 'clear_incident'].includes(command)) {
+    payload.incidentId = cleanText(payload.incidentId, 200);
+    if (!payload.incidentId) return null;
+  }
+  if (command === 'snooze_incident') {
+    payload.durationMs = Math.max(60_000, Math.min(3_600_000, Number(payload.durationMs) || 300_000));
+  }
+  if (['set_auto_submit', 'set_hold', 'set_focus_mode', 'set_quiet_mode'].includes(command)) {
     payload.value = Boolean(payload.value);
   }
   if (command === 'set_session_phase') {

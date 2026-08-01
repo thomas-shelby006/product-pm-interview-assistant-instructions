@@ -92,6 +92,19 @@
             <strong id="silenceState">Not timing</strong>
             <p id="silenceDetail">Starts when the mock interview becomes active.</p>
           </article>
+          <section class="incident-center" aria-labelledby="incidentCenterTitle">
+            <div class="panel-title">
+              <div><span class="eyebrow">Incident center</span><b id="incidentCenterTitle">No active incidents</b></div>
+              <button id="quietAttentionAction" data-command="set_quiet_mode" aria-pressed="false">Quiet mode: Off</button>
+            </div>
+            <p id="incidentCenterSummary">Only actionable runtime metadata appears here.</p>
+            <ol id="incidentList" class="incident-list"></ol>
+            <div id="incidentRunbook" class="incident-runbook" hidden>
+              <span class="eyebrow">Current safe step</span>
+              <strong id="incidentRunbookStep">No runbook step</strong>
+              <button id="incidentRunbookAction" hidden>Run step</button>
+            </div>
+          </section>
         </section>
 
         <div class="control-grid" aria-label="Runtime controls">
@@ -319,6 +332,11 @@
             <button class="danger" id="archiveAll" data-confirm="Archive every unresolved final? This is explicit data loss from the delivery workflow.">Archive unresolved</button>
           </div>
         </div>
+        <section class="batch-preview" aria-label="Exact receiver batch preview">
+          <div><span class="eyebrow">Current batch</span><strong id="activeBatchPreview">No active batch</strong><p id="activeBatchMembers">No members.</p></div>
+          <div><span class="eyebrow">Next protected batch</span><strong id="nextBatchPreview">Nothing waiting</strong><p id="nextBatchMembers">No members.</p></div>
+          <div><span class="eyebrow">Provider budget</span><strong id="batchBudgetPreview">No budget evidence</strong><p id="batchPolicyPreview">Sequence order is preserved.</p></div>
+        </section>
         <div class="queue-wrap">
           <table>
             <thead><tr><th></th><th>Age</th><th>Seq</th><th>Status</th><th>Priority</th><th>Batch</th><th>Question</th></tr></thead>

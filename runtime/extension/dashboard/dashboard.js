@@ -341,6 +341,61 @@ function renderReadiness(snapshot, now) {
   }
 }
 
+function renderIncidentCenter(snapshot, now) {
+  const model = snapshot?.incidents || { items: [], quietMode: false, hiddenCount: 0, currentRunbook: null };
+  const items = Array.isArray(model.items) ? model.items.filter(item => item.visible !== false && Number(item.snoozedUntil || 0) <= now) : [];
+  text('incidentCenterTitle', items.length ? `${items.length} active incident${items.length === 1 ? '' : 's'}` : 'No active incidents');
+  text('incidentCenterSummary', model.quietMode
+    ? `Quiet mode is on. ${Number(model.hiddenCount || 0)} lower-priority incident${Number(model.hiddenCount || 0) === 1 ? '' : 's'} hidden.`
+    : 'Incidents are ordered by severity and owning subsystem.');
+  const quiet = byId('quietAttentionAction');
+  quiet.textContent = `Quiet mode: ${model.quietMode ? 'On' : 'Off'}`;
+  quiet.setAttribute('aria-pressed', String(Boolean(model.quietMode)));
+  const list = byId('incidentList');
+  list.replaceChildren();
+  for (const incident of items.slice(0, 8)) {
+    const row = document.createElement('li');
+    row.className = 'incident-item';
+    row.dataset.severity = incident.severity || 'warn';
+    row.dataset.acknowledged = String(Boolean(incident.acknowledgedAt));
+    const copy = document.createElement('div');
+    copy.className = 'incident-copy';
+    const title = document.createElement('strong');
+    title.textContent = humanizeCode(incident.code);
+    const meta = document.createElement('div');
+    meta.className = 'incident-meta';
+    const age = Math.max(0, now - Number(incident.firstSeenAt || now));
+    meta.textContent = `${humanizeCode(incident.owner)}${incident.role ? ` / ${humanizeCode(incident.role)}` : ''} · ${humanizeCode(incident.severity)} · ${formatDuration(age)}`;
+    copy.append(title, meta);
+    const actions = document.createElement('div');
+    actions.className = 'incident-actions';
+    if (!incident.acknowledgedAt) {
+      const acknowledge = document.createElement('button');
+      acknowledge.textContent = 'Acknowledge';
+      acknowledge.dataset.incidentAction = 'acknowledge';
+      acknowledge.dataset.incidentId = incident.id;
+      actions.append(acknowledge);
+    }
+    const snooze = document.createElement('button');
+    snooze.textContent = 'Snooze 5m';
+    snooze.dataset.incidentAction = 'snooze';
+    snooze.dataset.incidentId = incident.id;
+    actions.append(snooze);
+    row.append(copy, actions);
+    list.append(row);
+  }
+  const runbook = model.currentRunbook;
+  const runbookNode = byId('incidentRunbook');
+  runbookNode.hidden = !runbook?.current;
+  if (runbook?.current) {
+    text('incidentRunbookStep', `${runbook.currentIndex + 1} / ${runbook.steps.length} · ${runbook.current.label}`);
+    const action = byId('incidentRunbookAction');
+    action.hidden = !runbook.current.command;
+    action.dataset.command = runbook.current.command || '';
+    action.textContent = runbook.current.command ? 'Run current step' : 'Operator action required';
+  }
+}
+
 function renderLiveOperations(snapshot, now) {
   const operations = snapshot?.liveOperations || {};
   const liveSession = snapshot?.liveSession || {};
@@ -397,6 +452,7 @@ function renderLiveOperations(snapshot, now) {
     ? 'This is a capture/runtime issue, not interviewer silence. Run Check live.'
     : silence.state === 'inactive' ? 'Starts when the mock interview becomes active.'
       : `${formatDuration(silence.ageMs || 0)} since the last interviewer activity signal.`);
+  renderIncidentCenter(snapshot, now);
   applyFocusMode(document, deriveFocusMode(snapshot));
   const toolbar = byId('phaseRail');
   if (toolbar) applyRovingTabIndex(toolbar, state.toolbarIndex);
@@ -826,6 +882,19 @@ function renderOverview(snapshot, now) {
   text('holdAction', `Hold after answer: ${hold ? 'On' : 'Off'}`);
 }
 
+function renderBatchPreview(snapshot) {
+  const preview = snapshot?.batchPreview || {};
+  const active = preview.active;
+  const next = preview.next;
+  text('activeBatchPreview', active ? `${active.count} question${active.count === 1 ? '' : 's'} · ${active.totalChars} chars` : 'No active batch');
+  text('activeBatchMembers', active?.memberIds?.length ? active.memberIds.join(' · ') : 'No members.');
+  text('nextBatchPreview', next ? `${next.count} protected question${next.count === 1 ? '' : 's'} · ${next.totalChars} chars` : 'Nothing waiting');
+  text('nextBatchMembers', next?.memberIds?.length ? next.memberIds.join(' · ') : 'No members.');
+  const budget = preview.budget;
+  text('batchBudgetPreview', budget ? `${budget.maxMembers} questions / ${budget.maxChars} chars` : 'No budget evidence');
+  text('batchPolicyPreview', `${preview.sequencePreserved === false ? 'Sequence warning' : 'Sequence preserved'} · ${preview.hold ? 'Hold on' : preview.autoSubmit ? 'Auto-submit on' : 'Manual submit'}`);
+}
+
 function renderQuestionInspector(navigator) {
   const selected = navigator.selected;
   const inspector = byId('questionInspector');
@@ -857,6 +926,7 @@ function renderQuestionInspector(navigator) {
 }
 
 function renderQueue(snapshot, now) {
+  renderBatchPreview(snapshot);
   const body = byId('queueBody');
   body.replaceChildren();
   state.questionNavigator = {
@@ -1168,6 +1238,19 @@ document.addEventListener('click', event => {
     renderReview(state.snapshot);
     return;
   }
+  const incidentButton = event.target.closest('[data-incident-action]');
+  if (incidentButton) {
+    const action = incidentButton.dataset.incidentAction;
+    const command = action === 'acknowledge' ? 'acknowledge_incident'
+      : action === 'snooze' ? 'snooze_incident'
+        : 'clear_incident';
+    const payload = {
+      incidentId: incidentButton.dataset.incidentId || '',
+      ...(action === 'snooze' ? { durationMs: 300000 } : {})
+    };
+    void runCommand(incidentButton, command, payload);
+    return;
+  }
   const button = event.target.closest('[data-command]');
   if (button) {
     const command = button.dataset.command;
@@ -1177,7 +1260,9 @@ document.addEventListener('click', event => {
         ? { value: !Boolean(state.snapshot?.batchState?.hold) }
         : command === 'set_focus_mode'
           ? { value: !Boolean(state.snapshot?.liveSession?.focusMode) }
-          : {};
+          : command === 'set_quiet_mode'
+            ? { value: !Boolean(state.snapshot?.incidents?.quietMode) }
+            : {};
     void runCommand(button, command, payload);
   }
 });

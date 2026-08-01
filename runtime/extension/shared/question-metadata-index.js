@@ -1,11 +1,14 @@
+import { triageToQuestionMetadata } from './question-triage.js';
+
 const PRIORITIES = new Set(['low', 'normal', 'high', 'critical']);
 const DEFER_CONDITIONS = new Set(['none', 'after_current_answer', 'manual', 'until_time']);
 
 export function normalizeQuestionMetadata(value = {}) {
+  const legacy = triageToQuestionMetadata(value);
   return {
-    pinned: Boolean(value.pinned),
-    priority: PRIORITIES.has(String(value.priority)) ? String(value.priority) : 'normal',
-    deferCondition: DEFER_CONDITIONS.has(String(value.deferCondition)) ? String(value.deferCondition) : 'none',
+    pinned: value.pinned === undefined ? legacy.pinned : Boolean(value.pinned),
+    priority: PRIORITIES.has(String(value.priority)) ? String(value.priority) : legacy.priority,
+    deferCondition: DEFER_CONDITIONS.has(String(value.deferCondition)) ? String(value.deferCondition) : legacy.deferCondition,
     deferUntil: Math.max(0, Number(value.deferUntil || 0)),
     parentId: String(value.parentId || '').slice(0, 160),
     updatedAt: Math.max(0, Number(value.updatedAt || 0)),

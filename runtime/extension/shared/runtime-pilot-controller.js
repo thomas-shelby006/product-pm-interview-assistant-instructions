@@ -33,6 +33,11 @@ import { deriveNextAction } from './next-action-model.js';
 import { deriveSessionPhase } from './session-phase-model.js';
 import { commandCatalog } from './operator-command-catalog.js';
 import { deriveQuestionOperations } from './question-operations-state.js';
+import { deriveIncidents, mergeIncidentState } from './incident-center.js';
+import { deriveIncidentRunbook } from './incident-runbook.js';
+import { deriveQuietAttention } from './quiet-attention-policy.js';
+import { deriveBatchPreview } from './batch-preview-model.js';
+import { validateQuestionRelation } from './question-relation-model.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -67,6 +72,7 @@ export function createRuntimePilotController({
   const snapshotPerformance = new Map();
   const deliveryPolicyApplied = new Map();
   const deliveryPolicyEstablished = new Set();
+  const incidentStateCache = new Map();
   const mutationCoordinator = createSessionMutationCoordinator();
   const coalescedCommitLane = createCoalescedCommitLane({
     delayMs: 60,
@@ -230,21 +236,45 @@ export function createRuntimePilotController({
     const rootCause = snapshotBase ? classifyRuntimeRootCause(snapshotBase, Date.now()) : null;
     const deliveryPolicy = snapshotBase ? deriveQueueOnlyPolicy(snapshotBase, rootCause) : null;
     const enrichedBase = snapshotBase ? { ...snapshotBase, rootCause, deliveryPolicy } : null;
+    const derivedIncidents = enrichedBase ? deriveIncidents(enrichedBase, Date.now()) : [];
+    const incidents = enrichedBase ? mergeIncidentState(
+      derivedIncidents,
+      enrichedBase.incidentControls?.controls || {},
+      incidentStateCache.get(sessionId) || [],
+      Date.now()
+    ) : [];
+    if (enrichedBase) incidentStateCache.set(sessionId, incidents);
+    else incidentStateCache.delete(sessionId);
+    const baseAttention = enrichedBase ? deriveAttentionTarget(enrichedBase, Date.now()) : null;
+    const quietAttention = enrichedBase ? deriveQuietAttention(
+      { incidents, attention: baseAttention },
+      Boolean(enrichedBase.incidentControls?.quietMode),
+      Date.now()
+    ) : null;
+    const primaryIncident = quietAttention?.visibleIncidents?.[0] || null;
     const liveOperations = enrichedBase ? {
       phase: deriveSessionPhase(enrichedBase),
       runbook: deriveInterviewRunbook(enrichedBase, Date.now()),
       clock: deriveSessionClock(enrichedBase.liveSession || {}, Date.now()),
       silence: deriveInterviewerSilence(enrichedBase, Date.now()),
-      attention: deriveAttentionTarget(enrichedBase, Date.now()),
-      nextAction: deriveNextAction(enrichedBase, Date.now()),
-      commands: commandCatalog(enrichedBase)
+      attention: quietAttention.attention,
+      nextAction: deriveNextAction({ ...enrichedBase, attention: quietAttention.attention }, Date.now()),
+      commands: commandCatalog(enrichedBase),
+      quietAttention
     } : null;
     const rawSnapshot = snapshotBase ? {
       ...snapshotBase,
       rootCause,
       deliveryPolicy,
       liveOperations,
+      incidents: {
+        items: incidents,
+        quietMode: Boolean(snapshotBase.incidentControls?.quietMode),
+        hiddenCount: Number(quietAttention?.hiddenCount || 0),
+        currentRunbook: primaryIncident ? deriveIncidentRunbook(primaryIncident, enrichedBase) : null
+      },
       questionOperationsDerived: deriveQuestionOperations(enrichedBase, Date.now()),
+      batchPreview: deriveBatchPreview(enrichedBase),
       performanceBudget: {
         ...(snapshotBase.performanceBudget || {}),
         cacheHits: localPerformance.cacheHits,
@@ -1304,6 +1334,7 @@ export function createRuntimePilotController({
     registry.removeSession(sessionId);
     pilot.remove(sessionId);
     snapshotCaches.delete(sessionId);
+    incidentStateCache.delete(sessionId);
     await saveRegistry(registry);
     await store.save(pilot);
     await clearSessionLogs(sessionId);
@@ -1380,6 +1411,18 @@ export function createRuntimePilotController({
       case 'set_focus_mode':
         result = { ok: true, liveSession: pilot.setFocusMode(sessionId, Boolean(payload.value)) };
         break;
+      case 'acknowledge_incident':
+        result = pilot.updateIncidentControl(sessionId, payload.incidentId, 'acknowledge');
+        break;
+      case 'snooze_incident':
+        result = pilot.updateIncidentControl(sessionId, payload.incidentId, 'snooze', payload.durationMs);
+        break;
+      case 'clear_incident':
+        result = pilot.updateIncidentControl(sessionId, payload.incidentId, 'clear');
+        break;
+      case 'set_quiet_mode':
+        result = pilot.setQuietMode(sessionId, Boolean(payload.value));
+        break;
       case 'pause':
         pilot.setMode(sessionId, 'paused');
         if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'paused', 'transport_pause');
@@ -1407,9 +1450,16 @@ export function createRuntimePilotController({
       case 'set_question_priority':
         result = pilot.updateQuestionMetadata(sessionId, payload.itemId, { priority: payload.priority }, 'priority');
         break;
-      case 'link_question_follow_up':
-        result = pilot.updateQuestionMetadata(sessionId, payload.itemId, { parentId: payload.parentId }, 'relationship');
+      case 'link_question_follow_up': {
+        const snapshot = pilot.snapshot(sessionId);
+        const ledgerIds = new Set((snapshot?.ledger || []).map(item => item.id));
+        const relationIndex = Object.fromEntries([...ledgerIds].map(id => [id, snapshot?.questionOperations?.metadata?.[id] || {}]));
+        const validation = validateQuestionRelation(relationIndex, payload.itemId, payload.parentId);
+        result = validation.ok
+          ? pilot.updateQuestionMetadata(sessionId, payload.itemId, { parentId: validation.parentId }, 'relationship')
+          : validation;
         break;
+      }
       case 'undo_question_action':
         result = pilot.undoQuestionMetadata(sessionId, payload.undoId);
         break;
