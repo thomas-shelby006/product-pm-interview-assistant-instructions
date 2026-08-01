@@ -465,3 +465,21 @@ test('launcher clears sensitive in-memory context after both provider windows cl
   assert.match(monitor, /!sender\.Count && !receiver\.Count/);
   assert.match(monitor, /ClearSessionMemory/);
 });
+
+
+test('hide and restore preserve actual three-window geometry instead of replaying stale logical layout', () => {
+  assert.match(launcher, /CaptureManagedGeometry\(\)/);
+  assert.match(launcher, /RestoreManagedGeometry\(g_hiddenGeometry\)/);
+  const toggle = block('ToggleHide() {', '; Alt+CapsLock');
+  assert.ok(toggle.indexOf('CaptureManagedGeometry()') < toggle.indexOf('HideAllManaged()'));
+  assert.match(toggle, /if !RestoreManagedGeometry\(g_hiddenGeometry\)/);
+  assert.match(toggle, /RestoreLayout\(g_hiddenLayout\)/);
+});
+
+test('session-memory cleanup requires a ten-second simultaneous provider absence', () => {
+  const monitor = block('MonitorManagedSession() {', 'IsActiveSession() {');
+  assert.match(monitor, /g_providerMissingSince/);
+  assert.match(monitor, /sender\.Count \|\| receiver\.Count/);
+  assert.match(monitor, />= 10000/);
+  assert.match(monitor, /temporarily missing/);
+});

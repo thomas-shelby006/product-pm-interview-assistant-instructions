@@ -312,6 +312,8 @@ global g_lastStableLayout    := 0
 global g_hidden              := false
 global g_hiddenLayout        := 0
 global g_hiddenActive        := 0
+global g_hiddenGeometry      := 0
+global g_providerMissingSince := 0
 global g_launchGui           := 0
 global g_resumeEdit          := 0
 global g_jdEdit              := 0
@@ -1478,7 +1480,7 @@ CapsLock:: {
 }
 
 ToggleHide() {
-    global g_hidden, g_hiddenLayout, g_hiddenActive, g_currentLayout
+    global g_hidden, g_hiddenLayout, g_hiddenActive, g_hiddenGeometry, g_currentLayout
     global g_hWin1, g_hWin2, g_hDashboard, g_mode
 
     if (!IsActiveSession()) {
@@ -1499,6 +1501,7 @@ ToggleHide() {
             dashboardVisible: g_currentLayout.dashboardVisible
         }
         g_hiddenActive := WinGetID("A")
+        g_hiddenGeometry := CaptureManagedGeometry()
         RestoreWin1Visibility()
         HideAllManaged()
         g_hidden := true
@@ -1507,7 +1510,9 @@ ToggleHide() {
 
     ; Restore the exact saved visible mode/layout.
     g_hidden := false
-    RestoreLayout(g_hiddenLayout)
+    if !RestoreManagedGeometry(g_hiddenGeometry)
+        RestoreLayout(g_hiddenLayout)
+    g_hiddenGeometry := 0
 
     ; Restore focus sensibly within the restored mode.
     if (g_hiddenActive = g_hDashboard && IsAlive(g_hDashboard)) {
@@ -1546,6 +1551,44 @@ RestoreWin1Visibility() {
 ; ============================================================
 ;  LAYOUT APPLIERS
 ; ============================================================
+
+CaptureWindowGeometry(hwnd) {
+    if !IsAlive(hwnd)
+        return 0
+    x := 0, y := 0, w := 0, h := 0
+    try WinGetPos &x, &y, &w, &h, "ahk_id " hwnd
+    catch
+        return 0
+    return {hwnd: hwnd, x: x, y: y, w: w, h: h}
+}
+
+CaptureManagedGeometry() {
+    global g_hWin1, g_hWin2, g_hDashboard
+    return {
+        sender: CaptureWindowGeometry(g_hWin1),
+        receiver: CaptureWindowGeometry(g_hWin2),
+        dashboard: CaptureWindowGeometry(g_hDashboard)
+    }
+}
+
+RestoreWindowGeometry(snapshot) {
+    if !IsObject(snapshot) || !IsAlive(snapshot.hwnd)
+        return false
+    WinMove snapshot.x, snapshot.y, snapshot.w, snapshot.h, "ahk_id " snapshot.hwnd
+    return true
+}
+
+RestoreManagedGeometry(snapshot) {
+    if !IsObject(snapshot)
+        return false
+    RestoreWin1Visibility()
+    restored := false
+    for key in ["sender", "receiver", "dashboard"] {
+        if snapshot.HasOwnProp(key) && RestoreWindowGeometry(snapshot.%key%)
+            restored := true
+    }
+    return restored
+}
 
 HideAllManaged() {
     global g_hWin1, g_hWin2, g_hDashboard, OFF_X, OFF_Y
@@ -1808,7 +1851,7 @@ ClearSessionMemory(reason := "session ended") {
     global g_sessionCompany, g_sessionRole, g_sessionRound
     global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode
     global g_sessionId, g_interviewActive, g_hWin1, g_hWin2, g_hDashboard
-    global g_hidden, g_hiddenLayout, g_hiddenActive
+    global g_hidden, g_hiddenLayout, g_hiddenActive, g_hiddenGeometry, g_providerMissingSince
 
     g_sessionResume := ""
     g_sessionJD := ""
@@ -1827,17 +1870,31 @@ ClearSessionMemory(reason := "session ended") {
     g_hidden := false
     g_hiddenLayout := 0
     g_hiddenActive := 0
+    g_hiddenGeometry := 0
+    g_providerMissingSince := 0
     LogEvent("Session memory cleared: " reason)
 }
 
 MonitorManagedSession() {
     global g_interviewActive, g_sessionId, g_senderProvider, g_receiverProvider
-    if (!g_interviewActive || g_sessionId = "")
+    global g_providerMissingSince
+    if (!g_interviewActive || g_sessionId = "") {
+        g_providerMissingSince := 0
         return
+    }
     sender := FindLifecycleWindow("sender", g_senderProvider, g_sessionId, "boot")
     receiver := FindLifecycleWindow("receiver", g_receiverProvider, g_sessionId, "boot")
-    if (!sender.Count && !receiver.Count)
-        ClearSessionMemory("both managed provider windows closed")
+    if (sender.Count || receiver.Count) {
+        g_providerMissingSince := 0
+        return
+    }
+    if (g_providerMissingSince = 0) {
+        g_providerMissingSince := A_TickCount
+        LogEvent("Both provider lifecycle titles temporarily missing; context cleanup grace started")
+        return
+    }
+    if (A_TickCount - g_providerMissingSince >= 10000)
+        ClearSessionMemory("both managed provider windows absent for 10 seconds")
 }
 
 IsActiveSession() {
