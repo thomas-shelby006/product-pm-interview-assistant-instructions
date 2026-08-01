@@ -1,4 +1,4 @@
-import { OperatorQueue } from './operator-queue.js';
+import { DeliveryLedger } from './delivery-ledger.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -72,7 +72,7 @@ function normalizeSession(item) {
     latestPreview: item.latestPreview || null,
     latestFinal: item.latestFinal || null,
     latestProof: item.latestProof || null,
-    queue: new OperatorQueue(item.queue || []),
+    queue: new DeliveryLedger(item.ledger || item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
     metrics: { ...emptyMetrics(), ...(item.metrics || {}) },
     processedCommandIds: Array.isArray(item.processedCommandIds)
@@ -176,8 +176,44 @@ export class RuntimePilotState {
       createdAt: envelope.createdAt || now,
       observedAt: now
     } : null;
-    session.metrics.finalsObserved += envelope?.kind === 'question' ? 1 : 0;
     session.updatedAt = now;
+  }
+
+  persistFinal(sessionId, envelope, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const outcome = session.queue.persist(envelope, { now });
+    if (outcome.accepted && !outcome.duplicate) {
+      session.metrics.finalsObserved += envelope?.kind === 'question' ? 1 : 0;
+      this.recordFinal(sessionId, envelope, now);
+      this.record(sessionId, 'final_persisted', {
+        envelopeId: envelope.id,
+        seq: envelope.seq || 0,
+        ledgerState: outcome.entry?.state || 'persisted'
+      }, now);
+    }
+    session.updatedAt = now;
+    return outcome;
+  }
+
+  markLedgerStaged(sessionId, ids, batchId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const changed = session.queue.markStaged(ids, batchId, now);
+    if (changed.length) this.record(sessionId, 'batch_staged', { batchId, memberIds: changed.map(item => item.id) }, now);
+    return changed;
+  }
+
+  markLedgerSubmitting(sessionId, batchId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const changed = session.queue.markSubmitting(batchId, now);
+    if (changed.length) this.record(sessionId, 'batch_submitting', { batchId, memberIds: changed.map(item => item.id) }, now);
+    return changed;
+  }
+
+  markLedgerProven(sessionId, batchId, proof = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const changed = session.queue.markProven(batchId, proof, now);
+    if (changed.length) this.record(sessionId, 'batch_proven', { batchId, memberIds: changed.map(item => item.id), proof }, now);
+    return changed;
   }
 
   queueFinal(sessionId, envelope, options = {}) {
@@ -400,6 +436,8 @@ export class RuntimePilotState {
       latestFinal: session.latestFinal ? { ...session.latestFinal } : null,
       latestProof: session.latestProof ? { ...session.latestProof } : null,
       queue: session.queue.list(),
+      ledger: session.queue.snapshot(),
+      ledgerCounts: session.queue.counts(),
       warnings,
       timeline: session.timeline.map(event => ({ ...event, data: { ...event.data } })),
       metrics: {
@@ -428,7 +466,8 @@ export class RuntimePilotState {
       latestPreview: session.latestPreview,
       latestFinal: session.latestFinal,
       latestProof: session.latestProof,
-      queue: session.queue.exportState(),
+      queue: session.queue.list(),
+      ledger: session.queue.exportState(),
       timeline: session.timeline,
       metrics: session.metrics,
       processedCommandIds: session.processedCommandIds,

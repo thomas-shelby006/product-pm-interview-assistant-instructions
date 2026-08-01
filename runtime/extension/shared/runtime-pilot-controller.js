@@ -138,38 +138,63 @@ export function createRuntimePilotController({
 
   async function beforeForward(envelope) {
     const pilot = await state();
-    pilot.recordFinal(envelope.sessionId, envelope);
-    if (pilot.snapshot(envelope.sessionId)?.mode === 'paused' && envelope.kind !== 'boot') {
-      const queued = pilot.queueFinal(envelope.sessionId, envelope, {
-        reason: 'transport_paused'
-      });
+    if (envelope.kind === 'boot') {
+      pilot.recordFinal(envelope.sessionId, envelope);
       await commit(envelope.sessionId, pilot);
+      return { paused: false, persisted: true, duplicate: false, response: null };
+    }
+    const persisted = pilot.persistFinal(envelope.sessionId, envelope);
+    await commit(envelope.sessionId, pilot);
+    if (!persisted.accepted) {
       return {
         paused: true,
+        persisted: false,
+        duplicate: false,
+        response: { ok: false, persisted: false, error: persisted.reason || 'persist_failed' }
+      };
+    }
+    if (persisted.duplicate) {
+      return {
+        paused: true,
+        persisted: true,
+        duplicate: true,
         response: {
           ok: true,
+          persisted: true,
+          duplicate: true,
+          delivered: persisted.entry?.state === 'proven',
+          queued: persisted.entry?.state !== 'proven',
+          reason: 'duplicate_persisted'
+        }
+      };
+    }
+    if (pilot.snapshot(envelope.sessionId)?.mode === 'paused') {
+      return {
+        paused: true,
+        persisted: true,
+        duplicate: false,
+        response: {
+          ok: true,
+          persisted: true,
           delivered: false,
-          queued: queued.accepted,
+          queued: true,
           reason: 'transport_paused'
         }
       };
     }
-    await commit(envelope.sessionId, pilot);
-    return { paused: false, response: null };
+    return { paused: false, persisted: true, duplicate: false, response: null };
   }
 
   async function afterForward(envelope, outcome) {
     const pilot = await state();
-    if (outcome?.queued && envelope.kind !== 'boot') {
-      pilot.queueFinal(envelope.sessionId, envelope, { reason: outcome.reason });
-    } else if (outcome?.delivered) {
-      const completed = pilot.completeQueueSend(envelope.sessionId, envelope.id, outcome);
-      if (!completed) pilot.supersedeQueuedBefore(envelope.sessionId, envelope.seq);
+    if (envelope.kind !== 'boot') {
+      pilot.completeQueueSend(envelope.sessionId, envelope.id, outcome);
     }
     pilot.recordDelivery(envelope.sessionId, {
       envelopeId: envelope.id,
       seq: envelope.seq || 0,
       kind: envelope.kind,
+      persisted: envelope.kind !== 'boot',
       ...outcome
     });
     await commit(envelope.sessionId, pilot);

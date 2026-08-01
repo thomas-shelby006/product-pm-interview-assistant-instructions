@@ -92,10 +92,6 @@ async function deliver(route, registry) {
     },
     wakeTab: wakeManagedTab
   });
-  if (!outcome.delivered && route?.message?.sessionId) {
-    registry.queueLatest(route.message.sessionId, route.message);
-    await saveRegistry(registry);
-  }
   return {
     ...outcome,
     attempts,
@@ -213,52 +209,27 @@ async function handleRegistration(message, incomingTab, registry) {
 
 async function handleForward(message, tabId, registry) {
   if (!isEnvelope(message.envelope)) {
-    return { ok: false, error: 'invalid_envelope' };
+    return { ok: false, persisted: false, error: 'invalid_envelope' };
   }
   if (!registry.canForward(message.envelope.sessionId, tabId, message.runtimeInstanceId)) {
-    return { ok: false, terminal: true, error: 'sender_not_registered' };
-  }
-
-  const sequence = registry.acceptSequence(
-    message.envelope.sessionId,
-    message.envelope.seq
-  );
-  if (!sequence.accepted) {
-    const sequenceReason = sequence.reason === 'duplicate'
-      ? 'duplicate_sequence'
-      : 'stale_sequence';
-    await appendLog(message.envelope.sessionId, 'sender', {
-      type: 'forward_ignored',
-      envelopeId: message.envelope.id,
-      seq: message.envelope.seq || 0,
-      reason: sequenceReason
-    });
-    return {
-      ok: true,
-      delivered: false,
-      queued: false,
-      reason: sequenceReason
-    };
+    return { ok: false, persisted: false, terminal: true, error: 'sender_not_registered' };
   }
 
   const pilotDecision = await pilotController.beforeForward(message.envelope);
-  if (pilotDecision.paused) {
-    await saveRegistry(registry);
+  if (pilotDecision.response) {
     await appendLog(message.envelope.sessionId, 'sender', {
-      type: 'forward_paused',
+      type: pilotDecision.duplicate ? 'forward_duplicate_persisted' : 'forward_persisted',
       envelopeId: message.envelope.id,
-      kind: message.envelope.kind,
-      sourceProvider: message.envelope.sourceProvider,
-      delivered: false,
-      queued: pilotDecision.response.queued,
-      reason: pilotDecision.response.reason
+      seq: message.envelope.seq || 0,
+      persisted: Boolean(pilotDecision.persisted),
+      queued: Boolean(pilotDecision.response.queued),
+      reason: pilotDecision.response.reason || pilotDecision.response.error || ''
     });
     await broadcastLinkStatus(message.envelope.sessionId, registry);
     return pilotDecision.response;
   }
 
   const route = registry.route(message.envelope.sessionId, message.envelope);
-  await saveRegistry(registry);
   const outcome = await deliver(route, registry);
   await pilotController.afterForward(message.envelope, outcome);
   await appendLog(message.envelope.sessionId, 'sender', {
@@ -266,6 +237,7 @@ async function handleForward(message, tabId, registry) {
     envelopeId: message.envelope.id,
     kind: message.envelope.kind,
     sourceProvider: message.envelope.sourceProvider,
+    persisted: Boolean(pilotDecision.persisted),
     delivered: outcome.delivered,
     queued: outcome.queued,
     reason: outcome.reason,
@@ -273,7 +245,7 @@ async function handleForward(message, tabId, registry) {
     deliveryProofMs: outcome.deliveryProofMs
   });
   await broadcastLinkStatus(message.envelope.sessionId, registry);
-  return { ok: true, ...outcome };
+  return { ok: true, persisted: true, ...outcome };
 }
 
 function authorizeSessionMessage(registry, sessionId, tabId, instanceId = '') {

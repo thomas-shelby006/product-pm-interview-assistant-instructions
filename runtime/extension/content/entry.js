@@ -31,6 +31,7 @@ import { createPreflightResponder } from './preflight-responder.js';
 import { createRuntimeTelemetry } from './runtime-telemetry.js';
 import { getOrCreateRuntimeInstanceId, shouldApplyRoleRevocation } from './role-revocation.js';
 import { sendWithRegistrationRecovery } from './registration-recovery.js';
+import { createSenderOutbox } from './sender-outbox.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -151,6 +152,35 @@ async function startRuntime(runtimeConfig) {
     }
   };
 
+  const senderOutbox = runtimeConfig.role === 'sender'
+    ? createSenderOutbox({
+        storage: sessionStorage,
+        key: `pmia_sender_outbox_${runtimeConfig.sessionId}`
+      })
+    : null;
+
+  async function persistEnvelope(envelope) {
+    const forwarding = await sendWithRegistrationRecovery({
+      send: payload => message(payload),
+      register,
+      payload: { type: 'PMIA_FORWARD', envelope }
+    });
+    const response = forwarding.response || { ok: false, persisted: false, error: 'no_response' };
+    if (response.persisted && senderOutbox) senderOutbox.ackPersisted(envelope.id);
+    if (forwarding.recovered) {
+      telemetry?.event('registration_recovered_before_forward', {
+        envelopeId: envelope.id,
+        attempts: forwarding.attempts
+      });
+    }
+    return response;
+  }
+
+  async function replaySenderOutbox() {
+    if (!senderOutbox?.size || !runtimeRegistered || paused) return [];
+    return senderOutbox.replay(envelope => persistEnvelope(envelope));
+  }
+
   const logEvent = async (type, data = {}) => {
     const safe = { ...data };
     if (typeof safe.text === 'string') safe.text = redactSensitiveSessionText(safe.text);
@@ -187,6 +217,7 @@ async function startRuntime(runtimeConfig) {
         overlay.setStatus(status.text, status.tone);
       }
       void telemetry.publish({ force: true, event: { type: 'registration' } });
+      if (senderOutbox?.size) setTimeout(() => { void replaySenderOutbox(); }, 0);
       return true;
     }
     if (response?.terminal) {
@@ -236,7 +267,7 @@ async function startRuntime(runtimeConfig) {
     try {
       const response = await message({ type: 'PMIA_PREVIEW', preview });
       if (!response?.ok && phase !== 'clear') outboundTranscriptCache.forget(text, 'preview', transcriptIdentity);
-      return Boolean(response?.ok);
+      return Boolean(response?.persisted || (kind === 'boot' && response?.ok));
     } catch {
       if (phase !== 'clear') outboundTranscriptCache.forget(text, 'preview', transcriptIdentity);
       return false;
@@ -272,20 +303,16 @@ async function startRuntime(runtimeConfig) {
       if (transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
       return false;
     }
-    telemetry.final(envelope);
-    const forwarding = await sendWithRegistrationRecovery({
-      send: payload => message(payload),
-      register,
-      payload: { type: 'PMIA_FORWARD', envelope }
-    });
-    const response = forwarding.response;
-    if (forwarding.recovered) {
-      telemetry.event('registration_recovered_before_forward', {
-        envelopeId: envelope.id,
-        attempts: forwarding.attempts
-      });
+    if (kind === 'question' && senderOutbox && !senderOutbox.enqueue(envelope)) {
+      if (transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
+      overlay.setStatus('OUTBOX SAVE FAILED', 'error', 2500);
+      return false;
     }
-    if (!response?.ok && transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
+    telemetry.final(envelope);
+    const response = await persistEnvelope(envelope);
+    if (!response?.persisted && response?.terminal && transcriptPhase) {
+      outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
+    }
     if (response?.terminal) {
       runtimeRegistered = false;
       refreshLifecycleTitle();
@@ -294,16 +321,17 @@ async function startRuntime(runtimeConfig) {
       overlay.setStatus('SENDER REVOKED', 'error');
     } else if (response?.delivered) {
       overlay.setStatus('FORWARDED', 'ok', 1200);
-    } else if (response?.queued) {
-      overlay.setStatus('QUEUED', 'warn', 1600);
+    } else if (response?.persisted) {
+      overlay.setStatus(response?.queued ? 'STAGED' : 'PERSISTED', 'warn', 1600);
     } else {
-      overlay.setStatus('SEND REJECTED', 'error', 2000);
+      overlay.setStatus('OUTBOX RETAINED', 'error', 2000);
     }
     await logEvent('sender_text', {
       envelopeId: envelope.id,
       kind,
       text: normalized,
       ...(kind === 'boot' ? { sessionContext: extractSafeSessionContext(normalized) } : {}),
+      persisted: Boolean(response?.persisted),
       delivered: Boolean(response?.delivered),
       queued: Boolean(response?.queued),
       reason: response?.reason || response?.error || ''
