@@ -168,6 +168,8 @@ function normalizeSession(item) {
     contextArmed: Boolean(item.contextArmed),
     contextArmedAt: Number(item.contextArmedAt || 0),
     deliverySla: item.deliverySla && typeof item.deliverySla === 'object' ? { ...item.deliverySla } : { state: 'clear', action: '', nextAction: '', oldestAgeMs: 0, targetMs: 20000, evaluatedAt: 0, lastAction: '', lastActionAt: 0, lastResult: null },
+    deliveryPolicy: item.deliveryPolicy && typeof item.deliveryPolicy === 'object' ? { ...item.deliveryPolicy } : { active: false, reason: '', resumeWhen: 'already_active', allowPersist: true, allowProviderWrite: true },
+    consistencyAudit: item.consistencyAudit && typeof item.consistencyAudit === 'object' ? JSON.parse(JSON.stringify(item.consistencyAudit)) : null,
     recoverySchedules: Array.isArray(item.recoverySchedules) ? item.recoverySchedules.filter(value => value?.alarmName && value?.dueAt).map(value => ({ ...value })) : [],
     endGuard: item.endGuard && typeof item.endGuard === 'object' ? { ...item.endGuard, counts: { ...(item.endGuard.counts || {}) } } : null,
     senderOutboxState: normalizeOutboxState(item.senderOutboxState),
@@ -289,6 +291,65 @@ export class RuntimePilotState {
     session.recoverySchedules = [];
     session.updatedAt = now;
     return removed;
+  }
+
+  setDeliveryPolicy(sessionId, value = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const next = {
+      ...(session.deliveryPolicy || {}),
+      ...(value && typeof value === 'object' ? value : {})
+    };
+    const changed = JSON.stringify(session.deliveryPolicy || {}) !== JSON.stringify(next);
+    if (changed) {
+      session.deliveryPolicy = next;
+      session.updatedAt = now;
+    }
+    return { ...session.deliveryPolicy, changed };
+  }
+
+  setConsistencyAudit(sessionId, value = null, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const next = value && typeof value === 'object' ? JSON.parse(JSON.stringify(value)) : null;
+    const signature = audit => audit ? JSON.stringify({
+      ok: audit.ok === true,
+      repairs: (audit.repairs || []).map(item => [String(item.code || ''), String(item.role || ''), String(item.alarmName || '')]),
+      blocked: (audit.blocked || []).map(item => [String(item.code || ''), String(item.role || ''), Number(item.count || 0)]),
+      reason: String(audit.reason || '')
+    }) : '';
+    const changed = signature(session.consistencyAudit) !== signature(next);
+    if (!changed) return next ? { ...JSON.parse(JSON.stringify(next)), changed: false } : { changed: false };
+    session.consistencyAudit = next;
+    session.updatedAt = now;
+    if (next) this.record(sessionId, 'consistency_audit', {
+      ok: next.ok === true,
+      repairs: (next.repairs || []).map(item => item.code),
+      blocked: (next.blocked || []).map(item => item.code),
+      reason: next.reason || ''
+    }, now);
+    return next ? { ...JSON.parse(JSON.stringify(next)), changed } : { changed };
+  }
+
+  auditLedgerIndex(sessionId, { repair = false } = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const result = session.ledger.indexAudit({ repair });
+    session.updatedAt = now;
+    return JSON.parse(JSON.stringify(result));
+  }
+
+  releaseExpiredAttemptLease(sessionId, ledgerItemId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const entry = session.ledger.get(ledgerItemId);
+    const lease = entry?.attemptLease;
+    if (!lease || Number(lease.expiresAt || 0) > Number(now)) {
+      return { released: false, reason: 'attempt_lease_not_expired' };
+    }
+    const result = session.ledger.releaseAttemptLease(ledgerItemId, {
+      owner: lease.owner,
+      leaseId: lease.id,
+      now
+    });
+    if (result.released) session.updatedAt = now;
+    return result;
   }
 
   setDeliverySla(sessionId, value = {}, now = Date.now()) {
@@ -866,10 +927,13 @@ export class RuntimePilotState {
       batchState: { ...session.batchState, active: session.batchState.active ? { ...session.batchState.active } : null, next: session.batchState.next ? { ...session.batchState.next } : null },
       ledger: session.ledger.snapshot(),
       ledgerCounts: session.ledger.counts(),
+      ledgerIndexAudit: session.ledger.indexAudit({ repair: false }),
       warnings,
       timeline: session.timeline.map(event => ({ ...event, data: { ...event.data } })),
       commandJournal: session.commandJournal.recent(5),
       deliverySla: { ...(session.deliverySla || {}) },
+      deliveryPolicy: { ...(session.deliveryPolicy || {}) },
+      consistencyAudit: session.consistencyAudit ? JSON.parse(JSON.stringify(session.consistencyAudit)) : null,
       recoverySchedules: (session.recoverySchedules || []).map(value => ({ ...value })),
       endGuard: session.endGuard ? { ...session.endGuard, counts: { ...(session.endGuard.counts || {}) } } : null,
       senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) },
@@ -925,6 +989,8 @@ export class RuntimePilotState {
       contextArmed: session.contextArmed,
       contextArmedAt: session.contextArmedAt,
       deliverySla: { ...(session.deliverySla || {}) },
+      deliveryPolicy: { ...(session.deliveryPolicy || {}) },
+      consistencyAudit: session.consistencyAudit ? JSON.parse(JSON.stringify(session.consistencyAudit)) : null,
       recoverySchedules: (session.recoverySchedules || []).map(value => ({ ...value })),
       endGuard: session.endGuard ? { ...session.endGuard, counts: { ...(session.endGuard.counts || {}) } } : null,
       senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) },

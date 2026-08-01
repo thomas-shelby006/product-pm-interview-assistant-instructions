@@ -1,4 +1,5 @@
 import { deriveSelfTestTrust } from './self-test-trust-model.js';
+import { classifyRuntimeRootCause } from '../shared/runtime-root-cause.js';
 
 function blocker(code, label, action = 'check_live') {
   return { code, label, action };
@@ -31,6 +32,7 @@ export function deriveReadiness(snapshot, now = Date.now()) {
       if (!value.composerReady) blockers.push(blocker(`${role}_composer`, `${role === 'sender' ? 'Window 1' : 'Window 2'} composer is unavailable`, 'repair_runtime'));
       if (value.adapterCapabilities?.complete !== true) blockers.push(blocker(`${role}_adapter`, `${role === 'sender' ? 'Window 1' : 'Window 2'} adapter capability check is incomplete`, 'repair_runtime'));
       if (['critical', 'degraded'].includes(String(value.adapterCapabilityDrift?.state || ''))) blockers.push(blocker(`${role}_adapter_drift`, `${role === 'sender' ? 'Window 1' : 'Window 2'} provider capability changed after readiness`, 'repair_runtime'));
+      if (value.adapterCapabilityProbation?.writeSafe === false) blockers.push(blocker(`${role}_capability_probation`, `${role === 'sender' ? 'Window 1' : 'Window 2'} provider write surfaces are on probation`, 'check_live'));
       const heartbeatAge = value.heartbeatAt ? Math.max(0, Number(now) - Number(value.heartbeatAt)) : Infinity;
       if (heartbeatAge > 15000) blockers.push(blocker(`${role}_heartbeat`, `${role === 'sender' ? 'Window 1' : 'Window 2'} heartbeat is stale`, 'repair_runtime'));
     }
@@ -49,7 +51,8 @@ export function deriveReadiness(snapshot, now = Date.now()) {
   else if (trust.state === 'stale') blockers.push(blocker('self_test_stale', 'Active runtime verification evidence is stale', 'run_self_test'));
 
   const actions = [...new Set(blockers.map(item => item.action).filter(Boolean))];
+  const rootCause = classifyRuntimeRootCause(snapshot, now);
   return blockers.length
-    ? { state: 'not_ready', label: 'Not ready', blockers, actions, evidenceSource: trust.source, evidenceExpiresAt: trust.expiresAt }
-    : { state: 'ready', label: 'Ready', blockers: [], actions: [], evidenceSource: trust.source, evidenceExpiresAt: trust.expiresAt };
+    ? { state: 'not_ready', label: 'Not ready', blockers, actions, rootCause, evidenceSource: trust.source, evidenceExpiresAt: trust.expiresAt }
+    : { state: 'ready', label: 'Ready', blockers: [], actions: [], rootCause, evidenceSource: trust.source, evidenceExpiresAt: trust.expiresAt };
 }

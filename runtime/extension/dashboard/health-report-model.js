@@ -1,5 +1,7 @@
 import { buildDiagnostics } from './dashboard-model.js';
 import { deriveReadiness } from './readiness-model.js';
+import { classifyRuntimeRootCause } from '../shared/runtime-root-cause.js';
+import { deriveQueueOnlyPolicy } from '../shared/queue-only-policy.js';
 import { deriveGapWatch } from './gap-watch-model.js';
 import { deriveOutboxStatus } from './outbox-status-model.js';
 import { deriveProofInspector } from './proof-inspector-model.js';
@@ -20,6 +22,8 @@ export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {
   const pace = derivePaceGuard(snapshot, now);
   const verification = deriveSelfTestTrust(snapshot, now);
   const compatibility = deriveStateCompatibility(snapshot);
+  const rootCause = classifyRuntimeRootCause(snapshot, now);
+  const deliveryPolicy = deriveQueueOnlyPolicy(snapshot, rootCause);
   return {
     generatedAt: now,
     sessionId: String(snapshot.sessionId || ''),
@@ -28,6 +32,14 @@ export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {
       blockers: readiness.blockers.map(item => ({ code: item.code, label: item.label }))
     },
     runtime: buildDiagnostics(snapshot, now),
+    rootCause,
+    deliveryPolicy,
+    consistencyAudit: snapshot.consistencyAudit ? {
+      ok: snapshot.consistencyAudit.ok === true,
+      reason: String(snapshot.consistencyAudit.reason || ''),
+      repairs: (snapshot.consistencyAudit.repairs || []).map(item => ({ code: String(item.code || '') })),
+      blocked: (snapshot.consistencyAudit.blocked || []).map(item => ({ code: String(item.code || '') }))
+    } : null,
     stateCompatibility: {
       state: compatibility.state,
       schemaVersion: compatibility.schemaVersion,

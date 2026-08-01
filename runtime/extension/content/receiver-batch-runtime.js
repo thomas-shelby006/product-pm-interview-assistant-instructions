@@ -24,6 +24,7 @@ export function createReceiverBatchRuntime({
   let lastSuccessfulChars = 0;
   let lastFailureChars = 0;
   let lastSchedulingDecision = null;
+  let queueOnly = { active: false, reason: '' };
 
   const emit = (type, data = {}) => {
     const event = { type, at: nowFn(), ...data };
@@ -195,6 +196,15 @@ export function createReceiverBatchRuntime({
     if (submitting || planner.active()) {
       return { ok: true, staged: true, reason: 'active_batch' };
     }
+    if (queueOnly.active) {
+      mirrorNext();
+      return {
+        ok: true,
+        staged: true,
+        reason: 'queue_only',
+        deliveryPolicy: { ...queueOnly }
+      };
+    }
     applyProviderBudget();
     const next = planner.next();
     if (!next.count) return { ok: true, staged: false, reason: 'batch_empty' };
@@ -256,14 +266,14 @@ export function createReceiverBatchRuntime({
         nextCount: planner.nextSize,
         partitionCount: planner.next().partitionCount
       });
-      if (adapter.isGenerating?.() || planner.active()) {
+      if (queueOnly.active || adapter.isGenerating?.() || planner.active()) {
         mirrorNext();
         const next = planner.next();
         return {
           ok: true,
           delivered: false,
           staged: true,
-          reason: 'receiver_busy',
+          reason: queueOnly.active ? 'queue_only' : 'receiver_busy',
           batchId: 'next',
           memberIds: [String(envelope.id)],
           protectedCount: next.count,
@@ -378,21 +388,37 @@ export function createReceiverBatchRuntime({
       planner.setHold(value);
       emit('batch_policy_changed', {
         hold: planner.hold,
-        autoSubmit: planner.autoSubmit
+        autoSubmit: planner.autoSubmit,
+        queueOnly: { ...queueOnly }
       });
-      if (!planner.hold) return submitNext();
+      if (!planner.hold && !queueOnly.active) return submitNext();
       mirrorNext();
-      return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit };
+      return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit, queueOnly: { ...queueOnly } };
+    },
+    async setQueueOnly(value, reason = '') {
+      queueOnly = {
+        active: Boolean(value),
+        reason: Boolean(value) ? String(reason || 'runtime_degraded') : ''
+      };
+      emit('batch_policy_changed', {
+        hold: planner.hold,
+        autoSubmit: planner.autoSubmit,
+        queueOnly: { ...queueOnly }
+      });
+      if (!queueOnly.active && !planner.hold) return submitNext();
+      mirrorNext();
+      return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit, queueOnly: { ...queueOnly } };
     },
     async setAutoSubmit(value) {
       planner.setAutoSubmit(value);
       emit('batch_policy_changed', {
         hold: planner.hold,
-        autoSubmit: planner.autoSubmit
+        autoSubmit: planner.autoSubmit,
+        queueOnly: { ...queueOnly }
       });
-      if (planner.autoSubmit && !planner.hold) return submitNext();
+      if (planner.autoSubmit && !planner.hold && !queueOnly.active) return submitNext();
       mirrorNext();
-      return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit };
+      return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit, queueOnly: { ...queueOnly } };
     },
     snapshot() {
       return {
@@ -400,7 +426,8 @@ export function createReceiverBatchRuntime({
         transaction: activeTransaction?.snapshot() || null,
         lastTransaction: lastTransaction ? { ...lastTransaction, memberIds: [...(lastTransaction.memberIds || [])], history: (lastTransaction.history || []).map(item => ({ ...item })) } : null,
         budget: planner.budget(),
-        scheduling: lastSchedulingDecision ? { ...lastSchedulingDecision, memberIds: [...(lastSchedulingDecision.memberIds || [])] } : null
+        scheduling: lastSchedulingDecision ? { ...lastSchedulingDecision, memberIds: [...(lastSchedulingDecision.memberIds || [])] } : null,
+        deliveryPolicy: { ...queueOnly }
       };
     }
   };

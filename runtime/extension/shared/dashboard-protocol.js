@@ -23,6 +23,7 @@ const COMMANDS = new Set([
   'toggle_scroll',
   'focus_composer',
   'export_session',
+  'export_support_bundle',
   'prepare_end_session',
   'end_session',
   'layout_both',
@@ -70,6 +71,9 @@ export function normalizeDashboardCommand(value) {
   }
   if (['set_auto_submit', 'set_hold'].includes(command)) {
     payload.value = Boolean(payload.value);
+  }
+  if (command === 'export_support_bundle') {
+    for (const key of Object.keys(payload)) delete payload[key];
   }
   if (command === 'end_session') {
     payload.confirmToken = cleanText(payload.confirmToken, 160);

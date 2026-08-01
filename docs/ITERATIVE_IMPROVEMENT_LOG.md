@@ -534,3 +534,110 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** commit metrics persist in session state while snapshot-cache counters remain controller-local and are injected without mutating state during broadcast.
 
 **Block C verification:** 97/97 focused integration tests passed across canonical fingerprints, snapshot deltas, telemetry, section reuse, cached ledger views, persistence lanes, Pilot state/controller, dashboard, health report, and performance budgets. HTML atlas remains deferred.
+
+
+## Cycle 86 - Provider Capability Probation
+- **Bug fixes:** one transient provider-surface miss no longer disables delivery, while repeated missing required surfaces cannot remain falsely writable.
+- **New features:** probation, blocked, recovering, and healthy states with stable-sample counters and reason-coded evidence.
+- **Implementation:** content telemetry owns a hysteresis-based capability probation state and readiness fails closed only after the configured critical threshold.
+
+## Cycle 87 - Deterministic Runtime Root Cause
+- **Bug fixes:** storage, registration, transport, provider, sequence, batch, and proof symptoms no longer trigger unrelated competing repairs.
+- **New features:** one primary owner, severity, evidence, next action, and a suppressed-symptom list.
+- **Implementation:** a pure precedence classifier is shared by readiness, recovery, support export, and Safe Health reporting.
+
+## Cycle 88 - Cause-Driven Recovery Escalation
+- **Bug fixes:** repair no longer reloads every role for a single-owner failure or consumes automatic budget on non-repairable conditions.
+- **New features:** reconcile, reconnect, re-register, managed reload, queue-only, and operator-handoff actions selected from one cause.
+- **Implementation:** the existing repair authority delegates action choice to one bounded policy while preserving active-answer safety and recovery budgets.
+
+## Cycle 89 - Queue-Only Degraded Delivery
+- **Bug fixes:** finals are no longer written into an unhealthy provider composer during storage, compatibility, registration, or provider-capability failure.
+- **New features:** visible protected-delivery mode with reason, resume condition, and one-click recheck.
+- **Implementation:** persistence remains active, provider writes are blocked at forward, reconciliation, manual submit, batching, and SLA escalation boundaries, and the mode clears only after the underlying blocker clears.
+
+## Cycle 90 - Runtime Consistency Watchdog
+- **Bug fixes:** missing alarms, stale indexes, expired attempt leases, and registry/Pilot drift no longer remain silent until delivery fails.
+- **New features:** metadata-only consistency result with deterministic repair instructions and blocked ambiguity reporting.
+- **Implementation:** semantic commits, worker startup, and alarm wake use the same audit owner; safe repairs are automatic and ambiguous batch membership fails closed.
+
+## Cycles 86-95: runtime safety and release evidence
+
+### Cycle 86 - Provider capability probation
+- **Bug fix:** transient provider DOM loss no longer immediately disables the runtime or permits unsafe writes after repeated loss.
+- **New feature:** readiness and support evidence expose healthy, probation, blocked, and recovering capability states.
+- **Implementation:** capability hysteresis is metadata-only and blocks provider writes only after the configured critical threshold.
+
+### Cycle 87 - One runtime root cause
+- **Bug fix:** secondary warnings no longer compete as independent repair triggers.
+- **New feature:** the Pilot readiness summary names the primary cause while preserving suppressed evidence.
+- **Implementation:** a deterministic precedence classifier owns state, storage, registration, transport, provider, sequence, batch, and proof causes.
+
+### Cycle 88 - Cause-driven recovery
+- **Bug fix:** broad repair loops no longer reload both roles for unrelated failures.
+- **New feature:** repair reports expose the selected action and reason.
+- **Implementation:** recovery chooses exactly one bounded action: reconcile, reconnect, re-register, managed reload, queue-only, or operator handoff.
+
+### Cycle 89 - Queue-only degraded mode
+- **Bug fix:** unsafe provider state no longer blocks Window 1 persistence or allows Window 2 mutation.
+- **New feature:** a visible protected-delivery banner explains why writes are blocked and when they resume.
+- **Implementation:** queue-only is separate from manual Hold, survives receiver reload, and clears after compatibility and capabilities recover.
+
+### Cycle 90 - Consistency watchdog
+- **Bug fix:** stale indexes, expired attempt leases, and missing managed alarms are detected and safely repaired.
+- **New feature:** Safe Health Report includes the latest consistency result.
+- **Implementation:** audits run on startup, alarm wake, and semantic commits, never by polling provider content.
+
+## Cycle 91 - Deterministic Fault Scenario Harness
+- **Bug fixes:** fault-path validation no longer depends on ad hoc scripts with inconsistent cleanup or evidence shapes.
+- **New features:** ordered scenario steps, before/after metadata, first-failure location, and guaranteed cleanup.
+- **Implementation:** the harness lives under the test-only import boundary and strips question, answer, setup, clipboard, credential, and token fields from evidence.
+
+## Cycle 92 - Restart Continuity Proof
+- **Bug fixes:** worker restart can no longer be considered safe without proving ledger order, batch membership, owner identity, outbox order, alarms, and index integrity.
+- **New features:** deterministic before/after continuity checks for every persisted mechanical owner.
+- **Implementation:** the scenario reconstructs Runtime Pilot State and Session Registry from exported state and reports exact failing invariants without provider content.
+
+## Cycle 93 - Expanded No-Content Chaos Drill
+- **Bug fixes:** state compatibility, ledger indexes, capability probation, queue-only policy, and restart continuity can no longer regress outside the operator drill.
+- **New features:** twelve structured no-content checks instead of seven, with isolated-smoke enforcement.
+- **Implementation:** the drill reuses existing self-test, fallback, sequence, alarm, state, index, policy, and continuity owners and never reads prompt or answer content.
+
+## Cycle 94 - Privacy-Safe Support Bundle
+- **Bug fixes:** support evidence no longer requires copying raw diagnostics or exposing provider URLs and conversation content.
+- **New features:** one-click JSON export containing version, reason-coded state, role health, transport metadata, ledger identities, audits, performance, drill results, and source hashes.
+- **Implementation:** a pure allow-list builder excludes questions, answers, setup context, clipboard data, credentials, and raw URLs; the Pilot downloads the result locally.
+
+## Cycle 95 - Commit-Bound Release Evidence Manifest
+- **Bug fixes:** a passing test log and browser smoke can no longer be attached to a different source commit or incomplete cleanup result.
+- **New features:** deterministic SHA-256 source inventory, gate counts, smoke outcomes, cleanup evidence, and one manifest hash.
+- **Implementation:** the validator optionally generates the evidence manifest only when gate log, isolated-smoke evidence, and output path are supplied together.
+
+**Source-complete status:** Cycles 86-95 are implemented. Executable verification remains deferred until the complete requested development program is finished. The HTML atlas remains untouched.
+
+### Cycle 91 - Test-only fault scenario harness
+- **Bug fix:** fault experiments can no longer leak into production entry points or leave cleanup ambiguous.
+- **New feature:** named metadata-only scenarios capture ordered before/result/after evidence.
+- **Implementation:** the validator rejects any production import of `runtime/extension/testing`.
+
+### Cycle 92 - Restart continuity proof
+- **Bug fix:** restart validation now checks ledger order, active/next batch membership, outbox intent, owner generations, alarms, and index integrity together.
+- **New feature:** one deterministic restart report identifies the exact failed continuity check.
+- **Implementation:** the scenario reconstructs Pilot state and registry owners only from serialized session data.
+
+### Cycle 93 - Expanded no-content drill
+- **Bug fix:** the previous seven-check drill did not exercise compatibility, indexes, probation, queue-only policy, or restart continuity.
+- **New feature:** the Pilot drill now reports twelve ordered control-plane checks.
+- **Implementation:** all drill evidence is reason-coded metadata and explicitly records `contentAccessed: false`.
+
+### Cycle 94 - Safe support bundle
+- **Bug fix:** support collection no longer depends on screenshots, raw URLs, prompts, answers, setup context, or credentials.
+- **New feature:** Review can download one metadata-only JSON bundle with runtime, compatibility, root cause, lanes, audits, trace IDs, budgets, and drill results.
+- **Implementation:** caller-supplied fields are stripped; source hashes remain exclusive to release evidence.
+
+### Cycle 95 - Deterministic release evidence
+- **Bug fix:** release claims can no longer mix a gate, smoke, or cleanup result from another commit.
+- **New feature:** the final validator can emit one commit-bound evidence manifest.
+- **Implementation:** sorted source SHA-256 hashes, gate counts, smoke proof, cleanup state, and a deterministic manifest hash form the release identity.
+
+**Development status:** source and regression contracts complete. Executable block and repository gates remain deferred until all later development cycles are source-complete.

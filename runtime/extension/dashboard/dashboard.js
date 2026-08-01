@@ -75,6 +75,11 @@ function requestId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function humanizeCode(value) {
+  const text = String(value || '').trim().replaceAll('_', ' ');
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : 'Unknown';
+}
+
 function sendCommand(command, payload = {}) {
   if (!state.port) {
     showToast('Dashboard is not connected.', 'error');
@@ -303,13 +308,22 @@ function renderReadiness(snapshot, now) {
     ? 'Window 1, Window 2, context, delivery, and storage checks are healthy.'
     : readiness.state === 'repairing'
       ? 'Repair is running. Ready will appear only after every check passes.'
-      : `${readiness.blockers.length} blocker(s) must be resolved before relying on the runtime.`);
+      : `${readiness.blockers.length} blocker(s). Primary cause: ${humanizeCode(readiness.rootCause?.code)}.`);
   const list = byId('readinessBlockers');
   list.replaceChildren();
   for (const value of readiness.blockers.slice(0, 5)) {
     const item = document.createElement('li');
     item.textContent = value.label;
     list.append(item);
+  }
+  const banner = byId('deliveryPolicyBanner');
+  const policy = snapshot?.deliveryPolicy || {};
+  banner.hidden = policy.active !== true;
+  if (!banner.hidden) {
+    text('deliveryPolicyLabel', policy.reason === 'operator_hold' ? 'Forwarding paused' : 'Queue-only protection');
+    text('deliveryPolicyDetail', policy.reason === 'operator_hold'
+      ? 'Every final remains durable until you resume forwarding.'
+      : `Provider writes are blocked by ${String(policy.reason || 'runtime safety')}. Finals remain in the lossless inbox until ${String(policy.resumeWhen || 'the runtime is healthy')}.`);
   }
 }
 
@@ -974,6 +988,32 @@ document.addEventListener('click', event => {
         : {};
     void runCommand(button, command, payload);
   }
+});
+
+byId('exportSupportBundle').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.dataset.busy = 'true';
+  button.setAttribute('aria-busy', 'true');
+  updateControlAvailability();
+  const result = await sendCommand('export_support_bundle');
+  button.dataset.busy = 'false';
+  button.removeAttribute('aria-busy');
+  updateControlAvailability();
+  if (!result?.ok || !result.bundle) {
+    text('supportBundleStatus', result?.error || 'Support bundle export failed.');
+    showToast(result?.error || 'Support bundle export failed.', 'error');
+    return;
+  }
+  const blob = new Blob([`${JSON.stringify(result.bundle, null, 2)}
+`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `pmia-support-${sessionId.replace(/[^A-Za-z0-9_-]+/g, '_')}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  text('supportBundleStatus', 'Metadata-only support bundle exported.');
+  showToast('Safe support bundle downloaded.', 'ok');
 });
 
 byId('traceSearch').addEventListener('input', event => {

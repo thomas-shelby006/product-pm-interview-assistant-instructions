@@ -1,6 +1,7 @@
 import { describeAdapterCapabilities } from './adapter-health.js';
 import { reconcileGenerationTruth } from './generation-truth.js';
 import { evaluateAdapterCapabilityDrift } from './adapter-capability-drift.js';
+import { CapabilityProbation } from './capability-probation.js';
 
 export function classifySourceSilence({
   role,
@@ -68,6 +69,8 @@ export function createRuntimeTelemetry({
   let lastAssistantText = String(adapter?.getLatestAssistantText?.() || '');
   let adapterCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
   let adapterCapabilityDrift = evaluateAdapterCapabilityDrift(adapterCapabilities, adapterCapabilities, null, now());
+  const capabilityProbation = new CapabilityProbation();
+  let adapterCapabilityProbation = capabilityProbation.observe(adapterCapabilities, now());
   let lastFingerprint = '';
   let closed = false;
 
@@ -100,6 +103,7 @@ export function createRuntimeTelemetry({
     }
     const currentCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
     adapterCapabilityDrift = evaluateAdapterCapabilityDrift(adapterCapabilities, currentCapabilities, adapterCapabilityDrift, current);
+    adapterCapabilityProbation = capabilityProbation.observe(currentCapabilities, current);
     adapterCapabilities = currentCapabilities;
     return {
       role: runtimeConfig?.role || '',
@@ -113,6 +117,7 @@ export function createRuntimeTelemetry({
       micState,
       adapterCapabilities,
       adapterCapabilityDrift: { ...adapterCapabilityDrift, removed: [...adapterCapabilityDrift.removed], restored: [...adapterCapabilityDrift.restored], criticalRemoved: [...adapterCapabilityDrift.criticalRemoved] },
+      adapterCapabilityProbation: { ...adapterCapabilityProbation },
       pageVisibility: getVisibilityState(),
       pageLifecycle: typeof getLifecycleState === 'function' ? getLifecycleState() : null,
       schedulerState: runtimeConfig?.role === 'receiver' ? { ...schedulerState } : null,

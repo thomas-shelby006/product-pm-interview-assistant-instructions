@@ -42,6 +42,15 @@
       </div>
     </section>
 
+    <section id="deliveryPolicyBanner" class="policy-banner" aria-live="polite" aria-atomic="true" hidden>
+      <div>
+        <span class="eyebrow">Protected delivery mode</span>
+        <strong id="deliveryPolicyLabel">Queue only</strong>
+        <p id="deliveryPolicyDetail">Finals remain durable while provider writes are blocked.</p>
+      </div>
+      <button data-command="check_live">Recheck</button>
+    </section>
+
     <nav class="tabs" aria-label="Dashboard views" role="tablist">
       <button class="tab active" data-view="overview" role="tab" aria-selected="true" aria-controls="panelOverview">Live</button>
       <button class="tab" data-view="queue" role="tab" aria-selected="false" aria-controls="panelQueue">Inbox <span id="queueBadge">0</span></button>
@@ -335,9 +344,14 @@
             <button data-command="reset_recovery_budget" id="resetRecoveryBudget">Reset recovery budget</button>
           </article>
           <article class="mechanics-card drill-card">
-            <div class="section-heading"><div><h3>No-content transport drill</h3><p>Tests protocol, direct, fallback, epoch, NACK, alarms, and invariants.</p></div></div>
+            <div class="section-heading"><div><h3>No-content transport drill</h3><p>Tests protocol, direct, fallback, epoch, NACK, alarms, invariants, compatibility, and restart continuity.</p></div></div>
             <button data-command="run_transport_drill" id="runTransportDrill">Run transport drill</button>
             <pre id="transportDrillReport">No drill has been run.</pre>
+          </article>
+          <article class="mechanics-card support-card">
+            <div class="section-heading"><div><h3>Safe support bundle</h3><p>Downloads metadata-only runtime evidence without prompts, answers, context, credentials, or raw URLs.</p></div></div>
+            <button id="exportSupportBundle">Download support bundle</button>
+            <p id="supportBundleStatus">No support bundle has been exported.</p>
           </article>
         </section>
         <article class="trace-inspector">

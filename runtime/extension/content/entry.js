@@ -874,6 +874,9 @@ async function startRuntime(runtimeConfig) {
       case 'set_hold':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.setHold(Boolean(payload.value));
+      case 'set_queue_only':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.setQueueOnly(Boolean(payload.value), String(payload.reason || ''));
       case 'submit_next':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.submitNext({ force: true });

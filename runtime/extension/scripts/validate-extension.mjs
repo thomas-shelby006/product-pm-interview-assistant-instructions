@@ -52,7 +52,7 @@ for (const file of files) {
 const forbidden = ['/backend-api/conversation', '/api/chat_conversations/', 'Authorization: Bearer'];
 const runtimeFiles = files.filter(file => {
   const path = relative(root, file);
-  return !path.startsWith('scripts') && !path.startsWith('tests');
+  return !path.startsWith('scripts') && !path.startsWith('tests') && !path.startsWith('testing');
 });
 for (const file of runtimeFiles) {
   const source = await readFile(file, 'utf8');
@@ -88,6 +88,16 @@ function relativeImportSpecifiers(source) {
     for (const match of source.matchAll(pattern)) output.push(match[1]);
   }
   return output;
+}
+
+for (const file of runtimeFiles) {
+  const source = await readFile(file, 'utf8');
+  for (const specifier of relativeImportSpecifiers(source)) {
+    const target = relative(root, resolve(dirname(file), specifier));
+    if (target.startsWith('testing')) {
+      throw new Error(`Production module imports test-only fault harness: ${relative(root, file)} -> ${specifier}`);
+    }
+  }
 }
 
 const productionFiles = new Set(runtimeFiles.map(file => resolve(file)));

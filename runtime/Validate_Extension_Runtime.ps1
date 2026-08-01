@@ -1,5 +1,8 @@
-﻿param(
-    [string]$AutoHotkeyExe = "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe"
+param(
+    [string]$AutoHotkeyExe = "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe",
+    [string]$GateLog = '',
+    [string]$SmokeEvidence = '',
+    [string]$EvidenceManifest = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,6 +12,7 @@ $launcher = Join-Path $PSScriptRoot 'Final_2_Window_Extension.ahk'
 $reviewCompanion = Join-Path $PSScriptRoot 'Session_Tracker_End_Session.ahk'
 $isolatedSmoke = Join-Path $PSScriptRoot 'scripts\run-isolated-release-smoke.ps1'
 $isolatedRunner = Join-Path $PSScriptRoot 'scripts\isolated-release-smoke.mjs'
+$evidenceBuilder = Join-Path $PSScriptRoot 'scripts\build-release-evidence-manifest.mjs'
 
 if (-not (Test-Path $AutoHotkeyExe)) { throw "AutoHotkey v2 not found: $AutoHotkeyExe" }
 if (-not (Test-Path (Join-Path $extension 'manifest.json'))) { throw 'Extension manifest missing.' }
@@ -16,6 +20,7 @@ if (-not (Test-Path $launcher)) { throw 'Extension launcher missing.' }
 if (-not (Test-Path $reviewCompanion)) { throw 'Session review companion missing.' }
 if (-not (Test-Path $isolatedSmoke)) { throw 'Isolated release smoke PowerShell owner missing.' }
 if (-not (Test-Path $isolatedRunner)) { throw 'Isolated release smoke Node runner missing.' }
+if (-not (Test-Path $evidenceBuilder)) { throw 'Release evidence manifest builder missing.' }
 
 $launcherSource = Get-Content $launcher -Raw
 $requiredHotkeys = @('!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::', '!h::', '!+r::', '!+e::')
@@ -82,6 +87,13 @@ try {
 
     Test-AutoHotkeyScript -Path $launcher -Label 'Main launcher'
     Test-AutoHotkeyScript -Path $reviewCompanion -Label 'Session review companion' -UseEnvironmentValidation
+
+    $evidenceInputs = @($GateLog, $SmokeEvidence, $EvidenceManifest) | Where-Object { $_ }
+    if ($evidenceInputs.Count -gt 0) {
+        if ($evidenceInputs.Count -ne 3) { throw 'GateLog, SmokeEvidence, and EvidenceManifest must be provided together.' }
+        & node $evidenceBuilder --repo $repo --gate-log $GateLog --smoke-evidence $SmokeEvidence --output $EvidenceManifest
+        if ($LASTEXITCODE -ne 0) { throw "Release evidence manifest generation failed with exit code $LASTEXITCODE" }
+    }
 
     Write-Host 'PMIA extension runtime validation passed.'
     Write-Host "Extension:        $extension"

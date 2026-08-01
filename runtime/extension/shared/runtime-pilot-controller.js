@@ -17,8 +17,13 @@ import { createCoalescedCommitLane } from './persistence-urgency-policy.js';
 import { outboxAlarmName } from './alarm-rehydration.js';
 import { runTransportDrill } from './transport-drill.js';
 import { deriveSequenceFeedback } from './sequence-feedback.js';
+import { buildSafeSupportBundle } from './support-bundle.js';
 
 import { classifyRegistration } from './registration-heartbeat.js';
+import { classifyRuntimeRootCause } from './runtime-root-cause.js';
+import { selectRecoveryAction } from './recovery-escalation-policy.js';
+import { deriveQueueOnlyPolicy } from './queue-only-policy.js';
+import { runConsistencyAudit } from './consistency-watchdog.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -74,8 +79,99 @@ export function createRuntimePilotController({
     }
   }
 
+  function sameDeliveryPolicy(left = {}, right = {}) {
+    return Boolean(left.active) === Boolean(right.active)
+      && String(left.reason || '') === String(right.reason || '')
+      && String(left.resumeWhen || '') === String(right.resumeWhen || '')
+      && Boolean(left.allowPersist) === Boolean(right.allowPersist)
+      && Boolean(left.allowProviderWrite) === Boolean(right.allowProviderWrite);
+  }
+
+  async function syncDeliveryPolicy(sessionId, registry, pilot, { force = false } = {}) {
+    const snapshot = pilot.snapshot(sessionId);
+    if (!snapshot) return { active: false, reason: 'session_missing', allowPersist: true, allowProviderWrite: false };
+    const rootCause = classifyRuntimeRootCause({ ...snapshot, stateAudit: store.audit() }, Date.now());
+    const policy = deriveQueueOnlyPolicy(snapshot, rootCause);
+    const changed = !sameDeliveryPolicy(snapshot.deliveryPolicy, policy);
+    if (changed) {
+      pilot.setDeliveryPolicy(sessionId, policy);
+      pilot.record(sessionId, policy.active ? 'queue_only_enabled' : 'queue_only_cleared', {
+        reason: policy.reason,
+        resumeWhen: policy.resumeWhen,
+        rootCause: rootCause.code
+      });
+    }
+    if ((changed || force) && registry?.getSession) {
+      await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_queue_only', {
+        value: policy.active,
+        reason: policy.reason,
+        source: 'runtime_policy'
+      });
+    }
+    return { ...policy, changed, rootCause };
+  }
+
+  async function runAndApplyConsistencyAudit(sessionId, pilot, registry = null) {
+    const snapshot = pilot.snapshot(sessionId);
+    if (!snapshot) return { ok: true, repairs: [], blocked: [], reason: 'session_missing' };
+    let activeRegistry = registry;
+    if (!activeRegistry) {
+      try { activeRegistry = await registryProvider(); } catch { activeRegistry = null; }
+    }
+    let alarms = [];
+    try { alarms = await chromeApi.alarms?.getAll?.() || []; } catch { alarms = []; }
+    let audit = runConsistencyAudit({
+      snapshot,
+      storeAudit: store.audit(),
+      registry: activeRegistry,
+      alarms,
+      now: Date.now()
+    });
+    for (const repair of audit.repairs || []) {
+      if (repair.code === 'rebuild_ledger_index') {
+        pilot.auditLedgerIndex(sessionId, { repair: true });
+      } else if (repair.code === 'release_expired_attempt_lease' && repair.ledgerItemId) {
+        pilot.releaseExpiredAttemptLease(sessionId, repair.ledgerItemId);
+      } else if (repair.code === 'restore_alarm' && repair.alarmName) {
+        const schedule = snapshot.recoverySchedules?.find(item => item.alarmName === repair.alarmName);
+        if (schedule?.dueAt) {
+          await chromeApi.alarms?.create?.(repair.alarmName, { when: Math.max(Date.now() + 50, Number(schedule.dueAt)) });
+        }
+      }
+    }
+    if ((audit.repairs || []).some(item => ['rebuild_ledger_index','release_expired_attempt_lease','restore_alarm'].includes(item.code))) {
+      let refreshedAlarms = [];
+      try { refreshedAlarms = await chromeApi.alarms?.getAll?.() || []; } catch { refreshedAlarms = []; }
+      audit = runConsistencyAudit({
+        snapshot: pilot.snapshot(sessionId),
+        storeAudit: store.audit(),
+        registry: activeRegistry,
+        alarms: refreshedAlarms,
+        now: Date.now()
+      });
+    }
+    pilot.setConsistencyAudit(sessionId, audit);
+    return audit;
+  }
+
   async function state() {
     return store.load();
+  }
+
+  async function refreshDerivedPolicies(sessionId, pilot, { registry = null } = {}) {
+    const base = pilot.snapshot(sessionId);
+    if (!base) return { rootCause: null, deliveryPolicy: null, consistencyAudit: null };
+    let currentRegistry = registry;
+    if (!currentRegistry) {
+      try { currentRegistry = await registryProvider(); } catch { currentRegistry = null; }
+    }
+    const consistencyAudit = await runAndApplyConsistencyAudit(sessionId, pilot, currentRegistry);
+    const deliveryPolicy = await syncDeliveryPolicy(sessionId, currentRegistry, pilot);
+    return {
+      rootCause: deliveryPolicy.rootCause,
+      deliveryPolicy,
+      consistencyAudit
+    };
   }
 
   function blockedStateSnapshot(sessionId, error = null) {
@@ -104,17 +200,22 @@ export function createRuntimePilotController({
     const current = pilot || await state();
     const baseSnapshot = current.snapshot(sessionId, Date.now());
     const localPerformance = snapshotPerformance.get(sessionId) || { cacheHits: 0, cacheMisses: 0 };
-    const rawSnapshot = baseSnapshot ? {
-      ...baseSnapshot,
+    const stateAudit = store.audit();
+    const snapshotBase = baseSnapshot ? { ...baseSnapshot, stateAudit } : null;
+    const rootCause = snapshotBase ? classifyRuntimeRootCause(snapshotBase, Date.now()) : null;
+    const deliveryPolicy = snapshotBase ? deriveQueueOnlyPolicy(snapshotBase, rootCause) : null;
+    const rawSnapshot = snapshotBase ? {
+      ...snapshotBase,
+      rootCause,
+      deliveryPolicy,
       performanceBudget: {
-        ...(baseSnapshot.performanceBudget || {}),
+        ...(snapshotBase.performanceBudget || {}),
         cacheHits: localPerformance.cacheHits,
         cacheMisses: localPerformance.cacheMisses,
         cacheHitRate: localPerformance.cacheHits + localPerformance.cacheMisses
           ? Math.round((localPerformance.cacheHits / (localPerformance.cacheHits + localPerformance.cacheMisses)) * 100)
           : 100
-      },
-      stateAudit: store.audit()
+      }
     } : null;
     if (!rawSnapshot) {
       snapshotCaches.delete(sessionId);
@@ -154,8 +255,10 @@ export function createRuntimePilotController({
     return snapshot;
   }
 
-  async function commit(sessionId, pilot = null, reason = 'semantic_commit') {
+  async function commit(sessionId, pilot = null, reason = 'semantic_commit', { skipConsistency = false } = {}) {
     const current = pilot || await state();
+    const auditEligible = !/^coalesced:(preview|batch_checkpoint)$/.test(String(reason || ''));
+    if (!skipConsistency && auditEligible) await refreshDerivedPolicies(sessionId, current);
     current.recordPerformance(sessionId, {
       kind: 'persistence',
       operations: 1,
@@ -249,6 +352,9 @@ export function createRuntimePilotController({
     const currentPilot = pilot || await state();
     const snapshot = currentPilot.snapshot(sessionId);
     if (!snapshot?.receiver?.connected) return { ok: false, error: 'receiver_missing' };
+    if (snapshot?.deliveryPolicy?.active || snapshot?.deliveryPolicy?.allowProviderWrite === false) {
+      return { ok: true, queued: true, reason: snapshot.deliveryPolicy?.reason || 'queue_only' };
+    }
     const payload = buildReconciliationPayload(snapshot);
     if (!payload.pending.length) {
       if (currentPilot.snapshot(sessionId)?.mode === 'repairing') {
@@ -350,6 +456,10 @@ export function createRuntimePilotController({
     });
     await commit(registration.sessionId, pilot);
     if (registration.role === 'receiver') {
+      try {
+        const registry = await registryProvider();
+        await syncDeliveryPolicy(registration.sessionId, registry, pilot, { force: true });
+      } catch {}
       setTimeout(() => {
         void mutationCoordinator.run(
           registration.sessionId,
@@ -440,12 +550,29 @@ export function createRuntimePilotController({
         }
       };
     }
-    if (pilot.snapshot(envelope.sessionId)?.mode === 'paused') {
+    const persistedSnapshot = pilot.snapshot(envelope.sessionId);
+    if (persistedSnapshot?.mode === 'paused') {
       return {
         paused: true,
         persisted: true,
         duplicate: false,
         response: { ok: true, persisted: true, delivered: false, queued: true, reason: 'transport_paused' }
+      };
+    }
+    if (persistedSnapshot?.deliveryPolicy?.allowProviderWrite === false) {
+      return {
+        paused: true,
+        persisted: true,
+        duplicate: false,
+        response: {
+          ok: true,
+          persisted: true,
+          delivered: false,
+          queued: true,
+          staged: true,
+          reason: 'queue_only_mode',
+          deliveryPolicy: { ...persistedSnapshot.deliveryPolicy }
+        }
       };
     }
     return { paused: false, persisted: true, duplicate: false, response: null };
@@ -610,6 +737,19 @@ export function createRuntimePilotController({
 
   async function evaluateDeliverySla(sessionId, registry, pilot) {
     const snapshot = pilot.snapshot(sessionId);
+    if (snapshot?.deliveryPolicy?.active || snapshot?.deliveryPolicy?.allowProviderWrite === false) {
+      const prior = snapshot.deliverySla || {};
+      const decision = {
+        ...prior,
+        state: 'queue_only',
+        reason: snapshot.deliveryPolicy?.reason || 'queue_only',
+        action: '',
+        nextAction: snapshot.deliveryPolicy?.resumeWhen || '',
+        evaluatedAt: Date.now()
+      };
+      pilot.setDeliverySla(sessionId, decision);
+      return { ...decision, changed: prior.state !== 'queue_only' || prior.reason !== decision.reason };
+    }
     const decision = deriveDeliverySla(snapshot, Date.now());
     const previousActionAt = Number(snapshot?.deliverySla?.lastActionAt || 0);
     if (!decision.action) {
@@ -761,13 +901,22 @@ export function createRuntimePilotController({
       reconnect: async () => ({ ok: ['sender', 'receiver'].every(role => Number(snapshot?.[role]?.transportLane?.epoch || 0) > 0), epochs: { sender: snapshot?.sender?.transportLane?.epoch || 0, receiver: snapshot?.receiver?.transportLane?.epoch || 0 } }),
       selectiveNack: async () => { const feedback = deriveSequenceFeedback({ lastAcceptedSeq: 1, buffered: [{ seq: 3, envelope: { seq: 3 } }] }); return { ok: JSON.stringify(feedback.nackRanges) === '[[2,2]]', nackRanges: feedback.nackRanges }; },
       alarmAudit: async () => { const event = [...(snapshot?.timeline || [])].reverse().find(item => item.type === 'alarm_rehydration_audit'); return { ok: true, restored: Number(event?.data?.restored || 0), expected: Number(event?.data?.expected || 0) }; },
-      invariantAudit: async () => ({ ok: Number(snapshot?.stateAudit?.blocked || store.audit().blocked || 0) === 0, blocked: Number(snapshot?.stateAudit?.blocked || store.audit().blocked || 0), repaired: Number(snapshot?.stateAudit?.repaired || store.audit().repaired || 0) })
+      invariantAudit: async () => ({ ok: Number(snapshot?.stateAudit?.blocked || store.audit().blocked || 0) === 0, blocked: Number(snapshot?.stateAudit?.blocked || store.audit().blocked || 0), repaired: Number(snapshot?.stateAudit?.repaired || store.audit().repaired || 0) }),
+      stateCompatibility: async () => ({ ok: snapshot?.stateCompatibility?.state !== 'blocked' && !snapshot?.stateAudit?.blocked, state: snapshot?.stateCompatibility?.state || 'compatible', schemaVersion: Number(snapshot?.stateCompatibility?.schemaVersion || snapshot?.stateAudit?.schemaVersion || 0) }),
+      indexAudit: async () => ({ ok: snapshot?.consistencyAudit?.repairs?.some(item => item.code === 'rebuild_ledger_index') !== true, reason: snapshot?.consistencyAudit?.reason || 'consistent' }),
+      capabilityProbation: async () => ({ ok: ['sender', 'receiver'].every(role => snapshot?.[role]?.adapterCapabilityProbation?.writeSafe !== false), states: Object.fromEntries(['sender', 'receiver'].map(role => [role, snapshot?.[role]?.adapterCapabilityProbation?.state || 'unknown'])) }),
+      queueOnlyPolicy: async () => ({ ok: snapshot?.deliveryPolicy?.allowPersist !== false && !(snapshot?.deliveryPolicy?.active && snapshot?.deliveryPolicy?.allowProviderWrite), active: Boolean(snapshot?.deliveryPolicy?.active), reason: snapshot?.deliveryPolicy?.reason || '' }),
+      restartContinuity: async () => ({ ok: snapshot?.consistencyAudit?.ok !== false && Number(snapshot?.stateAudit?.blocked || 0) === 0, recoverySchedules: snapshot?.recoverySchedules?.length || 0, retryIntent: Boolean(snapshot?.senderOutboxState?.retryIntent?.dueAt) })
     });
     pilot.setTransportDrill(sessionId, report);
     return report;
   }
   async function submitLedgerItem(sessionId, itemId, registry, pilot) {
-    const item = pilot.snapshot(sessionId)?.ledger?.find(candidate => candidate.id === itemId);
+    const currentSnapshot = pilot.snapshot(sessionId);
+    if (currentSnapshot?.deliveryPolicy?.active || currentSnapshot?.deliveryPolicy?.allowProviderWrite === false) {
+      return { ok: false, queued: true, error: currentSnapshot.deliveryPolicy?.reason || 'queue_only' };
+    }
+    const item = currentSnapshot?.ledger?.find(candidate => candidate.id === itemId);
     if (!item) return { ok: false, error: 'ledger_item_missing' };
     if (!['persisted', 'failed'].includes(item.state)) {
       return { ok: false, error: 'ledger_item_not_actionable', state: item.state };
@@ -837,6 +986,7 @@ export function createRuntimePilotController({
       }
     }
     const ok = Boolean(roles.sender?.responsive && roles.receiver?.responsive);
+    await syncDeliveryPolicy(sessionId, registry, pilot, { force: true });
     let recovery = pilot.snapshot(sessionId)?.lastRepair || null;
     if (pilot.snapshot(sessionId)?.mode === 'repairing' || pilot.snapshot(sessionId)?.mode === 'blocked') {
       const reconciliation = ok
@@ -869,53 +1019,94 @@ export function createRuntimePilotController({
   }
 
   async function repair(sessionId, registry, pilot, { source = 'automatic' } = {}) {
-    const budget = pilot.consumeRecoveryBudget(sessionId, { source });
-    if (!budget.accepted) return { ok: false, error: budget.reason, recoveryBudget: budget.budget };
-    applyRecoveryTransition(pilot, sessionId, { type: 'repair_requested' });
-    const report = { ok: true, actions: [], unresolved: [] };
-    const session = registry.getSession(sessionId);
     const snapshot = pilot.snapshot(sessionId);
+    const rootCause = classifyRuntimeRootCause({ ...snapshot, stateAudit: store.audit() }, Date.now());
+    const availableBudget = snapshot?.recoveryBudget || { remaining: 1, maxAutomatic: 1 };
+    const selected = selectRecoveryAction(rootCause, {
+      budget: source === 'manual'
+        ? { ...availableBudget, remaining: Math.max(1, Number(availableBudget.remaining || 0)) }
+        : availableBudget,
+      attempts: source === 'manual' ? 0 : Number(snapshot?.lastRepair?.attempt || 0),
+      roleHealth: { activeAnswer: ['waiting', 'streaming'].includes(String(snapshot?.answerState?.state || '')) }
+    });
+    const deliveryPolicy = deriveQueueOnlyPolicy(snapshot || {}, rootCause);
+    pilot.setDeliveryPolicy(sessionId, deliveryPolicy);
 
-    for (const role of ['sender', 'receiver']) {
-      const registration = session?.[role];
-      if (registration?.tabId) {
-        const recovered = await sendRuntimeCommand(registry, sessionId, role, 'recover');
-        if (recovered.ok) {
-          report.actions.push({ role, action: 'runtime_recovery_requested' });
+    if (selected.action === 'none') {
+      return { ok: true, action: 'none', reason: selected.reason, rootCause, deliveryPolicy };
+    }
+    if (selected.action === 'operator_handoff' || selected.action === 'queue_only') {
+      const report = {
+        ok: selected.action === 'queue_only',
+        actions: selected.action === 'queue_only' ? [{ action: 'queue_only' }] : [],
+        unresolved: selected.action === 'operator_handoff' ? [{ reason: selected.reason }] : [],
+        selectedAction: selected,
+        rootCause,
+        deliveryPolicy,
+        pendingVerification: false,
+        verified: false
+      };
+      persistRepairReport(pilot, sessionId, report);
+      return report;
+    }
+
+    const budget = pilot.consumeRecoveryBudget(sessionId, { source });
+    if (!budget.accepted) return { ok: false, error: budget.reason, recoveryBudget: budget.budget, rootCause, selectedAction: selected };
+    applyRecoveryTransition(pilot, sessionId, { type: 'repair_requested' });
+    const report = { ok: true, actions: [], unresolved: [], selectedAction: selected, rootCause, deliveryPolicy };
+    const session = registry.getSession(sessionId);
+    const targetRole = String(rootCause?.evidence?.role || '');
+    const roles = ['sender', 'receiver'].filter(role => !targetRole || role === targetRole);
+
+    if (selected.action === 'reconcile') {
+      const result = await reconcileSession(sessionId, { registry, pilot, commitResult: false });
+      if (result?.ok === false) {
+        report.ok = false;
+        report.unresolved.push({ reason: result.error || 'reconciliation_failed' });
+      } else {
+        report.actions.push({ action: 'reconciled', role: targetRole || 'receiver' });
+      }
+    } else if (selected.action === 'reconnect' || selected.action === 're_register') {
+      for (const role of roles) {
+        const result = await sendRuntimeCommand(registry, sessionId, role, 'recover', { reason: selected.reason });
+        if (result.ok) report.actions.push({ role, action: selected.action });
+        else {
+          report.ok = false;
+          report.unresolved.push({ role, reason: result.error || `${selected.action}_failed` });
+        }
+      }
+    } else if (selected.action === 'managed_reload') {
+      for (const role of roles) {
+        const registration = session?.[role];
+        if (registration?.tabId) {
+          try {
+            await chromeApi.tabs.reload(registration.tabId);
+            report.actions.push({ role, action: 'tab_reloaded' });
+            continue;
+          } catch {}
+        }
+        const roleState = snapshot?.[role] || {};
+        const url = runtimeUrl(roleState.pageUrl, sessionId, role, roleState.provider);
+        if (!url) {
+          report.ok = false;
+          report.unresolved.push({ role, reason: 'missing_repair_url' });
           continue;
         }
         try {
-          await chromeApi.tabs.reload(registration.tabId);
-          report.actions.push({ role, action: 'tab_reloaded' });
-          continue;
-        } catch {
-          report.unresolved.push({ role, reason: 'registered_tab_unreachable' });
+          await chromeApi.windows.create({
+            url,
+            type: 'popup',
+            focused: false,
+            width: role === 'sender' ? 480 : 976,
+            height: 1032,
+            left: role === 'sender' ? 0 : 464,
+            top: 0
+          });
+          report.actions.push({ role, action: 'role_window_reopened' });
+        } catch (error) {
           report.ok = false;
-          continue;
+          report.unresolved.push({ role, reason: safeError(error) });
         }
-      }
-
-      const roleState = snapshot?.[role] || {};
-      const url = runtimeUrl(roleState.pageUrl, sessionId, role, roleState.provider);
-      if (!url) {
-        report.unresolved.push({ role, reason: 'missing_repair_url' });
-        report.ok = false;
-        continue;
-      }
-      try {
-        await chromeApi.windows.create({
-          url,
-          type: 'popup',
-          focused: false,
-          width: role === 'sender' ? 480 : 976,
-          height: 1032,
-          left: role === 'sender' ? 0 : 464,
-          top: 0
-        });
-        report.actions.push({ role, action: 'role_window_reopened' });
-      } catch (error) {
-        report.unresolved.push({ role, reason: safeError(error) });
-        report.ok = false;
       }
     }
 
@@ -924,7 +1115,7 @@ export function createRuntimePilotController({
       checks: currentRecoveryChecks(pilot.snapshot(sessionId)),
       storageCritical: pilot.snapshot(sessionId)?.storagePressure?.level === 'critical'
     });
-    finalReport = { ...finalReport, ...report, pendingVerification: true, verified: false };
+    finalReport = { ...finalReport, ...report, pendingVerification: report.actions.length > 0, verified: false };
     finalReport = persistRepairReport(pilot, sessionId, finalReport);
     if (!report.ok || !report.actions.length) {
       finalReport = applyRecoveryTransition(pilot, sessionId, {
@@ -1204,6 +1395,21 @@ export function createRuntimePilotController({
         }, 0);
         result = { ok: true, scheduled: true };
         break;
+      case 'export_support_bundle': {
+        const currentSnapshot = pilot.snapshot(sessionId);
+        result = {
+          ok: true,
+          bundle: buildSafeSupportBundle({
+            ...currentSnapshot,
+            stateAudit: store.audit(),
+            rootCause: classifyRuntimeRootCause({ ...currentSnapshot, stateAudit: store.audit() }, Date.now())
+          }, {
+            manifest: chromeApi.runtime?.getManifest?.() || {},
+            sourceHashes: {}
+          })
+        };
+        break;
+      }
       case 'prepare_end_session':
         result = await prepareEndSession(sessionId, pilot);
         break;
@@ -1360,6 +1566,13 @@ export function createRuntimePilotController({
     await commit(sessionId, pilot);
   }
 
+  async function auditConsistency(sessionId, { registry = null, alarms = null } = {}) {
+    const pilot = await state();
+    const derived = await refreshDerivedPolicies(sessionId, pilot, { registry, alarms });
+    await commit(sessionId, pilot, 'consistency_audit', { skipConsistency: true });
+    return derived.consistencyAudit;
+  }
+
   async function snapshot(sessionId) {
     try {
       const pilot = await state();
@@ -1396,6 +1609,10 @@ export function createRuntimePilotController({
     recordRegistrationRecovery: (sessionId, data) => mutationCoordinator.run(
       sessionId,
       () => recordRegistrationRecovery(sessionId, data)
+    ),
+    auditConsistency: (sessionId, options) => mutationCoordinator.run(
+      sessionId,
+      () => auditConsistency(sessionId, options)
     ),
     disconnectTab,
     removeSession: sessionId => mutationCoordinator.run(sessionId, () => removeSession(sessionId)),

@@ -40,7 +40,7 @@ test('isolated smoke writes structured evidence and distinguishes answer limitat
 
 test('isolated smoke runs the complete no-content transport drill', () => {
   assert.match(runner, /run_transport_drill/);
-  assert.match(runner, /checks\.length === 7/);
+  assert.match(runner, /checks\.length === 12/);
   assert.match(runner, /contentAccessed === false/);
   assert.match(runner, /transportDrillOk/);
 });

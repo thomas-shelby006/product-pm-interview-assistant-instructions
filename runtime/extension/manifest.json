@@ -73,6 +73,7 @@
                                                            "content/receiver-answer-orchestrator.js",
                                                            "content/composer-fingerprint.js",
                                                            "content/adapter-capability-drift.js",
+                                                           "content/capability-probation.js",
                                                            "content/page-lifecycle-coordinator.js",
                                                            "content/runtime-instance-fence.js"
                                                        ],

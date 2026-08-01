@@ -59,6 +59,11 @@ p { margin: 0; }
 .readiness-blockers { margin: .38rem 0 0; padding-left: 1.1rem; font-size: .68rem; }
 .readiness-actions { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: flex-end; }
 .readiness-actions button { border-radius: var(--radius); }
+.policy-banner { margin: .65rem .8rem 0; padding: .72rem .82rem; border: 1px solid var(--ochre); border-radius: var(--radius-lg); background: var(--ochre-soft); display: flex; align-items: center; justify-content: space-between; gap: .8rem; }
+.policy-banner[hidden] { display: none; }
+.policy-banner strong { display: block; margin-top: .1rem; color: var(--rust); }
+.policy-banner p { margin: .18rem 0 0; color: var(--ink-soft); font-size: .72rem; }
+.policy-banner button { flex: 0 0 auto; }
 
 .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; padding: .65rem .8rem 0; background: var(--surface); border-bottom: 1px solid var(--line); }
 .tab { border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: .68rem .4rem; border-bottom: 3px solid transparent; }

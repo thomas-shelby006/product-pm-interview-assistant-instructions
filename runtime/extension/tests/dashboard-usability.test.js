@@ -302,3 +302,12 @@ test('Runtime Pilot exposes deterministic performance budgets', () => {
   assert.match(dashboard, /snapshot\?\.performanceBudget/);
   assert.match(styles, /\.performance-budget-card/);
 });
+
+test('Runtime Pilot exposes queue-only protection and one primary root cause', () => {
+  for (const id of ['deliveryPolicyBanner', 'deliveryPolicyLabel', 'deliveryPolicyDetail']) {
+    assert.match(markup, new RegExp(`id="${id}"`));
+  }
+  assert.match(dashboard, /readiness\.rootCause\?\.code/);
+  assert.match(dashboard, /Queue-only protection/);
+  assert.match(styles, /\.policy-banner/);
+});

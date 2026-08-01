@@ -241,7 +241,7 @@ try {
   const drill = await waitFor('no-content transport drill', async () => {
     const current = await pilotState();
     const report = current?.lastTransportDrill || null;
-    return { ok: Boolean(report && Array.isArray(report.checks) && report.checks.length === 7), value: report };
+    return { ok: Boolean(report && Array.isArray(report.checks) && report.checks.length === 12), value: report };
   }, 30000, 250);
   evidence.transportDrill = drill.value;
   evidence.transportDrillOk = drill.value?.ok === true
@@ -252,7 +252,7 @@ try {
     await dashboard.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     await sleep(180);
     const raw = await dashboard.evaluate(`(()=>{
-      const required=['forecastRisk','forecastDrain','forecastP95','forecastThroughput','recoveryBudgetState','runTransportDrill','transportDrillReport','traceSearch','traceResults','traceDetail'];
+      const required=['forecastRisk','forecastDrain','forecastP95','forecastThroughput','recoveryBudgetState','runTransportDrill','transportDrillReport','traceSearch','traceResults','traceDetail','exportSupportBundle','supportBundleStatus'];
       const mechanics=document.querySelector('.mechanics-grid');
       const traces=document.querySelector('.trace-layout');
       const panel=document.querySelector('[data-view-panel="review"]');

@@ -96,9 +96,11 @@ async function rehydrateManagedAlarms() {
     create: (name, options) => chrome.alarms.create(name, options),
     clear: name => chrome.alarms.clear(name)
   });
-  await Promise.allSettled(registry.exportState().map(item => (
-    pilotController.recordAlarmAudit?.(item.sessionId, result)
-  )));
+  const refreshedAlarms = await chrome.alarms.getAll();
+  await Promise.allSettled(registry.exportState().flatMap(item => [
+    pilotController.recordAlarmAudit?.(item.sessionId, result),
+    pilotController.auditConsistency?.(item.sessionId, { registry, alarms: refreshedAlarms })
+  ]));
   return result;
 }
 function serialize(operation, sessionId = '__background__') {
@@ -365,10 +367,12 @@ chrome.alarms.onAlarm.addListener(alarm => {
       requestId: `outbox-alarm-${Date.now()}`,
       command: 'retry_outbox',
       payload: { source: 'outbox_alarm' }
-    }).catch(() => {});
+    }).then(() => pilotController.auditConsistency?.(sessionId)).catch(() => {});
     return;
   }
-  void pilotController.handleAlarm(alarm).catch(() => {});
+  void pilotController.handleAlarm(alarm)
+    .then(() => rehydrateManagedAlarms())
+    .catch(() => {});
 });
 
 void rehydrateManagedAlarms().catch(() => {});

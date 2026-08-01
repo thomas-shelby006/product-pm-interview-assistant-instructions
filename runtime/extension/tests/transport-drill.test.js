@@ -12,11 +12,20 @@ test('transport drill covers all no-content control-plane checks', async () => {
     selectiveNack: async () => ({ ok: true, nackRanges: [[2, 2]] }),
     alarmAudit: async () => ({ ok: true, restored: 0 }),
     invariantAudit: async () => ({ ok: true, blocked: 0 }),
+    stateCompatibility: async () => ({ ok: true, state: 'compatible' }),
+    indexAudit: async () => ({ ok: true, mismatches: 0 }),
+    capabilityProbation: async () => ({ ok: true, roles: [] }),
+    queueOnlyPolicy: async () => ({ ok: true, active: false }),
+    restartContinuity: async () => ({ ok: true, ownerCount: 2 }),
     onCheck: check => calls.push(check.name),
     now: (() => { let value = 0; return () => ++value; })()
   });
   assert.equal(result.ok, true);
-  assert.deepEqual(calls, ['handshake', 'direct', 'fallback', 'reconnect', 'selective_nack', 'alarm_audit', 'invariant_audit']);
+  assert.deepEqual(calls, [
+    'handshake', 'direct', 'fallback', 'reconnect', 'selective_nack', 'alarm_audit',
+    'invariant_audit', 'state_compatibility', 'index_audit', 'capability_probation',
+    'queue_only_policy', 'restart_continuity'
+  ]);
   assert.equal(result.contentAccessed, false);
 });
 
