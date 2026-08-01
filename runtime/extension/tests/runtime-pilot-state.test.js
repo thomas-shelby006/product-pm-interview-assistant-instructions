@@ -32,10 +32,13 @@ test('pilot state derives role and lossless inbox warnings', () => {
   assert.ok(snapshot.warnings.some(item => item.code === 'inbox_waiting'));
 });
 
-test('pilot commands are idempotent', () => {
+test('pilot command results replay idempotently', () => {
   const state = new RuntimePilotState();
-  assert.equal(state.markCommand('pmia_session', 'req-1'), true);
-  assert.equal(state.markCommand('pmia_session', 'req-1'), false);
+  state.recordCommandResult('pmia_session', 'req-1', 'check_live', { ok: true }, 10, 20);
+  const first = state.replayCommandResult('pmia_session', 'req-1', 30);
+  const second = state.replayCommandResult('pmia_session', 'req-1', 40);
+  assert.equal(first.result.ok, true);
+  assert.equal(second.entry.replayCount, 2);
 });
 
 test('pilot state survives export and restore with exact ledger identity', () => {
@@ -147,7 +150,7 @@ test('context armed is durable session state rather than timeline-only evidence'
 
 
 test('Runtime Pilot stores and replays exact dashboard command results', () => {
-  const state = new stateModule.RuntimePilotState();
+  const state = new RuntimePilotState();
   state.recordCommandResult('session', 'request-1', 'check_live', { ok: true, reason: 'healthy' }, 10, 25);
   const replay = state.replayCommandResult('session', 'request-1');
   assert.equal(replay.replayed, true);

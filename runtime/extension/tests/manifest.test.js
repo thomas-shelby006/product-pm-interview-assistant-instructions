@@ -20,7 +20,7 @@ test('manifest is MV3 and registers module service worker', async () => {
 test('manifest grants only required provider hosts and storage', async () => {
   const manifest = await readManifest();
   assert.ok(manifest, 'manifest.json must exist');
-  assert.deepEqual(manifest.permissions.sort(), ['storage', 'tabs', 'windows'].sort());
+  assert.deepEqual(manifest.permissions.sort(), ['alarms', 'storage', 'tabs', 'windows'].sort());
   assert.deepEqual(manifest.host_permissions.sort(), [
     'https://chat.openai.com/*',
     'https://chatgpt.com/*',
@@ -146,6 +146,7 @@ test('dashboard fails pending commands immediately when its runtime port disconn
 });
 
 
-test('manifest grants alarms for durable recovery scheduling', () => {
+test('manifest grants alarms for durable recovery scheduling', async () => {
+  const manifest = await readManifest();
   assert.ok(manifest.permissions.includes('alarms'));
 });

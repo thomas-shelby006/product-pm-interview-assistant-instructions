@@ -17,7 +17,7 @@ export function partitionEntries(entries = [], {
   measure = defaultMeasure
 } = {}) {
   const memberLimit = Math.max(1, Number(maxMembers) || 8);
-  const charLimit = Math.max(256, Number(maxChars) || 12000);
+  const charLimit = Math.max(1, Number(maxChars) || 12000);
   const source = (Array.isArray(entries) ? entries : [])
     .map(cloneEntry)
     .filter(entry => entry?.id && entry.envelope);

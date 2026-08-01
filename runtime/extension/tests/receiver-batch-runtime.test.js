@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createReceiverBatchRuntime } from '../content/receiver-batch-runtime.js';
+import { BatchPlanner } from '../shared/batch-planner.js';
 
 function envelope(id, seq) {
   return { id, sessionId: 's', sourceProvider: 'chatgpt', kind: 'question', seq, text: `Question ${seq}`, metadata: {}, createdAt: seq };

@@ -366,7 +366,7 @@ test('heartbeat telemetry cannot clear repair without reconciliation', async () 
   const { fileURLToPath } = await import('node:url');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const source = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
-  const telemetry = source.slice(source.indexOf('async function telemetry'), source.indexOf('async function sendRuntimeCommand'));
+  const telemetry = source.slice(source.indexOf('async function telemetry'), source.indexOf('async function evaluateDeliverySla'));
   assert.doesNotMatch(telemetry, /setMode\(sessionId, 'active'\)/);
   assert.match(telemetry, /currentRecoveryChecks/);
   assert.match(source, /reconciliation:\s*result\.ok !== false/);
@@ -388,15 +388,15 @@ test('repair schedules durable bounded verification without activating tabs', as
 
 
 test('duplicate dashboard request returns the original command result', async () => {
-  const harness = createHarness();
-  const command = { sessionId: 'session', requestId: 'same-request', command: 'check_live', payload: {} };
-  const first = await harness.controller.handleCommand(command);
-  const second = await harness.controller.handleCommand(command);
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  const command = { sessionId: 's1', requestId: 'same-request', command: 'check_live', payload: {} };
+  const first = await controller.handleCommand(command);
+  const second = await controller.handleCommand(command);
   assert.equal(second.ok, first.ok);
   assert.equal(second.replayed, true);
   assert.equal(second.roles?.sender?.responsive, first.roles?.sender?.responsive);
 });
-
 
 test('end session remains blocked while durable sender outbox items exist', async () => {
   const { controller, registry, storageArea } = setup();

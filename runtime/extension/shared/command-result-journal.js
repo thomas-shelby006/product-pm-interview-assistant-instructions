@@ -26,7 +26,7 @@ export class CommandResultJournal {
   #maxEntries;
 
   constructor(state = [], { maxEntries = 128 } = {}) {
-    this.#maxEntries = Math.max(8, Number(maxEntries) || 128);
+    this.#maxEntries = Math.max(1, Number(maxEntries) || 128);
     for (const value of Array.isArray(state) ? state : []) {
       const entry = normalizeEntry(value);
       if (!entry || this.#entries.some(item => item.requestId === entry.requestId)) continue;

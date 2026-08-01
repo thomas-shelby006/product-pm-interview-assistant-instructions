@@ -200,16 +200,15 @@ test('launcher foregrounds each registered provider before its composer readines
   assert.ok(launch.slice(receiverRegistered, receiverReady).includes('WinActivate "ahk_id " receiverRegistered["hwnd"]'));
 });
 
-test('Alt+Delete closes every managed PMIA lifecycle window even with stale cached state', () => {
+test('Alt+Delete requests extension safety approval without direct window cleanup', () => {
   const hotkeyBlock = launcher.match(/!Delete:: \{[\s\S]*?\n\}/)?.[0] || '';
   const endStart = launcher.indexOf('EndActiveSession() {');
   const endBlock = launcher.slice(endStart, launcher.indexOf('; Alt+E', endStart));
   assert.match(hotkeyBlock, /EndActiveSession\(\)/);
   assert.match(endBlock, /IsActiveSession\(\)/);
-  assert.match(endBlock, /sessionId := g_sessionId/);
-  assert.match(endBlock, /CloseManagedPmiaWindows\(sessionId\)/);
-  assert.match(endBlock, /ExitApp/);
-  assert.doesNotMatch(endBlock, /RunExtensionControlAction/);
+  assert.match(endBlock, /SendBrowserCommandBackground\("\^\+\{F4\}", g_hWin1\)/);
+  assert.match(endBlock, /ObserveManagedShutdown/);
+  assert.doesNotMatch(endBlock, /CloseManagedPmiaWindows|WinActivate/);
 });
 
 test('launcher confirms sender readiness before opening the receiver window', () => {
@@ -234,13 +233,13 @@ test('launcher sends boot context through the sender transport without local sen
   assert.doesNotMatch(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F7\}", g_hWin2\)/);
 });
 
-test('Alt+Delete uses the recovered session suffix as the exact shutdown boundary', () => {
+test('Alt+Delete scopes the safety request to the recovered sender handle', () => {
   const endStart = launcher.indexOf('EndActiveSession() {');
   const endBlock = launcher.slice(endStart, launcher.indexOf('; Alt+E', endStart));
-  assert.ok(endBlock.indexOf('IsActiveSession()') < endBlock.indexOf('sessionId := g_sessionId'));
-  assert.ok(endBlock.indexOf('sessionId := g_sessionId') < endBlock.indexOf('CloseManagedPmiaWindows(sessionId)'));
-  assert.doesNotMatch(endBlock, /CloseManagedPmiaWindows\(\)/);
-  assert.doesNotMatch(endBlock, /chrome-extension:\/\//);
+  assert.ok(endBlock.indexOf('IsActiveSession()') < endBlock.indexOf('SendBrowserCommandBackground'));
+  assert.match(endBlock, /global g_hWin1/);
+  assert.match(endBlock, /SendBrowserCommandBackground\("\^\+\{F4\}", g_hWin1\)/);
+  assert.doesNotMatch(endBlock, /CloseManagedPmiaWindows|chrome-extension:\/\//);
 });
 
 test('composer readiness uses a long watchdog without slowing successful launches', () => {
@@ -359,14 +358,14 @@ test('focus-dependent window actions include hidden managed windows and restore 
 });
 
 
-test('review control messages reuse exact recovered browser-command export and shutdown operations', () => {
+test('review control messages reuse export and safety-gated shutdown operations', () => {
   const exportBlock = launcher.slice(launcher.indexOf('ExportActiveSession() {'), launcher.indexOf('; Alt+Q'));
   assert.match(exportBlock, /SendBrowserCommand\("\^\+8", g_hWin1\)/);
   const endStart = launcher.indexOf('EndActiveSession() {');
   const endBlock = launcher.slice(endStart, launcher.indexOf('; Alt+E', endStart));
-  assert.match(endBlock, /CloseManagedPmiaWindows\(sessionId\)/);
+  assert.match(endBlock, /SendBrowserCommandBackground\("\^\+\{F4\}", g_hWin1\)/);
+  assert.doesNotMatch(endBlock, /CloseManagedPmiaWindows/);
 });
-
 
 test('browser command activation includes hidden managed windows and restores detection mode', () => {
   const start = launcher.indexOf('SendBrowserCommand(shortcut, hTarget) {');

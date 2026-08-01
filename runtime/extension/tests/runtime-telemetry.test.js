@@ -94,7 +94,7 @@ test('sender telemetry never includes receiver batch state', () => {
 
 
 test('receiver telemetry exposes safe hidden runtime scheduler state', () => {
-  const telemetry = telemetryModule.createRuntimeTelemetry({
+  const telemetry = createRuntimeTelemetry({
     runtimeConfig: { sessionId: 's', role: 'receiver', provider: 'chatgpt' },
     adapter: { findComposer: () => ({}), isGenerating: () => false },
     send: async () => ({ ok: true }),

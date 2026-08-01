@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFile as readTextFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const globalExtensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 test('extension validator does not flag its own forbidden marker definitions', () => {
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -417,7 +420,7 @@ test('focus-independent review control reaches the extension through the launche
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
   const entry = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
-  const launcher = await readFile(resolve(extensionRoot, '..', 'Final_2_Window_Extension.ahk'), 'utf8');
+  const launcher = await readTextFile(resolve(globalExtensionRoot, '..', 'Final_2_Window_Extension.ahk'), 'utf8');
   const companion = await readFile(resolve(extensionRoot, '..', 'Session_Tracker_End_Session.ahk'), 'utf8');
   assert.match(companion, /SendRuntimeControl\(PMIA_RUNTIME_CONTROL_EXPORT\)/);
   assert.match(launcher, /RUNTIME_CONTROL_MESSAGE_NAME\s*:=\s*"PMIA_RUNTIME_CONTROL_V1"/);
@@ -650,7 +653,7 @@ test('background separates per-session operations from serialized registry write
 
 
 test('sender forwarding is gated on extension-session outbox readiness', async () => {
-  const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const entry = await readTextFile(resolve(globalExtensionRoot, 'content/entry.js'), 'utf8');
   assert.match(entry, /senderOutboxReady/);
   assert.match(entry, /OUTBOX NOT READY/);
   assert.match(entry, /await senderOutbox\.enqueue\(envelope\)/);
@@ -658,8 +661,8 @@ test('sender forwarding is gated on extension-session outbox readiness', async (
 
 
 test('launcher session end requests extension approval without foreground activation', async () => {
-  const launcher = await readFile(resolve(extensionRoot, '..', 'Final_2_Window_Extension.ahk'), 'utf8');
-  const start = launcher.indexOf('EndActiveSession()');
+  const launcher = await readTextFile(resolve(globalExtensionRoot, '..', 'Final_2_Window_Extension.ahk'), 'utf8');
+  const start = launcher.indexOf('EndActiveSession() {');
   const end = launcher.indexOf('; Alt+E', start);
   const block = launcher.slice(start, end);
   assert.match(block, /SendBrowserCommandBackground\("\^\+\{F4\}"/);

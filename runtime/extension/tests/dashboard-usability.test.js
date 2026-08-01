@@ -179,17 +179,17 @@ test('Pilot exposes a one-click Safe Health Report separate from diagnostics', (
 
 
 test('Runtime Pilot exposes hidden receiver scheduler evidence', () => {
-  assert.match(dashboardHtml, /id="hiddenRuntimeState"/);
-  assert.match(dashboardHtml, /id="hiddenRuntimeTitle"/);
-  assert.match(dashboardHtml, /id="hiddenRuntimeDetail"/);
-  assert.match(dashboardJs, /receiver\?\.schedulerState/);
+  assert.match(markup, /id="hiddenRuntimeState"/);
+  assert.match(markup, /id="hiddenRuntimeTitle"/);
+  assert.match(markup, /id="hiddenRuntimeDetail"/);
+  assert.match(dashboard, /receiver\?\.schedulerState/);
 });
 
 
 test('Runtime Pilot exposes recent command results and replay counts', () => {
-  assert.match(dashboardHtml, /id="commandJournalList"/);
-  assert.match(dashboardJs, /snapshot\?\.commandJournal/);
-  assert.match(dashboardJs, /replayed \$\{command\.replayCount\}/);
+  assert.match(markup, /id="commandJournalList"/);
+  assert.match(dashboard, /snapshot\?\.commandJournal/);
+  assert.match(dashboard, /replayed \$\{command\.replayCount\}/);
 });
 
 
@@ -219,7 +219,7 @@ test('Runtime Pilot exposes explicit receiver draft conflict resolutions', () =>
 test('Runtime Pilot exposes Delivery SLA escalation state', () => {
   assert.match(markup, /id="deliverySlaState"/);
   assert.match(markup, /id="deliverySlaDetail"/);
-  assert.match(dashboard, /deriveDeliverySlaView\(snapshot\)/);
+  assert.match(dashboard, /deriveDeliverySlaView\(snapshot, now\)/);
 });
 
 

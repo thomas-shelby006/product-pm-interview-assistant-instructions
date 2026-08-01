@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 const protocol = await import('../shared/protocol.js').catch(() => null);
 const registryModule = await import('../shared/session-registry.js').catch(() => null);
+const dashboardProtocol = await import('../shared/dashboard-protocol.js').catch(() => null);
 
 test('runtime config parses explicit query parameters', () => {
   assert.ok(protocol, 'protocol module must exist');
@@ -242,19 +243,19 @@ test('runtime lease migration can be denied for an inactive duplicate tab', () =
 
 test('dashboard protocol accepts explicit draft conflict resolution commands', () => {
   for (const command of ['resolve_draft_keep_manual', 'resolve_draft_restore_pmia', 'resolve_draft_merge']) {
-    assert.equal(protocolModule.normalizeDashboardCommand({ sessionId: 's', requestId: command, command, payload: {} })?.command, command);
+    assert.equal(dashboardProtocol.normalizeDashboardCommand({ sessionId: 's', requestId: command, command, payload: {} })?.command, command);
   }
 });
 
 
 test('dashboard protocol normalizes prepare and confirmed end payloads', () => {
-  assert.equal(protocolModule.normalizeDashboardCommand({ sessionId: 's', requestId: 'p', command: 'prepare_end_session', payload: {} })?.command, 'prepare_end_session');
-  const end = protocolModule.normalizeDashboardCommand({ sessionId: 's', requestId: 'e', command: 'end_session', payload: { confirmToken: 'token', mode: 'archive_and_end' } });
+  assert.equal(dashboardProtocol.normalizeDashboardCommand({ sessionId: 's', requestId: 'p', command: 'prepare_end_session', payload: {} })?.command, 'prepare_end_session');
+  const end = dashboardProtocol.normalizeDashboardCommand({ sessionId: 's', requestId: 'e', command: 'end_session', payload: { confirmToken: 'token', mode: 'archive_and_end' } });
   assert.equal(end.payload.confirmToken, 'token');
   assert.equal(end.payload.mode, 'archive_and_end');
 });
 
 
 test('dashboard protocol accepts active runtime self-test', () => {
-  assert.equal(protocolModule.normalizeDashboardCommand({ sessionId: 's', requestId: 'self-test', command: 'run_self_test', payload: {} })?.command, 'run_self_test');
+  assert.equal(dashboardProtocol.normalizeDashboardCommand({ sessionId: 's', requestId: 'self-test', command: 'run_self_test', payload: {} })?.command, 'run_self_test');
 });
