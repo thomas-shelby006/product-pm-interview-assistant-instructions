@@ -123,21 +123,21 @@ test('entry runtime wires provider previews to receiver prefill without final se
   assert.doesNotMatch(previewFunction, /senderSequence|makeEnvelope|PMIA_LOG_EVENT/);
 });
 
-test('entry runtime captures answers from provider mutations with a 500ms watchdog', async () => {
+test('entry runtime delegates answer observation to one receiver orchestrator', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
-  assert.match(entry, /createAnswerTracker/);
+  const orchestrator = await readFile(resolve(extensionRoot, 'content/receiver-answer-orchestrator.js'), 'utf8');
+  assert.match(entry, /createReceiverAnswerOrchestrator/);
   assert.match(entry, /createWakeSignal/);
   assert.match(entry, /receiverObserver/);
   assert.match(entry, /answerWake\.pulse/);
-  assert.match(entry, /await answerWake\.wait\(500\)/);
-  const capture = entry.slice(
-    entry.indexOf('async function captureAnswer'),
-    entry.indexOf('const receiver = createReceiverController')
-  );
-  assert.doesNotMatch(capture, /sleep\(300\)/);
-  assert.doesNotMatch(capture, /stableSince >= 850/);
+  assert.doesNotMatch(entry, /async function captureAnswer|createAnswerTracker/);
+  assert.match(orchestrator, /createAnswerTracker/);
+  assert.match(orchestrator, /deriveAnswerDeadline/);
+  assert.match(orchestrator, /reconcileGenerationTruth/);
+  assert.match(orchestrator, /await wake\.wait/);
+  assert.doesNotMatch(orchestrator, /setInterval|sleep\(300\)|stableSince >= 850/);
 });
 
 test('background keeps preview delivery outside durable serialization and storage reads', async () => {

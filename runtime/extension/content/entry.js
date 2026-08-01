@@ -18,10 +18,8 @@ import { createClaudeSignalHandler } from './signals/claude-runtime.js';
 import { createProviderObserver } from './observation/provider-observer.js';
 import { createProviderSender } from './senders/provider-sender.js';
 import { createChatGptTurnTracker } from './senders/chatgpt-turn-tracker.js';
-import { createAnswerTracker, createWakeSignal } from './answer-tracker.js';
-import { reconcileGenerationTruth } from './generation-truth.js';
-import { createAnswerLifecycle } from './answer-lifecycle.js';
-import { deriveAnswerDeadline } from './answer-timeout-policy.js';
+import { createWakeSignal } from './answer-tracker.js';
+import { createReceiverAnswerOrchestrator } from './receiver-answer-orchestrator.js';
 import { createLatestPreviewScheduler } from './preview-scheduler.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
 import { nextSequence } from '../shared/sequence.js';
@@ -43,7 +41,6 @@ import { createComposerArbiter } from './composer-arbiter.js';
 import { safeBatchTelemetry } from '../shared/batch-event-policy.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
-const ANSWER_LIMITS = Object.freeze({ startGraceMs: 8000, streamStallMs: 20000, hardCapMs: 120000 });
 
 function actualProvider(hostname) {
   return hostname.includes('claude.ai') ? 'claude' : 'chatgpt';
@@ -117,7 +114,7 @@ async function startRuntime(runtimeConfig) {
   let scrollLocked = false;
   let latestBootContext = '';
   let telemetry = null;
-  let answerCaptureToken = 0;
+  let receiverAnswerOrchestrator = null;
   let registrationActive = true;
   let assistantFinalHintVersion = 0;
   let claudeProtocolVoiceActive = false;
@@ -155,27 +152,6 @@ async function startRuntime(runtimeConfig) {
   let sequenceDrainTimer = null;
   let sequenceDrainAttempt = 0;
   const outboundTranscriptCache = createRecentTranscriptCache();
-  let receiverGenerationTruth = reconcileGenerationTruth({ now: Date.now() });
-  let receiverAnswerState = null;
-  let lastReceiverAssistantText = String(adapter.getLatestAssistantText?.() || '');
-  let lastReceiverHintVersion = assistantFinalHintVersion;
-
-  function observeReceiverGeneration() {
-    const currentText = String(adapter.getLatestAssistantText?.() || '');
-    const textChanged = Boolean(currentText && currentText !== lastReceiverAssistantText);
-    const finalHintChanged = assistantFinalHintVersion !== lastReceiverHintVersion;
-    receiverGenerationTruth = reconcileGenerationTruth({
-      adapterGenerating: Boolean(adapter.isGenerating?.()),
-      stopAvailable: Boolean(adapter.hasStopControl?.()),
-      textChanged,
-      finalHintChanged,
-      previous: receiverGenerationTruth,
-      now: Date.now()
-    });
-    if (currentText) lastReceiverAssistantText = currentText;
-    lastReceiverHintVersion = assistantFinalHintVersion;
-    return { truth: receiverGenerationTruth, text: currentText, textChanged, finalHintChanged };
-  }
 
   function isCombinedVoiceActive() {
     return Boolean(
@@ -292,8 +268,8 @@ async function startRuntime(runtimeConfig) {
     getScrollLocked: () => scrollLocked,
     getVoiceActive: isCombinedVoiceActive,
     getBatchState: () => safeBatchTelemetry(receiverBatchRuntime?.snapshot()),
-    getGenerationState: () => receiverGenerationTruth,
-    getAnswerState: () => receiverAnswerState
+    getGenerationState: () => receiverAnswerOrchestrator?.snapshot().generationState || null,
+    getAnswerState: () => receiverAnswerOrchestrator?.snapshot().answerState || null
   });
 
   async function register() {
@@ -520,81 +496,20 @@ async function startRuntime(runtimeConfig) {
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
   }
 
-  async function captureAnswer(envelope, beforeText, token, hintVersionAtStart) {
-    const startedAt = Date.now();
-    const lifecycle = createAnswerLifecycle();
-    receiverAnswerState = lifecycle.transition({ type: 'start', batchId: envelope.id, at: startedAt });
-    telemetry.answerState(receiverAnswerState);
-    const tracker = createAnswerTracker({
-      beforeText,
-      startedAt,
-      initialHintVersion: hintVersionAtStart,
-      stabilityMs: 250,
-      noGenerationGraceMs: 600
+  if (runtimeConfig.role === 'receiver') {
+    receiverAnswerOrchestrator = createReceiverAnswerOrchestrator({
+      adapter,
+      wake: answerWake,
+      getHintVersion: () => assistantFinalHintVersion,
+      onAnswerState(value) { telemetry.answerState(value); },
+      onAnswer(value) { telemetry.answer(value); },
+      onTerminal(value) {
+        if (value?.timeout) telemetry.answerTimeout(value?.answerState?.batchId || '');
+      },
+      log: logEvent,
+      setStatus: (...args) => overlay.setStatus(...args),
+      scroll: scrollToLatest
     });
-    while (true) {
-      if (token !== answerCaptureToken) {
-        receiverAnswerState = lifecycle.transition({ type: 'cancel', at: Date.now(), reason: 'capture_superseded' });
-        telemetry.answerState(receiverAnswerState);
-        return { ok: false, cancelled: true, answerState: receiverAnswerState };
-      }
-      const observed = observeReceiverGeneration();
-      const current = Date.now();
-      if (observed.textChanged && observed.text && observed.text !== beforeText) {
-        receiverAnswerState = lifecycle.transition({
-          type: 'stream',
-          at: current,
-          wordCount: observed.text.split(/\s+/).filter(Boolean).length,
-          reason: observed.truth.reason
-        });
-        telemetry.answerState(receiverAnswerState);
-      }
-      const result = tracker.observe({
-        now: current,
-        text: observed.text,
-        generating: observed.truth.generating,
-        hintVersion: assistantFinalHintVersion
-      });
-      if (result) {
-        const words = result.text.split(/\s+/).filter(Boolean).length;
-        receiverAnswerState = lifecycle.transition({ type: 'complete', at: current, wordCount: words });
-        telemetry.answerState(receiverAnswerState);
-        await logEvent('answer', {
-          envelopeId: envelope.id,
-          text: result.text,
-          wordCount: words,
-          elapsedMs: result.elapsedMs
-        });
-        telemetry.answer({
-          envelopeId: envelope.id,
-          text: result.text,
-          wordCount: words,
-          elapsedMs: result.elapsedMs
-        });
-        overlay.setStatus(`ANSWER ${words}w`, 'ok', 1800);
-        scrollToLatest();
-        return { ok: true, text: result.text, wordCount: words, elapsedMs: result.elapsedMs, answerState: receiverAnswerState };
-      }
-      const deadline = deriveAnswerDeadline({ ...receiverAnswerState, now: current, limits: ANSWER_LIMITS });
-      if (deadline.terminal) {
-        const eventType = deadline.state === 'no_response' ? 'no_response' : 'timeout';
-        receiverAnswerState = lifecycle.transition({ type: eventType, at: current, reason: deadline.reason });
-        telemetry.answerState(receiverAnswerState);
-        await logEvent(deadline.state === 'no_response' ? 'answer_no_response' : 'answer_timeout', {
-          envelopeId: envelope.id,
-          reason: deadline.reason
-        });
-        if (deadline.state === 'timed_out') telemetry.answerTimeout(envelope.id);
-        overlay.setStatus(deadline.state === 'no_response' ? 'NO ANSWER OBSERVED' : 'ANSWER TIMEOUT', 'warn', 2500);
-        return {
-          ok: false,
-          noResponse: deadline.state === 'no_response',
-          timeout: deadline.state === 'timed_out',
-          answerState: receiverAnswerState
-        };
-      }
-      await answerWake.wait(Math.min(500, Math.max(1, deadline.nextCheckMs)));
-    }
   }
 
   const composerArbiter = createComposerArbiter({
@@ -650,8 +565,6 @@ async function startRuntime(runtimeConfig) {
         };
         const beforeText = adapter.getLatestAssistantText();
         const hintVersionAtStart = assistantFinalHintVersion;
-        answerCaptureToken += 1;
-        const token = answerCaptureToken;
         latestReceiverProof = null;
         const submitted = await receiver.deliver(batchEnvelope);
         if (!submitted) return { ok: false, error: 'receiver_delivery_failed' };
@@ -661,13 +574,16 @@ async function startRuntime(runtimeConfig) {
           verified: false,
           proof: 'submit_action_only'
         };
-        void captureAnswer(batchEnvelope, beforeText, token, hintVersionAtStart)
-          .then(answer => receiverBatchRuntime?.answerComplete(batch.id, {
-            answer: answer || null,
-            answerState: answer?.answerState || receiverAnswerState || null,
-            timeout: Boolean(answer?.timeout),
-            proof
-          }));
+        void receiverAnswerOrchestrator.start({
+          envelope: batchEnvelope,
+          beforeText,
+          hintVersionAtStart
+        }).then(answer => receiverBatchRuntime?.answerComplete(batch.id, {
+          answer: answer || null,
+          answerState: answer?.answerState || receiverAnswerOrchestrator.snapshot().answerState || null,
+          timeout: Boolean(answer?.timeout),
+          proof
+        }));
         return { ok: true, proof };
       },
       onEvent(event) {
@@ -687,8 +603,8 @@ async function startRuntime(runtimeConfig) {
       onChange: () => {
         refreshLifecycleTitle();
         answerWake.pulse();
-        observeReceiverGeneration();
-        if (!receiverGenerationTruth.generating) {
+        const observed = receiverAnswerOrchestrator?.observeGeneration();
+        if (!observed?.truth?.generating) {
           void receiverBatchRuntime?.submitNext();
         }
       },
@@ -998,7 +914,7 @@ async function startRuntime(runtimeConfig) {
     if (shouldApplyRoleRevocation(runtimeConfig, runtimeInstanceId, incoming)) {
       registrationActive = false;
       paused = true;
-      answerCaptureToken += 1;
+      receiverAnswerOrchestrator?.cancel('role_revoked');
       answerWake.pulse();
       receiver.supersede({ id: `revoked-${Date.now()}` });
       telemetry.event('role_revoked');
