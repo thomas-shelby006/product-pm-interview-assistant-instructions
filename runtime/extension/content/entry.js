@@ -26,6 +26,7 @@ import { nextSequence } from '../shared/sequence.js';
 import { ContiguousSequenceBuffer } from '../shared/contiguous-sequence-buffer.js';
 import { deriveSequenceFeedback } from '../shared/sequence-feedback.js';
 import { deriveReceiverCredits } from '../shared/receiver-flow-control.js';
+import { ReceiverCreditHysteresis } from '../shared/receiver-credit-hysteresis.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 import { describeRuntimeStatus } from '../shared/session-status.js';
 import { extractSafeSessionContext } from '../shared/session-context.js';
@@ -168,6 +169,24 @@ async function startRuntime(runtimeConfig) {
   let sequenceDrainTimer = null;
   let sequenceDrainAttempt = 0;
   const outboundTranscriptCache = createRecentTranscriptCache();
+  const receiverCreditHysteresis = new ReceiverCreditHysteresis({ recoveryWindowMs: 500 });
+
+  function deriveSmoothedReceiverCredits(input = {}) {
+    const raw = deriveReceiverCredits({
+      bufferedCount: input.bufferedCount,
+      maxBuffered: input.maxBuffered ?? input.capacity,
+      activeMembers: input.activeMembers ?? input.active,
+      hold: input.hold,
+      paused: input.paused,
+      storageCritical: input.storageCritical,
+      draftConflict: input.draftConflict
+    });
+    return receiverCreditHysteresis.update(raw, {
+      now: Date.now(),
+      critical: raw.reason === 'storage_critical',
+      reason: raw.reason
+    });
+  }
 
   function isCombinedVoiceActive() {
     return Boolean(
@@ -724,7 +743,7 @@ async function startRuntime(runtimeConfig) {
 
     const currentSequenceStatus = receiverSequenceBuffer.status();
     const currentBatchState = receiverBatchRuntime.snapshot();
-    const receiverCredits = deriveReceiverCredits({
+    const receiverCredits = deriveSmoothedReceiverCredits({
       bufferedCount: currentSequenceStatus.bufferedCount,
       maxBuffered: currentSequenceStatus.capacity,
       activeMembers: currentBatchState?.active?.memberIds?.length || 0,
@@ -756,7 +775,7 @@ async function startRuntime(runtimeConfig) {
         buffered: Boolean(sequenceDecision.buffered),
         expectedSeq: sequenceDecision.expectedSeq,
         sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot()),
-        receiverCredits: deriveReceiverCredits({ ...receiverCredits, bufferedCount: receiverSequenceBuffer.status().bufferedCount, maxBuffered: receiverSequenceBuffer.status().capacity })
+        receiverCredits: deriveSmoothedReceiverCredits({ ...receiverCredits, bufferedCount: receiverSequenceBuffer.status().bufferedCount, maxBuffered: receiverSequenceBuffer.status().capacity })
       };
     }
     if (!sequenceDecision.accepted) {
@@ -767,7 +786,7 @@ async function startRuntime(runtimeConfig) {
         error: sequenceDecision.reason,
         expectedSeq: sequenceDecision.expectedSeq,
         sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot()),
-        receiverCredits: deriveReceiverCredits({ ...receiverCredits, bufferedCount: receiverSequenceBuffer.status().bufferedCount, maxBuffered: receiverSequenceBuffer.status().capacity })
+        receiverCredits: deriveSmoothedReceiverCredits({ ...receiverCredits, bufferedCount: receiverSequenceBuffer.status().bufferedCount, maxBuffered: receiverSequenceBuffer.status().capacity })
       };
     }
 
@@ -785,7 +804,7 @@ async function startRuntime(runtimeConfig) {
       return {
         ...(drain.failure.result || { ok: false, error: 'batch_rejected' }),
         sequenceFeedback: drain.sequenceFeedback,
-        receiverCredits: deriveReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
+        receiverCredits: deriveSmoothedReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
       };
     }
 
@@ -802,7 +821,7 @@ async function startRuntime(runtimeConfig) {
         fingerprint: originalResult.batch?.prompt?.fingerprint || originalResult.fingerprint || '',
         memberFingerprint: originalResult.batch?.prompt?.memberFingerprint || originalResult.memberFingerprint || '',
         sequenceFeedback: drain.sequenceFeedback,
-        receiverCredits: deriveReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
+        receiverCredits: deriveSmoothedReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
       };
     }
     return {
@@ -814,7 +833,7 @@ async function startRuntime(runtimeConfig) {
       expectedSeq: gap.expectedSeq,
       bufferedCount: gap.bufferedCount,
       sequenceFeedback: drain.sequenceFeedback,
-      receiverCredits: deriveReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
+      receiverCredits: deriveSmoothedReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
     };
   }
 

@@ -2,6 +2,7 @@ import { isEnvelope } from './protocol.js';
 import { memberSetFingerprint, sameMemberSet } from './batch-planner.js';
 import { acquireAttemptLease, normalizeAttemptLease, releaseAttemptLease } from './delivery-attempt-lease.js';
 import { DeliveryLedgerIndex } from './delivery-ledger-index.js';
+import { auditLedgerIndex } from './ledger-index-audit.js';
 
 export const ACTIVE_LEDGER_STATES = new Set(['persisted', 'staged', 'submitting', 'failed']);
 const ALL_LEDGER_STATES = new Set([...ACTIVE_LEDGER_STATES, 'proven', 'archived']);
@@ -305,10 +306,7 @@ export class DeliveryLedger {
   }
 
   indexAudit({ repair = false } = {}) {
-    const initial = this.#index.audit(this.#entries);
-    if (initial.ok || !repair) return { ...initial, rebuilt: false };
-    this.#index.rebuild(this.#entries);
-    return { ...this.#index.audit(this.#entries), rebuilt: true, previousFindings: initial.findings };
+    return auditLedgerIndex(this.#index, this.#entries, { repair });
   }
 
   exportState() {
