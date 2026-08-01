@@ -82,6 +82,7 @@ export class ContiguousSequenceBuffer {
     return {
       expectedSeq: this.expectedSeq,
       bufferedCount: sequences.length,
+      capacity: this.#maxBuffered,
       highestBufferedSeq: sequences.at(-1) || 0,
       hasGap,
       gapAgeMs: ageMs,

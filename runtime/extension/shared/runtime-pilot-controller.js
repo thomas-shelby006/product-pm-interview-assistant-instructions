@@ -12,6 +12,7 @@ import { prepareSessionEnd, senderOutboxStorageKey, validateSessionEnd } from '.
 import { runRuntimeSelfTest } from './runtime-self-test.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
+import { outboxAlarmName } from './alarm-rehydration.js';
 
 import { classifyRegistration } from './registration-heartbeat.js';
 
@@ -232,6 +233,14 @@ export function createRuntimePilotController({
       consecutiveFailures: value.consecutiveFailures,
       nextProbeAt: value.nextProbeAt,
       lastFailureReason: value.lastFailureReason,
+      score: value.score,
+      scoreState: value.scoreState,
+      preferredMode: value.preferredMode,
+      scoreReason: value.scoreReason,
+      protocolVersion: value.protocolVersion,
+      epoch: value.epoch,
+      capabilities: Array.isArray(value.capabilities) ? value.capabilities.map(String) : [],
+      handshakeReady: Boolean(value.handshakeReady),
       updatedAt: value.updatedAt
     });
     await commit(sessionId, pilot);
@@ -520,6 +529,15 @@ export function createRuntimePilotController({
     } else if (event?.type === 'outbox_state') {
       pilot.setSenderOutboxState(sessionId, event);
       pilot.record(sessionId, event.type, event);
+      const alarmName = outboxAlarmName(sessionId);
+      const dueAt = Number(event.retryIntent?.dueAt || 0);
+      try {
+        if (Number(event.count || 0) > 0 && dueAt > 0) {
+          await chromeApi.alarms?.create?.(alarmName, { when: Math.max(Date.now() + 50, dueAt) });
+        } else {
+          await chromeApi.alarms?.clear?.(alarmName);
+        }
+      } catch {}
     } else if (event?.type) {
       pilot.record(sessionId, event.type, event);
     }
@@ -1218,6 +1236,18 @@ export function createRuntimePilotController({
     }
   }
 
+  async function recordAlarmAudit(sessionId, data = {}) {
+    const pilot = await state();
+    pilot.record(sessionId, 'alarm_rehydration_audit', {
+      restored: Math.max(0, Number(data.restored) || 0),
+      unchanged: Math.max(0, Number(data.unchanged) || 0),
+      cleared: Math.max(0, Number(data.cleared) || 0),
+      expected: Math.max(0, Number(data.expected) || 0),
+      auditedAt: Math.max(0, Number(data.auditedAt) || Date.now())
+    });
+    await commit(sessionId, pilot);
+    return { ok: true };
+  }
   async function recordRegistrationRecovery(sessionId, data) {
     const pilot = await state();
     pilot.record(sessionId, 'registration_recovered', data);
@@ -1248,6 +1278,10 @@ export function createRuntimePilotController({
       () => syncRegistration(registration)
     ),
     transportLane: value => mutationCoordinator.run(value?.sessionId, () => transportLane(value)),
+    recordAlarmAudit: (sessionId, data) => mutationCoordinator.run(
+      sessionId,
+      () => recordAlarmAudit(sessionId, data)
+    ),
     recordRegistrationRecovery: (sessionId, data) => mutationCoordinator.run(
       sessionId,
       () => recordRegistrationRecovery(sessionId, data)

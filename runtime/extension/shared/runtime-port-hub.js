@@ -6,6 +6,7 @@ import {
   withTransportProtocol
 } from './transport-protocol.js';
 import { RequestCorrelationJournal } from './request-correlation-journal.js';
+import { chooseTransportLane, deriveTransportLaneScore } from './transport-lane-score.js';
 
 export function rolePortName(sessionId, role, instanceId) {
   return `pmia-role:${String(sessionId)}:${String(role)}:${String(instanceId)}`;
@@ -42,6 +43,7 @@ export function createRuntimePortHub({
   };
   const publishCircuit = (identity, circuit, protocol = null) => {
     try {
+      const lane = chooseTransportLane(circuit.snapshot());
       onCircuitState({
         sessionId: identity.sessionId,
         role: identity.role,
@@ -51,6 +53,10 @@ export function createRuntimePortHub({
         epoch: Number(protocol?.epoch || 0),
         capabilities: Array.isArray(protocol?.capabilities) ? [...protocol.capabilities] : [],
         handshakeReady: Boolean(protocol),
+        score: lane.direct.score,
+        scoreState: lane.direct.state,
+        preferredMode: lane.mode,
+        scoreReason: lane.direct.reason,
         ...circuit.snapshot()
       });
     } catch {}
@@ -238,6 +244,12 @@ export function createRuntimePortHub({
   async function request(sessionId, role, frame, { timeout = timeoutMs } = {}) {
     const entry = await readyEntry(sessionId, role, Math.min(Number(timeout) || timeoutMs, handshakeTimeoutMs));
     const circuit = circuitFor(sessionId, role);
+    const laneDecision = chooseTransportLane(circuit.snapshot());
+    if (laneDecision.mode !== 'direct') {
+      circuit.markFallback('direct_lane_degraded', now());
+      publishCircuit(entry, circuit, entry.protocol);
+      throw new Error('direct_lane_degraded');
+    }
     if (!circuit.canAttemptDirect(now())) {
       circuit.markFallback('port_circuit_open', now());
       publishCircuit(entry, circuit, entry.protocol);
@@ -291,8 +303,14 @@ export function createRuntimePortHub({
 
   function getTransportState(sessionId, role) {
     const entry = get(sessionId, role);
+    const circuitState = circuitFor(sessionId, role).snapshot();
+    const lane = deriveTransportLaneScore(circuitState);
     return {
-      ...circuitFor(sessionId, role).snapshot(),
+      ...circuitState,
+      score: lane.score,
+      scoreState: lane.state,
+      preferredMode: lane.score >= 35 ? 'direct' : 'fallback',
+      scoreReason: lane.reason,
       protocolVersion: Number(entry?.protocol?.version || 0),
       epoch: Number(entry?.protocol?.epoch || entry?.epoch || 0),
       capabilities: [...(entry?.protocol?.capabilities || [])],

@@ -12,6 +12,7 @@ import { shouldAllowRuntimeLeaseMigration } from './shared/registration-migratio
 import { createRuntimePortHub } from './shared/runtime-port-hub.js';
 import { createSessionMutationCoordinator } from './shared/session-mutation-coordinator.js';
 import { senderOutboxStorageKey } from './shared/session-end-guard.js';
+import { auditAndRehydrateAlarms, outboxAlarmName } from './shared/alarm-rehydration.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -69,6 +70,37 @@ pilotController = createRuntimePilotController({
   }
 });
 
+async function rehydrateManagedAlarms() {
+  const registry = await loadRegistry();
+  const schedules = [];
+  for (const item of registry.exportState()) {
+    const sessionId = String(item.sessionId || '');
+    if (!sessionId) continue;
+    const snapshot = await pilotController.snapshot(sessionId);
+    for (const schedule of snapshot?.recoverySchedules || []) {
+      if (schedule?.alarmName && schedule?.dueAt) schedules.push(schedule);
+    }
+    const retryIntent = snapshot?.senderOutboxState?.retryIntent;
+    if (retryIntent?.dueAt) {
+      schedules.push({
+        alarmName: outboxAlarmName(sessionId),
+        dueAt: Number(retryIntent.dueAt),
+        source: retryIntent.source || 'outbox_retry_intent'
+      });
+    }
+  }
+  const existingAlarms = await chrome.alarms.getAll();
+  const result = await auditAndRehydrateAlarms({
+    schedules,
+    existingAlarms,
+    create: (name, options) => chrome.alarms.create(name, options),
+    clear: name => chrome.alarms.clear(name)
+  });
+  await Promise.allSettled(registry.exportState().map(item => (
+    pilotController.recordAlarmAudit?.(item.sessionId, result)
+  )));
+  return result;
+}
 function serialize(operation, sessionId = '__background__') {
   return operationCoordinator.run(sessionId, operation);
 }
@@ -325,8 +357,23 @@ async function broadcastLinkStatus(sessionId, registry) {
 
 
 chrome.alarms.onAlarm.addListener(alarm => {
+  const outboxMatch = /^pmia-outbox:(.+)$/.exec(String(alarm?.name || ''));
+  if (outboxMatch) {
+    const sessionId = outboxMatch[1];
+    void pilotController.handleCommand({
+      sessionId,
+      requestId: `outbox-alarm-${Date.now()}`,
+      command: 'retry_outbox',
+      payload: { source: 'outbox_alarm' }
+    }).catch(() => {});
+    return;
+  }
   void pilotController.handleAlarm(alarm).catch(() => {});
 });
+
+void rehydrateManagedAlarms().catch(() => {});
+chrome.runtime.onStartup?.addListener?.(() => { void rehydrateManagedAlarms().catch(() => {}); });
+chrome.runtime.onInstalled?.addListener?.(() => { void rehydrateManagedAlarms().catch(() => {}); });
 
 chrome.runtime.onConnect.addListener(port => {
   if (rolePortHub.connect(port)) return;

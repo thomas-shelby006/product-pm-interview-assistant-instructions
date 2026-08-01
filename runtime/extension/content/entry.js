@@ -25,6 +25,7 @@ import { createRuntimeRecovery } from './runtime-recovery.js';
 import { nextSequence } from '../shared/sequence.js';
 import { ContiguousSequenceBuffer } from '../shared/contiguous-sequence-buffer.js';
 import { deriveSequenceFeedback } from '../shared/sequence-feedback.js';
+import { deriveReceiverCredits } from '../shared/receiver-flow-control.js';
 import { buildSessionExport, renderSessionMarkdown } from '../shared/session-log.js';
 import { describeRuntimeStatus } from '../shared/session-status.js';
 import { extractSafeSessionContext } from '../shared/session-context.js';
@@ -706,6 +707,30 @@ async function startRuntime(runtimeConfig) {
       return { ok: true, reason: 'accepted', duplicate: false };
     }
 
+    const currentSequenceStatus = receiverSequenceBuffer.status();
+    const currentBatchState = receiverBatchRuntime.snapshot();
+    const receiverCredits = deriveReceiverCredits({
+      bufferedCount: currentSequenceStatus.bufferedCount,
+      maxBuffered: currentSequenceStatus.capacity,
+      activeMembers: currentBatchState?.active?.memberIds?.length || 0,
+      hold: Boolean(currentBatchState?.hold),
+      paused: Boolean(transportPaused || paused),
+      storageCritical: false,
+      draftConflict: Boolean(currentBatchState?.draftConflict)
+    });
+    if (!receiverCredits.canAccept && Number(envelope?.seq || 0) > receiverSequenceBuffer.lastAcceptedSeq) {
+      return {
+        ok: false,
+        persisted: true,
+        queued: true,
+        buffered: false,
+        error: 'receiver_backpressure',
+        reason: receiverCredits.reason,
+        sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot()),
+        receiverCredits
+      };
+    }
+
     const sequenceDecision = receiverSequenceBuffer.offer(envelope);
     if (sequenceDecision.duplicate) {
       overlay.setStatus('DUPLICATE ACK', 'warn', 1400);
@@ -715,7 +740,8 @@ async function startRuntime(runtimeConfig) {
         duplicate: true,
         buffered: Boolean(sequenceDecision.buffered),
         expectedSeq: sequenceDecision.expectedSeq,
-        sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot())
+        sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot()),
+        receiverCredits: deriveReceiverCredits({ ...receiverCredits, bufferedCount: receiverSequenceBuffer.status().bufferedCount, maxBuffered: receiverSequenceBuffer.status().capacity })
       };
     }
     if (!sequenceDecision.accepted) {
@@ -725,7 +751,8 @@ async function startRuntime(runtimeConfig) {
         buffered: false,
         error: sequenceDecision.reason,
         expectedSeq: sequenceDecision.expectedSeq,
-        sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot())
+        sequenceFeedback: deriveSequenceFeedback(receiverSequenceBuffer.snapshot()),
+        receiverCredits: deriveReceiverCredits({ ...receiverCredits, bufferedCount: receiverSequenceBuffer.status().bufferedCount, maxBuffered: receiverSequenceBuffer.status().capacity })
       };
     }
 
@@ -742,7 +769,8 @@ async function startRuntime(runtimeConfig) {
     if (drain.failure?.envelope?.id === envelope.id) {
       return {
         ...(drain.failure.result || { ok: false, error: 'batch_rejected' }),
-        sequenceFeedback: drain.sequenceFeedback
+        sequenceFeedback: drain.sequenceFeedback,
+        receiverCredits: deriveReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
       };
     }
 
@@ -758,7 +786,8 @@ async function startRuntime(runtimeConfig) {
         proof: originalResult.proof || null,
         fingerprint: originalResult.batch?.prompt?.fingerprint || originalResult.fingerprint || '',
         memberFingerprint: originalResult.batch?.prompt?.memberFingerprint || originalResult.memberFingerprint || '',
-        sequenceFeedback: drain.sequenceFeedback
+        sequenceFeedback: drain.sequenceFeedback,
+        receiverCredits: deriveReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
       };
     }
     return {
@@ -769,7 +798,8 @@ async function startRuntime(runtimeConfig) {
       reason: 'buffered_gap',
       expectedSeq: gap.expectedSeq,
       bufferedCount: gap.bufferedCount,
-      sequenceFeedback: drain.sequenceFeedback
+      sequenceFeedback: drain.sequenceFeedback,
+      receiverCredits: deriveReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
     };
   }
 

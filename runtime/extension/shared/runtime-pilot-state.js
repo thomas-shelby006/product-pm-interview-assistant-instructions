@@ -23,7 +23,7 @@ function emptyRole() {
     heartbeatAt: 0,
     lastActivityAt: 0,
     pageUrl: '',
-    transportLane: { state: 'unknown', lastMode: '', lastRttMs: 0, consecutiveFailures: 0, nextProbeAt: 0, lastFailureReason: '', updatedAt: 0 },
+    transportLane: { state: 'unknown', lastMode: '', lastRttMs: 0, consecutiveFailures: 0, nextProbeAt: 0, lastFailureReason: '', score: 0, scoreState: 'unknown', preferredMode: 'fallback', protocolVersion: 0, epoch: 0, capabilities: [], handshakeReady: false, updatedAt: 0 },
     instanceId: '',
     lastRegistrationAt: 0,
     registrationHeartbeatCount: 0
@@ -82,6 +82,13 @@ function normalizeOutboxState(value = {}) {
     persistenceError: String(source.persistenceError || ''),
     restoredCount: Math.max(0, Number(source.restoredCount || 0)),
     recoverySource: String(source.recoverySource || ''),
+    retryIntent: source.retryIntent && typeof source.retryIntent === 'object' ? {
+      envelopeId: String(source.retryIntent.envelopeId || ''),
+      dueAt: Math.max(0, Number(source.retryIntent.dueAt || 0)),
+      attempt: Math.max(0, Number(source.retryIntent.attempt || 0)),
+      reason: String(source.retryIntent.reason || ''),
+      source: String(source.retryIntent.source || '')
+    } : null,
     updatedAt: Math.max(0, Number(source.updatedAt || 0))
   };
 }

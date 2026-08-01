@@ -67,6 +67,17 @@ export function createSenderOutbox({
       return false;
     }
   };
+  const retryIntent = () => {
+    const first = entries[0];
+    if (!first || !first.nextRetryAt) return null;
+    return {
+      envelopeId: String(first.envelope.id),
+      dueAt: Number(first.nextRetryAt),
+      attempt: Math.max(0, Number(first.attempts) || 0),
+      reason: String(first.lastError || 'persistence_unconfirmed'),
+      source: 'extension_session_outbox'
+    };
+  };
   const snapshot = () => ({
     count: entries.length,
     replaying,
@@ -76,7 +87,8 @@ export function createSenderOutbox({
     lastError: entries[0]?.lastError || '',
     persistenceError,
     restoredCount: Math.max(0, Number(restoredCount) || 0),
-    recoverySource: String(recoverySource || 'unknown')
+    recoverySource: String(recoverySource || 'unknown'),
+    retryIntent: retryIntent()
   });
   const notify = () => { try { onState(snapshot()); } catch {} };
   function cancelTimer() { if (timer === null) return false; clearTimer(timer); timer = null; return true; }

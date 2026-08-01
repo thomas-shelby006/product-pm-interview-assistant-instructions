@@ -342,3 +342,30 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** feedback is derived from the authoritative contiguous buffer and contains no question text.
 
 **Source-complete status:** Cycles 46-50 are implemented. Executable verification remains deferred until Cycle 70.
+
+## Cycle 51 - Receiver Credit Backpressure
+- **Bug fixes:** burst traffic cannot overflow the contiguous receiver buffer or enter an already held/conflicted batch path.
+- **New features:** reason-coded available, backpressure, capacity, buffered, active, and retry-after credit state.
+- **Implementation:** credits are derived at receiver admission; zero credit preserves the durable sender final and returns an ordered retry response.
+
+## Cycle 52 - Adaptive Transport Lane Scoring
+- **Bug fixes:** a slow or repeatedly failing direct port is no longer preferred merely because it remains connected.
+- **New features:** safe 0-100 lane score, health state, reason, and preferred direct/fallback mode.
+- **Implementation:** the port hub scores circuit, RTT, failures, and recent fallback evidence before each direct request.
+
+## Cycle 53 - Jittered Reconnect and Half-Open Probe
+- **Bug fixes:** role and dashboard reconnects no longer synchronize into fixed retry bursts.
+- **New features:** bounded exponential delay, jitter, attempt count, and one half-open probe.
+- **Implementation:** one reconnect policy owns both content role-port and dashboard reconnection state.
+
+## Cycle 54 - Alarm Rehydration on Worker Start
+- **Bug fixes:** missing recovery and outbox alarms are recreated after service-worker suspension; stale managed alarms are removed.
+- **New features:** startup audit reports restored, unchanged, cleared, expected, and audited-at counts.
+- **Implementation:** background reconstructs schedules from extension-session Pilot state and records a metadata-only audit.
+
+## Cycle 55 - Durable Outbox Retry Intent
+- **Bug fixes:** a pending retry survives content reload instead of depending on a page timer.
+- **New features:** retry envelope identity, due time, attempt, reason, and alarm source in safe outbox state.
+- **Implementation:** retry intent is derived from the persisted first outbox entry; the worker schedules `pmia-outbox` and routes it to the established retry command.
+
+**Source-complete status:** Cycles 51-55 are implemented. Executable verification remains deferred until Cycle 70.

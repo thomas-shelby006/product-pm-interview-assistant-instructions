@@ -6,6 +6,7 @@ import {
   withTransportProtocol
 } from '../shared/transport-protocol.js';
 import { RequestCorrelationJournal } from '../shared/request-correlation-journal.js';
+import { ReconnectPolicy } from '../shared/reconnect-policy.js';
 
 export function createRuntimeRolePort({
   chromeApi = globalThis.chrome,
@@ -27,6 +28,7 @@ export function createRuntimeRolePort({
   const pending = new Map();
   const outboundJournal = new RequestCorrelationJournal({ maxEntries: 256 });
   const inboundJournal = new RequestCorrelationJournal({ maxEntries: 256 });
+  const reconnectPolicy = new ReconnectPolicy({ baseMs: reconnectDelayMs, capMs: 8000 });
   const localHandshake = createTransportHandshake({ sessionId, role, instanceId });
 
   const failPending = reason => {
@@ -58,12 +60,13 @@ export function createRuntimeRolePort({
     return handshakePromise;
   }
 
-  function scheduleReconnect() {
+  function scheduleReconnect(decision = null) {
     if (stopped || reconnectTimer) return;
+    const next = decision || reconnectPolicy.next();
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       connect();
-    }, Math.max(50, Number(reconnectDelayMs) || 120));
+    }, Math.max(50, Number(next.delayMs) || 120));
   }
 
   function sendResponse(requestId, result) {
@@ -80,12 +83,13 @@ export function createRuntimeRolePort({
     if (stopped || port) return Boolean(port);
     protocol = null;
     beginHandshake();
+    reconnectPolicy.beginProbe();
     try {
       port = chromeApi.runtime.connect({ name: rolePortName(sessionId, role, instanceId) });
     } catch {
       port = null;
       settleHandshake({ ok: false, error: 'role_port_connect_failed' });
-      scheduleReconnect();
+      scheduleReconnect(reconnectPolicy.failProbe());
       return false;
     }
     port.onMessage.addListener(frame => {
@@ -113,6 +117,7 @@ export function createRuntimeRolePort({
         if (!frame.ok || !frame.protocol) {
           protocol = null;
           settleHandshake({ ok: false, error: frame.error || 'transport_handshake_rejected' });
+          try { port?.disconnect(); } catch {}
           return;
         }
         const validation = validateTransportFrame({ protocol: frame.protocol }, protocol || frame.protocol);
@@ -122,6 +127,7 @@ export function createRuntimeRolePort({
           return;
         }
         protocol = validation.identity;
+        reconnectPolicy.succeed();
         settleHandshake({ ok: true, protocol });
         return;
       }
@@ -168,7 +174,7 @@ export function createRuntimeRolePort({
       protocol = null;
       settleHandshake({ ok: false, error: 'role_port_disconnected' });
       failPending('role_port_disconnected');
-      scheduleReconnect();
+      scheduleReconnect(reconnectPolicy.failProbe());
     });
     return true;
   }
@@ -236,7 +242,8 @@ export function createRuntimeRolePort({
       handshakeReady: Boolean(protocol),
       protocolVersion: Number(protocol?.version || 0),
       epoch: Number(protocol?.epoch || 0),
-      capabilities: [...(protocol?.capabilities || [])]
+      capabilities: [...(protocol?.capabilities || [])],
+      reconnect: reconnectPolicy.snapshot()
     };
   }
 

@@ -28,9 +28,11 @@ import { deriveSessionEndView } from './session-end-model.js';
 import { deriveSelfTestView } from './self-test-model.js';
 import { renderTruthRail } from './render-live-status.js';
 import { renderRuntimeRole } from './render-runtime-health.js';
+import { ReconnectPolicy } from '../shared/reconnect-policy.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
+const reconnectPolicy = new ReconnectPolicy({ baseMs: 350, capMs: 8000 });
 const state = {
   snapshot: null,
   port: null,
@@ -137,14 +139,15 @@ function failPendingCommands(reason = 'dashboard_disconnected') {
 
 function scheduleReconnect() {
   state.reconnectAttempt += 1;
-  const delay = Math.min(8000, 350 * (2 ** Math.min(5, state.reconnectAttempt)));
+  const decision = reconnectPolicy.failProbe();
   clearTimeout(state.reconnectTimer);
-  state.reconnectTimer = setTimeout(connect, delay);
+  state.reconnectTimer = setTimeout(connect, decision.delayMs);
 }
 
 function handlePortMessage(message) {
   if (message?.type === 'PMIA_DASHBOARD_SNAPSHOT') {
     state.reconnectAttempt = 0;
+    reconnectPolicy.succeed();
     state.sessionEnded = false;
     state.snapshot = message.snapshot;
     state.efficiency.full += 1;
