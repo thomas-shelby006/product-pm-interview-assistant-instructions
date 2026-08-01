@@ -40,7 +40,7 @@ test('receiver batch runtime accumulates and mirrors arrivals during generation'
   assert.equal(first.staged, true);
   assert.equal(second.staged, true);
   assert.equal(submitted.length, 0);
-  assert.match(provider.drafts.at(-1), /Question 1:[\s\S]*Question 2:/);
+  assert.match(provider.drafts.at(-1), /EARLIER QUESTION 1:[\s\S]*Question 1[\s\S]*LATEST QUESTION \(HIGHEST PRIORITY\):[\s\S]*Question 2/);
 });
 
 test('answer completion drains the full accumulated next batch without stopping generation', async () => {

@@ -9,5 +9,7 @@ export function classifyStoragePressure(bytes, quotaBytes = DEFAULT_SESSION_QUOT
     : ratio >= 0.85 ? 'high'
       : ratio >= 0.70 ? 'elevated'
         : 'normal';
-  return { bytes: used, quotaBytes: quota, ratio, percent, level, breakdown: breakdown || null };
+  const result = { bytes: used, quotaBytes: quota, ratio, percent, level };
+  if (breakdown) result.breakdown = breakdown;
+  return result;
 }

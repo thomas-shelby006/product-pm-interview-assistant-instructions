@@ -90,7 +90,12 @@ export class BatchPlanner {
     this.#hold = Boolean(state?.hold);
     this.#autoSubmit = state?.autoSubmit !== false;
     this.#active = state?.active ? this.#normalizeBatch(state.active) : null;
-    this.#next = Array.isArray(state?.next) ? state.next.map(cloneEntry).filter(entry => entry.id) : [];
+    const nextEntries = Array.isArray(state?.next)
+      ? state.next
+      : Array.isArray(state?.next?.entries)
+        ? state.next.entries
+        : [];
+    this.#next = nextEntries.map(cloneEntry).filter(entry => entry.id);
     for (const entry of [...(this.#active?.entries || []), ...this.#next]) this.#known.add(entry.id);
   }
 

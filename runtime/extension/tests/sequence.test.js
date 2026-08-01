@@ -81,8 +81,10 @@ test('receiver duplicate acknowledgement returns before batch admission', async 
     entry.indexOf('async function receiveEnvelope'),
     entry.indexOf('async function handleRuntimeCommand')
   );
-  const duplicateIndex = receive.indexOf("reason: 'duplicate_ack'");
-  const batchIndex = receive.indexOf('await receiverBatchRuntime.accept(envelope)');
-  assert.ok(duplicateIndex >= 0 && duplicateIndex < batchIndex);
-  assert.match(receive, /if \(sequenceDecision\.duplicate\)[\s\S]*return \{ ok: true, reason: 'duplicate_ack', duplicate: true \}/);
+  const duplicateIndex = receive.indexOf('if (sequenceDecision.duplicate)');
+  const drainIndex = receive.indexOf('await drainReceiverSequenceBuffer(envelope.id)');
+  assert.ok(duplicateIndex >= 0 && duplicateIndex < drainIndex);
+  assert.match(receive, /reason:\s*sequenceDecision\.reason/);
+  assert.match(receive, /duplicate:\s*true/);
+  assert.match(receive, /buffered:\s*Boolean\(sequenceDecision\.buffered\)/);
 });

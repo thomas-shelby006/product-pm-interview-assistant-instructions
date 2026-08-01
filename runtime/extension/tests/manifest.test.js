@@ -69,7 +69,8 @@ test('manifest identifies the low-latency preview/commit runtime', async () => {
   assert.match(manifest.description, /preview/i);
   assert.match(manifest.description, /delivery proof/i);
   assert.match(manifest.description, /Runtime Pilot Dashboard/i);
-  assert.match(manifest.description, /bounded final queue/i);
+  assert.match(manifest.description, /non-preemptive batching/i);
+  assert.doesNotMatch(manifest.description, /bounded final queue/i);
 });
 
 test('manifest exposes all dynamically imported sender and answer modules', async () => {

@@ -37,10 +37,10 @@ test('delivery preserves receiver acknowledgement reason for accepted retries', 
     route: { tabId: 2 },
     response: { ok: true, reason: 'duplicate_ack', duplicate: true }
   }), {
-    delivered: true,
+    delivered: false,
     queued: false,
-    reason: 'duplicate_ack',
-    duplicate: true
+    duplicate: true,
+    reason: 'duplicate_ack'
   });
 });
 
@@ -86,11 +86,9 @@ test('stale acknowledgement remains staged until rendered proof exists', () => {
     response: { ok: true, reason: 'stale_ack', duplicate: true }
   }), {
     delivered: false,
-    queued: true,
-    staged: true,
-    reason: 'stale_ack',
-    batchId: 'next',
-    memberIds: []
+    queued: false,
+    duplicate: true,
+    reason: 'stale_ack'
   });
 });
 

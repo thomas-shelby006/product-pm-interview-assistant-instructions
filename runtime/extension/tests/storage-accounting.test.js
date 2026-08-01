@@ -22,5 +22,5 @@ test('compaction plan never selects actionable storage', () => {
 
 test('utf8 byte estimation handles non-ascii text', () => {
   assert.equal(utf8Bytes('A'), 1);
-  assert.equal(utf8Bytes('?'), 3);
+  assert.equal(utf8Bytes('\u20B9'), 3);
 });

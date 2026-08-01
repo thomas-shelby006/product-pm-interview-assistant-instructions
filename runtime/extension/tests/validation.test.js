@@ -56,8 +56,8 @@ test('runtime applies lossless sender persistence and receiver sequence idempote
   const registry = await readFile(resolve(extensionRoot, 'shared/session-registry.js'), 'utf8');
   assert.match(entry, /createSenderOutbox/);
   assert.match(entry, /senderOutbox\.enqueue\(envelope\)/);
-  assert.match(entry, /receiverSequenceBuffer\.admit/);
-  assert.match(entry, /receiverSequenceBuffer\.accept/);
+  assert.match(entry, /receiverSequenceBuffer\.offer\(envelope\)/);
+  assert.match(entry, /receiverSequenceBuffer\.confirm\(readyEnvelope\.seq\)/);
   assert.match(controller, /pilot\.persistFinal\(envelope\.sessionId, envelope\)/);
   assert.doesNotMatch(registry, /acceptSequence|lastAcceptedSeq|queueLatest|pending/);
 });
@@ -165,19 +165,20 @@ test('preview ordering is page-lifetime memory and never writes browser storage'
   assert.doesNotMatch(previewFunction, /sessionStorage\.setItem/);
 });
 
-test('receiver submits before starting durable received-text telemetry', async () => {
+test('receiver batch ownership precedes durable received-text telemetry', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
-  const receive = entry.slice(
-    entry.indexOf('async function receiveEnvelope'),
-    entry.indexOf('chrome.runtime.onMessage.addListener')
+  const drain = entry.slice(
+    entry.indexOf('async function drainReceiverSequenceBuffer'),
+    entry.indexOf('async function receiveEnvelope')
   );
-  const deliverIndex = receive.indexOf('await receiver.deliver(envelope)');
-  const logIndex = receive.indexOf("logEvent('received_text'");
-  assert.ok(deliverIndex >= 0, 'receiver delivery must exist');
-  assert.ok(logIndex > deliverIndex, 'received-text logging must start after submission');
-  assert.match(receive, /deliveryElapsedMs/);
+  const acceptIndex = drain.indexOf('await receiverBatchRuntime.accept(readyEnvelope)');
+  const confirmIndex = drain.indexOf('receiverSequenceBuffer.confirm(readyEnvelope.seq)');
+  const logIndex = drain.indexOf("void logEvent('received_text'");
+  assert.ok(acceptIndex >= 0, 'receiver batch acceptance must exist');
+  assert.ok(confirmIndex > acceptIndex, 'sequence confirmation must follow batch ownership');
+  assert.ok(logIndex > confirmIndex, 'durable logging must start after ownership is confirmed');
 });
 
 test('entry runtime uses readiness submission and event-driven recovery without fixed hotkey delays', async () => {
@@ -208,17 +209,17 @@ test('entry preserves runtime resources for back-forward cache restoration', asy
   assert.match(pagehide, /event\.persisted/);
   assert.match(pagehide, /if \(event\.persisted\) return/);
 });
-test('receiver acknowledgement never waits for telemetry after successful submission', async () => {
+test('receiver acknowledgement never waits for telemetry after batch ownership', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
-  const receive = entry.slice(
-    entry.indexOf('async function receiveEnvelope'),
-    entry.indexOf('chrome.runtime.onMessage.addListener')
+  const drain = entry.slice(
+    entry.indexOf('async function drainReceiverSequenceBuffer'),
+    entry.indexOf('async function receiveEnvelope')
   );
-  assert.match(receive, /void logEvent\('received_text'/);
-  assert.doesNotMatch(receive, /await receivedLog/);
-  assert.doesNotMatch(receive, /const receivedLog/);
+  assert.match(drain, /void logEvent\('received_text'/);
+  assert.doesNotMatch(drain, /await logEvent\('received_text'/);
+  assert.doesNotMatch(drain, /const receivedLog/);
 });
 test('entry imports every runtime dependency passed to the receiver controller', async () => {
   const { readFile } = await import('node:fs/promises');
@@ -376,7 +377,7 @@ test('production sender uses bounded fallback only for ChatGPT', async () => {
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
   assert.match(entry, /allowFallbackFinalization:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
   assert.match(entry, /allowVoiceFallback:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
-  assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 900 \}\)/);
+  assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 180 \}\)/);
 });
 
 test('Claude MAIN-world observer preserves interruption and resets only an empty transcript', async () => {
@@ -460,7 +461,7 @@ test('ChatGPT transport enables bounded stable finalization while Claude keeps p
   const entry = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
   assert.match(entry, /allowFallbackFinalization: runtimeConfig\.provider === 'chatgpt'/);
   assert.match(entry, /allowVoiceFallback: runtimeConfig\.provider === 'chatgpt'/);
-  assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 900 \}\)/);
+  assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 180 \}\)/);
 });
 
 test('service worker keeps transcript logs in session storage and purges legacy local logs', async () => {
@@ -630,8 +631,7 @@ test('production runtime contains no latest-only delivery authority', async () =
     'shared/runtime-pilot-controller.js',
     'shared/runtime-pilot-state.js'
   ];
-  const source = (await Promise.all(files.map(file => readFile(resolve(extensionRoot, file), 'utf8')))).join('
-');
+  const source = (await Promise.all(files.map(file => readFile(resolve(extensionRoot, file), 'utf8')))).join('\n');
   assert.doesNotMatch(source, /queueLatest|acceptSequence|lastAcceptedSeq|supersedeBefore|resume_latest/);
   assert.match(source, /persistFinal|DeliveryLedger|resume_catch_up/);
 });

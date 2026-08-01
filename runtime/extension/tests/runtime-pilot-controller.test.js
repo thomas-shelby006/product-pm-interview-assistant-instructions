@@ -69,7 +69,7 @@ function setup({ requestRole = null } = {}) {
         delivered: true,
         queued: false,
         reason: 'accepted',
-        proof: { verified: true, proof: 'new_rendered_turn' }
+        proof: { verified: true, proof: 'new_rendered_turn', memberIds: ['q1', 'q2'] }
       };
     },
     appendLog: async () => {},
@@ -128,7 +128,7 @@ test('batch proof transitions every member while unrelated finals remain unresol
       type: 'batch_submitted',
       batchId: 'batch-1',
       memberIds: ['q1', 'q2'],
-      proof: { verified: true, proof: 'new_rendered_turn' }
+      proof: { verified: true, proof: 'new_rendered_turn', memberIds: ['q1', 'q2'] }
     }
   });
   assert.deepEqual((await controller.snapshot('s1')).ledger.map(item => [item.id, item.state]), [
@@ -185,7 +185,7 @@ test('end session removes registry and pilot state without recreating a ghost se
   assert.deepEqual(result.closeTabIds.sort(), [1, 2]);
 });
 
-test('runtime repair remains repairing until both roles publish healthy telemetry', async () => {
+test('healthy role telemetry alone never completes semantic recovery', async () => {
   const { controller, registry } = setup();
   await controller.syncRegistration(registry.getSession('s1').sender);
   await controller.syncRegistration(registry.getSession('s1').receiver);
@@ -204,8 +204,9 @@ test('runtime repair remains repairing until both roles publish healthy telemetr
     telemetry: { composerReady: true, phase: 'ready' }
   });
   const snapshot = await controller.snapshot('s1');
-  assert.equal(snapshot.mode, 'active');
-  assert.equal(snapshot.lastRepair.verified, true);
+  assert.equal(snapshot.mode, 'repairing');
+  assert.equal(snapshot.lastRepair.verified, false);
+  assert.equal(snapshot.lastRepair.checks.reconciliation, false);
 });
 
 test('heartbeat-only telemetry is coalesced after semantic state is established', async () => {
@@ -293,7 +294,7 @@ test('unverified batch submission does not close ledger members', async () => {
       type: 'batch_reconciled',
       batchId: 'batch-1',
       memberIds: ['q1'],
-      proof: { ok: true, verified: true, proof: 'existing_rendered_batch' }
+      proof: { ok: true, verified: true, proof: 'existing_rendered_batch', memberIds: ['q1'] }
     }
   });
   assert.equal((await controller.snapshot('s1')).ledger[0].state, 'proven');

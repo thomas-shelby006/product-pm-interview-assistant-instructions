@@ -154,8 +154,8 @@ test('Pilot exposes the current update lane as a Runtime Efficiency indicator', 
 });
 
 
-test('heartbeat updates use the lightweight role-only render path', async () => {
-  const source = await readFile(resolve(extensionRoot, 'dashboard/dashboard.js'), 'utf8');
+test('heartbeat updates use the lightweight role-only render path', () => {
+  const source = dashboard;
   const branch = source.slice(
     source.indexOf("message?.type === 'PMIA_DASHBOARD_HEARTBEAT'"),
     source.indexOf("message?.type === 'PMIA_DASHBOARD_COMMAND_RESULT'")

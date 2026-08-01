@@ -38,7 +38,7 @@ test('batch prompt preserves arrival order', () => {
   const entries = [1, 2, 3].map(seq => ({ id: `q${seq}`, envelope: envelope(`q${seq}`, seq) }));
   const prompt = composeBatchPrompt({ entries });
   assert.deepEqual(prompt.memberIds, ['q1', 'q2', 'q3']);
-  assert.match(prompt.text, /Question 1:[\s\S]*Question 2:[\s\S]*Question 3:/);
+  assert.match(prompt.text, /EARLIER QUESTION 1:[\s\S]*Question 1[\s\S]*EARLIER QUESTION 2:[\s\S]*Question 2[\s\S]*LATEST QUESTION \(HIGHEST PRIORITY\):[\s\S]*Question 3/);
 });
 
 
@@ -86,4 +86,14 @@ test('interrupt selection moves only the latest waiting final and preserves earl
   assert.equal(selected.interrupted.id, original.id);
   assert.deepEqual(selected.batch.prompt.memberIds, ['q4']);
   assert.deepEqual(planner.next().prompt.memberIds, ['q2', 'q3']);
+});
+
+
+test('batch planner restores the exported next-batch wrapper without losing entries', () => {
+  const planner = new BatchPlanner();
+  planner.add(envelope('q1', 1));
+  planner.add(envelope('q2', 2));
+  const restored = new BatchPlanner(planner.exportState());
+  assert.equal(restored.nextSize, 2);
+  assert.deepEqual(restored.next().prompt.memberIds, ['q1', 'q2']);
 });
