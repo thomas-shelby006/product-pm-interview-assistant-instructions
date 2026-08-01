@@ -80,16 +80,35 @@ test('delivery wakes and retries the same envelope before queueing', async () =>
 });
 
 
-test('stale acknowledgement is terminal supersession, not delivery', () => {
+test('stale acknowledgement remains staged until rendered proof exists', () => {
   assert.deepEqual(classifyDelivery({
     route: { tabId: 2 },
     response: { ok: true, reason: 'stale_ack', duplicate: true }
   }), {
     delivered: false,
-    queued: false,
-    superseded: true,
-    reason: 'stale_ack'
+    queued: true,
+    staged: true,
+    reason: 'stale_ack',
+    batchId: 'next',
+    memberIds: []
   });
+});
+
+test('staged receiver ownership stops transport retries immediately', async () => {
+  const module = await import('../shared/delivery.js');
+  let sends = 0;
+  const outcome = await module.deliverWithWakeRetry({
+    route: { tabId: 2, message: { id: 'q1', sessionId: 's1' } },
+    async sendToTab() {
+      sends += 1;
+      return { ok: true, staged: true, reason: 'receiver_busy', batchId: 'next', memberIds: ['q1'] };
+    },
+    async wakeTab() { throw new Error('staged delivery must not wake'); },
+    async wait() { throw new Error('staged delivery must not retry'); }
+  });
+  assert.equal(sends, 1);
+  assert.equal(outcome.staged, true);
+  assert.deepEqual(outcome.memberIds, ['q1']);
 });
 
 test('accepted receiver delivery never carries sender-terminal semantics', () => {

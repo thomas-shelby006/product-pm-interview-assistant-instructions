@@ -45,12 +45,16 @@ test('delivery ledger retains failed entries and proves all members of one batch
   assert.equal(ledger.counts().pending, 0);
 });
 
-test('delivery ledger compatibility queue never supersedes older finals automatically', () => {
+test('delivery ledger never supersedes an older unresolved final after a newer proof', () => {
   const ledger = new DeliveryLedger();
-  ledger.enqueue(envelope('q-1', 1));
-  ledger.enqueue(envelope('q-2', 2));
-  assert.deepEqual(ledger.supersedeBefore(2), []);
-  assert.deepEqual(ledger.list().map(item => item.id), ['q-1', 'q-2']);
+  ledger.persist(envelope('q-1', 1));
+  ledger.persist(envelope('q-2', 2));
+  ledger.markStaged(['q-2'], 'batch-2');
+  ledger.markSubmitting('batch-2');
+  ledger.markProven('batch-2', { verified: true });
+  assert.deepEqual(ledger.snapshot().map(item => [item.id, item.state]), [
+    ['q-1', 'persisted'], ['q-2', 'proven']
+  ]);
 });
 
 

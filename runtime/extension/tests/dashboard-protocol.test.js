@@ -35,12 +35,12 @@ test('selected queue commands require an item id', () => {
   assert.equal(normalizeDashboardCommand({
     sessionId: 'pmia_123',
     requestId: 'req-1',
-    command: 'send_selected'
+    command: 'submit_selected'
   }), null);
   assert.equal(normalizeDashboardCommand({
     sessionId: 'pmia_123',
     requestId: 'req-2',
-    command: 'send_selected',
+    command: 'submit_selected',
     payload: { queueItemId: 'env-1' }
   })?.payload.queueItemId, 'env-1');
 });

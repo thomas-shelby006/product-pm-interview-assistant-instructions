@@ -22,8 +22,6 @@ test('preview route validates sender ownership without mutating durable state', 
   const registry = new registryModule.SessionRegistry();
   registry.register({ sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 10 });
   registry.register({ sessionId: 's1', role: 'receiver', provider: 'claude', tabId: 20 });
-  registry.acceptSequence('s1', 8);
-  registry.queueLatest('s1', { id: 'final-pending', seq: 8, text: 'durable final' });
   const before = registry.exportState();
   const preview = previewModule.makePreview({
     sessionId: 's1', sourceProvider: 'chatgpt', text: 'partial',
@@ -51,7 +49,7 @@ test('preview route rejects non-owner and drops when receiver is absent', () => 
   const registration = registry.register({
     sessionId: 's1', role: 'receiver', provider: 'chatgpt', tabId: 20
   });
-  assert.equal(registration.pending, null);
+  assert.equal('pending' in registration, false);
 });
 
 test('preview contract rejects missing identity and invalid revision', () => {

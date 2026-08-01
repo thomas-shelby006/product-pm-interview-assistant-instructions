@@ -31,12 +31,13 @@ export function classifyDelivery({ route, response, error } = {}) {
     const outcome = {
       delivered: response.delivered !== false,
       queued: false,
-      reason,
-      staged: false,
-      batchId: String(response.batchId || ''),
-      memberIds: Array.isArray(response.memberIds) ? response.memberIds.map(String) : [],
-      proof: response.proof || null
+      reason
     };
+    const batchId = String(response.batchId || '');
+    const memberIds = Array.isArray(response.memberIds) ? response.memberIds.map(String) : [];
+    if (batchId) outcome.batchId = batchId;
+    if (memberIds.length) outcome.memberIds = memberIds;
+    if (response.proof) outcome.proof = response.proof;
     if (response.duplicate === true) outcome.duplicate = true;
     return outcome;
   }
@@ -68,12 +69,12 @@ export async function deliverWithWakeRetry({
   };
 
   let outcome = await attempt();
-  if (outcome.delivered || outcome.superseded) return outcome;
+  if (outcome.delivered || outcome.staged) return outcome;
   await wakeTab(route.tabId);
   for (const delay of retryDelaysMs) {
     await wait(Math.max(0, Number(delay) || 0));
     outcome = await attempt();
-    if (outcome.delivered || outcome.superseded) return outcome;
+    if (outcome.delivered || outcome.staged) return outcome;
   }
   return outcome;
 }

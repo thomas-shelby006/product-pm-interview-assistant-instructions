@@ -1,11 +1,8 @@
 const COMMANDS = new Set([
   'pause',
-  'resume_latest',
+  'resume_catch_up',
+  'submit_selected',
   'resume_without_send',
-  'send_selected',
-  'discard_selected',
-  'discard_all',
-  'discard_superseded',
   'set_auto_submit',
   'set_hold',
   'submit_now',
@@ -59,7 +56,7 @@ export function normalizeDashboardCommand(value) {
   const payload = value.payload && typeof value.payload === 'object'
     ? { ...value.payload }
     : {};
-  if (['send_selected', 'discard_selected', 'archive_selected'].includes(command)) {
+  if (['submit_selected', 'archive_selected'].includes(command)) {
     const queueItemId = cleanText(payload.queueItemId, 160);
     if (!queueItemId) return null;
     payload.queueItemId = queueItemId;

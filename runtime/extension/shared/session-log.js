@@ -100,7 +100,7 @@ function summaryLines(summary = {}) {
     `- Answers over 180 words: ${summary.answersOver180 || 0}`,
     `- Average receiver delivery: ${summary.averageDeliveryMs || 0} ms`,
     `- Maximum receiver delivery: ${summary.maxDeliveryMs || 0} ms`,
-    `- Queued finals: ${summary.queuedFinalCount || 0}`,
+    `- Persisted or staged finals: ${summary.queuedFinalCount || 0}`,
     `- Ignored duplicate/stale deliveries: ${summary.ignoredDeliveryCount || 0}`,
     `- Answer timeouts: ${summary.answerTimeoutCount || 0}`
   ];

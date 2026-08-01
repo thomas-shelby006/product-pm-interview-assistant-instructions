@@ -3,7 +3,7 @@ import { createRuntimePilotStore } from './runtime-pilot-store.js';
 import { getRuntimeWindowLayout, windowUpdateForBounds } from './window-layout.js';
 import { hasMeaningfulTelemetryChange, heartbeatPatch } from './telemetry-coalescer.js';
 import { classifyStoragePressure, DEFAULT_SESSION_QUOTA_BYTES } from './storage-pressure.js';
-import { composeBatchPrompt } from './batch-planner.js';
+import { buildReconciliationPayload } from './delivery-reconciler.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -114,43 +114,31 @@ export function createRuntimePilotController({
     }
   }
 
-  function reconciliationPayload(snapshot) {
-    const ledger = Array.isArray(snapshot?.ledger) ? snapshot.ledger : [];
-    const unresolved = ledger.filter(item => ['persisted', 'staged', 'submitting', 'failed'].includes(item.state));
-    const grouped = new Map();
-    for (const item of unresolved) {
-      const batchId = String(item.batchId || '');
-      if (!batchId || batchId === 'next' || batchId.startsWith('single-')) continue;
-      if (!grouped.has(batchId)) grouped.set(batchId, []);
-      grouped.get(batchId).push(item);
-    }
-    const batches = [...grouped.entries()].map(([id, items]) => {
-      const entries = items
-        .sort((a, b) => Number(a.envelope?.seq || 0) - Number(b.envelope?.seq || 0))
-        .map(item => ({ id: item.id, envelope: item.envelope }));
-      return { id, memberIds: entries.map(entry => entry.id), prompt: composeBatchPrompt({ entries }) };
-    });
-    return {
-      batches,
-      pending: unresolved.map(item => item.envelope).filter(Boolean)
-    };
-  }
-
-  async function reconcileSession(sessionId) {
-    const registry = await registryProvider();
-    const pilot = await state();
-    const snapshot = pilot.snapshot(sessionId);
+  async function reconcileSession(sessionId, {
+    registry = null,
+    pilot = null,
+    commitResult = true
+  } = {}) {
+    const currentRegistry = registry || await registryProvider();
+    const currentPilot = pilot || await state();
+    const snapshot = currentPilot.snapshot(sessionId);
     if (!snapshot?.receiver?.connected) return { ok: false, error: 'receiver_missing' };
-    const payload = reconciliationPayload(snapshot);
+    const payload = buildReconciliationPayload(snapshot);
     if (!payload.pending.length) return { ok: true, reason: 'ledger_clean' };
-    const result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'reconcile_delivery', payload);
-    pilot.record(sessionId, 'delivery_reconciliation', {
+    const result = await sendRuntimeCommand(
+      currentRegistry,
+      sessionId,
+      'receiver',
+      'reconcile_delivery',
+      payload
+    );
+    currentPilot.record(sessionId, 'delivery_reconciliation', {
       ok: Boolean(result.ok),
       pendingCount: payload.pending.length,
       batchCount: payload.batches.length,
       error: result.error || ''
     });
-    await commit(sessionId, pilot);
+    if (commitResult) await commit(sessionId, currentPilot);
     return result;
   }
 
@@ -240,24 +228,27 @@ export function createRuntimePilotController({
     return { paused: false, persisted: true, duplicate: false, response: null };
   }
 
+  function applyDeliveryOutcome(pilot, envelope, outcome) {
+    if (envelope.kind === 'boot') return;
+    const memberIds = outcome?.memberIds?.length ? outcome.memberIds : [envelope.id];
+    const batchId = outcome?.batchId || (outcome?.staged ? 'next' : `single-${envelope.id}`);
+    if (outcome?.staged || outcome?.delivered) {
+      pilot.markLedgerStaged(envelope.sessionId, memberIds, batchId);
+    }
+    if (outcome?.delivered) {
+      pilot.markLedgerSubmitting(envelope.sessionId, batchId);
+      pilot.markLedgerProven(envelope.sessionId, batchId, outcome.proof || {
+        proof: 'receiver_ack',
+        verified: Boolean(outcome.proof?.verified)
+      });
+    } else if (!outcome?.staged) {
+      pilot.completeLedgerItem(envelope.sessionId, envelope.id, outcome);
+    }
+  }
+
   async function afterForward(envelope, outcome) {
     const pilot = await state();
-    if (envelope.kind !== 'boot') {
-      const memberIds = outcome?.memberIds?.length ? outcome.memberIds : [envelope.id];
-      const batchId = outcome?.batchId || (outcome?.staged ? 'next' : `single-${envelope.id}`);
-      if (outcome?.staged || outcome?.delivered) {
-        pilot.markLedgerStaged(envelope.sessionId, memberIds, batchId);
-      }
-      if (outcome?.delivered) {
-        pilot.markLedgerSubmitting(envelope.sessionId, batchId);
-        pilot.markLedgerProven(envelope.sessionId, batchId, outcome.proof || {
-          proof: 'receiver_ack',
-          verified: Boolean(outcome.proof?.verified)
-        });
-      } else if (!outcome?.staged) {
-        pilot.completeQueueSend(envelope.sessionId, envelope.id, outcome);
-      }
-    }
+    applyDeliveryOutcome(pilot, envelope, outcome);
     pilot.recordDelivery(envelope.sessionId, {
       envelopeId: envelope.id,
       seq: envelope.seq || 0,
@@ -282,7 +273,7 @@ export function createRuntimePilotController({
       pilot.markLedgerSubmitting(sessionId, batchId);
       pilot.markLedgerProven(sessionId, batchId, value.proof || {});
     } else if (value.type === 'batch_submit_failed') {
-      pilot.ensure(sessionId).queue.markFailed(memberIds, value.reason || 'batch_submit_failed');
+      pilot.markLedgerFailed(sessionId, memberIds, value.reason || 'batch_submit_failed');
     }
     await commit(sessionId, pilot);
     return { ok: true, batchId, memberIds };
@@ -368,32 +359,31 @@ export function createRuntimePilotController({
     return { sender, receiver };
   }
 
-  async function sendQueuedItem(sessionId, itemId, registry, pilot) {
-    const item = pilot.snapshot(sessionId)?.queue?.find(candidate => candidate.id === itemId);
-    if (!item) return { ok: false, error: 'queue_item_missing' };
-    if (item.status === 'superseded') {
-      return { ok: false, error: 'queue_item_superseded' };
+  async function submitLedgerItem(sessionId, itemId, registry, pilot) {
+    const item = pilot.snapshot(sessionId)?.ledger?.find(candidate => candidate.id === itemId);
+    if (!item) return { ok: false, error: 'ledger_item_missing' };
+    if (!['persisted', 'failed'].includes(item.state)) {
+      return { ok: false, error: 'ledger_item_not_actionable', state: item.state };
     }
     const transportWasPaused = pilot.snapshot(sessionId)?.mode === 'paused';
     if (transportWasPaused) {
       await sendRuntimeCommand(registry, sessionId, 'receiver', 'resume', {
-        source: 'send_selected'
+        source: 'submit_selected'
       });
     }
-    pilot.markQueueSending(sessionId, itemId);
+    pilot.markLedgerItemSubmitting(sessionId, itemId);
     const route = registry.route(sessionId, item.envelope);
-    await saveRegistry(registry);
     const outcome = await deliverFinal(route, registry);
     if (transportWasPaused) {
       await sendRuntimeCommand(registry, sessionId, 'receiver', 'pause', {
-        source: 'send_selected'
+        source: 'submit_selected'
       });
     }
-    pilot.completeQueueSend(sessionId, itemId, outcome);
+    applyDeliveryOutcome(pilot, item.envelope, outcome);
     pilot.recordDelivery(sessionId, {
       envelopeId: item.envelope.id,
       seq: item.envelope.seq || 0,
-      source: 'operator_queue',
+      source: 'operator_inbox',
       ...outcome
     });
     return { ok: true, ...outcome };
@@ -615,15 +605,15 @@ export function createRuntimePilotController({
         pilot.setMode(sessionId, 'active');
         result = { ok: true, roles: await sendToRoles(registry, sessionId, 'resume') };
         break;
-      case 'resume_latest': {
+      case 'resume_catch_up': {
         pilot.setMode(sessionId, 'active');
         const roles = await sendToRoles(registry, sessionId, 'resume');
-        const catchUp = await reconcileSession(sessionId);
+        const catchUp = await reconcileSession(sessionId, { registry, pilot, commitResult: false });
         result = { ok: catchUp?.ok !== false, reason: catchUp?.reason || 'catch_up_started', roles, catchUp };
         break;
       }
-      case 'send_selected':
-        result = await sendQueuedItem(sessionId, payload.queueItemId, registry, pilot);
+      case 'submit_selected':
+        result = await submitLedgerItem(sessionId, payload.queueItemId, registry, pilot);
         break;
       case 'set_auto_submit':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_auto_submit', {
@@ -646,7 +636,7 @@ export function createRuntimePilotController({
         });
         break;
       case 'archive_selected': {
-        const archived = pilot.discardQueueItem(sessionId, payload.queueItemId);
+        const archived = pilot.archiveLedgerItem(sessionId, payload.queueItemId);
         result = {
           ok: Boolean(archived),
           ledgerItemId: payload.queueItemId,
@@ -655,22 +645,10 @@ export function createRuntimePilotController({
         break;
       }
       case 'archive_all':
-        result = { ok: true, archived: pilot.clearQueue(sessionId).length };
+        result = { ok: true, archived: pilot.archiveAllUnresolved(sessionId).length };
         break;
       case 'archive_proven':
         result = { ok: true, archived: pilot.archiveProven(sessionId).length };
-        break;
-      case 'discard_selected':
-        result = {
-          ok: Boolean(pilot.discardQueueItem(sessionId, payload.queueItemId)),
-          queueItemId: payload.queueItemId
-        };
-        break;
-      case 'discard_all':
-        result = { ok: true, discarded: pilot.clearQueue(sessionId).length };
-        break;
-      case 'discard_superseded':
-        result = { ok: true, discarded: pilot.discardSuperseded(sessionId).length };
         break;
       case 'check_live':
         result = await liveCheck(sessionId, registry, pilot);

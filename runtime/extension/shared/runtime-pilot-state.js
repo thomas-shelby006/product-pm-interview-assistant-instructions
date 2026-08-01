@@ -28,14 +28,30 @@ function emptyRole() {
 function emptyMetrics() {
   return {
     finalsObserved: 0,
+    persisted: 0,
     delivered: 0,
-    queued: 0,
     failed: 0,
     duplicateAcks: 0,
-    superseded: 0,
+    archived: 0,
     answerTimeouts: 0,
     deliveryProofMs: [],
     answerElapsedMs: []
+  };
+}
+
+function normalizeMetrics(value = {}) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    ...emptyMetrics(),
+    finalsObserved: Number(source.finalsObserved || 0),
+    persisted: Number(source.persisted || source.queued || 0),
+    delivered: Number(source.delivered || 0),
+    failed: Number(source.failed || 0),
+    duplicateAcks: Number(source.duplicateAcks || 0),
+    archived: Number(source.archived || source.superseded || 0),
+    answerTimeouts: Number(source.answerTimeouts || 0),
+    deliveryProofMs: Array.isArray(source.deliveryProofMs) ? source.deliveryProofMs.slice(-MAX_METRIC_SAMPLES) : [],
+    answerElapsedMs: Array.isArray(source.answerElapsedMs) ? source.answerElapsedMs.slice(-MAX_METRIC_SAMPLES) : []
   };
 }
 
@@ -81,9 +97,9 @@ function normalizeSession(item) {
       lastCompleted: item.batchState?.lastCompleted || null,
       draftConflict: item.batchState?.draftConflict || null
     },
-    queue: new DeliveryLedger(item.ledger || item.queue || []),
+    ledger: new DeliveryLedger(item.ledger || item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
-    metrics: { ...emptyMetrics(), ...(item.metrics || {}) },
+    metrics: normalizeMetrics(item.metrics),
     processedCommandIds: Array.isArray(item.processedCommandIds)
       ? item.processedCommandIds.slice(-MAX_COMMAND_IDS)
       : [],
@@ -192,9 +208,10 @@ export class RuntimePilotState {
 
   persistFinal(sessionId, envelope, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const outcome = session.queue.persist(envelope, { now });
+    const outcome = session.ledger.persist(envelope, { now });
     if (outcome.accepted && !outcome.duplicate) {
       session.metrics.finalsObserved += envelope?.kind === 'question' ? 1 : 0;
+      session.metrics.persisted += envelope?.kind === 'question' ? 1 : 0;
       this.recordFinal(sessionId, envelope, now);
       this.record(sessionId, 'final_persisted', {
         envelopeId: envelope.id,
@@ -208,114 +225,100 @@ export class RuntimePilotState {
 
   markLedgerStaged(sessionId, ids, batchId, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const changed = session.queue.markStaged(ids, batchId, now);
+    const changed = session.ledger.markStaged(ids, batchId, now);
     if (changed.length) this.record(sessionId, 'batch_staged', { batchId, memberIds: changed.map(item => item.id) }, now);
     return changed;
   }
 
   markLedgerSubmitting(sessionId, batchId, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const changed = session.queue.markSubmitting(batchId, now);
+    const changed = session.ledger.markSubmitting(batchId, now);
     if (changed.length) this.record(sessionId, 'batch_submitting', { batchId, memberIds: changed.map(item => item.id) }, now);
     return changed;
   }
 
   markLedgerProven(sessionId, batchId, proof = {}, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const changed = session.queue.markProven(batchId, proof, now);
+    const changed = session.ledger.markProven(batchId, proof, now);
+    session.metrics.delivered += changed.length;
     if (changed.length) this.record(sessionId, 'batch_proven', { batchId, memberIds: changed.map(item => item.id), proof }, now);
     return changed;
   }
 
-  queueFinal(sessionId, envelope, options = {}) {
-    const session = this.ensure(sessionId, options.now);
-    const outcome = session.queue.enqueue(envelope, options);
-    if (outcome.accepted && outcome.reason === 'queued') {
-      session.metrics.queued += 1;
-      this.record(sessionId, 'final_queued', {
-        envelopeId: envelope.id,
-        seq: envelope.seq || 0,
-        reason: options.reason || 'paused',
-        droppedIds: outcome.dropped.map(item => item.id)
-      }, options.now);
-    }
-    session.updatedAt = Number.isFinite(options.now) ? options.now : Date.now();
-    return outcome;
-  }
-
-  markQueueSending(sessionId, itemId, now = Date.now()) {
+  markLedgerFailed(sessionId, ids, reason = 'delivery_failed', now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const item = session.queue.markSending(itemId, now);
-    if (item) this.record(sessionId, 'queue_send_started', { queueItemId: itemId }, now);
-    return item;
-  }
-
-  completeQueueSend(sessionId, itemId, outcome = {}, now = Date.now()) {
-    const session = this.ensure(sessionId, now);
-    const result = session.queue.complete(itemId, { ...outcome, now });
-    if (!result) return null;
-    let superseded = [];
-    if (result.delivered) {
-      superseded = session.queue.supersedeBefore(result.item.envelope?.seq, now);
-    }
-    const eventType = result.delivered
-      ? 'queue_send_delivered'
-      : result.superseded
-        ? 'queue_send_superseded'
-        : 'queue_send_failed';
-    this.record(sessionId, eventType, {
-      queueItemId: itemId,
-      reason: outcome.reason || '',
-      supersededIds: superseded.map(item => item.id)
-    }, now);
-    return { ...result, supersededItems: superseded };
-  }
-
-  supersedeQueuedBefore(sessionId, sequence, now = Date.now()) {
-    const session = this.ensure(sessionId, now);
-    const superseded = session.queue.supersedeBefore(sequence, now);
-    if (superseded.length) {
-      this.record(sessionId, 'queue_items_superseded', {
-        sequence: Number(sequence) || 0,
-        queueItemIds: superseded.map(item => item.id)
+    const changed = session.ledger.markFailed(ids, reason, now);
+    if (changed.length) {
+      this.record(sessionId, 'ledger_entries_failed', {
+        memberIds: changed.map(entry => entry.id),
+        reason
       }, now);
     }
-    return superseded;
+    return changed;
   }
 
-  discardQueueItem(sessionId, itemId, now = Date.now()) {
+  markLedgerItemSubmitting(sessionId, itemId, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const item = session.queue.discard(itemId);
-    if (item) this.record(sessionId, 'queue_item_discarded', { queueItemId: itemId }, now);
-    return item;
+    const entry = session.ledger.markItemSubmitting(itemId, now);
+    if (entry) this.record(sessionId, 'ledger_item_submitting', { ledgerItemId: itemId }, now);
+    return entry;
+  }
+
+  completeLedgerItem(sessionId, itemId, outcome = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    let entry = null;
+    let eventType = 'ledger_item_failed';
+    if (outcome.delivered) {
+      entry = session.ledger.markItemProven(itemId, outcome.proof || {
+        reason: outcome.reason || 'accepted',
+        verified: Boolean(outcome.proof?.verified)
+      }, now);
+      if (entry) session.metrics.delivered += 1;
+      eventType = 'ledger_item_proven';
+    } else if (outcome.queued || outcome.staged) {
+      entry = session.ledger.markPersisted([itemId], outcome.reason || 'receiver_unavailable', now)[0] || null;
+      eventType = 'ledger_item_persisted';
+    } else {
+      entry = session.ledger.markFailed([itemId], outcome.reason || 'delivery_failed', now)[0] || null;
+    }
+    if (entry) {
+      this.record(sessionId, eventType, {
+        ledgerItemId: itemId,
+        reason: outcome.reason || ''
+      }, now);
+    }
+    return entry;
+  }
+
+  archiveLedgerItem(sessionId, itemId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const entry = session.ledger.archiveEntry(itemId, now);
+    if (entry) {
+      session.metrics.archived += 1;
+      this.record(sessionId, 'ledger_item_archived', { ledgerItemId: itemId }, now);
+    }
+    return entry;
   }
 
   archiveProven(sessionId, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const removed = session.queue.archiveProven(now);
+    const removed = session.ledger.archiveProven(now);
+    session.metrics.archived += removed.length;
     if (removed.length) this.record(sessionId, 'proven_entries_archived', { count: removed.length }, now);
     return removed;
   }
 
-  discardSuperseded(sessionId, now = Date.now()) {
+  archiveAllUnresolved(sessionId, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const removed = session.queue.discardSuperseded();
-    this.record(sessionId, 'superseded_queue_cleared', { count: removed.length }, now);
-    return removed;
-  }
-
-  clearQueue(sessionId, now = Date.now()) {
-    const session = this.ensure(sessionId, now);
-    const removed = session.queue.clear();
-    this.record(sessionId, 'queue_cleared', { count: removed.length }, now);
+    const removed = session.ledger.archiveAllUnresolved(now);
+    session.metrics.archived += removed.length;
+    if (removed.length) this.record(sessionId, 'unresolved_entries_archived', { count: removed.length }, now);
     return removed;
   }
 
   recordDelivery(sessionId, outcome = {}, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    if (outcome.delivered) session.metrics.delivered += 1;
-    else if (outcome.superseded) session.metrics.superseded += 1;
-    else if (!outcome.queued) session.metrics.failed += 1;
+    if (!outcome.delivered && !outcome.queued && !outcome.staged) session.metrics.failed += 1;
     if (outcome.duplicate) session.metrics.duplicateAcks += 1;
     const elapsed = Number(outcome.deliveryProofMs);
     if (Number.isFinite(elapsed)) {
@@ -388,7 +391,7 @@ export class RuntimePilotState {
 
   compactProvenHistory(sessionId, retain = 80, now = Date.now()) {
     const session = this.ensure(sessionId, now);
-    const removed = session.queue.compactProven(retain);
+    const removed = session.ledger.compactProven(retain);
     if (!removed.length) return 0;
     session.proofArchive = {
       count: Number(session.proofArchive?.count || 0) + removed.length,
@@ -495,16 +498,16 @@ export class RuntimePilotState {
         ageMs: session.sender.sourceSilenceMs || 0
       });
     }
-    if (session.queue.size) warnings.push({ code: 'queue_waiting', severity: 'warn', count: session.queue.size });
-    const actionableQueue = session.queue.list().filter(item => item.status !== 'superseded');
-    const oldestQueuedAt = actionableQueue.length
-      ? Math.min(...actionableQueue.map(item => Number(item.queuedAt) || now))
+    const unresolved = session.ledger.unresolved();
+    if (unresolved.length) warnings.push({ code: 'inbox_waiting', severity: 'warn', count: unresolved.length });
+    const oldestPersistedAt = unresolved.length
+      ? Math.min(...unresolved.map(item => Number(item.persistedAt) || now))
       : 0;
-    if (oldestQueuedAt && now - oldestQueuedAt >= 120_000) {
+    if (oldestPersistedAt && now - oldestPersistedAt >= 120_000) {
       warnings.push({
-        code: 'queue_oldest_stale',
+        code: 'inbox_oldest_stale',
         severity: 'error',
-        ageMs: now - oldestQueuedAt
+        ageMs: now - oldestPersistedAt
       });
     }
     if (session.batchState.draftConflict) warnings.push({ code: 'receiver_draft_conflict', severity: 'warn' });
@@ -527,9 +530,8 @@ export class RuntimePilotState {
       latestFinal: session.latestFinal ? { ...session.latestFinal } : null,
       latestProof: session.latestProof ? { ...session.latestProof } : null,
       batchState: { ...session.batchState, active: session.batchState.active ? { ...session.batchState.active } : null, next: session.batchState.next ? { ...session.batchState.next } : null },
-      queue: session.queue.list(),
-      ledger: session.queue.snapshot(),
-      ledgerCounts: session.queue.counts(),
+      ledger: session.ledger.snapshot(),
+      ledgerCounts: session.ledger.counts(),
       warnings,
       timeline: session.timeline.map(event => ({ ...event, data: { ...event.data } })),
       metrics: {
@@ -561,8 +563,7 @@ export class RuntimePilotState {
       latestFinal: session.latestFinal,
       latestProof: session.latestProof,
       batchState: session.batchState,
-      queue: session.queue.list(),
-      ledger: session.queue.exportState(),
+      ledger: session.ledger.exportState(),
       timeline: session.timeline,
       metrics: session.metrics,
       processedCommandIds: session.processedCommandIds,

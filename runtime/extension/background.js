@@ -187,13 +187,6 @@ async function handleRegistration(message, incomingTab, registry) {
     }).catch(() => {});
   }
 
-  const pendingOutcome = result.pending
-    ? await deliver({ tabId, message: result.pending }, registry)
-    : null;
-  if (result.pending && pendingOutcome) {
-    await pilotController.afterForward(result.pending, pendingOutcome);
-  }
-
   if (result.changed) {
     const registrationEvent = {
       type: recoveryReason ? 'registration_recovered' : 'registration',
@@ -224,8 +217,7 @@ async function handleRegistration(message, incomingTab, registry) {
     ok: true,
     changed: result.changed,
     recovered: Boolean(recoveryReason),
-    pendingDelivered: Boolean(pendingOutcome?.delivered),
-    pendingQueued: Boolean(pendingOutcome?.queued),
+    reconciliationScheduled: message.registration.role === 'receiver',
     status
   };
 }

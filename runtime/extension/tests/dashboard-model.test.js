@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  actionableQueue,
   buildDiagnostics,
   commandResultLabel,
   deriveReview,
@@ -31,7 +30,7 @@ test('safe diagnostics omit transcript text and setup context', () => {
     uptimeMs: 100,
     sender: { connected: true, provider: 'chatgpt', phase: 'ready', composerReady: true, heartbeatAt: 1000 },
     receiver: { connected: true, provider: 'claude', phase: 'ready', composerReady: true, heartbeatAt: 1000 },
-    queue: [{ envelope: { text: 'Sensitive question' } }],
+    ledger: [{ envelope: { text: 'Sensitive question' } }],
     latestFinal: { text: 'Sensitive question' },
     warnings: [],
     metrics: {}
@@ -50,11 +49,6 @@ test('review derives only safe context and metrics', () => {
 });
 
 
-test('dashboard defaults to actionable queue items and exposes all items on demand', () => {
-  const queue = [{ id: 'q1', status: 'queued' }, { id: 'q2', status: 'superseded' }];
-  assert.deepEqual(actionableQueue(queue).map(item => item.id), ['q1']);
-  assert.deepEqual(actionableQueue(queue, true).map(item => item.id), ['q1', 'q2']);
-});
 
 test('primary transport action reflects authoritative session mode', () => {
   assert.deepEqual(primaryTransportAction('paused'), {
@@ -74,8 +68,12 @@ test('command feedback describes the actual operator outcome', () => {
     'Repair started; verifying both roles'
   );
   assert.equal(
-    commandResultLabel('discard_superseded', { ok: true, discarded: 3 }),
-    '3 superseded final(s) cleared'
+    commandResultLabel('archive_proven', { ok: true, archived: 3 }),
+    '3 proven final(s) archived'
+  );
+  assert.equal(
+    commandResultLabel('submit_selected', { ok: true, staged: true }),
+    'Selected final added to the next batch'
   );
 });
 
@@ -89,4 +87,17 @@ test('transitional lifecycle phases are never reported healthy', () => {
   assert.equal(roleHealth({
     connected: true, phase: 'ready', heartbeatAt: 900, composerReady: true
   }, 1000).label, 'Healthy');
+});
+
+
+test('warning labels describe the lossless inbox rather than a latest-only queue', async () => {
+  const { warningLabel } = await import('../dashboard/dashboard-model.js');
+  assert.equal(
+    warningLabel({ code: 'inbox_waiting' }),
+    'Unresolved finals are waiting in the lossless inbox'
+  );
+  assert.equal(
+    warningLabel({ code: 'inbox_oldest_stale' }),
+    'The oldest unresolved final may be contextually stale'
+  );
 });

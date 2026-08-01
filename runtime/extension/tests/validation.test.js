@@ -48,18 +48,18 @@ test('entry runtime uses scoped observation instead of hot sender polling', asyn
   assert.doesNotMatch(entry, /senderTimer = setInterval/);
 });
 
-test('runtime applies sender and receiver sequence idempotency', async () => {
+test('runtime applies lossless sender persistence and receiver sequence idempotency', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
-  const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
-  assert.match(entry, /nextSequence/);
-  assert.match(entry, /new SequenceGate/);
-  assert.match(entry, /seq: nextSenderSequence/);
+  const controller = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
+  const registry = await readFile(resolve(extensionRoot, 'shared/session-registry.js'), 'utf8');
+  assert.match(entry, /createSenderOutbox/);
+  assert.match(entry, /senderOutbox\.enqueue\(envelope\)/);
   assert.match(entry, /receiverSequenceGate\.admit/);
   assert.match(entry, /receiverSequenceGate\.accept/);
-  assert.match(background, /registry\.acceptSequence/);
-  assert.match(background, /stale_sequence|duplicate_sequence/);
+  assert.match(controller, /pilot\.persistFinal\(envelope\.sessionId, envelope\)/);
+  assert.doesNotMatch(registry, /acceptSequence|lastAcceptedSeq|queueLatest|pending/);
 });
 
 test('runtime stores and exports logs per managed window role', async () => {
@@ -329,16 +329,18 @@ test('content runtime accepts a managed-tab restore signal', async () => {
   assert.match(listener, /runtimeRecovery\?\.trigger\('tab_restored'\)/);
 });
 
-test('transient delivery errors preserve the registered receiver for wake recovery', async () => {
+test('transient delivery errors preserve receiver identity and ledger ownership', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const background = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  const controller = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
   const deliver = background.slice(
     background.indexOf('async function deliver('),
     background.indexOf('async function handleRegistration')
   );
-  assert.ok(!deliver.includes('registry.unregister(route.tabId)'));
-  assert.ok(deliver.includes('registry.queueLatest(route.message.sessionId, route.message)'));
+  assert.doesNotMatch(deliver, /registry\.unregister|queueLatest/);
+  assert.match(controller, /pilot\.persistFinal\(envelope\.sessionId, envelope\)/);
+  assert.match(controller, /pilot\.completeLedgerItem\(envelope\.sessionId, envelope\.id, outcome\)/);
 });
 
 test('sender boot shortcut forwards context without submitting into the question source', async () => {
@@ -601,5 +603,5 @@ test('receiver delivery terminality cannot revoke an authorized sender', async (
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const delivery = await readFile(resolve(extensionRoot, 'shared/delivery.js'), 'utf8');
   assert.doesNotMatch(delivery, /delivered: true,[\s\S]{0,80}terminal: true/);
-  assert.match(delivery, /outcome\.delivered \|\| outcome\.superseded/);
+  assert.match(delivery, /outcome\.delivered \|\| outcome\.staged/);
 });

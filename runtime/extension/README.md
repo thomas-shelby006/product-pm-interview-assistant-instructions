@@ -5,7 +5,7 @@ Manifest V3 provider and Runtime Pilot Dashboard extension used by `runtime/Fina
 ## Architecture
 
 - AutoHotkey owns provider selection, exact sender/receiver/dashboard windows, initial layout, full-route repair, and PM-only global hotkeys.
-- The service worker owns role registration, sender authorization, durable final ordering, transport pause, the bounded operator queue, dashboard state, acknowledgements, recovery, and session cleanup.
+- The service worker owns role registration, sender authorization, durable final ordering, transport pause, the lossless delivery ledger and live inbox, dashboard state, acknowledgements, recovery, and session cleanup.
 - Content scripts own provisional transcript previews, provider-specific finalization, receiver prefill/submission/proof, answer capture, semantic commands, telemetry, compact status UI, and export.
 - `dashboard/` is a trusted extension page connected by a long-lived port. It receives snapshots and sends validated commands; it never writes provider DOM directly.
 - Provider adapters own semantic composer discovery, message extraction, submit readiness, generation controls, and microphone controls.
@@ -28,29 +28,31 @@ Normal ChatGPT and Claude tabs without PMIA runtime configuration are untouched.
 Session Studio opens `dashboard/index.html?session=<SESSION>` as the third managed Edge app window after both provider roles are ready. Its defended title is `PMIA_DASHBOARD_<SESSION>`.
 
 - Overview shows route, transport mode, uptime, role health, heartbeat, source silence, composer/generation/microphone/scroll state, warnings, delivery metrics and latest artifacts.
-- Queue shows up to 20 authoritative final envelopes with age, sequence, status and text. Previews never enter this queue.
+- Lossless Inbox shows every session final with age, sequence, ledger state, batch ID and text. Previews never enter the ledger.
 - Timeline virtualizes the latest 200 operational events.
 - Review shows only safe session metadata and runtime outcomes. Resume, JD, avoid text and notes are excluded.
-- Controls cover pause, resume latest, resume without sending, selected send/discard, clear queue, live check, runtime repair, context resend, microphone, scroll, composer focus, export, layouts, hide/restore and end session.
+- Controls cover pause, Resume & Catch Up, resume without sending, submit selected, auto-submit, hold after answer, submit now, explicit interrupt for latest, archive, live check, runtime repair, context resend, microphone, scroll, composer focus, export, layouts, hide/restore and end session.
 - Dashboard refresh or service-worker suspension recovers from `chrome.storage.session`. Closing only the dashboard does not stop provider transport; `Alt+D` reopens it.
 
-### Queue semantics
+### Lossless ledger semantics
 
-- Pause does not stop sender observation. Preview delivery is suppressed and new authoritative finals are queued.
-- Resume Latest sends the newest non-superseded final through the normal receiver sequence gate and provider-rendered proof path.
-- Delivering a newer queued final marks older retained finals superseded.
-- `duplicate_ack` is delivered without resubmission. `stale_ack` is terminal supersession, not delivery and not a failure retry.
+- Pause does not stop sender observation. Preview delivery is suppressed and every authoritative final is persisted in the ledger.
+- Resume & Catch Up reconciles every unresolved final in sequence order; it never selects only the newest one.
+- A newer delivered final never supersedes or deletes an older unresolved final.
+- A final leaves the unresolved inbox only after duplicate identity, provider-rendered batch proof or explicit operator archive.
+- While Window 2 generates, new finals accumulate in the next composer draft without interrupting the current answer.
+- If more than one final accumulates, all questions remain in the submitted batch and the latest question is marked highest priority.
 
 ## Preview and commit lanes
 
 Provisional text and final questions use separate paths.
 
-- Preview updates are disposable, in-memory, latest-only, and never queued or persisted.
+- Preview updates are disposable, in-memory, and never entered into the lossless ledger.
 - Same-task transcript growth is collapsed to the newest value with a microtask, not a timer.
 - Each sender page has a unique preview stream ID, so sender reloads can safely restart preview sequence numbers.
 - Receiver preview state is bounded and the exact provisional turn is removed after a successful final submission.
-- Final envelopes remain durable, sequenced, acknowledged, and latest-only when a receiver is unavailable.
-- A replayed envelope is acknowledged as `duplicate_ack` without writing or submitting the prompt again. A `stale_ack` marks the older envelope superseded and is never counted as delivered.
+- Final envelopes remain durable, sequenced, acknowledged, and lossless when a receiver is unavailable.
+- A replayed envelope is acknowledged as `duplicate_ack` without writing or submitting the prompt again. Any unresolved older final remains protected until duplicate identity or rendered proof is established.
 ## Provider boundaries
 
 ### ChatGPT

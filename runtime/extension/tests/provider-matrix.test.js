@@ -9,7 +9,7 @@ const providers = ['chatgpt', 'claude'];
 for (const senderProvider of providers) {
   for (const receiverProvider of providers) {
     const routeName = `${senderProvider} -> ${receiverProvider}`;
-    test(`${routeName} registers, sequences, and routes one final exactly once`, () => {
+    test(`${routeName} registers and routes one final through exact role ownership`, () => {
       const sessionId = `matrix-${senderProvider}-${receiverProvider}`;
       const registry = new SessionRegistry();
       const senderTabId = senderProvider === 'chatgpt' ? 101 : 102;
@@ -29,21 +29,15 @@ for (const senderProvider of providers) {
         now: 1002
       });
       assert.equal(registry.canForward(sessionId, senderTabId), true);
-      assert.deepEqual(registry.acceptSequence(sessionId, envelope.seq), {
-        accepted: true, reason: 'new', lastAcceptedSeq: 1
-      });
       const route = registry.route(sessionId, envelope);
       assert.equal(route.tabId, receiverTabId);
       assert.equal(route.message, envelope);
-      assert.deepEqual(registry.acceptSequence(sessionId, envelope.seq), {
-        accepted: false, reason: 'duplicate', lastAcceptedSeq: 1
-      });
 
       const status = buildSessionStatus(registry.getSession(sessionId), 1002, 45000);
       assert.deepEqual(describeRuntimeStatus(status), { text: 'LINK OK', tone: 'ok' });
     });
 
-    test(`${routeName} retains only the latest final while its receiver is absent`, () => {
+    test(`${routeName} leaves absent-receiver finals to the lossless ledger`, () => {
       const sessionId = `recovery-${senderProvider}-${receiverProvider}`;
       const registry = new SessionRegistry();
       const senderTabId = senderProvider === 'chatgpt' ? 301 : 302;
@@ -59,11 +53,12 @@ for (const senderProvider of providers) {
       });
       assert.equal(registry.route(sessionId, first), null);
       assert.equal(registry.route(sessionId, latest), null);
-      const registration = registry.register({
+      assert.equal('pending' in registry.getSession(sessionId), false);
+      registry.register({
         sessionId, role: 'receiver', provider: receiverProvider, tabId: receiverTabId
       }, { now: 2003 });
-      assert.equal(registration.pending.id, latest.id);
-      assert.equal(registration.pending.text, 'Latest final');
+      assert.equal(registry.route(sessionId, first).message.id, first.id);
+      assert.equal(registry.route(sessionId, latest).message.id, latest.id);
     });
   }
 }

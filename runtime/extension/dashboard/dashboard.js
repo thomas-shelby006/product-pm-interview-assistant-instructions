@@ -512,7 +512,7 @@ function renderReview(snapshot) {
 
 function updateControlAvailability() {
   const unavailable = !state.snapshot || state.sessionEnded;
-  document.querySelectorAll('[data-command], #sendSelected, #discardSelected, #discardSuperseded, #discardAll, #copyLatest').forEach(node => {
+  document.querySelectorAll('[data-command], #submitSelected, #archiveSelected, #archiveProven, #archiveAll, #copyLatest').forEach(node => {
     const busy = node.dataset.busy === 'true';
     node.disabled = unavailable || busy;
   });
@@ -524,8 +524,8 @@ function updateControlAvailability() {
     byId('submitNow').disabled ||= !nextCount || active;
     byId('interruptLatest').disabled ||= !nextCount || !(active || generating);
     byId('copyLatest').disabled ||= !state.snapshot?.latestFinal?.text;
-    byId('sendSelected').disabled ||= !state.selectedQueueId;
-    byId('discardSelected').disabled ||= !state.selectedQueueId;
+    byId('submitSelected').disabled ||= !state.selectedQueueId;
+    byId('archiveSelected').disabled ||= !state.selectedQueueId;
   }
   document.body.dataset.sessionEnded = state.sessionEnded ? 'true' : 'false';
 }
@@ -596,20 +596,20 @@ document.addEventListener('click', event => {
   }
 });
 
-byId('sendSelected').addEventListener('click', event => {
+byId('submitSelected').addEventListener('click', event => {
   if (!state.selectedQueueId) return showToast('Select a queued final.', 'warn');
   const item = state.snapshot?.ledger?.find(candidate => candidate.id === state.selectedQueueId);
   if (!['persisted', 'failed'].includes(item?.state)) return showToast('Only pending or failed finals can be submitted manually.', 'warn');
-  void runCommand(event.currentTarget, 'send_selected', { queueItemId: state.selectedQueueId });
+  void runCommand(event.currentTarget, 'submit_selected', { queueItemId: state.selectedQueueId });
 });
-byId('discardSelected').addEventListener('click', event => {
+byId('archiveSelected').addEventListener('click', event => {
   if (!state.selectedQueueId) return showToast('Select a queued final.', 'warn');
   void runCommand(event.currentTarget, 'archive_selected', { queueItemId: state.selectedQueueId });
 });
-byId('discardSuperseded').addEventListener('click', event => {
+byId('archiveProven').addEventListener('click', event => {
   void runCommand(event.currentTarget, 'archive_proven');
 });
-byId('discardAll').addEventListener('click', event => {
+byId('archiveAll').addEventListener('click', event => {
   void runCommand(event.currentTarget, 'archive_all');
 });
 byId('copyLatest').addEventListener('click', async () => {
@@ -657,7 +657,7 @@ document.addEventListener('keydown', event => {
   if (key === ' ') {
     event.preventDefault();
     void runKeyboardCommand(state.snapshot?.mode === 'paused' ? 'resume_without_send' : 'pause');
-  } else if (key === 'l') void runKeyboardCommand('resume_latest');
+  } else if (key === 'l') void runKeyboardCommand('resume_catch_up');
   else if (key === 'h') void runKeyboardCommand('check_live');
   else if (key === 'r') void runKeyboardCommand('repair_runtime');
   else if (key === 'e') void runKeyboardCommand('export_session');

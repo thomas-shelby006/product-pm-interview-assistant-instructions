@@ -8,7 +8,7 @@ This repository contains Sundar's live Product Management mock-interview system:
 
 - `runtime/Final_2_Window_Extension.ahk` owns Session Studio, provider selection, exact sender/receiver/dashboard windows, layouts, PM-only hotkeys, and in-memory setup context.
 - `runtime/extension/` is the authoritative provider and dashboard runtime for ChatGPT and Claude in Microsoft Edge Stable.
-- The extension service worker owns role registration, durable final ordering, transport mode, the bounded operator queue, dashboard state, recovery, ephemeral logs, and deterministic cleanup.
+- The extension service worker owns role registration, durable final ordering, transport mode, the lossless delivery ledger and live inbox, dashboard state, recovery, ephemeral logs, and deterministic cleanup.
 - Content scripts own transcript previews, provider-specific final commits, receiver submission/proof, answer capture, semantic commands, telemetry, and compact overlays.
 - `runtime/extension/dashboard/` is the live Runtime Pilot Dashboard; it observes state and sends validated commands but never mutates provider pages directly.
 - `runtime/Session_Tracker_End_Session.ahk` optionally exports the exact session pair and sends it to the private review tracker.
@@ -27,8 +27,8 @@ The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retai
 - **Fast Repair** / `Alt+Shift+R` relaunches the current route using the existing in-memory context.
 - Exports use schema 2.1 and include safe session metadata plus answer-length, delivery-latency, queue, duplicate/stale, and timeout summaries.
 - The third Runtime Pilot Dashboard shows live role health, source silence, generation state, previews, finals, queue state, delivery proof, answers, warnings, repair reports, and bounded timeline history.
-- Pause keeps sender observation running while suppressing previews and queuing authoritative finals; Resume Latest sends only the newest valid item through normal proof.
-- Stale queued finals become superseded instead of being submitted after a newer question has already rendered.
+- Pause keeps sender observation running while suppressing previews and queuing authoritative finals; Resume & Catch Up sends only the newest valid item through normal proof.
+- Stale persisted finals become superseded instead of being submitted after a newer question has already rendered.
 
 ## Session flow
 

@@ -1,7 +1,7 @@
-import { isEnvelope } from './protocol.js';
+﻿import { isEnvelope } from './protocol.js';
 
-const ACTIVE_STATES = new Set(['persisted', 'staged', 'submitting', 'failed']);
-const ALL_STATES = new Set([...ACTIVE_STATES, 'proven', 'archived']);
+export const ACTIVE_LEDGER_STATES = new Set(['persisted', 'staged', 'submitting', 'failed']);
+const ALL_LEDGER_STATES = new Set([...ACTIVE_LEDGER_STATES, 'proven', 'archived']);
 
 function cloneEnvelope(envelope) {
   return {
@@ -24,7 +24,7 @@ function normalizeEntry(value) {
   const envelope = value?.envelope || value;
   if (!isEnvelope(envelope) || envelope.kind === 'boot') return null;
   const persistedAt = Number(value?.persistedAt || value?.queuedAt || envelope.createdAt || Date.now());
-  const state = ALL_STATES.has(value?.state)
+  const state = ALL_LEDGER_STATES.has(value?.state)
     ? value.state
     : value?.status === 'superseded'
       ? 'archived'
@@ -57,18 +57,14 @@ export class DeliveryLedger {
   constructor(state = []) {
     for (const value of Array.isArray(state) ? state : []) {
       const entry = normalizeEntry(value);
-      if (!entry) continue;
-      if (this.#entries.some(existing => existing.id === entry.id)) continue;
+      if (!entry || this.#entries.some(existing => existing.id === entry.id)) continue;
       this.#entries.push(entry);
     }
-    this.#entries.sort((a, b) => (
-      Number(a.envelope.seq || 0) - Number(b.envelope.seq || 0)
-      || a.persistedAt - b.persistedAt
-    ));
+    this.#sort();
   }
 
   get size() {
-    return this.retryable().length;
+    return this.unresolved().length;
   }
 
   persist(envelope, { now = Date.now() } = {}) {
@@ -89,10 +85,7 @@ export class DeliveryLedger {
     }
     const entry = normalizeEntry({ envelope, persistedAt: now, updatedAt: now, state: 'persisted' });
     this.#entries.push(entry);
-    this.#entries.sort((a, b) => (
-      Number(a.envelope.seq || 0) - Number(b.envelope.seq || 0)
-      || a.persistedAt - b.persistedAt
-    ));
+    this.#sort();
     return {
       accepted: true,
       persisted: true,
@@ -107,9 +100,19 @@ export class DeliveryLedger {
     return entry ? cloneEntry(entry) : null;
   }
 
+  markPersisted(ids, reason = '', now = Date.now()) {
+    return this.#transition(ids, entry => {
+      if (!ACTIVE_LEDGER_STATES.has(entry.state)) return false;
+      entry.state = 'persisted';
+      entry.updatedAt = now;
+      entry.lastError = String(reason || '');
+      return true;
+    });
+  }
+
   markStaged(ids, batchId, now = Date.now()) {
     return this.#transition(ids, entry => {
-      if (!ACTIVE_STATES.has(entry.state)) return false;
+      if (!ACTIVE_LEDGER_STATES.has(entry.state)) return false;
       entry.state = 'staged';
       entry.batchId = String(batchId || '');
       entry.updatedAt = now;
@@ -128,20 +131,28 @@ export class DeliveryLedger {
     });
   }
 
-  markProven(batchId, proof = {}, now = Date.now()) {
-    return this.#transitionBatch(batchId, entry => {
-      if (!['staged', 'submitting', 'failed'].includes(entry.state)) return false;
-      entry.state = 'proven';
+  markItemSubmitting(id, now = Date.now()) {
+    return this.#transition([id], entry => {
+      if (!['persisted', 'failed'].includes(entry.state)) return false;
+      entry.state = 'submitting';
       entry.updatedAt = now;
+      entry.attempts += 1;
       entry.lastError = '';
-      entry.proof = { ...proof, at: Number(proof.at || now) };
       return true;
-    });
+    })[0] || null;
+  }
+
+  markProven(batchId, proof = {}, now = Date.now()) {
+    return this.#transitionBatch(batchId, entry => this.#prove(entry, proof, now));
+  }
+
+  markItemProven(id, proof = {}, now = Date.now()) {
+    return this.#transition([id], entry => this.#prove(entry, proof, now))[0] || null;
   }
 
   markFailed(ids, reason = 'delivery_failed', now = Date.now()) {
     return this.#transition(ids, entry => {
-      if (!ACTIVE_STATES.has(entry.state)) return false;
+      if (!ACTIVE_LEDGER_STATES.has(entry.state)) return false;
       entry.state = 'failed';
       entry.updatedAt = now;
       entry.lastError = String(reason || 'delivery_failed');
@@ -159,8 +170,20 @@ export class DeliveryLedger {
     });
   }
 
-  retryable() {
-    return this.#entries.filter(entry => ACTIVE_STATES.has(entry.state)).map(cloneEntry);
+  archiveEntry(id, now = Date.now()) {
+    return this.archive([id], now)[0] || null;
+  }
+
+  archiveAllUnresolved(now = Date.now()) {
+    return this.archive(this.unresolved().map(entry => entry.id), now);
+  }
+
+  archiveProven(now = Date.now()) {
+    return this.archive(this.proven().map(entry => entry.id), now);
+  }
+
+  unresolved() {
+    return this.#entries.filter(entry => ACTIVE_LEDGER_STATES.has(entry.state)).map(cloneEntry);
   }
 
   pending() {
@@ -177,10 +200,6 @@ export class DeliveryLedger {
     return this.#entries.map(cloneEntry);
   }
 
-  archiveProven(now = Date.now()) {
-    return this.archive(this.proven().map(entry => entry.id), now);
-  }
-
   compactProven(retain = 80) {
     const keep = Math.max(0, Number(retain) || 0);
     const proven = this.#entries.filter(entry => entry.state === 'proven');
@@ -193,77 +212,33 @@ export class DeliveryLedger {
   }
 
   counts() {
-    const counts = { total: this.#entries.length, persisted: 0, staged: 0, submitting: 0, failed: 0, proven: 0, archived: 0 };
+    const counts = {
+      total: this.#entries.length,
+      persisted: 0,
+      staged: 0,
+      submitting: 0,
+      failed: 0,
+      proven: 0,
+      archived: 0
+    };
     for (const entry of this.#entries) counts[entry.state] += 1;
     counts.pending = counts.persisted + counts.failed;
     counts.inFlight = counts.staged + counts.submitting;
+    counts.unresolved = counts.pending + counts.inFlight;
     return counts;
-  }
-
-  // Compatibility facade for the PMIA 0.7 queue UI during migration.
-  enqueue(envelope, options = {}) {
-    const outcome = this.persist(envelope, options);
-    return {
-      accepted: outcome.accepted,
-      reason: outcome.duplicate ? 'duplicate' : outcome.reason,
-      item: outcome.entry ? this.#queueItem(outcome.entry) : null,
-      dropped: []
-    };
-  }
-
-  latest() {
-    const entries = this.retryable();
-    return entries.length ? this.#queueItem(entries.at(-1)) : null;
-  }
-
-  markSending(itemId, now = Date.now()) {
-    const entry = this.#entries.find(candidate => candidate.id === String(itemId));
-    if (!entry || !ACTIVE_STATES.has(entry.state)) return null;
-    entry.state = 'submitting';
-    entry.attempts += 1;
-    entry.updatedAt = now;
-    return this.#queueItem(entry);
-  }
-
-  complete(itemId, outcome = {}) {
-    const entry = this.#entries.find(candidate => candidate.id === String(itemId));
-    if (!entry) return null;
-    const now = Number(outcome.now || Date.now());
-    if (outcome.delivered) {
-      entry.state = 'proven';
-      entry.updatedAt = now;
-      entry.proof = { reason: outcome.reason || 'accepted', at: now };
-      return { delivered: true, queued: false, superseded: false, item: this.#queueItem(entry) };
-    }
-    entry.state = outcome.queued ? 'persisted' : 'failed';
-    entry.updatedAt = now;
-    entry.lastError = String(outcome.reason || 'receiver_unavailable');
-    return { delivered: false, queued: Boolean(outcome.queued), superseded: false, item: this.#queueItem(entry) };
-  }
-
-  supersedeBefore() {
-    return [];
-  }
-
-  discard(itemId) {
-    const changed = this.archive([itemId]);
-    return changed[0] ? this.#queueItem(changed[0]) : null;
-  }
-
-  discardSuperseded() {
-    return [];
-  }
-
-  clear() {
-    return this.archive(this.retryable().map(entry => entry.id)).map(entry => this.#queueItem(entry));
-  }
-
-  list() {
-    return this.retryable().map(entry => this.#queueItem(entry));
   }
 
   exportState() {
     return this.snapshot();
+  }
+
+  #prove(entry, proof, now) {
+    if (!ACTIVE_LEDGER_STATES.has(entry.state)) return false;
+    entry.state = 'proven';
+    entry.updatedAt = now;
+    entry.lastError = '';
+    entry.proof = { ...proof, at: Number(proof.at || now) };
+    return true;
   }
 
   #transition(ids, mutate) {
@@ -286,20 +261,10 @@ export class DeliveryLedger {
     return changed;
   }
 
-  #queueItem(entry) {
-    const value = entry?.envelope ? entry : normalizeEntry(entry);
-    if (!value) return null;
-    return {
-      id: value.id,
-      envelope: cloneEnvelope(value.envelope),
-      queuedAt: value.persistedAt,
-      updatedAt: value.updatedAt,
-      reason: value.lastError || value.state,
-      attempts: value.attempts,
-      status: value.state === 'failed' ? 'failed' : value.state === 'archived' ? 'superseded' : value.state,
-      lastError: value.lastError,
-      batchId: value.batchId,
-      ledgerState: value.state
-    };
+  #sort() {
+    this.#entries.sort((a, b) => (
+      Number(a.envelope.seq || 0) - Number(b.envelope.seq || 0)
+      || a.persistedAt - b.persistedAt
+    ));
   }
 }

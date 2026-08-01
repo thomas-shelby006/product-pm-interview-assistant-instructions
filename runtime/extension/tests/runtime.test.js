@@ -11,14 +11,13 @@ test('transcript filter suppresses filler and incomplete fragments', () => {
   assert.equal(filterModule.isActionableTranscript('How would you prioritize this launch?'), true);
 });
 
-test('receiver controller supersedes active generation with latest prompt', async () => {
+test('receiver controller never interrupts active generation for ordinary delivery', async () => {
   assert.ok(runtimeModule, 'runtime module must exist');
   const calls = [];
-  let generationChecks = 0;
   const adapter = {
-    isGenerating: () => generationChecks++ === 0,
+    isGenerating: () => true,
     stopGenerating: () => { calls.push('stop'); return true; },
-    setComposerText: text => calls.push(['set', text]),
+    setComposerText: text => { calls.push(['set', text]); return true; },
     submit: () => { calls.push('submit'); return true; },
     getLatestAssistantText: () => ''
   };
@@ -28,9 +27,8 @@ test('receiver controller supersedes active generation with latest prompt', asyn
     onStatus: status => calls.push(['status', status])
   });
   const result = await controller.deliver({ id: 'm2', text: 'latest question' });
-  assert.equal(result, true);
-  assert.deepEqual(calls.slice(0, 3), ['stop', ['status', 'SUPERSEDE'], ['set', 'latest question']]);
-  assert.equal(calls.includes('submit'), true);
+  assert.equal(result, false);
+  assert.deepEqual(calls, [['status', 'RECEIVER BUSY']]);
 });
 
 test('receiver controller rejects empty delivery without touching composer', async () => {

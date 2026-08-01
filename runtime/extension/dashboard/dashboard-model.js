@@ -35,8 +35,6 @@ export function warningLabel(warning) {
     receiver_composer_missing: 'Receiver composer is not ready',
     sender_lifecycle_not_ready: 'Sender runtime has not reached READY',
     receiver_lifecycle_not_ready: 'Receiver runtime has not reached READY',
-    queue_waiting: 'Final questions are waiting in the queue',
-    queue_oldest_stale: 'The oldest actionable queued question has waited over two minutes',
     sender_voice_transcript_slow: 'Voice is active but transcript updates are delayed',
     sender_voice_transcript_stalled: 'Voice is active but transcript updates appear stalled',
     sender_source_silent: 'No actionable sender transcript has been observed for 90 seconds',
@@ -139,13 +137,6 @@ export function deriveReview(snapshot) {
 }
 
 
-export function actionableQueue(items, includeSuperseded = false) {
-  const queue = Array.isArray(items) ? items : [];
-  return includeSuperseded
-    ? queue
-    : queue.filter(item => item?.status !== 'superseded');
-}
-
 export function primaryTransportAction(mode) {
   return mode === 'paused'
     ? { command: 'resume_without_send', label: 'Resume forwarding' }
@@ -165,13 +156,10 @@ export function commandResultLabel(command, result = {}) {
   const labels = {
     pause: 'Forwarding paused',
     resume_without_send: 'Forwarding resumed',
-    resume_latest: result.reason === 'ledger_clean'
+    resume_catch_up: result.reason === 'ledger_clean'
       ? 'Forwarding resumed; inbox caught up'
       : 'Forwarding resumed; catch-up started',
-    send_selected: result.delivered ? 'Selected final delivered' : 'Selected final remains queued',
-    discard_selected: 'Selected final discarded',
-    discard_superseded: `${Math.max(0, Number(result.discarded) || 0)} superseded final(s) cleared`,
-    discard_all: `${Math.max(0, Number(result.discarded) || 0)} queued final(s) discarded`,
+    submit_selected: result.delivered ? 'Selected final delivered' : result.staged ? 'Selected final added to the next batch' : 'Selected final remains protected',
     set_auto_submit: 'Auto-submit policy updated',
     set_hold: 'Hold-after-answer policy updated',
     submit_now: result.delivered ? 'Next draft submitted' : result.reason === 'batch_empty' ? 'No next draft to submit' : 'Next draft remains protected',

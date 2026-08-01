@@ -6,9 +6,9 @@ The upgraded runtime ports useful operator capabilities, not obsolete mechanisms
 
 | Older capability | Decision | PMIA 0.7 implementation |
 |---|---|---|
-| Pause and resume forwarding | Ported and improved | Session-level transport mode. Sender observation continues, previews are suppressed, and authoritative finals enter a bounded queue. |
-| PM buffer | Ported and redesigned | Twenty-item `chrome.storage.session` operator queue with envelope identity, sequence, age, attempts and state. |
-| Force/manual buffer flush | Replaced | Resume Latest or Send Selected uses normal sequence gates and rendered-turn proof; no unsafe forced finalization. |
+| Pause and resume forwarding | Ported and improved | Session-level transport mode. Sender observation continues, previews are suppressed, and authoritative finals enter a lossless ledger. |
+| PM buffer | Ported and redesigned | `chrome.storage.session` lossless delivery ledger with envelope identity, sequence, age, attempts and state. |
+| Force/manual buffer flush | Replaced | Resume & Catch Up or Submit Selected uses normal sequence gates and rendered-turn proof; no unsafe forced finalization. |
 | Queue while receiver generates | Already superior, exposed | Receiver supersession remains authoritative; dashboard shows generation and queue state. |
 | Silence warning | Ported and improved | Source silence, runtime heartbeat and composer readiness are separate health markers. |
 | Status indicator | Ported and expanded | Compact role overlays plus complete dashboard health. |
@@ -34,6 +34,6 @@ The upgraded runtime ports useful operator capabilities, not obsolete mechanisms
 - Previews are disposable and never queued.
 - Only validated final envelopes enter the operator queue.
 - A duplicate acknowledgement closes delivery without resubmitting.
-- A stale acknowledgement marks the older item superseded; it is not counted as delivered.
+- A stale acknowledgement keeps the older unresolved item protected until duplicate or rendered proof.
 - A provider-rendered matching user turn is the delivery proof.
 - Resume, JD, notes and setup text never enter disk-backed extension storage or safe diagnostics.

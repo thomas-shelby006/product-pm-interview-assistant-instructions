@@ -37,7 +37,7 @@
       <section class="view active" id="panelOverview" data-view-panel="overview" role="tabpanel">
         <div class="control-grid" aria-label="Runtime controls">
           <button class="primary" id="primaryTransportAction" data-command="pause">Pause forwarding</button>
-          <button data-command="resume_latest">Resume &amp; catch up</button>
+          <button data-command="resume_catch_up">Resume &amp; catch up</button>
           <button data-command="resume_without_send">Resume only</button>
           <button data-command="check_live">Check live</button>
           <button data-command="repair_runtime">Repair runtime</button>
@@ -146,10 +146,10 @@
           <div><h2>Lossless inbox</h2><p>Every unique final remains until rendered proof or explicit archive.</p></div>
           <div class="inline-actions">
             <select id="queueFilter" aria-label="Queue filter"><option value="actionable">Unresolved</option><option value="all">All ledger states</option></select>
-            <button id="sendSelected">Submit selected</button>
-            <button id="discardSelected" data-confirm="Archive the selected ledger final? It will remain in session history but will not be submitted automatically.">Archive selected</button>
-            <button id="discardSuperseded">Archive proven</button>
-            <button class="danger" id="discardAll" data-confirm="Archive every unresolved final? This is explicit data loss from the delivery workflow.">Archive unresolved</button>
+            <button id="submitSelected">Submit selected</button>
+            <button id="archiveSelected" data-confirm="Archive the selected ledger final? It will remain in session history but will not be submitted automatically.">Archive selected</button>
+            <button id="archiveProven">Archive proven</button>
+            <button class="danger" id="archiveAll" data-confirm="Archive every unresolved final? This is explicit data loss from the delivery workflow.">Archive unresolved</button>
           </div>
         </div>
         <div class="queue-wrap">

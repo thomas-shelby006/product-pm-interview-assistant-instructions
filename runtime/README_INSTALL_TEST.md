@@ -62,7 +62,7 @@ Alt+Shift+E    Open or focus Review Studio
 ## Runtime Pilot Dashboard operations
 
 - **Pause forwarding** keeps sender capture active, suppresses provisional preview delivery, and queues authoritative finals.
-- **Resume + latest** sends the newest valid queued final through the normal sequence and provider-rendered proof path.
+- **Resume + latest** sends the newest valid persisted final through the normal sequence and provider-rendered proof path.
 - **Resume only** re-enables transport without sending queued work.
 - **Send selected** rejects superseded items; **Discard selected/all** changes queue state only and never edits provider conversations.
 - **Check live** separates role reachability, heartbeat freshness, composer readiness, receiver generation, and sender source silence.
@@ -74,9 +74,9 @@ Alt+Shift+E    Open or focus Review Studio
 
 - Preview updates are disposable, coalesced, and never submit.
 - ChatGPT and Claude use provider-specific authoritative final boundaries.
-- Finals are sequenced and accepted once. Unavailable/paused question finals enter a bounded 20-item operator queue; boot context never enters it.
+- Finals are sequenced and accepted once. Unavailable/paused question finals enter a bounded 20-item lossless inbox; boot context never enters it.
 - Receiver acknowledgement requires a newly rendered matching user turn.
-- A newer question supersedes older generating receiver work. After a newer queued final is proven, older retained finals are marked superseded and cannot be sent.
+- A newer question supersedes older generating receiver work. After a newer persisted final is proven, older retained finals are marked superseded and cannot be sent.
 - Dead role registrations are replaced only after an active probe fails.
 - Discard recovery does not activate a tab or focus an Edge window.
 - Closing both provider tabs or ending the session removes registry, queue, pilot state, role logs, dashboard, and AHK in-memory setup context.
