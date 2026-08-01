@@ -194,7 +194,7 @@ export class DeliveryLedger {
 
   markBatchProven(batchId, proof = {}, now = Date.now()) {
     const normalized = String(batchId || '');
-    const entries = this.#entries.filter(entry => entry.batchId === normalized && entry.state !== 'archived');
+    const entries = this.#index.entriesForBatch(normalized).filter(entry => entry.state !== 'archived');
     if (!entries.length) return { accepted: false, duplicate: false, reason: 'batch_missing', changed: [], entries: [] };
     if (proof?.verified !== true) {
       return { accepted: false, duplicate: false, reason: 'proof_unverified', changed: [], entries: entries.map(cloneEntry) };
@@ -301,20 +301,14 @@ export class DeliveryLedger {
   }
 
   counts() {
-    const counts = {
-      total: this.#entries.length,
-      persisted: 0,
-      staged: 0,
-      submitting: 0,
-      failed: 0,
-      proven: 0,
-      archived: 0
-    };
-    for (const entry of this.#entries) counts[entry.state] += 1;
-    counts.pending = counts.persisted + counts.failed;
-    counts.inFlight = counts.staged + counts.submitting;
-    counts.unresolved = counts.pending + counts.inFlight;
-    return counts;
+    return this.#index.counts();
+  }
+
+  indexAudit({ repair = false } = {}) {
+    const initial = this.#index.audit(this.#entries);
+    if (initial.ok || !repair) return { ...initial, rebuilt: false };
+    this.#index.rebuild(this.#entries);
+    return { ...this.#index.audit(this.#entries), rebuilt: true, previousFindings: initial.findings };
   }
 
   exportState() {
@@ -336,7 +330,10 @@ export class DeliveryLedger {
     const changed = [];
     for (const id of wanted) {
       const entry = this.#index.byId(id);
-      if (!entry || !mutate(entry)) continue;
+      if (!entry) continue;
+      const previous = { state: entry.state, batchId: entry.batchId };
+      if (!mutate(entry)) continue;
+      this.#index.update(entry, previous);
       changed.push(cloneEntry(entry));
     }
     return changed;
@@ -345,8 +342,10 @@ export class DeliveryLedger {
   #transitionBatch(batchId, mutate) {
     const changed = [];
     const normalized = String(batchId || '');
-    for (const entry of this.#entries) {
-      if (entry.batchId !== normalized || !mutate(entry)) continue;
+    for (const entry of this.#index.entriesForBatch(normalized)) {
+      const previous = { state: entry.state, batchId: entry.batchId };
+      if (!mutate(entry)) continue;
+      this.#index.update(entry, previous);
       changed.push(cloneEntry(entry));
     }
     return changed;

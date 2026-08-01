@@ -1,11 +1,38 @@
+const STATES = ['persisted', 'staged', 'submitting', 'failed', 'proven', 'archived'];
+
 function sequenceKey(provider, seq) {
   const value = Number(seq || 0);
   return value > 0 && provider ? `${String(provider)}:${value}` : '';
 }
 
+function sortEntries(entries) {
+  return [...entries].sort((a, b) => (
+    Number(a?.envelope?.seq || 0) - Number(b?.envelope?.seq || 0)
+    || Number(a?.persistedAt || 0) - Number(b?.persistedAt || 0)
+    || String(a?.id || '').localeCompare(String(b?.id || ''))
+  ));
+}
+
+function addToMap(map, key, entry) {
+  const normalized = String(key || '');
+  if (!normalized) return;
+  if (!map.has(normalized)) map.set(normalized, new Set());
+  map.get(normalized).add(entry);
+}
+
+function removeFromMap(map, key, entry) {
+  const normalized = String(key || '');
+  if (!normalized) return;
+  const set = map.get(normalized);
+  set?.delete(entry);
+  if (set && !set.size) map.delete(normalized);
+}
+
 export class DeliveryLedgerIndex {
   #byId = new Map();
   #bySequence = new Map();
+  #byBatch = new Map();
+  #byState = new Map();
   #rebuilds = 0;
 
   constructor(entries = []) {
@@ -21,6 +48,22 @@ export class DeliveryLedgerIndex {
     return key ? this.#bySequence.get(key) || null : null;
   }
 
+  entriesForBatch(batchId) {
+    return sortEntries(this.#byBatch.get(String(batchId || '')) || []);
+  }
+
+  entriesForState(state) {
+    return sortEntries(this.#byState.get(String(state || '')) || []);
+  }
+
+  idsForBatch(batchId) {
+    return this.entriesForBatch(batchId).map(entry => String(entry.id));
+  }
+
+  idsForState(state) {
+    return this.entriesForState(state).map(entry => String(entry.id));
+  }
+
   insert(entry) {
     const id = String(entry?.id || '');
     if (!id) return { accepted: false, reason: 'invalid_id', entry: null };
@@ -31,7 +74,22 @@ export class DeliveryLedgerIndex {
     if (existingSequence) return { accepted: false, reason: 'duplicate_sequence', entry: existingSequence };
     this.#byId.set(id, entry);
     if (key) this.#bySequence.set(key, entry);
+    addToMap(this.#byState, entry?.state, entry);
+    addToMap(this.#byBatch, entry?.batchId, entry);
     return { accepted: true, reason: 'inserted', entry };
+  }
+
+  update(entry, previous = {}) {
+    if (this.byId(entry?.id) !== entry) return false;
+    if (String(previous.state || '') !== String(entry.state || '')) {
+      removeFromMap(this.#byState, previous.state, entry);
+      addToMap(this.#byState, entry.state, entry);
+    }
+    if (String(previous.batchId || '') !== String(entry.batchId || '')) {
+      removeFromMap(this.#byBatch, previous.batchId, entry);
+      addToMap(this.#byBatch, entry.batchId, entry);
+    }
+    return true;
   }
 
   remove(entry) {
@@ -40,22 +98,53 @@ export class DeliveryLedgerIndex {
     this.#byId.delete(String(entry.id));
     const key = sequenceKey(entry?.envelope?.sourceProvider, entry?.envelope?.seq);
     if (key && this.#bySequence.get(key) === entry) this.#bySequence.delete(key);
+    removeFromMap(this.#byState, entry?.state, entry);
+    removeFromMap(this.#byBatch, entry?.batchId, entry);
     return true;
   }
 
   rebuild(entries = []) {
     this.#byId.clear();
     this.#bySequence.clear();
+    this.#byBatch.clear();
+    this.#byState.clear();
     this.#rebuilds += 1;
     for (const entry of Array.isArray(entries) ? entries : []) this.insert(entry);
     return this.stats();
   }
 
+  counts() {
+    const counts = { total: this.#byId.size };
+    for (const state of STATES) counts[state] = this.#byState.get(state)?.size || 0;
+    counts.pending = counts.persisted + counts.failed;
+    counts.inFlight = counts.staged + counts.submitting;
+    counts.unresolved = counts.pending + counts.inFlight;
+    return counts;
+  }
+
+  audit(entries = []) {
+    const list = Array.isArray(entries) ? entries : [];
+    const findings = [];
+    if (this.#byId.size !== list.length || list.some(entry => this.byId(entry.id) !== entry)) {
+      findings.push({ code: 'identity_membership_mismatch' });
+    }
+    for (const entry of list) {
+      const key = sequenceKey(entry?.envelope?.sourceProvider, entry?.envelope?.seq);
+      if (key && this.#bySequence.get(key) !== entry) findings.push({ code: 'sequence_membership_mismatch', id: entry.id });
+      if (!this.#byState.get(String(entry.state || ''))?.has(entry)) findings.push({ code: 'state_membership_mismatch', id: entry.id });
+      if (entry.batchId && !this.#byBatch.get(String(entry.batchId))?.has(entry)) findings.push({ code: 'batch_membership_mismatch', id: entry.id });
+    }
+    const expectedIds = new Set(list.map(entry => String(entry.id)));
+    for (const set of this.#byState.values()) {
+      for (const entry of set) if (!expectedIds.has(String(entry.id))) findings.push({ code: 'stale_state_member', id: entry.id });
+    }
+    for (const set of this.#byBatch.values()) {
+      for (const entry of set) if (!expectedIds.has(String(entry.id))) findings.push({ code: 'stale_batch_member', id: entry.id });
+    }
+    return { ok: findings.length === 0, findings, stats: this.stats(), counts: this.counts() };
+  }
+
   stats() {
-    return {
-      ids: this.#byId.size,
-      sequences: this.#bySequence.size,
-      rebuilds: this.#rebuilds
-    };
+    return { ids: this.#byId.size, sequences: this.#bySequence.size, rebuilds: this.#rebuilds };
   }
 }
