@@ -890,3 +890,32 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** one focus coordinator owns the command palette and shortcut-help dialog contract.
 
 **Source-complete status:** Cycles 126–130 are implemented. Executable verification remains deferred until Cycle 145 source completion.
+
+## Live interview UX cycles 131–135
+
+### Cycle 131 — Guided Preflight
+- **Bug fixes:** starting no longer depends on interpreting independent readiness cards.
+- **New features:** an ordered seven-check preflight with the exact current blocker and safe action.
+- **Implementation:** a pure wizard projection reuses role, adapter, context, self-test, storage, sequence, and dashboard evidence.
+
+### Cycle 132 — Resume Guard
+- **Bug fixes:** resume no longer bypasses storage, sequence, outbox, self-test, or draft-conflict blockers.
+- **New features:** one Resume safely decision with explicit blocker codes.
+- **Implementation:** one guard validates the boundary before phase or provider state changes.
+
+### Cycle 133 — Explicit Resume Boundary
+- **Bug fixes:** checkpoint restoration no longer mutates phase before runtime safety is proven.
+- **New features:** guarded active/paused/debrief restoration with retained-final count.
+- **Implementation:** the existing checkpoint and role-resume owners remain authoritative.
+
+### Cycle 134 — Crash Resume Card
+- **Bug fixes:** service-worker or managed-role interruption no longer leaves a silent resumable session.
+- **New features:** checkpoint age, retained-final count, Resume safely, and Dismiss.
+- **Implementation:** visibility derives from checkpoint generation, interruption state, and bounded dismissal metadata.
+
+### Cycle 135 — Live Session End Boundary
+- **Bug fixes:** a clean ledger can no longer end an Active or Paused mock accidentally.
+- **New features:** end-session summary includes live phase as an explicit blocker.
+- **Implementation:** the existing tokenized two-phase end guard now includes the live-session phase.
+
+**Source-complete status:** Cycles 131–135 are implemented. Executable verification remains deferred until Cycle 145 source completion.

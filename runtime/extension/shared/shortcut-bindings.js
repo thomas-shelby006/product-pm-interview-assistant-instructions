@@ -1,5 +1,5 @@
 const DEFAULT_BINDINGS = Object.freeze({
-  pause_toggle: 'Space',
+  toggle_pause: 'Space',
   resume_catch_up: 'L',
   check_live: 'H',
   repair_runtime: 'R',
@@ -11,8 +11,8 @@ const DEFAULT_BINDINGS = Object.freeze({
   copy_latest: 'C',
   copy_health_report: 'G',
   copy_diagnostics: 'D',
-  open_command_palette: 'Ctrl+K',
-  open_shortcut_help: '?'
+  command_palette: 'Ctrl+K',
+  shortcut_help: '?'
 });
 
 const RESERVED_SINGLE = new Set(['Tab','Enter','Escape','Backspace','Delete','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End']);

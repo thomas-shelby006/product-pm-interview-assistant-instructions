@@ -43,6 +43,9 @@ import { deriveSessionCheckpoint } from './session-checkpoint.js';
 import { deriveInterruptionRecoveryCard } from './interruption-recovery-card.js';
 import { deriveSessionLandmarks } from './session-landmarks.js';
 import { validateFocusGesture } from './focus-gesture-token.js';
+import { derivePreflightWizard } from './preflight-wizard.js';
+import { deriveResumeGuard, validateResumeBoundary } from './resume-guard.js';
+import { deriveCrashResume } from './crash-resume-model.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -291,6 +294,9 @@ export function createRuntimePilotController({
       recoveryCard,
       questionOperationsDerived: deriveQuestionOperations(enrichedBase, Date.now()),
       batchPreview: deriveBatchPreview(enrichedBase),
+      preflightWizard: derivePreflightWizard(enrichedBase),
+      resumeGuard: deriveResumeGuard(enrichedBase),
+      crashResume: deriveCrashResume(enrichedBase, Date.now()),
       performanceBudget: {
         ...(snapshotBase.performanceBudget || {}),
         cacheHits: localPerformance.cacheHits,
@@ -1433,6 +1439,26 @@ export function createRuntimePilotController({
     let result;
 
     switch (command.command) {
+      case 'run_preflight': {
+        const selfTest = await activeSelfTest(sessionId, registry, pilot);
+        const live = await liveCheck(sessionId, registry, pilot);
+        const snapshot = pilot.snapshot(sessionId);
+        result = { ok: Boolean(selfTest?.ok && live?.ok), selfTest, live, preflight: derivePreflightWizard(snapshot) };
+        break;
+      }
+      case 'resume_live_session': {
+        const snapshot = pilot.snapshot(sessionId);
+        const validation = validateResumeBoundary(snapshot, payload.phase || snapshot?.checkpoint?.phase || 'active');
+        if (!validation.ok) { result = validation; break; }
+        const checkpoint = snapshot.checkpoint;
+        if (checkpoint) pilot.setLiveSession(sessionId, { ...snapshot.liveSession, phase: validation.phase, segment: checkpoint.segment || snapshot.liveSession?.segment });
+        pilot.setMode(sessionId, 'active');
+        result = { ok: true, guard: validation, roles: await sendToRoles(registry, sessionId, 'resume') };
+        break;
+      }
+      case 'dismiss_crash_resume':
+        result = pilot.dismissCrashResume(sessionId);
+        break;
       case 'start_mock': {
         const snapshot = pilot.snapshot(sessionId);
         const runbook = deriveInterviewRunbook(snapshot, Date.now());

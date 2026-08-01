@@ -70,6 +70,7 @@ const state = {
   commandPalette: { open: false, query: '', selectedIndex: 0, recent: [] },
   commandPaletteReturnFocus: null,
   toolbarIndex: 0,
+  lastAnnouncement: '',
   interruptPlanDraft: null
 };
 
@@ -79,7 +80,7 @@ const toast = byId('toast');
 const timelineViewport = byId('timelineViewport');
 const timelineCanvas = byId('timelineCanvas');
 const dialogFocus = createDialogFocusCoordinator();
-const liveAnnouncer = createLiveAnnouncer({ politeNode: byId('politeAnnouncements'), assertiveNode: byId('assertiveAnnouncements') });
+const liveAnnouncer = createLiveAnnouncer({ polite: byId('screenReaderPolite'), assertive: byId('screenReaderAssertive') });
 const shortcutBindings = normalizeShortcutBindings();
 
 function setConnection(label, tone = 'warn') {
@@ -240,22 +241,42 @@ function handlePortMessage(message) {
 }
 
 
+
+function renderPreflightAndCrash(snapshot, now = Date.now()) {
+  const preflight = snapshot?.preflightWizard || { completed: 0, total: 0, ready: false, current: null };
+  const runbookProgress = byId('runbookProgress');
+  if (runbookProgress && preflight.total) runbookProgress.title = `${preflight.completed} of ${preflight.total} preflight checks complete`;
+  const crash = snapshot?.crashResume || { visible: false };
+  const card = byId('crashResumeCard');
+  card.hidden = !crash.visible;
+  if (crash.visible) {
+    text('crashResumeTitle', crash.reason === 'managed_role_restarted' ? 'Managed role restarted' : 'Runtime interruption detected');
+    text('crashResumeDetail', `${crash.unresolved || 0} protected final${crash.unresolved === 1 ? '' : 's'} retained. Checkpoint age ${formatDuration(crash.checkpointAgeMs || 0)}.`);
+    byId('resumeLiveSession').disabled = snapshot?.resumeGuard?.allowed === false;
+  }
+}
+
 function renderAccessibility(snapshot) {
-  const bindings = normalizeShortcutBindings(snapshot?.uiPreferences?.shortcutBindings || shortcutBindings);
+  shortcutBindings = normalizeShortcutBindings(snapshot?.uiPreferences?.shortcutBindings || shortcutBindings);
   const prefs = applyAccessibilityPreferences(document.documentElement, snapshot?.uiPreferences?.accessibility || {});
   document.querySelectorAll('[data-accessibility-name]').forEach(node => { node.value = String(prefs[node.dataset.accessibilityName] || ''); });
-  const list = byId('shortcutHelpList');
-  if (list) {
-    list.replaceChildren();
-    for (const group of deriveShortcutHelp(bindings, commandCatalog(snapshot || {})).groups) {
-      const heading = document.createElement('h3'); heading.textContent = group.name; list.append(heading);
-      for (const item of group.rows) {
-        const row = document.createElement('div'); row.className = 'shortcut-help-row';
-        const label = document.createElement('span'); label.textContent = item.label;
-        const key = document.createElement('kbd'); key.textContent = item.chord;
-        row.append(label, key); list.append(row);
-      }
+  if (byId('reducedMotionPreference')) byId('reducedMotionPreference').value = prefs.reducedMotion;
+  if (byId('textScalePreference')) byId('textScalePreference').value = prefs.textScale;
+  if (byId('contrastPreference')) byId('contrastPreference').value = prefs.contrast;
+  const list = byId('shortcutHelpGroups');
+  if (!list) return;
+  list.replaceChildren();
+  for (const group of deriveShortcutHelp(shortcutBindings, commandCatalog(snapshot || {})).groups) {
+    const section = document.createElement('section'); section.className = 'shortcut-group';
+    const heading = document.createElement('h3'); heading.textContent = group.name; section.append(heading);
+    for (const item of group.rows) {
+      const row = document.createElement('div'); row.className = 'shortcut-row';
+      const label = document.createElement('label'); label.textContent = item.label; label.htmlFor = `shortcut-${item.command}`;
+      const input = document.createElement('input'); input.id = `shortcut-${item.command}`; input.value = item.chord; input.dataset.shortcutCommand = item.command;
+      const save = document.createElement('button'); save.textContent = 'Save'; save.dataset.saveShortcut = item.command;
+      row.append(label, input, save); section.append(row);
     }
+    list.append(section);
   }
 }
 
@@ -501,6 +522,11 @@ function renderLiveOperations(snapshot, now) {
   text('attentionDetail', attention.reason === 'caught_up'
     ? 'No operator action is required.'
     : `${humanizeCode(attention.reason)}${nextAction.label ? ` - ${nextAction.label}` : ''}.`);
+  const announcement = `${humanizeCode(phase.state || 'setup')}: ${attention.title || humanizeCode(attention.reason || 'caught up')}`;
+  if (announcement !== state.lastAnnouncement && state.snapshot?.uiPreferences?.accessibility?.announcements !== false) {
+    state.lastAnnouncement = announcement;
+    liveAnnouncer.announce(announcement, { priority: ['critical','error'].includes(attention.severity) ? 'assertive' : 'polite' });
+  }
   const actionButton = byId('nextBestAction');
   actionButton.hidden = !nextAction.available;
   actionButton.dataset.command = nextAction.command || '';
@@ -1284,6 +1310,7 @@ function render(changedKeys = null) {
   renderOverview(state.snapshot, now);
   renderLiveOperations(state.snapshot, now);
   renderAccessibility(state.snapshot);
+  renderPreflightAndCrash(state.snapshot, now);
   renderCommandPalette();
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
@@ -1345,8 +1372,25 @@ document.addEventListener('click', event => {
     return;
   }
   if (event.target.closest('#openCommandPalette')) { openCommandPalette(event.target.closest('#openCommandPalette')); return; }
-  if (event.target.closest('#openShortcutHelp')) { dialogFocus.open(byId('shortcutHelpDialog'), event.target.closest('#openShortcutHelp')); return; }
+  if (event.target.closest('#openShortcutHelp')) { renderAccessibility(state.snapshot); dialogFocus.open(byId('shortcutHelpDialog'), event.target.closest('#openShortcutHelp')); return; }
   if (event.target.closest('#closeShortcutHelp')) { dialogFocus.close(byId('shortcutHelpDialog')); return; }
+  const saveShortcut = event.target.closest('[data-save-shortcut]');
+  if (saveShortcut) {
+    const commandId = saveShortcut.dataset.saveShortcut || '';
+    const input = byId(`shortcut-${commandId}`);
+    void runCommand(saveShortcut, 'set_shortcut_binding', { commandId, chord: input?.value || '' }).then(result => {
+      text('shortcutPreferenceStatus', result?.ok ? `${humanizeCode(commandId)} now uses ${result.chord}.` : humanizeCode(result?.error || 'shortcut_update_failed'));
+      if (result?.ok) renderAccessibility({ ...state.snapshot, uiPreferences: { ...(state.snapshot?.uiPreferences || {}), shortcutBindings: result.bindings } });
+    });
+    return;
+  }
+  if (event.target.closest('#resetShortcutBindings')) {
+    const button = event.target.closest('#resetShortcutBindings');
+    void runCommand(button, 'reset_shortcut_bindings').then(result => {
+      if (result?.ok) renderAccessibility({ ...state.snapshot, uiPreferences: { ...(state.snapshot?.uiPreferences || {}), shortcutBindings: result.bindings } });
+    });
+    return;
+  }
   if (event.target.closest('#closeCommandPalette')) { closeCommandPalette(); return; }
   const tab = event.target.closest('[data-view]');
   if (tab) {
@@ -1448,6 +1492,19 @@ byId('commandPaletteSearch').addEventListener('input', event => {
 byId('phaseRail').addEventListener('keydown', event => {
   const result = handleToolbarKey(event.currentTarget, event, state.toolbarIndex);
   if (result.handled) state.toolbarIndex = result.activeIndex;
+});
+
+document.querySelectorAll('[data-accessibility-name],#reducedMotionPreference,#textScalePreference,#contrastPreference').forEach(node => {
+  node.addEventListener('change', event => {
+    const idMap = { reducedMotionPreference: 'reducedMotion', textScalePreference: 'textScale', contrastPreference: 'contrast' };
+    const name = event.currentTarget.dataset.accessibilityName || idMap[event.currentTarget.id];
+    void runCommand(event.currentTarget, 'set_accessibility_preference', { name, value: event.currentTarget.value }).then(result => {
+      if (!result?.ok) return;
+      state.snapshot = { ...state.snapshot, uiPreferences: { ...(state.snapshot?.uiPreferences || {}), accessibility: result.preferences } };
+      applyAccessibilityPreferences(document.documentElement, result.preferences);
+      text('shortcutPreferenceStatus', `${humanizeCode(name)} set to ${humanizeCode(result.value)}.`);
+    });
+  });
 });
 
 byId('traceSearch').addEventListener('input', event => {
@@ -1603,18 +1660,8 @@ function runKeyboardCommand(command) {
 }
 
 document.addEventListener('keydown', event => {
-  if (dialogFocus.handleKey(event)) return;
-  const shortcutCommand = resolveShortcutCommand(state.snapshot?.uiPreferences?.shortcutBindings || shortcutBindings, event);
-  if (shortcutCommand === 'open_shortcut_help') { event.preventDefault(); dialogFocus.open(byId('shortcutHelpDialog'), document.activeElement); return; }
-  if (shortcutCommand === 'open_command_palette') { event.preventDefault(); state.commandPalette.open ? closeCommandPalette() : openCommandPalette(document.activeElement); return; }
   const paletteOpen = state.commandPalette.open;
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-    event.preventDefault();
-    paletteOpen ? closeCommandPalette() : openCommandPalette(document.activeElement);
-    return;
-  }
   if (paletteOpen) {
-    if (event.key === 'Escape') { event.preventDefault(); closeCommandPalette(); return; }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       state.commandPalette = movePaletteSelection(state.commandPalette, event.key === 'ArrowDown' ? 1 : -1);
@@ -1622,33 +1669,23 @@ document.addEventListener('keydown', event => {
       return;
     }
     if (event.key === 'Enter') { event.preventDefault(); void executePaletteSelection(); return; }
-    if (event.key === 'Tab') {
-      const nodes = [...byId('commandPalette').querySelectorAll('button:not([disabled]),input:not([disabled])')].filter(node => !node.hidden);
-      if (nodes.length) {
-        const first = nodes[0], last = nodes[nodes.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-      }
-    }
+  }
+  if (dialogFocus.handleKey(event)) {
+    if (event.key === 'Escape' && paletteOpen) { state.commandPalette = { ...state.commandPalette, open: false }; renderCommandPalette(); }
     return;
   }
-  if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
-  if (event.target.matches('input,select,textarea,button')) return;
-  const key = event.key.toLowerCase();
-  if (key === ' ') {
-    event.preventDefault();
-    void runKeyboardCommand(state.snapshot?.mode === 'paused' ? 'resume_without_send' : 'pause');
-  } else if (key === 'l') void runKeyboardCommand('resume_catch_up');
-  else if (key === 'h') void runKeyboardCommand('check_live');
-  else if (key === 'r') void runKeyboardCommand('repair_runtime');
-  else if (key === 'e') void runKeyboardCommand('export_session');
-  else if (key === 'm') void runKeyboardCommand('toggle_mic');
-  else if (key === 's') void runKeyboardCommand('toggle_scroll');
-  else if (key === 'n') void runKeyboardCommand('submit_now');
-  else if (key === 'i') void runKeyboardCommand('interrupt_latest');
-  else if (key === 'c') byId('copyLatest').click();
-  else if (key === 'g') byId('copyHealthReport').click();
-  else if (key === 'd') byId('copyDiagnostics').click();
+  if (event.repeat) return;
+  const shortcutCommand = resolveShortcutCommand(state.snapshot?.uiPreferences?.shortcutBindings || shortcutBindings, event);
+  if (!shortcutCommand) return;
+  if (event.target.matches('input,select,textarea') && !['command_palette','shortcut_help'].includes(shortcutCommand)) return;
+  event.preventDefault();
+  if (shortcutCommand === 'shortcut_help') { renderAccessibility(state.snapshot); dialogFocus.open(byId('shortcutHelpDialog'), document.activeElement); return; }
+  if (shortcutCommand === 'command_palette') { paletteOpen ? closeCommandPalette() : openCommandPalette(document.activeElement); return; }
+  if (shortcutCommand === 'toggle_pause') { void runKeyboardCommand(state.snapshot?.mode === 'paused' ? 'resume_without_send' : 'pause'); return; }
+  if (shortcutCommand === 'copy_latest') { byId('copyLatest').click(); return; }
+  if (shortcutCommand === 'copy_health_report') { byId('copyHealthReport').click(); return; }
+  if (shortcutCommand === 'copy_diagnostics') { byId('copyDiagnostics').click(); return; }
+  void runKeyboardCommand(shortcutCommand);
 });
 
 setInterval(() => {

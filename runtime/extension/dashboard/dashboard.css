@@ -471,3 +471,10 @@ html[data-large-text="true"] { font-size: 112.5%; }
 html[data-compact-density="true"] .shell { gap: 8px; } html[data-compact-density="true"] section, html[data-compact-density="true"] article { --section-gap: 8px; }
 @media (max-width: 420px) { .accessibility-controls { grid-template-columns: 1fr; } .shortcut-dialog { padding: 8px; } }
 @media print { .shortcut-dialog, .accessibility-card input { display: none !important; } }
+
+.crash-resume-card { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--warn) 8%, var(--panel)); }
+.crash-resume-card[hidden] { display: none; }
+.crash-resume-card strong { display: block; margin: 3px 0; }
+.crash-resume-card p { margin: 0; color: var(--muted); }
+@media (max-width: 520px) { .crash-resume-card { align-items: stretch; flex-direction: column; } .crash-resume-card .inline-actions button { flex: 1; } }
+@media print { .crash-resume-card .inline-actions { display: none; } }

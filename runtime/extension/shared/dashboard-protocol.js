@@ -1,6 +1,7 @@
 const COMMANDS = new Set([
   'pause',
   'start_mock',
+  'run_preflight',
   'set_session_phase',
   'mark_interviewer_activity',
   'set_focus_mode',
@@ -14,6 +15,8 @@ const COMMANDS = new Set([
   'add_marker',
   'remove_marker',
   'resume_checkpoint',
+  'resume_live_session',
+  'dismiss_crash_resume',
   'resume_catch_up',
   'set_question_pin',
   'defer_question',

@@ -227,6 +227,7 @@ function normalizeSession(item) {
     incidentControls: normalizeIncidentControls(item.incidentControls || {}),
     operatorMarkers: Array.isArray(item.operatorMarkers) ? item.operatorMarkers.map(value => ({ ...value })).slice(-100) : [],
     checkpoint: item.checkpoint && typeof item.checkpoint === 'object' ? normalizeSessionCheckpoint(item.checkpoint) : null,
+    crashResumeDismissedAt: Math.max(0, Number(item.crashResumeDismissedAt || 0)),
     uiPreferences: {
       shortcutBindings: normalizeShortcutBindings(item.uiPreferences?.shortcutBindings || {}),
       accessibility: normalizeAccessibilityPreferences(item.uiPreferences?.accessibility || {})
@@ -470,6 +471,15 @@ export class RuntimePilotState {
     session.senderOutboxState = normalizeOutboxState({ ...value, updatedAt: now });
     session.updatedAt = now;
     return { ...session.senderOutboxState };
+  }
+
+
+  dismissCrashResume(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.crashResumeDismissedAt = now;
+    session.updatedAt = now;
+    this.record(sessionId, 'crash_resume_dismissed', { at: now }, now);
+    return { ok: true, dismissedAt: now };
   }
 
   setEndGuard(sessionId, value = null, now = Date.now()) {
@@ -1227,6 +1237,7 @@ export class RuntimePilotState {
       incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false })),
       operatorMarkers: JSON.parse(JSON.stringify(session.operatorMarkers || [])),
       checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null,
+      crashResumeDismissedAt: Math.max(0, Number(session.crashResumeDismissedAt || 0)),
       uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() }))
     };
   }
@@ -1273,6 +1284,7 @@ export class RuntimePilotState {
       incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false })),
       operatorMarkers: JSON.parse(JSON.stringify(session.operatorMarkers || [])),
       checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null,
+      crashResumeDismissedAt: Math.max(0, Number(session.crashResumeDismissedAt || 0)),
       uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() }))
     }));
   }

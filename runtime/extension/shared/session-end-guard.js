@@ -21,10 +21,14 @@ export function sessionEndCounts(snapshot) {
   const actionable = ledger.filter(item => !FINAL_STATES.has(String(item?.state || ''))).length;
   const inFlightLedger = ledger.filter(item => IN_FLIGHT_STATES.has(String(item?.state || ''))).length;
   const activeMembers = Number(snapshot?.batchState?.active?.questionCount || snapshot?.batchState?.active?.memberIds?.length || 0);
+  const phase = String(snapshot?.liveSession?.phase || 'setup');
+  const liveActive = ['active','paused'].includes(phase) ? 1 : 0;
   return {
     actionable,
     inFlight: Math.max(inFlightLedger, activeMembers),
-    unpersisted: latestOutboxCount(snapshot)
+    unpersisted: latestOutboxCount(snapshot),
+    liveActive,
+    phase
   };
 }
 
@@ -39,7 +43,7 @@ export function prepareSessionEnd(snapshot, {
     preparedAt: Number(now),
     expiresAt: Number(now) + Math.max(5000, Number(ttlMs) || 30000),
     counts,
-    canEnd: counts.actionable === 0 && counts.inFlight === 0 && counts.unpersisted === 0
+    canEnd: counts.actionable === 0 && counts.inFlight === 0 && counts.unpersisted === 0 && counts.liveActive === 0
   };
 }
 
