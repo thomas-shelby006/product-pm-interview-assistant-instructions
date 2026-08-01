@@ -102,3 +102,17 @@ export function deriveReview(snapshot) {
     averageAnswerElapsedMs: metrics.averageAnswerElapsedMs || 0
   };
 }
+
+
+export function actionableQueue(items, includeSuperseded = false) {
+  const queue = Array.isArray(items) ? items : [];
+  return includeSuperseded
+    ? queue
+    : queue.filter(item => item?.status !== 'superseded');
+}
+
+export function primaryTransportAction(mode) {
+  return mode === 'paused'
+    ? { command: 'resume_without_send', label: 'Resume forwarding' }
+    : { command: 'pause', label: 'Pause forwarding' };
+}

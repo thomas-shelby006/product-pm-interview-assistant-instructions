@@ -19,3 +19,21 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** Geometry is scoped to exact cached HWNDs; unrelated windows are never enumerated or moved. Context still clears after genuine provider shutdown, but not during brief extension/browser recovery.
 
 **Why this is superior:** It fixes the owning state boundary without blocking dashboard layouts or weakening privacy cleanup.
+
+## Cycle 2 - Dashboard clarity and operator speed
+
+**Evidence inspected:** Primary control labels, queue selection behavior, superseded queue rows, and keyboard discoverability.
+
+**Issue/opportunity:** The dashboard always said Pause forwarding, even when paused. Superseded history was mixed with actionable finals and could still be selected for an avoidable rejected send. Keyboard controls were implemented but hidden.
+
+**Classification:** User-facing efficiency and error-prevention improvement.
+
+**Implementation:** Made the primary transport action mode-aware, defaulted the queue to actionable items with an All-items filter, visually de-emphasized superseded rows, blocked superseded sends in the UI, and added compact visible keyboard help.
+
+**Files changed:** dashboard-model.js, dashboard.js, dashboard.css, index.html, and dashboard-model.test.js.
+
+**Coverage added:** Pure-model checks for actionable queue filtering and authoritative primary action selection.
+
+**Source review:** The service worker remains authoritative; UI filtering never deletes queue history and controller rejection remains the backstop.
+
+**Why this is superior:** It reduces operator decisions and prevents an invalid action without weakening queue auditability.

@@ -36,7 +36,7 @@
     <main>
       <section class="view active" data-view-panel="overview">
         <div class="control-grid" aria-label="Runtime controls">
-          <button class="primary" data-command="pause">Pause forwarding</button>
+          <button class="primary" id="primaryTransportAction" data-command="pause">Pause forwarding</button>
           <button data-command="resume_latest">Resume + latest</button>
           <button data-command="resume_without_send">Resume only</button>
           <button data-command="check_live">Check live</button>
@@ -98,6 +98,7 @@
         <div class="section-heading">
           <div><h2>Operator queue</h2><p>Only authoritative finals appear here.</p></div>
           <div class="inline-actions">
+            <select id="queueFilter" aria-label="Queue filter"><option value="actionable">Actionable</option><option value="all">All items</option></select>
             <button id="sendSelected">Send selected</button>
             <button id="discardSelected">Discard selected</button>
             <button class="danger" id="discardAll">Discard all</button>
@@ -147,6 +148,7 @@
         <button data-command="restore_managed">Restore</button>
       </div>
       <div class="footer-actions">
+        <details class="shortcut-help"><summary>Keys</summary><p><b>Space</b> pause/resume Â· <b>L</b> resume latest Â· <b>H</b> health Â· <b>R</b> repair Â· <b>E</b> export Â· <b>M</b> mic Â· <b>S</b> scroll Â· <b>D</b> diagnostics</p></details>
         <button id="copyDiagnostics">Copy diagnostics</button>
         <button class="danger" data-command="end_session" data-confirm="End this managed PMIA session?">End session</button>
       </div>

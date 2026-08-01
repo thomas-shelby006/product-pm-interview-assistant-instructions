@@ -117,3 +117,10 @@ pre { margin: 0; max-height: 14rem; overflow: auto; white-space: pre-wrap; overf
   .timeline-row { grid-template-columns: 4.8rem 6rem 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+tbody tr.superseded { opacity: .58; background: var(--surface-2); }
+tbody tr.superseded td.question { text-decoration: line-through; }
+.shortcut-help { position: relative; font-size: .65rem; }
+.shortcut-help summary { cursor: pointer; padding: .45rem .55rem; border: 1px solid var(--line-strong); border-radius: 999px; list-style: none; }
+.shortcut-help summary::-webkit-details-marker { display: none; }
+.shortcut-help p { position: absolute; right: 0; bottom: calc(100% + .45rem); width: 19rem; padding: .65rem; background: var(--ink); color: white; border-radius: var(--radius); box-shadow: var(--shadow); line-height: 1.55; }

@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  actionableQueue,
   buildDiagnostics,
   deriveReview,
+  primaryTransportAction,
   roleHealth,
   virtualSlice
 } from '../dashboard/dashboard-model.js';
@@ -44,4 +46,22 @@ test('review derives only safe context and metrics', () => {
   assert.equal(review.context.company, 'Acme');
   assert.equal(review.questions, 3);
   assert.equal(review.delivered, 2);
+});
+
+
+test('dashboard defaults to actionable queue items and exposes all items on demand', () => {
+  const queue = [{ id: 'q1', status: 'queued' }, { id: 'q2', status: 'superseded' }];
+  assert.deepEqual(actionableQueue(queue).map(item => item.id), ['q1']);
+  assert.deepEqual(actionableQueue(queue, true).map(item => item.id), ['q1', 'q2']);
+});
+
+test('primary transport action reflects authoritative session mode', () => {
+  assert.deepEqual(primaryTransportAction('paused'), {
+    command: 'resume_without_send',
+    label: 'Resume forwarding'
+  });
+  assert.deepEqual(primaryTransportAction('active'), {
+    command: 'pause',
+    label: 'Pause forwarding'
+  });
 });

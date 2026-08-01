@@ -1,7 +1,9 @@
 import {
+  actionableQueue,
   buildDiagnostics,
   deriveReview,
   formatDuration,
+  primaryTransportAction,
   roleHealth,
   virtualSlice,
   warningLabel
@@ -15,6 +17,7 @@ const state = {
   reconnectAttempt: 0,
   reconnectTimer: null,
   selectedQueueId: '',
+  queueFilter: 'actionable',
   timelineFilter: 'all',
   activeView: 'overview',
   pending: new Map()
@@ -188,13 +191,18 @@ function renderOverview(snapshot, now) {
   text('latestPreview', snapshot?.latestPreview?.text || 'No preview observed.');
   text('latestFinal', snapshot?.latestFinal?.text || 'No final observed.');
   text('latestAnswer', snapshot?.receiver?.latestAnswer?.text || snapshot?.latestAnswer?.text || 'No answer captured.');
-  text('queueBadge', String(snapshot?.queue?.length || 0));
+  const activeQueue = actionableQueue(snapshot?.queue, false);
+  text('queueBadge', String(activeQueue.length));
+  const primary = primaryTransportAction(snapshot?.mode);
+  const primaryButton = byId('primaryTransportAction');
+  primaryButton.dataset.command = primary.command;
+  primaryButton.textContent = primary.label;
 }
 
 function renderQueue(snapshot, now) {
   const body = byId('queueBody');
   body.replaceChildren();
-  const queue = snapshot?.queue || [];
+  const queue = actionableQueue(snapshot?.queue, state.queueFilter === 'all');
   if (!queue.length) {
     state.selectedQueueId = '';
     const row = document.createElement('tr');
@@ -212,6 +220,7 @@ function renderQueue(snapshot, now) {
   for (const item of queue) {
     const row = document.createElement('tr');
     if (item.id === state.selectedQueueId) row.classList.add('selected');
+    if (item.status === 'superseded') row.classList.add('superseded');
     row.addEventListener('click', () => {
       state.selectedQueueId = item.id;
       renderQueue(state.snapshot, Date.now());
@@ -348,6 +357,8 @@ document.addEventListener('click', event => {
 
 byId('sendSelected').addEventListener('click', event => {
   if (!state.selectedQueueId) return showToast('Select a queued final.', 'warn');
+  const item = state.snapshot?.queue?.find(candidate => candidate.id === state.selectedQueueId);
+  if (item?.status === 'superseded') return showToast('Superseded finals cannot be sent.', 'warn');
   void runCommand(event.currentTarget, 'send_selected', { queueItemId: state.selectedQueueId });
 });
 byId('discardSelected').addEventListener('click', event => {
@@ -357,6 +368,10 @@ byId('discardSelected').addEventListener('click', event => {
 byId('discardAll').addEventListener('click', event => {
   event.currentTarget.dataset.confirm = 'Discard every queued final?';
   void runCommand(event.currentTarget, 'discard_all');
+});
+byId('queueFilter').addEventListener('change', event => {
+  state.queueFilter = event.target.value;
+  renderQueue(state.snapshot, Date.now());
 });
 byId('timelineFilter').addEventListener('change', event => {
   state.timelineFilter = event.target.value;
