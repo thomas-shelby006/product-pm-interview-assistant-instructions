@@ -8,6 +8,7 @@ import { shouldPersistBatchEvent } from './batch-event-policy.js';
 import { utf8Bytes } from './storage-accounting.js';
 import { deriveDeliverySla } from './delivery-sla-policy.js';
 import { clearRecoveryAlarms, parseRecoveryAlarmName, scheduleRecoveryAlarm } from './recovery-schedule.js';
+import { prepareSessionEnd, senderOutboxStorageKey, validateSessionEnd } from './session-end-guard.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
 import { transitionRecovery } from './recovery-state-machine.js';
@@ -491,6 +492,9 @@ export function createRuntimePilotController({
         envelopeId: event.envelopeId,
         timeout: true
       });
+    } else if (event?.type === 'outbox_state') {
+      pilot.setSenderOutboxState(sessionId, event);
+      pilot.record(sessionId, event.type, event);
     } else if (event?.type) {
       pilot.record(sessionId, event.type, event);
     }
@@ -877,8 +881,38 @@ export function createRuntimePilotController({
     );
   }
 
-  async function endSession(sessionId, registry, pilot) {
+  async function prepareEndSession(sessionId, pilot) {
+    let stored;
+    try {
+      const key = senderOutboxStorageKey(sessionId);
+      const value = await storageArea.get(key);
+      stored = value?.[key];
+    } catch (error) {
+      return { ok: false, blocked: true, error: 'outbox_state_unavailable', detail: safeError(error) };
+    }
+    const snapshot = pilot.snapshot(sessionId);
+    const storedCount = Array.isArray(stored) ? stored.length : 0;
+    pilot.setSenderOutboxState(sessionId, {
+      ...(snapshot?.senderOutboxState || {}),
+      count: storedCount
+    });
+    const prepared = prepareSessionEnd(pilot.snapshot(sessionId));
+    pilot.setEndGuard(sessionId, prepared);
+    pilot.record(sessionId, 'session_end_prepared', { counts: prepared.counts, canEnd: prepared.canEnd, expiresAt: prepared.expiresAt });
+    return { ok: true, ...prepared };
+  }
+
+  async function endSession(sessionId, registry, pilot, confirmation = {}) {
+    const prepared = pilot.snapshot(sessionId)?.endGuard;
+    const validation = validateSessionEnd(prepared, {
+      token: confirmation.confirmToken,
+      mode: confirmation.mode,
+      now: Date.now()
+    });
+    if (!validation.ok) return { ok: false, blocked: true, ...validation };
+    if (validation.mode === 'archive_and_end') pilot.archiveAllUnresolved(sessionId);
     cancelBatchCheckpoint(sessionId);
+    await cancelRecoverySchedules(sessionId, pilot);
     const session = registry.getSession(sessionId);
     const tabIds = ['sender', 'receiver']
       .map(role => session?.[role]?.tabId)
@@ -891,6 +925,7 @@ export function createRuntimePilotController({
     await saveRegistry(registry);
     await store.save(pilot);
     await clearSessionLogs(sessionId);
+    await storageArea.remove(senderOutboxStorageKey(sessionId)).catch(() => {});
     return { ok: true, closeTabIds: [...new Set(tabIds)] };
   }
 
@@ -1009,8 +1044,11 @@ export function createRuntimePilotController({
         }, 0);
         result = { ok: true, scheduled: true };
         break;
+      case 'prepare_end_session':
+        result = await prepareEndSession(sessionId, pilot);
+        break;
       case 'end_session':
-        result = await endSession(sessionId, registry, pilot);
+        result = await endSession(sessionId, registry, pilot, payload);
         break;
       case 'layout_both':
       case 'layout_sender':

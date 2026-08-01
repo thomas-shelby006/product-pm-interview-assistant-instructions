@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SessionRegistry } from '../shared/session-registry.js';
 import { createRuntimePilotController } from '../shared/runtime-pilot-controller.js';
+import { senderOutboxStorageKey } from '../shared/session-end-guard.js';
 
 function memoryArea() {
   const data = {};
@@ -56,11 +57,13 @@ function setup({ requestRole = null } = {}) {
       async reload() {},
       async remove() {}
     },
-    windows: { async update() {}, async create() { return { id: 99 }; } }
+    windows: { async update() {}, async create() { return { id: 99 }; } },
+    alarms: { async create() {}, async clear() { return true; } }
   };
+  const storageArea = memoryArea();
   const controller = createRuntimePilotController({
     chromeApi,
-    storageArea: memoryArea(),
+    storageArea,
     registryProvider: async () => registry,
     saveRegistry: async () => {},
     async deliverFinal(route) {
@@ -78,7 +81,7 @@ function setup({ requestRole = null } = {}) {
     clearSessionLogs: async () => {},
     requestRole
   });
-  return { controller, registry, deliveries, runtimeCommands };
+  return { controller, registry, deliveries, runtimeCommands, storageArea };
 }
 
 async function ready(controller, registry) {
@@ -176,9 +179,14 @@ test('submit selected admits one receiver delivery while transport stays paused'
 test('end session removes registry and pilot state without recreating a ghost session', async () => {
   const { controller, registry } = setup();
   await controller.syncRegistration(registry.getSession('s1').sender);
-  const result = await controller.handleCommand({
-    sessionId: 's1', requestId: 'end-1', command: 'end_session'
+  const prepared = await controller.handleCommand({
+    sessionId: 's1', requestId: 'end-prepare-1', command: 'prepare_end_session'
   });
+  const result = await controller.handleCommand({
+    sessionId: 's1', requestId: 'end-1', command: 'end_session',
+    payload: { confirmToken: prepared.token, mode: 'clean' }
+  });
+  assert.equal(prepared.canEnd, true);
   assert.equal(result.ok, true);
   assert.equal(registry.getSession('s1'), null);
   assert.equal(await controller.snapshot('s1'), null);
@@ -377,4 +385,31 @@ test('duplicate dashboard request returns the original command result', async ()
   assert.equal(second.ok, first.ok);
   assert.equal(second.replayed, true);
   assert.equal(second.roles?.sender?.responsive, first.roles?.sender?.responsive);
+});
+
+
+test('end session remains blocked while durable sender outbox items exist', async () => {
+  const { controller, registry, storageArea } = setup();
+  await controller.syncRegistration(registry.getSession('s1').sender);
+  await storageArea.set({
+    [senderOutboxStorageKey('s1')]: [
+      { envelope: envelope('outbox-1', 1) },
+      { envelope: envelope('outbox-2', 2) }
+    ]
+  });
+  await controller.telemetry({
+    sessionId: 's1', role: 'sender', tabId: 1,
+    telemetry: { event: { type: 'outbox_state', count: 2 } }
+  });
+  const prepared = await controller.handleCommand({
+    sessionId: 's1', requestId: 'blocked-prepare', command: 'prepare_end_session'
+  });
+  const result = await controller.handleCommand({
+    sessionId: 's1', requestId: 'blocked-end', command: 'end_session',
+    payload: { confirmToken: prepared.token, mode: 'clean' }
+  });
+  assert.equal(prepared.counts.unpersisted, 2);
+  assert.equal(result.ok, false);
+  assert.equal(result.blocked, true);
+  assert.ok(registry.getSession('s1'));
 });

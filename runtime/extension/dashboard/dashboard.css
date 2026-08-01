@@ -248,3 +248,11 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 
 .recovery-schedule { display: grid; gap: .2rem; margin-top: .55rem; padding-top: .55rem; border-top: 1px solid var(--line); }
 .recovery-schedule span { color: var(--muted); font-size: .76rem; }
+
+.session-end-sheet[hidden] { display: none; }
+.session-end-sheet { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 1rem; background: rgba(10, 10, 10, .66); }
+.session-end-card { width: min(32rem, 100%); padding: 1.2rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--panel); box-shadow: 0 1.4rem 4rem rgba(0,0,0,.38); }
+.session-end-counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: 1rem 0; }
+.session-end-counts span { display: grid; gap: .2rem; padding: .65rem; border: 1px solid var(--line); border-radius: .7rem; text-align: center; }
+.session-end-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
+.session-end-actions button { flex: 1 1 8rem; }

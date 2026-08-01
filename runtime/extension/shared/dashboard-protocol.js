@@ -20,6 +20,7 @@ const COMMANDS = new Set([
   'toggle_scroll',
   'focus_composer',
   'export_session',
+  'prepare_end_session',
   'end_session',
   'layout_both',
   'layout_sender',
@@ -66,6 +67,10 @@ export function normalizeDashboardCommand(value) {
   }
   if (['set_auto_submit', 'set_hold'].includes(command)) {
     payload.value = Boolean(payload.value);
+  }
+  if (command === 'end_session') {
+    payload.confirmToken = cleanText(payload.confirmToken, 160);
+    payload.mode = ['clean', 'archive_and_end'].includes(payload.mode) ? payload.mode : 'clean';
   }
   return { sessionId, requestId, command, payload };
 }

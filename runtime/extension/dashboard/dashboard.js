@@ -25,6 +25,7 @@ import { deriveBatchPlan } from './batch-plan-model.js';
 import { deriveDraftConflict } from './draft-conflict-model.js';
 import { deriveDeliverySlaView } from './delivery-sla-model.js';
 import { deriveRecoverySchedule } from './recovery-schedule-model.js';
+import { deriveSessionEndView } from './session-end-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -39,7 +40,8 @@ const state = {
   activeView: 'overview',
   sessionEnded: false,
   pending: new Map(),
-  efficiency: { full: 0, delta: 0, heartbeat: 0, lastMode: 'Waiting', changedSections: 0 }
+  efficiency: { full: 0, delta: 0, heartbeat: 0, lastMode: 'Waiting', changedSections: 0 },
+  endPreparation: null
 };
 
 const byId = id => document.getElementById(id);
@@ -807,7 +809,7 @@ function renderReview(snapshot) {
 
 function updateControlAvailability() {
   const unavailable = !state.snapshot || state.sessionEnded;
-  document.querySelectorAll('[data-command], #submitSelected, #archiveSelected, #archiveProven, #archiveAll, #copyLatest').forEach(node => {
+  document.querySelectorAll('[data-command], #submitSelected, #archiveSelected, #archiveProven, #archiveAll, #copyLatest, #endSessionAction, #exportBeforeEnd, #archiveAndEnd, #cancelEndSession').forEach(node => {
     const busy = node.dataset.busy === 'true';
     const commandBlocked = state.pending.size > 0 && Boolean(node.dataset.command);
     node.disabled = unavailable || busy || commandBlocked;
@@ -922,6 +924,42 @@ byId('copyLatest').addEventListener('click', async () => {
     showToast('Clipboard write failed.', 'error');
   }
 });
+function closeEndSheet() {
+  byId('sessionEndSheet').hidden = true;
+  state.endPreparation = null;
+}
+
+byId('endSessionAction').addEventListener('click', async () => {
+  const prepared = await sendCommand('prepare_end_session');
+  if (!prepared?.ok) return showToast(prepared?.error || 'Could not prepare session end.', 'error');
+  state.endPreparation = prepared;
+  if (prepared.canEnd) {
+    const result = await sendCommand('end_session', { confirmToken: prepared.token, mode: 'clean' });
+    if (!result?.ok) showToast(result?.error || 'End session failed.', 'error');
+    return;
+  }
+  const view = deriveSessionEndView(prepared);
+  text('sessionEndSummary', view.summary);
+  text('endActionableCount', String(view.counts.actionable));
+  text('endInFlightCount', String(view.counts.inFlight));
+  text('endUnpersistedCount', String(view.counts.unpersisted));
+  byId('sessionEndSheet').hidden = false;
+});
+
+byId('exportBeforeEnd').addEventListener('click', async () => {
+  const result = await sendCommand('export_session');
+  showToast(result?.ok ? 'Export scheduled.' : result?.error || 'Export failed.', result?.ok ? 'ok' : 'error');
+});
+
+byId('archiveAndEnd').addEventListener('click', async () => {
+  const prepared = state.endPreparation;
+  if (!prepared?.token) return closeEndSheet();
+  if (!globalThis.confirm('Archive every unresolved final and end this session?')) return;
+  const result = await sendCommand('end_session', { confirmToken: prepared.token, mode: 'archive_and_end' });
+  if (!result?.ok) showToast(result?.error || 'End session failed.', 'error');
+});
+byId('cancelEndSession').addEventListener('click', closeEndSheet);
+
 byId('queueFilter').addEventListener('change', event => {
   state.queueFilter = event.target.value;
   renderQueue(state.snapshot, Date.now());

@@ -11,6 +11,7 @@ import { createRuntimePilotController } from './shared/runtime-pilot-controller.
 import { shouldAllowRuntimeLeaseMigration } from './shared/registration-migration.js';
 import { createRuntimePortHub } from './shared/runtime-port-hub.js';
 import { createSessionMutationCoordinator } from './shared/session-mutation-coordinator.js';
+import { senderOutboxStorageKey } from './shared/session-end-guard.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -299,10 +300,6 @@ function currentSessionStatus(registry, sessionId) {
 }
 
 
-function senderOutboxStorageKey(sessionId) {
-  return `pmia_sender_outbox_v2:${String(sessionId || '').trim()}`;
-}
-
 function validSenderOutboxState(value, sessionId) {
   return Array.isArray(value) && value.every(item => {
     const envelope = item?.envelope || item;
@@ -517,17 +514,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: false, error: 'session_not_owned' });
         return;
       }
+      const prepared = await pilotController.handleCommand({
+        type: 'PMIA_DASHBOARD_COMMAND',
+        sessionId: message.sessionId,
+        requestId: `content-end-prepare-${tabId}-${Date.now()}`,
+        command: 'prepare_end_session',
+        payload: { source: 'managed_tab' }
+      });
+      if (!prepared?.canEnd) {
+        sendResponse({ ...prepared, ok: false, blocked: true, error: 'actionable_finals_present' });
+        return;
+      }
       const result = await pilotController.handleCommand({
         type: 'PMIA_DASHBOARD_COMMAND',
         sessionId: message.sessionId,
-        requestId: `content-end-${tabId}-${Date.now()}`,
+        requestId: `content-end-confirm-${tabId}-${Date.now()}`,
         command: 'end_session',
-        payload: { source: 'managed_tab' }
+        payload: { source: 'managed_tab', confirmToken: prepared.token, mode: 'clean' }
       });
       sendResponse(result);
-      if (result?.closeTabIds?.length) {
-        setTimeout(() => chrome.tabs.remove(result.closeTabIds).catch(() => {}), 80);
-      }
+      if (result?.closeTabIds?.length) setTimeout(() => chrome.tabs.remove(result.closeTabIds).catch(() => {}), 80);
       return;
     }
 
@@ -592,6 +598,7 @@ chrome.tabs.onRemoved.addListener(tabId => {
     await pilotController.disconnectTab(tabId, affectedSessionIds);
     await Promise.all(orphanedSessionIds.map(async sessionId => {
       await logStore.clearSession(sessionId);
+      await chrome.storage.session.remove(senderOutboxStorageKey(sessionId)).catch(() => {});
       await pilotController.removeSession(sessionId);
     }));
     for (const sessionId of survivingSessionIds) {

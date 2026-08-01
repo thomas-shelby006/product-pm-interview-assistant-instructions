@@ -57,6 +57,22 @@ function normalizeMetrics(value = {}) {
   };
 }
 
+function normalizeOutboxState(value = {}) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    count: Math.max(0, Number(source.count || 0)),
+    replaying: Boolean(source.replaying),
+    attempts: Math.max(0, Number(source.attempts || 0)),
+    nextRetryAt: Math.max(0, Number(source.nextRetryAt || 0)),
+    oldestCreatedAt: Math.max(0, Number(source.oldestCreatedAt || 0)),
+    lastError: String(source.lastError || ''),
+    persistenceError: String(source.persistenceError || ''),
+    restoredCount: Math.max(0, Number(source.restoredCount || 0)),
+    recoverySource: String(source.recoverySource || ''),
+    updatedAt: Math.max(0, Number(source.updatedAt || 0))
+  };
+}
+
 function average(values) {
   const list = (Array.isArray(values) ? values : []).filter(Number.isFinite);
   if (!list.length) return 0;
@@ -124,7 +140,9 @@ function normalizeSession(item) {
     contextArmed: Boolean(item.contextArmed),
     contextArmedAt: Number(item.contextArmedAt || 0),
     deliverySla: item.deliverySla && typeof item.deliverySla === 'object' ? { ...item.deliverySla } : { state: 'clear', action: '', nextAction: '', oldestAgeMs: 0, targetMs: 20000, evaluatedAt: 0, lastAction: '', lastActionAt: 0, lastResult: null },
-    recoverySchedules: Array.isArray(item.recoverySchedules) ? item.recoverySchedules.filter(value => value?.alarmName && value?.dueAt).map(value => ({ ...value })) : []
+    recoverySchedules: Array.isArray(item.recoverySchedules) ? item.recoverySchedules.filter(value => value?.alarmName && value?.dueAt).map(value => ({ ...value })) : [],
+    endGuard: item.endGuard && typeof item.endGuard === 'object' ? { ...item.endGuard, counts: { ...(item.endGuard.counts || {}) } } : null,
+    senderOutboxState: normalizeOutboxState(item.senderOutboxState)
   };
 }
 
@@ -183,6 +201,20 @@ export class RuntimePilotState {
     };
     session.updatedAt = now;
     return { ...session[role] };
+  }
+
+  setSenderOutboxState(sessionId, value = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.senderOutboxState = normalizeOutboxState({ ...value, updatedAt: now });
+    session.updatedAt = now;
+    return { ...session.senderOutboxState };
+  }
+
+  setEndGuard(sessionId, value = null, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.endGuard = value ? { ...value, counts: { ...(value.counts || {}) } } : null;
+    session.updatedAt = now;
+    return session.endGuard ? { ...session.endGuard, counts: { ...session.endGuard.counts } } : null;
   }
 
   upsertRecoverySchedule(sessionId, schedule = {}, now = Date.now()) {
@@ -688,6 +720,8 @@ export class RuntimePilotState {
       commandJournal: session.commandJournal.recent(5),
       deliverySla: { ...(session.deliverySla || {}) },
       recoverySchedules: (session.recoverySchedules || []).map(value => ({ ...value })),
+      endGuard: session.endGuard ? { ...session.endGuard, counts: { ...(session.endGuard.counts || {}) } } : null,
+      senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) },
       metrics: {
         ...session.metrics,
         deliverySuccessRate: session.metrics.delivered + session.metrics.failed
@@ -703,9 +737,7 @@ export class RuntimePilotState {
       storagePressure: { ...session.storagePressure },
       proofArchive: { ...session.proofArchive },
       contextArmed: session.contextArmed,
-      contextArmedAt: session.contextArmedAt,
-      deliverySla: session.deliverySla,
-      recoverySchedules: session.recoverySchedules
+      contextArmedAt: session.contextArmedAt
     };
   }
 
@@ -731,7 +763,11 @@ export class RuntimePilotState {
       storagePressure: { ...session.storagePressure },
       proofArchive: { ...session.proofArchive },
       contextArmed: session.contextArmed,
-      contextArmedAt: session.contextArmedAt
+      contextArmedAt: session.contextArmedAt,
+      deliverySla: { ...(session.deliverySla || {}) },
+      recoverySchedules: (session.recoverySchedules || []).map(value => ({ ...value })),
+      endGuard: session.endGuard ? { ...session.endGuard, counts: { ...(session.endGuard.counts || {}) } } : null,
+      senderOutboxState: { ...normalizeOutboxState(session.senderOutboxState) }
     }));
   }
 }

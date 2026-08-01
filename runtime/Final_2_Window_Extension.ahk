@@ -1754,16 +1754,34 @@ RestoreLayout(layout) {
 }
 
 EndActiveSession() {
-    global g_interviewActive, g_sessionId
+    global g_hWin1
     if GetKeyState("Alt", "P")
         KeyWait "Alt"
-    LogEvent("Alt+Delete exit requested")
-    sessionId := ""
-    if IsActiveSession()
-        sessionId := g_sessionId
-    g_interviewActive := false
-    CloseManagedPmiaWindows(sessionId)
-    ExitApp
+    if !IsActiveSession() {
+        LogEvent("End ignored: no active interview session")
+        return false
+    }
+    LogEvent("Session end safety check requested")
+    if !SendBrowserCommandBackground("^+{F4}", g_hWin1) {
+        LogEvent("Session end request failed: sender window did not accept the control shortcut")
+        return false
+    }
+    SetTimer(() => ObserveManagedShutdown(0), -500)
+    return true
+}
+
+ObserveManagedShutdown(attempt) {
+    global g_hWin1, g_hWin2, g_interviewActive
+    if !IsAlive(g_hWin1) && !IsAlive(g_hWin2) {
+        g_interviewActive := false
+        LogEvent("Managed session ended after extension safety confirmation")
+        ExitApp
+    }
+    if attempt >= 20 {
+        LogEvent("Session end blocked or cancelled; managed windows remain open")
+        return
+    }
+    SetTimer(() => ObserveManagedShutdown(attempt + 1), -500)
 }
 
 ; Alt+E — Export both role-scoped PM session records.
@@ -1999,6 +2017,22 @@ RecoverUnambiguousManagedSession() {
 
 IsAlive(hWnd) {
     return hWnd != 0 && DllCall("IsWindow", "Ptr", hWnd, "Int")
+}
+
+SendBrowserCommandBackground(shortcut, hTarget) {
+    if !IsAlive(hTarget)
+        return false
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try {
+        ControlSend shortcut, , "ahk_id " hTarget
+        return true
+    } catch as err {
+        LogEvent("Background browser command failed: " err.Message)
+        return false
+    } finally {
+        DetectHiddenWindows previousDetectHidden
+    }
 }
 
 SendBrowserCommand(shortcut, hTarget) {

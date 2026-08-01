@@ -18,7 +18,8 @@ test('dashboard ends cleanly without reconnecting or leaving controls active', (
 test('destructive dashboard actions require explicit confirmation', () => {
   assert.match(markup, /id="archiveSelected" data-confirm=/);
   assert.match(markup, /id="archiveAll" data-confirm=/);
-  assert.match(markup, /data-command="end_session" data-confirm=/);
+  assert.match(markup, /id="endSessionAction"/);
+  assert.match(markup, /id="sessionEndSheet"/);
 });
 
 test('dashboard tabs expose accessible selected and panel state', () => {
@@ -232,4 +233,13 @@ test('Runtime Pilot exposes durable recovery deadline and source', () => {
 test('Runtime Pilot reports sender outbox restoration source without content', () => {
   assert.match(dashboard, /outbox\.restoredCount/);
   assert.match(dashboard, /outbox\.recoverySource/);
+});
+
+
+test('Runtime Pilot uses a two-phase session-end safety sheet', () => {
+  assert.match(markup, /id="endSessionAction"/);
+  assert.match(markup, /id="sessionEndSheet"/);
+  assert.match(markup, /id="archiveAndEnd"/);
+  assert.match(dashboard, /prepare_end_session/);
+  assert.match(dashboard, /confirmToken/);
 });

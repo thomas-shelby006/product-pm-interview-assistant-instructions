@@ -245,3 +245,11 @@ test('dashboard protocol accepts explicit draft conflict resolution commands', (
     assert.equal(protocolModule.normalizeDashboardCommand({ sessionId: 's', requestId: command, command, payload: {} })?.command, command);
   }
 });
+
+
+test('dashboard protocol normalizes prepare and confirmed end payloads', () => {
+  assert.equal(protocolModule.normalizeDashboardCommand({ sessionId: 's', requestId: 'p', command: 'prepare_end_session', payload: {} })?.command, 'prepare_end_session');
+  const end = protocolModule.normalizeDashboardCommand({ sessionId: 's', requestId: 'e', command: 'end_session', payload: { confirmToken: 'token', mode: 'archive_and_end' } });
+  assert.equal(end.payload.confirmToken, 'token');
+  assert.equal(end.payload.mode, 'archive_and_end');
+});

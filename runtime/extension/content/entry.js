@@ -1046,7 +1046,10 @@ async function startRuntime(runtimeConfig) {
         type: 'PMIA_END_SESSION',
         sessionId: runtimeConfig.sessionId
       });
-      if (!response?.ok) overlay.setStatus('END SESSION FAILED', 'error', 2500);
+      if (!response?.ok) {
+        const pending = Number(response?.counts?.actionable || 0) + Number(response?.counts?.unpersisted || 0);
+        overlay.setStatus(response?.blocked ? `END BLOCKED - ${pending} PENDING` : 'END SESSION FAILED', 'error', 3500);
+      }
       return;
     }
 

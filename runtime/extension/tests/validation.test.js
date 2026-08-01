@@ -655,3 +655,15 @@ test('sender forwarding is gated on extension-session outbox readiness', async (
   assert.match(entry, /OUTBOX NOT READY/);
   assert.match(entry, /await senderOutbox\.enqueue\(envelope\)/);
 });
+
+
+test('launcher session end requests extension approval without foreground activation', async () => {
+  const launcher = await readFile(resolve(extensionRoot, '..', 'Final_2_Window_Extension.ahk'), 'utf8');
+  const start = launcher.indexOf('EndActiveSession()');
+  const end = launcher.indexOf('; Alt+E', start);
+  const block = launcher.slice(start, end);
+  assert.match(block, /SendBrowserCommandBackground\("\^\+\{F4\}"/);
+  assert.match(launcher, /ControlSend shortcut/);
+  assert.doesNotMatch(block, /CloseManagedPmiaWindows/);
+  assert.doesNotMatch(block, /WinActivate/);
+});

@@ -293,9 +293,26 @@
         <details class="shortcut-help"><summary>Keys</summary><p><b>Space</b> pause/resume - <b>L</b> catch up - <b>H</b> health - <b>R</b> repair - <b>E</b> export - <b>M</b> mic - <b>S</b> scroll - <b>N</b> submit now - <b>I</b> interrupt latest - <b>C</b> copy latest - <b>G</b> health report - <b>D</b> diagnostics</p></details>
         <button id="copyHealthReport">Copy health report</button>
         <button id="copyDiagnostics">Copy diagnostics</button>
-        <button class="danger" data-command="end_session" data-confirm="End this managed PMIA session?">End session</button>
+        <button class="danger" id="endSessionAction">End session</button>
       </div>
     </footer>
+  </div>
+  <div class="session-end-sheet" id="sessionEndSheet" hidden role="dialog" aria-modal="true" aria-labelledby="sessionEndTitle">
+    <div class="session-end-card">
+      <span class="eyebrow">Session safety gate</span>
+      <h2 id="sessionEndTitle">Unresolved delivery state remains</h2>
+      <p id="sessionEndSummary">Preparing session counts.</p>
+      <div class="session-end-counts">
+        <span><b id="endActionableCount">0</b> unresolved</span>
+        <span><b id="endInFlightCount">0</b> in flight</span>
+        <span><b id="endUnpersistedCount">0</b> unpersisted</span>
+      </div>
+      <div class="session-end-actions">
+        <button id="exportBeforeEnd">Export first</button>
+        <button class="danger" id="archiveAndEnd">Archive and end</button>
+        <button id="cancelEndSession">Cancel</button>
+      </div>
+    </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="dashboard.js"></script>
