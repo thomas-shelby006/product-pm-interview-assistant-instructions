@@ -1,6 +1,6 @@
 # Current Status Dashboard
 
-Last updated: 2026-08-01 (Cycles 21-30 source-complete)
+Last updated: 2026-08-02 (Cycles 46–70 verified; Cycles 71–95 next)
 
 ## Active candidate system
 
@@ -48,26 +48,34 @@ Last updated: 2026-08-01 (Cycles 21-30 source-complete)
 
 ## 2026-08-01 lossless hardening candidate
 
-Implementation Cycles 11-20 are source-complete. The candidate now includes per-session mutation serialization, contiguous receiver sequencing, ordered sender replay, exact batch proof identity, quota backpressure, Readiness Gate, delta updates, explicit recovery state, and Safe Health Report. Automated and isolated-browser evidence is pending the consolidated Cycle 20 gate and must not be inferred from source completion.
+Implementation Cycles 11–20 are verified within the current cumulative gate. The candidate includes per-session mutation serialization, contiguous receiver sequencing, ordered sender replay, exact batch proof identity, quota backpressure, Readiness Gate, delta updates, explicit recovery state, and Safe Health Report.
 
 
 ## Reliability phase 21-30
 
 | Area | Source-complete capability | Verification status |
 |---|---|---|
-| Hidden runtime | Mutation-first provider scheduling and real ChatGPT Send-control readiness | Consolidated gate pending |
-| Command control | Exact result replay and recent command journal | Consolidated gate pending |
-| Transport | Direct-port circuit guard with immediate message fallback | Consolidated gate pending |
-| Batching | Ordered provider-safe partitions with complete lossless remainder | Consolidated gate pending |
-| Composer | Explicit manual/restore/merge conflict resolution | Consolidated gate pending |
-| Delivery SLA | Bounded catch-up, live-check, and repair escalation | Consolidated gate pending |
-| Recovery | Persisted `chrome.alarms` verification and timeout | Consolidated gate pending |
-| Sender outbox | Extension-session restoration with rollback and fail-closed forwarding | Consolidated gate pending |
-| Shutdown | Authoritative two-phase end-session safety gate | Consolidated gate pending |
-| Readiness | Fresh active no-content self-test required for Ready | Consolidated gate pending |
+| Hidden runtime | Mutation-first provider scheduling and real ChatGPT Send-control readiness | Verified in cumulative 719-test gate and isolated hidden-window smoke |
+| Command control | Exact result replay and recent command journal | Verified in cumulative 719-test gate |
+| Transport | Direct-port circuit guard with immediate message fallback | Verified in automated gate and seven-check transport drill |
+| Batching | Ordered provider-safe partitions with complete lossless remainder | Verified with exact Q2/Q3 accumulation and proof |
+| Composer | Explicit manual/restore/merge conflict resolution | Verified in cumulative 719-test gate |
+| Delivery SLA | Bounded catch-up, live-check, and repair escalation | Verified in cumulative 719-test gate |
+| Recovery | Persisted `chrome.alarms` verification and timeout | Verified in automated gate and alarm drill |
+| Sender outbox | Extension-session restoration with rollback and fail-closed forwarding | Verified; isolated smoke ended with outbox count 0 |
+| Shutdown | Authoritative two-phase end-session safety gate | Verified in cumulative 719-test gate |
+| Readiness | Fresh active no-content self-test required for Ready | Verified; isolated self-test passed both hidden roles, storage, and dashboard |
 
-A second evidence-driven phase, Cycles 31-45, begins only after this phase passes its full automated and isolated-browser gate. The condensed technical systems atlas will be updated once after Cycle 45.
+Cycles 31–45 and Cycles 46–70 have since passed their full automated and isolated-browser gates. The condensed technical systems atlas remains deferred until the requested Cycles 71–95 mechanics phase is complete.
 
 ## 2026-08-01 reliability cycles 31-45 verified
 
-Cycles 31-45 are verified on `improvement/pmia-0.7.0`. The complete automated gate passed 664/664 tests, validated 197 JavaScript files, 18 required runtime surfaces, 98 reachable production modules, and both AutoHotkey programs. The isolated Edge smoke passed with direct sender/receiver probes, three proven synthetic finals, ordered Q2/Q3 accumulation behind Q1, a clear sender outbox, no sequence gap, two observed answers, and complete temporary-profile/process cleanup. The final technical atlas remains deferred until the requested Cycles 46-70 phase is complete.
+Cycles 31–45 are verified on `improvement/pmia-0.7.0`. The complete automated gate passed 664/664 tests, validated 197 JavaScript files, 18 required runtime surfaces, 98 reachable production modules, and both AutoHotkey programs. The isolated Edge smoke passed with direct sender/receiver probes, three proven synthetic finals, ordered Q2/Q3 accumulation behind Q1, a clear sender outbox, no sequence gap, two observed answers, and complete temporary-profile/process cleanup.
+
+## 2026-08-02 transport-control cycles 46–70 verified
+
+Cycles 46–70 are verified on committed HEAD `6682f03`. The complete gate passed 719/719 tests and validated 244 JavaScript files, 18 required runtime surfaces, 121 reachable production modules, and both active AutoHotkey programs. The isolated Edge smoke proved three synthetic finals, exact Q2/Q3 accumulation, all seven no-content transport-drill checks, an empty outbox, clear sequence state, desktop and 320 CSS-pixel Pilot reflow, and complete disposable-profile/process cleanup. Normal Edge remained unchanged. Evidence: `docs/evidence/2026-08-02-pmia-cycles-46-70-verification.md`.
+
+## Next authorized phase
+
+Cycles 71–95 will focus on mechanics, reliability, performance, and operator efficiency. The standalone technical HTML remains frozen until that phase and its verification are complete.

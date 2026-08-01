@@ -292,7 +292,7 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** terminal answer outcomes deduplicate by batch ID and remain text-free in Pilot state and Safe Health reporting.
 
 ## Cycle 41 - Coherent Live Dashboard State
-- **Bug fixes:** Delivery “Caught up” no longer conflicts with a separate answer lifecycle or stale raw generation boolean.
+- **Bug fixes:** Delivery ï¿½Caught upï¿½ no longer conflicts with a separate answer lifecycle or stale raw generation boolean.
 - **New features:** independent Delivery, Answer and Verification truth rails with explicit labels, evidence and accessible live updates.
 - **Implementation:** pure answer-status model, delivery-only inbox and Pace Guard state, reconciled generation display and trust-aware self-test labels.
 
@@ -449,4 +449,4 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **New features:** one operator-run drill with seven structured checks, elapsed time, failed-check summary, and Safe Health Report coverage.
 - **Implementation:** the controller reuses `self_test_probe`, the established one-time fallback, synthetic sequence feedback, alarm audit, and invariant audit; no prompt, answer, clipboard, or delivery state is read or mutated.
 
-**Source-complete status:** Cycles 66-70 and all Cycles 46-70 are implemented. The deferred executable verification phase is now open. The technical HTML remains deferred until runtime verification is complete.
+**Verified status:** Cycles 46â€“70 are implemented and verified on committed HEAD `6682f03`. The complete gate passed 719/719 tests and validated 244 JavaScript files, 18 required runtime surfaces, 121 reachable production modules, and both active AutoHotkey programs. The isolated Edge smoke proved three synthetic finals, exact Q2/Q3 accumulation behind Q1, an empty sender outbox, clear sequence state, all seven no-content transport-drill checks, desktop and 320 CSS-pixel Pilot reflow without horizontal overflow, and complete process/profile cleanup. Normal Edge remained unchanged. The technical HTML remains deferred until the requested Cycles 71â€“95 mechanics phase is complete.

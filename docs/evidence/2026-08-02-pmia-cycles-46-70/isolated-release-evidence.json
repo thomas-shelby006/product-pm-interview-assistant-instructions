@@ -1,0 +1,479 @@
+{
+    "version":  "1.0",
+    "generatedAt":  "2026-08-01T18:55:49.303Z",
+    "isolatedProfile":  {
+                            "path":  "C:\\Users\\Sundar\\Documents\\ChatGPT Work\\Temp\\pmia-cycles-46-70-smoke-20260802-0022\\temporary-edge-profile",
+                            "temporary":  true,
+                            "normalProfileTouched":  false
+                        },
+    "extensions":  [
+                       {
+                           "id":  "5F9C30EF87F039AB966697810D159567",
+                           "extensionId":  "jdiccldimpdaibmpdkjnbmckianbfold",
+                           "name":  "Microsoft Voices",
+                           "version":  "1.0",
+                           "url":  "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold/_generated_background_page.html"
+                       },
+                       {
+                           "id":  "097E77F573D7C2023BD7EA2EF3861487",
+                           "extensionId":  "ncbjelpjchkpbikbpkcchkhkblodoama",
+                           "name":  "WebRTC Internals Extension",
+                           "version":  "2.0.4",
+                           "url":  "chrome-extension://ncbjelpjchkpbikbpkcchkhkblodoama/_generated_background_page.html"
+                       },
+                       {
+                           "id":  "DF02ED48A19F679D2BE3D35A4ABAA40A",
+                           "extensionId":  "fikbjbembnmfhppjfnmfkahdhfohhjmg",
+                           "name":  "Media Internals Services Extension",
+                           "version":  "2.0.0",
+                           "url":  "chrome-extension://fikbjbembnmfhppjfnmfkahdhfohhjmg/_generated_background_page.html"
+                       },
+                       {
+                           "id":  "FF01D72D2B4091978FB58ECBA3E0E4CE",
+                           "extensionId":  "ihmafllikibpmigkcoadcmckbfhibefp",
+                           "name":  "Edge Feedback",
+                           "version":  "1.0.0.1",
+                           "url":  "chrome-extension://ihmafllikibpmigkcoadcmckbfhibefp/_generated_background_page.html"
+                       },
+                       {
+                           "id":  "90A7E29AD5FB7176CF29DD0EA7772764",
+                           "extensionId":  "nkeimhogjdpnpccoofpliimaahmaaome",
+                           "name":  "WebRTC Extension",
+                           "version":  "4.3.26",
+                           "url":  "chrome-extension://nkeimhogjdpnpccoofpliimaahmaaome/background.html"
+                       },
+                       {
+                           "id":  "5507909F5FF93CB7F46F200C4BBCA34A",
+                           "extensionId":  "ndcpkimcihhghdcddljkfmmjccdmcmof",
+                           "name":  "Edge Copilot Bridge",
+                           "version":  "1.0.0.95",
+                           "url":  "chrome-extension://ndcpkimcihhghdcddljkfmmjccdmcmof/background.rollup.js"
+                       },
+                       {
+                           "id":  "ABF82688924C1D6EBE366422F66189BD",
+                           "extensionId":  "nehkofdhampeehnilphkckhflbmbjohn",
+                           "name":  "PM Interview Dual-Provider Runtime",
+                           "version":  "0.7.0",
+                           "url":  "chrome-extension://nehkofdhampeehnilphkckhflbmbjohn/background.js"
+                       }
+                   ],
+    "session":  {
+                    "id":  "release-1785610549303",
+                    "senderTarget":  "7C3C62A3BB135308393578EB421AEEA5",
+                    "receiverTarget":  "8B95790C97BA04F61EC2CF0A377CAA73",
+                    "dashboardTarget":  "2A661A0DEF260042E7165AED61E22959"
+                },
+    "selfTest":  {
+                     "completedAt":  1785610552619,
+                     "dashboard":  {
+                                       "connected":  true,
+                                       "connections":  1
+                                   },
+                     "elapsedMs":  11,
+                     "ok":  true,
+                     "roles":  {
+                                   "receiver":  {
+                                                    "composerReady":  true,
+                                                    "error":  "",
+                                                    "ok":  true,
+                                                    "rttMs":  3,
+                                                    "transport":  "direct",
+                                                    "visibilityState":  "hidden"
+                                                },
+                                   "sender":  {
+                                                  "composerReady":  true,
+                                                  "error":  "",
+                                                  "ok":  true,
+                                                  "rttMs":  4,
+                                                  "transport":  "direct",
+                                                  "visibilityState":  "hidden"
+                                              }
+                               },
+                     "startedAt":  1785610552608,
+                     "storage":  {
+                                     "error":  "",
+                                     "ok":  true,
+                                     "rttMs":  4
+                                 }
+                 },
+    "finals":  [
+                   {
+                       "key":  "q1",
+                       "text":  "Synthetic PMIA release Q1: Give a 30-point numbered checklist for measuring onboarding activation. Each point must be one short sentence.",
+                       "proven":  true
+                   },
+                   {
+                       "key":  "q2",
+                       "text":  "Synthetic PMIA release Q2: Explain activation versus engagement in exactly three bullets.",
+                       "proven":  true
+                   },
+                   {
+                       "key":  "q3",
+                       "text":  "Synthetic PMIA release Q3: Name two guardrail metrics for onboarding.",
+                       "proven":  true
+                   }
+               ],
+    "batches":  {
+                    "active":  {
+                                   "batchId":  "batch-2-3-5edh70wm",
+                                   "memberIds":  [
+                                                     "1785610568696-vb06xlhj",
+                                                     "1785610569064-5edh70wm"
+                                                 ],
+                                   "proof":  {
+                                                 "batchId":  "batch-2-3-5edh70wm",
+                                                 "envelopeId":  "batch-2-3-5edh70wm",
+                                                 "fingerprint":  "a12633a7",
+                                                 "memberFingerprint":  "c557d866",
+                                                 "memberIds":  [
+                                                                   "1785610568696-vb06xlhj",
+                                                                   "1785610569064-5edh70wm"
+                                                               ],
+                                                 "ok":  true,
+                                                 "proof":  "new_rendered_turn",
+                                                 "verified":  true
+                                             },
+                                   "questionCount":  2,
+                                   "submitted":  true,
+                                   "transaction":  {
+                                                       "batchId":  "batch-2-3-5edh70wm",
+                                                       "createdAt":  1785610576865,
+                                                       "history":  [
+                                                                       {
+                                                                           "at":  1785610576866,
+                                                                           "from":  "draft",
+                                                                           "reason":  "planner_freeze",
+                                                                           "to":  "frozen"
+                                                                       },
+                                                                       {
+                                                                           "at":  1785610576866,
+                                                                           "from":  "frozen",
+                                                                           "reason":  "automatic",
+                                                                           "to":  "submitting"
+                                                                       },
+                                                                       {
+                                                                           "at":  1785610577183,
+                                                                           "from":  "submitting",
+                                                                           "reason":  "rendered_proof",
+                                                                           "to":  "proven"
+                                                                       },
+                                                                       {
+                                                                           "at":  1785610577183,
+                                                                           "from":  "proven",
+                                                                           "reason":  "answer_observation_started",
+                                                                           "to":  "answering"
+                                                                       }
+                                                                   ],
+                                                       "memberIds":  [
+                                                                         "1785610568696-vb06xlhj",
+                                                                         "1785610569064-5edh70wm"
+                                                                     ],
+                                                       "reason":  "answer_observation_started",
+                                                       "state":  "answering",
+                                                       "updatedAt":  1785610577183
+                                                   }
+                               },
+                    "next":  null,
+                    "lastCompleted":  {
+                                          "answer":  {
+                                                         "answerState":  {
+                                                                             "batchId":  "batch-1-1-1k6hykp2",
+                                                                             "completedAt":  1785610576830,
+                                                                             "elapsedMs":  8155,
+                                                                             "firstTokenAt":  0,
+                                                                             "lastEvidenceAt":  1785610568675,
+                                                                             "reason":  "answer_never_started",
+                                                                             "startedAt":  1785610568675,
+                                                                             "state":  "no_response",
+                                                                             "wordCount":  0
+                                                                         },
+                                                         "noResponse":  true,
+                                                         "ok":  false,
+                                                         "timeout":  false
+                                                     },
+                                          "answerState":  {
+                                                              "batchId":  "batch-1-1-1k6hykp2",
+                                                              "completedAt":  1785610576830,
+                                                              "elapsedMs":  8155,
+                                                              "firstTokenAt":  0,
+                                                              "lastEvidenceAt":  1785610568675,
+                                                              "reason":  "answer_never_started",
+                                                              "startedAt":  1785610568675,
+                                                              "state":  "no_response",
+                                                              "wordCount":  0
+                                                          },
+                                          "batchId":  "batch-1-1-1k6hykp2",
+                                          "cancelled":  false,
+                                          "completedAt":  1785610576903,
+                                          "fingerprint":  "51021f30",
+                                          "focusId":  "1785610567420-1k6hykp2",
+                                          "memberIds":  [
+                                                            "1785610567420-1k6hykp2"
+                                                        ],
+                                          "noResponse":  true,
+                                          "proof":  {
+                                                        "envelopeId":  "batch-1-1-1k6hykp2",
+                                                        "ok":  true,
+                                                        "proof":  "new_rendered_turn",
+                                                        "verified":  true
+                                                    },
+                                          "questionCount":  1,
+                                          "submitted":  true,
+                                          "submittedAt":  1785610568679,
+                                          "timeout":  false,
+                                          "transaction":  {
+                                                              "batchId":  "batch-1-1-1k6hykp2",
+                                                              "createdAt":  1785610567473,
+                                                              "history":  [
+                                                                              {
+                                                                                  "at":  1785610567473,
+                                                                                  "from":  "draft",
+                                                                                  "reason":  "planner_freeze",
+                                                                                  "to":  "frozen"
+                                                                              },
+                                                                              {
+                                                                                  "at":  1785610567474,
+                                                                                  "from":  "frozen",
+                                                                                  "reason":  "automatic",
+                                                                                  "to":  "submitting"
+                                                                              },
+                                                                              {
+                                                                                  "at":  1785610568680,
+                                                                                  "from":  "submitting",
+                                                                                  "reason":  "rendered_proof",
+                                                                                  "to":  "proven"
+                                                                              },
+                                                                              {
+                                                                                  "at":  1785610568680,
+                                                                                  "from":  "proven",
+                                                                                  "reason":  "answer_observation_started",
+                                                                                  "to":  "answering"
+                                                                              }
+                                                                          ],
+                                                              "memberIds":  [
+                                                                                "1785610567420-1k6hykp2"
+                                                                            ],
+                                                              "reason":  "answer_observation_started",
+                                                              "state":  "answering",
+                                                              "updatedAt":  1785610568680
+                                                          }
+                                      },
+                    "receiverUsers":  [
+                                          "Synthetic PMIA release Q1: Give a 30-point numbered checklist for measuring onboarding activation. Each point must be one short sentence.",
+                                          "MULTIPLE INTERVIEWER QUESTIONS WERE RECEIVED WHILE THE PREVIOUS ANSWER WAS IN PROGRESS. Answer all questions, but focus primarily on the latest question. Keep responses to earlier questions brief unless they are needed for context.  EARLIER QUESTION 1: Synthetic PMIA release Q2: Explain activation versus engagement in exactly three bullets.  LATEST QUESTION (HIGHEST PRIORITY): Synthetic PMIA release Q3: Name two guardrail metrics for onboarding."
+                                      ]
+                },
+    "ledger":  [
+                   {
+                       "id":  "1785610567420-1k6hykp2",
+                       "seq":  1,
+                       "state":  "proven",
+                       "batchId":  "batch-1-1-1k6hykp2",
+                       "text":  "Synthetic PMIA release Q1: Give a 30-point numbered checklist for measuring onboarding activation. Each point must be one short sentence."
+                   },
+                   {
+                       "id":  "1785610568696-vb06xlhj",
+                       "seq":  2,
+                       "state":  "proven",
+                       "batchId":  "batch-2-3-5edh70wm",
+                       "text":  "Synthetic PMIA release Q2: Explain activation versus engagement in exactly three bullets."
+                   },
+                   {
+                       "id":  "1785610569064-5edh70wm",
+                       "seq":  3,
+                       "state":  "proven",
+                       "batchId":  "batch-2-3-5edh70wm",
+                       "text":  "Synthetic PMIA release Q3: Name two guardrail metrics for onboarding."
+                   }
+               ],
+    "outbox":  {
+                   "count":  0,
+                   "state":  "clear",
+                   "restoredCount":  0
+               },
+    "gap":  {
+                "clear":  true,
+                "lastEvent":  "none",
+                "data":  {
+
+                         }
+            },
+    "answerCapability":  {
+                             "state":  "anonymous_answer_unavailable",
+                             "assistantCount":  2
+                         },
+    "transportDrill":  {
+                           "checks":  [
+                                          {
+                                              "data":  {
+                                                           "ok":  true,
+                                                           "roles":  [
+                                                                         {
+                                                                             "capabilityCount":  6,
+                                                                             "epoch":  1,
+                                                                             "protocolVersion":  1
+                                                                         },
+                                                                         {
+                                                                             "capabilityCount":  6,
+                                                                             "epoch":  1,
+                                                                             "protocolVersion":  1
+                                                                         }
+                                                                     ]
+                                                       },
+                                              "durationMs":  0,
+                                              "error":  "",
+                                              "name":  "handshake",
+                                              "ok":  true
+                                          },
+                                          {
+                                              "data":  {
+                                                           "ok":  true,
+                                                           "receiverOk":  true,
+                                                           "senderOk":  true
+                                                       },
+                                              "durationMs":  7,
+                                              "error":  "",
+                                              "name":  "direct",
+                                              "ok":  true
+                                          },
+                                          {
+                                              "data":  {
+                                                           "ok":  true,
+                                                           "receiverOk":  true,
+                                                           "senderOk":  true
+                                                       },
+                                              "durationMs":  3,
+                                              "error":  "",
+                                              "name":  "fallback",
+                                              "ok":  true
+                                          },
+                                          {
+                                              "data":  {
+                                                           "epochs":  {
+                                                                          "receiver":  1,
+                                                                          "sender":  1
+                                                                      },
+                                                           "ok":  true
+                                                       },
+                                              "durationMs":  0,
+                                              "error":  "",
+                                              "name":  "reconnect",
+                                              "ok":  true
+                                          },
+                                          {
+                                              "data":  {
+                                                           "nackRanges":  [
+                                                                              [
+                                                                                  2,
+                                                                                  2
+                                                                              ]
+                                                                          ],
+                                                           "ok":  true
+                                                       },
+                                              "durationMs":  0,
+                                              "error":  "",
+                                              "name":  "selective_nack",
+                                              "ok":  true
+                                          },
+                                          {
+                                              "data":  {
+                                                           "expected":  0,
+                                                           "ok":  true,
+                                                           "restored":  0
+                                                       },
+                                              "durationMs":  1,
+                                              "error":  "",
+                                              "name":  "alarm_audit",
+                                              "ok":  true
+                                          },
+                                          {
+                                              "data":  {
+                                                           "blocked":  0,
+                                                           "ok":  true,
+                                                           "repaired":  0
+                                                       },
+                                              "durationMs":  0,
+                                              "error":  "",
+                                              "name":  "invariant_audit",
+                                              "ok":  true
+                                          }
+                                      ],
+                           "completedAt":  1785610577441,
+                           "contentAccessed":  false,
+                           "elapsedMs":  11,
+                           "ok":  true,
+                           "startedAt":  1785610577430
+                       },
+    "transportDrillOk":  true,
+    "pilotUi":  {
+                    "desktop":  {
+                                    "viewport":  {
+                                                     "width":  1200,
+                                                     "height":  900
+                                                 },
+                                    "scrollWidth":  1185,
+                                    "horizontalOverflow":  false,
+                                    "required":  {
+                                                     "forecastRisk":  true,
+                                                     "forecastDrain":  true,
+                                                     "forecastP95":  true,
+                                                     "forecastThroughput":  true,
+                                                     "recoveryBudgetState":  true,
+                                                     "runTransportDrill":  true,
+                                                     "transportDrillReport":  true,
+                                                     "traceSearch":  true,
+                                                     "traceResults":  true,
+                                                     "traceDetail":  true
+                                                 },
+                                    "reviewActive":  true,
+                                    "mechanicsColumns":  "376px 376px 376px",
+                                    "traceColumns":  "403.775px 706.612px",
+                                    "traceResultCount":  3,
+                                    "drillReportReady":  true,
+                                    "forecastRisk":  "clear",
+                                    "recoveryBudgetState":  "available",
+                                    "screenshotPath":  "C:\\Users\\Sundar\\Documents\\ChatGPT Work\\Temp\\pmia-cycles-46-70-smoke-20260802-0022\\pilot-desktop.png"
+                                },
+                    "mobile":  {
+                                   "viewport":  {
+                                                    "width":  320,
+                                                    "height":  900
+                                                },
+                                   "scrollWidth":  305,
+                                   "horizontalOverflow":  false,
+                                   "required":  {
+                                                    "forecastRisk":  true,
+                                                    "forecastDrain":  true,
+                                                    "forecastP95":  true,
+                                                    "forecastThroughput":  true,
+                                                    "recoveryBudgetState":  true,
+                                                    "runTransportDrill":  true,
+                                                    "transportDrillReport":  true,
+                                                    "traceSearch":  true,
+                                                    "traceResults":  true,
+                                                    "traceDetail":  true
+                                                },
+                                   "reviewActive":  true,
+                                   "mechanicsColumns":  "276px",
+                                   "traceColumns":  "250.4px",
+                                   "traceResultCount":  3,
+                                   "drillReportReady":  true,
+                                   "forecastRisk":  "clear",
+                                   "recoveryBudgetState":  "available",
+                                   "screenshotPath":  "C:\\Users\\Sundar\\Documents\\ChatGPT Work\\Temp\\pmia-cycles-46-70-smoke-20260802-0022\\pilot-320px.png"
+                               }
+                },
+    "pilotUiOk":  true,
+    "failureDetails":  null,
+    "cleanup":  {
+                    "processTreeClosed":  true,
+                    "profileRemoved":  true,
+                    "completedAt":  "2026-08-01T18:56:21.8243314Z"
+                },
+    "limitations":  [
+                        "The isolated anonymous provider session did not expose answer text; rendered delivery proof remained fully verifiable."
+                    ],
+    "deliveryProofOk":  true,
+    "ok":  true,
+    "completedAt":  "2026-08-01T18:56:18.883Z"
+}
