@@ -181,6 +181,15 @@ export class BatchPlanner {
     return this.#autoSubmit;
   }
 
+  setBudget({ maxMembers = this.#maxBatchMembers, maxChars = this.#maxBatchChars } = {}) {
+    this.#maxBatchMembers = Math.max(1, Number(maxMembers) || this.#maxBatchMembers);
+    this.#maxBatchChars = Math.max(256, Number(maxChars) || this.#maxBatchChars);
+    return this.budget();
+  }
+
+  budget() {
+    return { maxMembers: this.#maxBatchMembers, maxChars: this.#maxBatchChars };
+  }
   get hold() { return this.#hold; }
   get autoSubmit() { return this.#autoSubmit; }
   get nextSize() { return this.#next.length; }

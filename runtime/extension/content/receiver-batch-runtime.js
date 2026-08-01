@@ -1,4 +1,7 @@
 import { BatchPlanner, matchesRenderedBatch } from '../shared/batch-planner.js';
+import { BatchTransaction } from '../shared/batch-transaction.js';
+import { deriveProviderBatchBudget } from '../shared/provider-batch-budget.js';
+import { deriveBatchSchedulingDecision } from '../shared/batch-scheduling-policy.js';
 
 export function createReceiverBatchRuntime({
   adapter,
@@ -15,6 +18,11 @@ export function createReceiverBatchRuntime({
     throw new TypeError('Receiver batch runtime requires adapter and submitBatch');
   }
   let submitting = false;
+  let activeTransaction = null;
+  let lastTransaction = null;
+  let lastSuccessfulChars = 0;
+  let lastFailureChars = 0;
+  let lastSchedulingDecision = null;
 
   const emit = (type, data = {}) => {
     const event = { type, at: nowFn(), ...data };
@@ -22,7 +30,38 @@ export function createReceiverBatchRuntime({
     return event;
   };
 
+  const applyProviderBudget = () => {
+    const budget = deriveProviderBatchBudget({
+      provider: adapter.provider || 'unknown',
+      capabilityComplete: true,
+      recentSuccessfulChars: lastSuccessfulChars,
+      recentFailureChars: lastFailureChars
+    });
+    planner.setBudget({ maxMembers: budget.maxMembers, maxChars: budget.maxChars });
+    return budget;
+  };
+
+  const ensureTransaction = batch => {
+    if (!batch) return null;
+    if (!activeTransaction || activeTransaction.snapshot().batchId !== batch.id) {
+      activeTransaction = new BatchTransaction({
+        batchId: batch.id,
+        memberIds: batch.prompt?.memberIds || [],
+        createdAt: batch.createdAt || nowFn()
+      });
+      activeTransaction.transition('frozen', { now: nowFn(), reason: 'planner_freeze' });
+    }
+    return activeTransaction;
+  };
+
+  const transitionTransaction = (next, reason, data = {}) => {
+    if (!activeTransaction) return null;
+    const result = activeTransaction.transition(next, { reason, now: nowFn(), data });
+    if (result.ok) lastTransaction = result.transaction;
+    return result;
+  };
   const mirrorNext = () => {
+    applyProviderBudget();
     const next = planner.next();
     if (!next.count) return false;
     const written = Boolean(
@@ -62,6 +101,9 @@ export function createReceiverBatchRuntime({
         error: 'draft_conflict'
       };
     }
+    const transaction = ensureTransaction(batch);
+    const submittingTransition = transitionTransaction('submitting', source);
+    if (!submittingTransition?.ok) return { ok: false, staged: true, error: submittingTransition?.error || 'batch_transaction_invalid' };
     submitting = true;
     emit('batch_submitting', {
       batchId: batch.id,
@@ -84,6 +126,9 @@ export function createReceiverBatchRuntime({
       submitting = false;
     }
     if (!result?.ok) {
+      lastFailureChars = Number(batch.prompt?.text?.length || 0);
+      transitionTransaction('draft', result?.error || 'submit_failed');
+      activeTransaction = null;
       planner.failActive();
       mirrorNext();
       emit('batch_submit_failed', {
@@ -110,6 +155,11 @@ export function createReceiverBatchRuntime({
       memberFingerprint: batch.prompt.memberFingerprint
     } : null;
     const verified = proof?.ok !== false && proof?.verified === true;
+    if (verified) {
+      lastSuccessfulChars = Math.max(lastSuccessfulChars, Number(batch.prompt?.text?.length || 0));
+      transitionTransaction('proven', 'rendered_proof');
+      transitionTransaction('answering', 'answer_observation_started');
+    }
     emit('batch_submitted', {
       batchId: batch.id,
       memberIds: batch.prompt.memberIds,
@@ -118,6 +168,7 @@ export function createReceiverBatchRuntime({
       fingerprint: batch.prompt.fingerprint,
       memberFingerprint: batch.prompt.memberFingerprint,
       source,
+      transaction: activeTransaction?.snapshot() || transaction?.snapshot() || null,
       proof,
       verified
     });
@@ -137,23 +188,30 @@ export function createReceiverBatchRuntime({
     if (submitting || planner.active()) {
       return { ok: true, staged: true, reason: 'active_batch' };
     }
-    if (!planner.nextSize) return { ok: true, staged: false, reason: 'batch_empty' };
-    if (hasManualConflict()) {
-      return { ok: false, staged: true, error: 'draft_conflict' };
-    }
-    if (!force && (planner.hold || !planner.autoSubmit)) {
+    applyProviderBudget();
+    const next = planner.next();
+    if (!next.count) return { ok: true, staged: false, reason: 'batch_empty' };
+    lastSchedulingDecision = deriveBatchSchedulingDecision({
+      memberIds: next.entries.map(entry => entry.id),
+      oldestAt: next.entries[0]?.addedAt || 0,
+      now: nowFn(),
+      hold: planner.hold,
+      autoSubmit: planner.autoSubmit,
+      receiverBusy: Boolean(adapter.isGenerating?.()),
+      draftConflict: hasManualConflict()
+    });
+    emit('batch_schedule_evaluated', lastSchedulingDecision);
+    if (hasManualConflict()) return { ok: false, staged: true, error: 'draft_conflict', scheduling: lastSchedulingDecision };
+    if (!force && !lastSchedulingDecision.submitRecommended) {
       mirrorNext();
-      return {
-        ok: true,
-        staged: true,
-        reason: planner.hold ? 'hold_enabled' : 'auto_submit_disabled'
-      };
+      return { ok: true, staged: true, reason: lastSchedulingDecision.reason, scheduling: lastSchedulingDecision };
     }
     if (adapter.isGenerating?.()) {
       mirrorNext();
-      return { ok: true, staged: true, reason: 'receiver_generating' };
+      return { ok: true, staged: true, reason: 'receiver_generating', scheduling: lastSchedulingDecision };
     }
     const batch = planner.freezeNext(nowFn());
+    ensureTransaction(batch);
     return executeBatch(batch, force ? 'operator_submit_now' : 'automatic');
   }
 
@@ -239,6 +297,11 @@ export function createReceiverBatchRuntime({
       if (!active) return { ok: true, reason: 'no_active_batch' };
       if (batchId && active.id !== batchId) return { ok: false, error: 'batch_mismatch' };
       const completed = planner.completeActive();
+      const terminalReason = String(result?.answerState?.state || (result?.timeout ? 'timed_out' : 'complete'));
+      transitionTransaction('terminal', terminalReason, { proofVerified: result?.proof?.verified === true });
+      transitionTransaction('released', 'next_batch_release');
+      lastTransaction = activeTransaction?.snapshot() || lastTransaction;
+      activeTransaction = null;
       const answerState = String(result?.answerState?.state || (result?.timeout ? 'timed_out' : 'complete'));
       const eventType = {
         complete: 'batch_answer_complete',
@@ -315,6 +378,14 @@ export function createReceiverBatchRuntime({
       mirrorNext();
       return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit };
     },
-    snapshot() { return planner.snapshot(); }
+    snapshot() {
+      return {
+        ...planner.snapshot(),
+        transaction: activeTransaction?.snapshot() || null,
+        lastTransaction: lastTransaction ? { ...lastTransaction, memberIds: [...(lastTransaction.memberIds || [])], history: (lastTransaction.history || []).map(item => ({ ...item })) } : null,
+        budget: planner.budget(),
+        scheduling: lastSchedulingDecision ? { ...lastSchedulingDecision, memberIds: [...(lastSchedulingDecision.memberIds || [])] } : null
+      };
+    }
   };
 }

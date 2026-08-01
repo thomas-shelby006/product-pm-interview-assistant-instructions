@@ -1,4 +1,4 @@
-const TRANSIENT_EVENTS = new Set(['batch_accumulated', 'next_batch_draft']);
+const TRANSIENT_EVENTS = new Set(['batch_accumulated', 'next_batch_draft', 'batch_schedule_evaluated']);
 
 export function shouldPersistBatchEvent(event) {
   const type = String(event?.type || '');
@@ -38,10 +38,31 @@ export function safeBatchTelemetry(state = null) {
         remainingCount: Number(value.next.remainingCount || 0)
       }
     : null;
+  const cleanTransaction = transaction => transaction && typeof transaction === 'object' ? {
+    batchId: String(transaction.batchId || ''),
+    memberIds: Array.isArray(transaction.memberIds) ? transaction.memberIds.map(String) : [],
+    state: String(transaction.state || ''),
+    updatedAt: Number(transaction.updatedAt || 0),
+    reason: String(transaction.reason || '')
+  } : null;
   return {
     active: cleanBatch(value.active),
     next,
     hold: Boolean(value.hold),
-    autoSubmit: value.autoSubmit !== false
+    autoSubmit: value.autoSubmit !== false,
+    transaction: cleanTransaction(value.transaction),
+    lastTransaction: cleanTransaction(value.lastTransaction),
+    budget: value.budget && typeof value.budget === 'object' ? {
+      maxMembers: Math.max(1, Number(value.budget.maxMembers) || 1),
+      maxChars: Math.max(256, Number(value.budget.maxChars) || 256)
+    } : null,
+    scheduling: value.scheduling && typeof value.scheduling === 'object' ? {
+      memberIds: Array.isArray(value.scheduling.memberIds) ? value.scheduling.memberIds.map(String) : [],
+      urgency: String(value.scheduling.urgency || ''),
+      reason: String(value.scheduling.reason || ''),
+      ageMs: Math.max(0, Number(value.scheduling.ageMs) || 0),
+      submitRecommended: Boolean(value.scheduling.submitRecommended),
+      evaluatedAt: Number(value.scheduling.evaluatedAt || 0)
+    } : null
   };
 }

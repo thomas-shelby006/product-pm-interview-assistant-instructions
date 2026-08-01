@@ -68,7 +68,8 @@ export function createRuntimePilotController({
 
   async function broadcast(sessionId, pilot = null) {
     const current = pilot || await state();
-    const snapshot = current.snapshot(sessionId, Date.now());
+    const baseSnapshot = current.snapshot(sessionId, Date.now());
+    const snapshot = baseSnapshot ? { ...baseSnapshot, stateAudit: store.audit() } : null;
     for (const entry of sessionPorts(sessionId)) {
       if (!snapshot) {
         if (post(entry.port, { type: 'PMIA_DASHBOARD_SESSION_ENDED', sessionId, snapshot: null })) {
@@ -1256,7 +1257,8 @@ export function createRuntimePilotController({
 
   async function snapshot(sessionId) {
     const pilot = await state();
-    return pilot.snapshot(sessionId, Date.now());
+    const value = pilot.snapshot(sessionId, Date.now());
+    return value ? { ...value, stateAudit: store.audit() } : null;
   }
 
   return {

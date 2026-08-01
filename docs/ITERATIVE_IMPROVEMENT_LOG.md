@@ -369,3 +369,30 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** retry intent is derived from the persisted first outbox entry; the worker schedules `pmia-outbox` and routes it to the established retry command.
 
 **Source-complete status:** Cycles 51-55 are implemented. Executable verification remains deferred until Cycle 70.
+
+## Cycle 56 - Atomic Pilot Commit Journal
+- **Bug fixes:** an interrupted multi-step session-state write is detected and rolled back to the last applied generation.
+- **New features:** prepared/applied generation, state hash, recovery count, and storage audit.
+- **Implementation:** Runtime Pilot Store preserves the previous applied state, writes the candidate, then marks the generation applied.
+
+## Cycle 57 - Runtime Invariant Validator and Repair
+- **Bug fixes:** deterministic duplicate ledger identities, duplicate alarm schedules, expired attempt leases, and empty-outbox retry intents are repaired at hydration.
+- **New features:** metadata-only repaired and blocked findings with reason codes.
+- **Implementation:** ambiguous active-batch membership is reported and preserved for operator action rather than silently changed.
+
+## Cycle 58 - Explicit Batch Transaction State Machine
+- **Bug fixes:** batch submission, proof, answer observation, terminal outcome, and release can no longer drift as unrelated booleans.
+- **New features:** draft, frozen, submitting, proven, answering, terminal, and released transaction states with bounded history.
+- **Implementation:** receiver batch runtime transitions one batch transaction beside the existing planner and exposes a safe snapshot.
+
+## Cycle 59 - Provider-Aware Dynamic Batch Budgets
+- **Bug fixes:** future partitions no longer use one fixed budget when provider capability or recent safe size differs.
+- **New features:** provider, source, member, and character budgets with safety floors and caps.
+- **Implementation:** the planner accepts a restorable budget; a single question remains indivisible.
+
+## Cycle 60 - Deadline-Aware Batch Scheduling
+- **Bug fixes:** protected partitions now expose age and urgency before delivery SLA breach.
+- **New features:** normal, elevated, and critical scheduling state with a submit recommendation.
+- **Implementation:** scheduling controls timing only and preserves exact ledger/member sequence; explicit hold and disabled auto-submit remain authoritative.
+
+**Source-complete status:** Cycles 56-60 are implemented. Executable verification remains deferred until Cycle 70.
