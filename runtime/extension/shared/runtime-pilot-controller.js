@@ -42,6 +42,7 @@ import { deriveActivityMarkers } from './activity-markers.js';
 import { deriveSessionCheckpoint } from './session-checkpoint.js';
 import { deriveInterruptionRecoveryCard } from './interruption-recovery-card.js';
 import { deriveSessionLandmarks } from './session-landmarks.js';
+import { validateFocusGesture } from './focus-gesture-token.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -77,6 +78,7 @@ export function createRuntimePilotController({
   const deliveryPolicyApplied = new Map();
   const deliveryPolicyEstablished = new Set();
   const incidentStateCache = new Map();
+  const consumedFocusGestures = new Set();
   const mutationCoordinator = createSessionMutationCoordinator();
   const coalescedCommitLane = createCoalescedCommitLane({
     delayMs: 60,
@@ -1264,7 +1266,7 @@ export function createRuntimePilotController({
     return ids;
   }
 
-  async function applyLayout(sessionId, command, registry, pilot) {
+  async function applyLayout(sessionId, command, registry, pilot, { pushHistory = false, focusedRole = '' } = {}) {
     const layout = getRuntimeWindowLayout(command);
     if (!layout) return { ok: false, error: 'invalid_layout' };
     const ids = await managedWindowIds(sessionId, registry);
@@ -1280,8 +1282,55 @@ export function createRuntimePilotController({
     }
     const outcomes = await Promise.allSettled(updates);
     const failed = outcomes.filter(item => item.status === 'rejected').length;
-    pilot.setLayout(sessionId, { mode: layout.mode, hidden: false });
+    pilot.setLayout(sessionId, { mode: layout.mode, hidden: false, ...(focusedRole ? { focusedRole } : {}) }, Date.now(), { pushHistory });
     return { ok: failed === 0, failed, mode: layout.mode };
+  }
+
+  function layoutCommandForMode(mode) {
+    return {
+      three_window: 'layout_both',
+      sender_dashboard: 'layout_sender',
+      receiver_dashboard: 'layout_receiver',
+      dashboard_only: 'layout_dashboard'
+    }[String(mode || '')] || 'layout_both';
+  }
+
+  async function focusManagedWindow(sessionId, target, action, registry, pilot, focusIntent) {
+    const validation = validateFocusGesture(focusIntent, {
+      sessionId,
+      target,
+      action,
+      now: Date.now(),
+      consumed: consumedFocusGestures
+    });
+    if (!validation.ok) return validation;
+    if (consumedFocusGestures.size > 512) consumedFocusGestures.delete(consumedFocusGestures.values().next().value);
+    const ids = await managedWindowIds(sessionId, registry);
+    const windowFor = role => role === 'pilot' ? ids.dashboard[0] : ids[role];
+    const focusRole = async role => {
+      const windowId = windowFor(role);
+      if (!Number.isInteger(windowId)) return { ok: false, error: 'managed_window_missing', target: role };
+      await chromeApi.windows.update(windowId, { focused: true, state: 'normal' });
+      return { ok: true, target: role, windowId };
+    };
+    if (action === 'back') {
+      const previous = pilot.popLayoutHistory(sessionId);
+      if (!previous.ok) return previous;
+      const layoutResult = await applyLayout(sessionId, layoutCommandForMode(previous.value.mode), registry, pilot, { focusedRole: previous.value.focusedRole });
+      const focusResult = previous.value.focusedRole ? await focusRole(previous.value.focusedRole) : { ok: true, target: '' };
+      return { ok: layoutResult.ok && focusResult.ok, action, previous: previous.value, layoutResult, focusResult, gestureId: validation.id };
+    }
+    const before = pilot.snapshot(sessionId)?.layout || {};
+    if (action === 'spotlight') {
+      const layoutCommand = target === 'sender' ? 'layout_sender' : target === 'receiver' ? 'layout_receiver' : 'layout_dashboard';
+      const layoutResult = await applyLayout(sessionId, layoutCommand, registry, pilot, { pushHistory: true, focusedRole: target });
+      if (!layoutResult.ok) return { ...layoutResult, action, target };
+    } else {
+      pilot.setLayout(sessionId, { focusedRole: target }, Date.now(), { pushHistory: true });
+    }
+    const focusResult = await focusRole(target);
+    pilot.record(sessionId, 'managed_window_navigation', { target, action, gestureId: validation.id, priorMode: before.mode || 'three_window' });
+    return { ...focusResult, action, gestureId: validation.id };
   }
 
   async function setHidden(sessionId, hidden, registry, pilot) {
@@ -1298,15 +1347,9 @@ export function createRuntimePilotController({
       pilot.setLayout(sessionId, { hidden: true });
       return { ok: outcomes.every(item => item.status === 'fulfilled') };
     }
-    const modeToCommand = {
-      three_window: 'layout_both',
-      sender_dashboard: 'layout_sender',
-      receiver_dashboard: 'layout_receiver',
-      dashboard_only: 'layout_dashboard'
-    };
     return applyLayout(
       sessionId,
-      modeToCommand[pilot.snapshot(sessionId)?.layout?.mode] || 'layout_both',
+      layoutCommandForMode(pilot.snapshot(sessionId)?.layout?.mode),
       registry,
       pilot
     );
@@ -1524,6 +1567,20 @@ export function createRuntimePilotController({
           value: Boolean(payload.value)
         });
         break;
+      case 'set_receiver_policy':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_receiver_policy', {
+          policy: payload.policy || {}
+        });
+        break;
+      case 'preview_interrupt_latest':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'preview_interrupt_latest', { source: 'dashboard' });
+        break;
+      case 'acknowledge_answer':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'acknowledge_answer', { source: 'dashboard' });
+        break;
+      case 'resolve_no_response':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'resolve_no_response', { action: payload.action });
+        break;
       case 'submit_now':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'submit_next', {
           source: 'dashboard'
@@ -1531,7 +1588,7 @@ export function createRuntimePilotController({
         break;
       case 'interrupt_latest':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'interrupt_latest', {
-          source: 'dashboard'
+          source: 'dashboard', token: String(payload.token || '')
         });
         break;
       case 'resolve_draft_keep_manual':
@@ -1625,11 +1682,32 @@ export function createRuntimePilotController({
       case 'end_session':
         result = await endSession(sessionId, registry, pilot, payload);
         break;
+      case 'focus_sender':
+        result = await focusManagedWindow(sessionId, 'sender', 'focus', registry, pilot, payload.focusIntent);
+        break;
+      case 'focus_receiver':
+        result = await focusManagedWindow(sessionId, 'receiver', 'focus', registry, pilot, payload.focusIntent);
+        break;
+      case 'focus_pilot':
+        result = await focusManagedWindow(sessionId, 'pilot', 'focus', registry, pilot, payload.focusIntent);
+        break;
+      case 'spotlight_sender':
+        result = await focusManagedWindow(sessionId, 'sender', 'spotlight', registry, pilot, payload.focusIntent);
+        break;
+      case 'spotlight_receiver':
+        result = await focusManagedWindow(sessionId, 'receiver', 'spotlight', registry, pilot, payload.focusIntent);
+        break;
+      case 'spotlight_pilot':
+        result = await focusManagedWindow(sessionId, 'pilot', 'spotlight', registry, pilot, payload.focusIntent);
+        break;
+      case 'focus_back':
+        result = await focusManagedWindow(sessionId, 'previous', 'back', registry, pilot, payload.focusIntent);
+        break;
       case 'layout_both':
       case 'layout_sender':
       case 'layout_receiver':
       case 'layout_dashboard':
-        result = await applyLayout(sessionId, command.command, registry, pilot);
+        result = await applyLayout(sessionId, command.command, registry, pilot, { pushHistory: true });
         break;
       case 'hide_managed':
         result = await setHidden(sessionId, true, registry, pilot);

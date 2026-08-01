@@ -8,6 +8,13 @@ const CATALOG = Object.freeze([
   { id: 'repair_runtime', label: 'Repair runtime', group: 'Recovery', shortcut: 'R', risk: 'caution' },
   { id: 'stabilize_runtime', label: 'Stabilize runtime', group: 'Recovery', risk: 'safe' },
   { id: 'run_transport_drill', label: 'Run transport drill', group: 'Verification', risk: 'safe' },
+  { id: 'focus_sender', label: 'Focus Window 1', group: 'Navigate', risk: 'safe' },
+  { id: 'focus_receiver', label: 'Focus Window 2', group: 'Navigate', risk: 'safe' },
+  { id: 'focus_pilot', label: 'Focus Runtime Pilot', group: 'Navigate', risk: 'safe' },
+  { id: 'focus_back', label: 'Back to previous managed view', group: 'Navigate', risk: 'safe' },
+  { id: 'spotlight_sender', label: 'Spotlight Window 1', group: 'Navigate', risk: 'safe' },
+  { id: 'spotlight_receiver', label: 'Spotlight Window 2', group: 'Navigate', risk: 'safe' },
+  { id: 'spotlight_pilot', label: 'Spotlight Runtime Pilot', group: 'Navigate', risk: 'safe' },
   { id: 'export_support_bundle', label: 'Download support bundle', group: 'Review', risk: 'safe' },
   { id: 'create_checkpoint', label: 'Create session checkpoint', group: 'Review', risk: 'safe' },
   { id: 'prepare_end_session', label: 'Prepare end session', group: 'Session', risk: 'caution' }

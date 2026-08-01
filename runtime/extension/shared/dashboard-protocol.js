@@ -21,8 +21,12 @@ const COMMANDS = new Set([
   'resume_without_send',
   'set_auto_submit',
   'set_hold',
+  'set_receiver_policy',
   'submit_now',
   'interrupt_latest',
+  'acknowledge_answer',
+  'resolve_no_response',
+  'preview_interrupt_latest',
   'resolve_draft_keep_manual',
   'resolve_draft_restore_pmia',
   'resolve_draft_merge',
@@ -42,6 +46,13 @@ const COMMANDS = new Set([
   'export_support_bundle',
   'prepare_end_session',
   'end_session',
+  'focus_sender',
+  'focus_receiver',
+  'focus_pilot',
+  'focus_back',
+  'spotlight_sender',
+  'spotlight_receiver',
+  'spotlight_pilot',
   'layout_both',
   'layout_sender',
   'layout_receiver',
@@ -120,9 +131,30 @@ export function normalizeDashboardCommand(value) {
     payload.markerId = cleanText(payload.markerId, 200);
     if (!payload.markerId) return null;
   }
+  if (['focus_sender','focus_receiver','focus_pilot','focus_back','spotlight_sender','spotlight_receiver','spotlight_pilot'].includes(command)) {
+    const value = payload.focusIntent;
+    if (!value || typeof value !== 'object') return null;
+    payload.focusIntent = {
+      id: cleanText(value.id, 160),
+      sessionId: cleanText(value.sessionId, 160),
+      target: cleanText(value.target, 32),
+      action: cleanText(value.action, 48),
+      issuedAt: Math.max(0, Number(value.issuedAt || 0)),
+      expiresAt: Math.max(0, Number(value.expiresAt || 0))
+    };
+    if (!payload.focusIntent.id) return null;
+  }
   if (['set_auto_submit', 'set_hold', 'set_focus_mode', 'set_quiet_mode'].includes(command)) {
     payload.value = Boolean(payload.value);
   }
+  if (command === 'set_receiver_policy') {
+    payload.policy = payload.policy && typeof payload.policy === 'object' ? { ...payload.policy } : {};
+    if ('pauseAfterAnswer' in payload.policy) payload.policy.pauseAfterAnswer = Boolean(payload.policy.pauseAfterAnswer);
+    if ('submitOnIdle' in payload.policy) payload.policy.submitOnIdle = Boolean(payload.policy.submitOnIdle);
+    if ('drainMode' in payload.policy) payload.policy.drainMode = ['off', 'one', 'all'].includes(payload.policy.drainMode) ? payload.policy.drainMode : 'off';
+  }
+  if (command === 'interrupt_latest') payload.token = cleanText(payload.token, 160);
+  if (command === 'resolve_no_response') payload.action = ['wait', 'retry', 'continue'].includes(payload.action) ? payload.action : 'wait';
   if (command === 'set_session_phase') {
     payload.phase = cleanText(payload.phase, 24).toLowerCase();
     if (!['setup','ready','active','paused','debrief','ended'].includes(payload.phase)) return null;

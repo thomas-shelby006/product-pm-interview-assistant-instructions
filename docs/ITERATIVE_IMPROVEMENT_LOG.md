@@ -826,3 +826,30 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Bug fixes:** the operational timeline no longer hides interview-oriented review points.
 - **New features:** merged phase, question, answer, incident, recovery, and operator marker landmarks.
 - **Implementation:** bounded metadata landmarks are sorted by timestamp while the existing virtualized timeline remains authoritative.
+
+## Live interview UX cycles 121–125
+
+### Cycle 121 — Managed Window Navigator
+- **Bug fixes:** switching among Window 1, Window 2, and Runtime Pilot no longer depends on blind Alt+Tab order.
+- **New features:** explicit Focus Window 1, Focus Window 2, Focus Pilot, and Back commands.
+- **Implementation:** every target is resolved from current Session Registry ownership before the existing windows API is used.
+
+### Cycle 122 — Live Layout Presets
+- **Bug fixes:** manual resizing no longer blocks setup or recovery.
+- **New features:** three-window, Window 1 spotlight, Window 2 spotlight, and Pilot spotlight layouts.
+- **Implementation:** presets reuse the existing non-focused layout owner and session-scoped geometry state.
+
+### Cycle 123 — Role Spotlight
+- **Bug fixes:** the operator no longer needs separate resize and focus actions to inspect one role.
+- **New features:** one-command spotlight for Window 1, Window 2, or Runtime Pilot.
+- **Implementation:** spotlight applies the existing safe layout first, then performs one validated focus action.
+
+### Cycle 124 — Focus History and Back
+- **Bug fixes:** returning from a spotlight no longer requires reconstructing the previous view manually.
+- **New features:** bounded managed-layout/focus history and Back to Previous View.
+- **Implementation:** only mode, focused role, and timestamp are retained; the history is capped at twelve entries.
+
+### Cycle 125 — User-Gesture Focus Safety
+- **Bug fixes:** delayed or replayed focus commands can no longer steal focus after the user’s intent has expired.
+- **New features:** one-use focus-intent tokens bound to session, target, action, issue time, and expiry.
+- **Implementation:** the only new `focused: true` update is guarded by intent validation and one-use consumption; recovery remains non-focused.

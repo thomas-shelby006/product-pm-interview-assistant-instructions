@@ -105,6 +105,18 @@
               <button id="incidentRunbookAction" hidden>Run step</button>
             </div>
           </section>
+          <section class="managed-window-navigator" aria-label="Managed window navigator">
+            <div><span class="eyebrow">Navigate managed windows</span><strong id="managedWindowState">Three-window layout</strong></div>
+            <div class="managed-window-actions">
+              <button id="focusSenderAction" data-command="focus_sender">Focus Window 1</button>
+              <button id="focusReceiverAction" data-command="focus_receiver">Focus Window 2</button>
+              <button id="focusPilotAction" data-command="focus_pilot">Focus Pilot</button>
+              <button id="focusBackAction" data-command="focus_back">Back</button>
+              <button data-command="spotlight_sender">Spotlight W1</button>
+              <button data-command="spotlight_receiver">Spotlight W2</button>
+              <button data-command="spotlight_pilot">Spotlight Pilot</button>
+            </div>
+          </section>
           <section id="interruptionRecoveryCard" class="interruption-recovery-card" hidden aria-live="polite">
             <div><span class="eyebrow">Resume checkpoint</span><strong id="recoveryCheckpointTitle">No checkpoint</strong><p id="recoveryCheckpointDetail">The current live session has no recovery action.</p></div>
             <button id="recoveryCheckpointAction" hidden>Run recovery step</button>
@@ -340,6 +352,16 @@
           <div><span class="eyebrow">Current batch</span><strong id="activeBatchPreview">No active batch</strong><p id="activeBatchMembers">No members.</p></div>
           <div><span class="eyebrow">Next protected batch</span><strong id="nextBatchPreview">Nothing waiting</strong><p id="nextBatchMembers">No members.</p></div>
           <div><span class="eyebrow">Provider budget</span><strong id="batchBudgetPreview">No budget evidence</strong><p id="batchPolicyPreview">Sequence order is preserved.</p></div>
+        </section>
+        <section class="receiver-flow" aria-label="Receiver flow controls">
+          <div class="receiver-flow-summary"><span class="eyebrow">Post-answer policy</span><strong id="receiverPolicyState">Automatic</strong><p id="receiverPolicyDetail">Next protected batch follows the verified answer boundary.</p></div>
+          <div class="receiver-flow-summary"><span class="eyebrow">Answer deadline</span><strong id="answerDeadlineState">Idle</strong><p id="answerHandoffState">No completed answer handoff.</p></div>
+          <div class="receiver-flow-actions" role="toolbar" aria-label="Receiver flow actions">
+            <button id="pauseAfterAnswer">Pause after answer</button><button id="drainOne">Drain one</button><button id="drainAll">Drain all</button><button id="stopDrain">Stop drain</button><button id="submitOnIdle">Submit on idle</button>
+            <button id="acknowledgeAnswer">Acknowledge answer</button><button id="resolveNoResponseWait">Wait</button><button id="resolveNoResponseRetry">Retry answer</button><button id="resolveNoResponseContinue">Continue</button>
+            <button id="previewInterrupt">Preview interrupt</button><button id="confirmInterrupt" class="danger" hidden>Confirm interrupt</button>
+          </div>
+          <p id="interruptPreviewState" class="receiver-flow-note">No interrupt is prepared.</p>
         </section>
         <div class="queue-wrap">
           <table>

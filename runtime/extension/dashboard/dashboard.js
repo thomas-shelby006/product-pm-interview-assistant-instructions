@@ -41,6 +41,7 @@ import { deriveInterviewerSilence } from '../shared/interviewer-silence.js';
 import { deriveAttentionTarget } from '../shared/attention-model.js';
 import { deriveNextAction } from '../shared/next-action-model.js';
 import { commandCatalog, searchCommands } from '../shared/operator-command-catalog.js';
+import { deriveAnswerDeadlineView } from '../shared/answer-operations.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -63,7 +64,8 @@ const state = {
   selectedTraceId: '',
   commandPalette: { open: false, query: '', selectedIndex: 0, recent: [] },
   commandPaletteReturnFocus: null,
-  toolbarIndex: 0
+  toolbarIndex: 0,
+  interruptPlanDraft: null
 };
 
 const byId = id => document.getElementById(id);
@@ -396,6 +398,19 @@ function renderIncidentCenter(snapshot, now) {
   }
 }
 
+function renderManagedWindowNavigator(snapshot) {
+  const model = deriveManagedWindowModel(snapshot);
+  text('managedWindowState', model.description);
+  const back = byId('focusBackAction');
+  back.disabled = !model.canGoBack;
+  for (const item of model.targets) {
+    const node = byId(`focus${item.target[0].toUpperCase()}${item.target.slice(1)}Action`);
+    if (!node) continue;
+    node.setAttribute('aria-pressed', String(item.focused));
+    node.classList.toggle('active', item.focused);
+  }
+}
+
 function renderRecoveryCard(snapshot) {
   const model = snapshot?.recoveryCard || { visible: false };
   const card = byId('interruptionRecoveryCard');
@@ -469,6 +484,7 @@ function renderLiveOperations(snapshot, now) {
     : silence.state === 'inactive' ? 'Starts when the mock interview becomes active.'
       : `${formatDuration(silence.ageMs || 0)} since the last interviewer activity signal.`);
   renderIncidentCenter(snapshot, now);
+  renderManagedWindowNavigator(snapshot);
   renderRecoveryCard(snapshot);
   applyFocusMode(document, deriveFocusMode(snapshot));
   const toolbar = byId('phaseRail');
@@ -912,6 +928,26 @@ function renderBatchPreview(snapshot) {
   text('batchPolicyPreview', `${preview.sequencePreserved === false ? 'Sequence warning' : 'Sequence preserved'} · ${preview.hold ? 'Hold on' : preview.autoSubmit ? 'Auto-submit on' : 'Manual submit'}`);
 }
 
+function renderReceiverFlow(snapshot, now = Date.now()) {
+  const batch = snapshot?.batchState || {};
+  const policy = batch.receiverPolicy || {};
+  const deadline = deriveAnswerDeadlineView(snapshot?.answerState || {}, now);
+  const mode = policy.pauseAfterAnswer ? 'Pause after answer' : policy.drainMode === 'all' ? 'Drain all' : policy.drainMode === 'one' ? `Drain ${policy.drainRemaining || 1}` : policy.submitOnIdle ? 'Submit on idle' : 'Automatic';
+  text('receiverPolicyState', mode);
+  text('receiverPolicyDetail', batch.preview?.next?.count ? `${batch.preview.next.count} protected question${batch.preview.next.count === 1 ? '' : 's'} in ${batch.preview.next.partitionCount || 1} partition${batch.preview.next.partitionCount === 1 ? '' : 's'}.` : 'No protected batch is waiting.');
+  text('answerDeadlineState', deadline.terminal ? humanizeCode(deadline.state) : deadline.deadlineAt ? `${humanizeCode(deadline.state)} · ${formatDuration(deadline.remainingMs)}` : humanizeCode(deadline.state));
+  const handoff = batch.answerHandoff;
+  text('answerHandoffState', handoff ? `${humanizeCode(handoff.state)} · ${handoff.memberCount || 0} question${handoff.memberCount === 1 ? '' : 's'} · ${handoff.proofVerified ? 'proof verified' : 'proof pending'}` : 'No completed answer handoff.');
+  byId('pauseAfterAnswer').textContent = policy.pauseAfterAnswer ? 'Disable pause after answer' : 'Pause after answer';
+  byId('submitOnIdle').textContent = policy.submitOnIdle ? 'Disable submit on idle' : 'Submit on idle';
+  const noResponse = Boolean(batch.pendingNoResponse);
+  for (const id of ['resolveNoResponseWait','resolveNoResponseRetry','resolveNoResponseContinue']) byId(id).hidden = !noResponse;
+  byId('acknowledgeAnswer').disabled = !batch.answerAcknowledgement || batch.answerAcknowledgement.acknowledged;
+  const plan = state.interruptPlanDraft || batch.interruptPlan || null;
+  byId('confirmInterrupt').hidden = !plan?.ok;
+  text('interruptPreviewState', plan?.ok ? `Interrupt latest #${plan.latestSeq || '--'}; preserve ${plan.preservedIds?.length || 0} waiting question${plan.preservedIds?.length === 1 ? '' : 's'}.` : 'No interrupt is prepared.');
+}
+
 function renderQuestionInspector(navigator) {
   const selected = navigator.selected;
   const inspector = byId('questionInspector');
@@ -944,6 +980,7 @@ function renderQuestionInspector(navigator) {
 
 function renderQueue(snapshot, now) {
   renderBatchPreview(snapshot);
+  renderReceiverFlow(snapshot, now);
   const body = byId('queueBody');
   body.replaceChildren();
   state.questionNavigator = {
@@ -1235,6 +1272,18 @@ async function runCommand(button, command, payload = {}) {
     button.setAttribute('aria-busy', 'true');
   }
   updateControlAvailability();
+  const focusCommands = {
+    focus_sender: { target: 'sender', action: 'focus' },
+    focus_receiver: { target: 'receiver', action: 'focus' },
+    focus_pilot: { target: 'pilot', action: 'focus' },
+    focus_back: { target: 'previous', action: 'back' },
+    spotlight_sender: { target: 'sender', action: 'spotlight' },
+    spotlight_receiver: { target: 'receiver', action: 'spotlight' },
+    spotlight_pilot: { target: 'pilot', action: 'spotlight' }
+  };
+  if (focusCommands[command] && !payload.focusIntent) {
+    payload = { ...payload, focusIntent: issueFocusGesture({ sessionId, ...focusCommands[command] }) };
+  }
   const result = await sendCommand(command, payload);
   if (button) {
     button.dataset.busy = 'false';

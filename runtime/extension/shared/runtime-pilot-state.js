@@ -10,6 +10,7 @@ import { consumeUndo, normalizeUndoJournal, recordUndo } from './operator-undo-j
 import { updateIncidentControl } from './incident-center.js';
 import { addOperatorMarker, removeOperatorMarker } from './operator-markers.js';
 import { normalizeSessionCheckpoint } from './session-checkpoint.js';
+import { normalizeLayoutHistory, popLayoutHistory, pushLayoutHistory } from './layout-history.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -164,7 +165,13 @@ function normalizeSession(item) {
       transaction: item.batchState?.transaction || null,
       lastTransaction: item.batchState?.lastTransaction || null,
       budget: item.batchState?.budget || null,
-      scheduling: item.batchState?.scheduling || null
+      scheduling: item.batchState?.scheduling || null,
+      receiverPolicy: item.batchState?.receiverPolicy || null,
+      preview: item.batchState?.preview || null,
+      answerAcknowledgement: item.batchState?.answerAcknowledgement || null,
+      pendingNoResponse: item.batchState?.pendingNoResponse || null,
+      interruptPlan: item.batchState?.interruptPlan || null,
+      answerHandoff: item.batchState?.answerHandoff || null
     },
     ledger: new DeliveryLedger(item.ledger || item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
@@ -182,7 +189,9 @@ function normalizeSession(item) {
     dashboardConnections: 0,
     layout: {
       mode: String(item.layout?.mode || 'three_window'),
-      hidden: Boolean(item.layout?.hidden)
+      hidden: Boolean(item.layout?.hidden),
+      focusedRole: ['sender','receiver','pilot'].includes(String(item.layout?.focusedRole || '')) ? String(item.layout.focusedRole) : '',
+      history: normalizeLayoutHistory(item.layout?.history || [])
     },
     lastRepair: item.lastRepair || null,
     endedAt: Number.isFinite(item.endedAt) ? item.endedAt : 0,
@@ -827,7 +836,13 @@ export class RuntimePilotState {
       transaction: next.transaction || null,
       lastTransaction: next.lastTransaction || null,
       budget: next.budget || null,
-      scheduling: next.scheduling || null
+      scheduling: next.scheduling || null,
+      receiverPolicy: next.receiverPolicy || null,
+      preview: next.preview || null,
+      answerAcknowledgement: next.answerAcknowledgement || null,
+      pendingNoResponse: next.pendingNoResponse || null,
+      interruptPlan: next.interruptPlan || null,
+      answerHandoff: next.answerHandoff || null
     };
     const previous = JSON.stringify({
       active: session.batchState.active,
@@ -837,7 +852,13 @@ export class RuntimePilotState {
       transaction: session.batchState.transaction,
       lastTransaction: session.batchState.lastTransaction,
       budget: session.batchState.budget,
-      scheduling: session.batchState.scheduling
+      scheduling: session.batchState.scheduling,
+      receiverPolicy: session.batchState.receiverPolicy,
+      preview: session.batchState.preview,
+      answerAcknowledgement: session.batchState.answerAcknowledgement,
+      pendingNoResponse: session.batchState.pendingNoResponse,
+      interruptPlan: session.batchState.interruptPlan,
+      answerHandoff: session.batchState.answerHandoff
     });
     const changed = previous !== JSON.stringify(normalized);
     if (!changed) return false;
@@ -907,6 +928,19 @@ export class RuntimePilotState {
     } else if (type === 'batch_policy_changed') {
       if ('hold' in event) session.batchState.hold = Boolean(event.hold);
       if ('autoSubmit' in event) session.batchState.autoSubmit = Boolean(event.autoSubmit);
+    } else if (type === 'receiver_delivery_policy_changed' || type === 'post_answer_policy') {
+      session.batchState.receiverPolicy = event.policy ? { ...event.policy } : session.batchState.receiverPolicy;
+    } else if (type === 'answer_acknowledged') {
+      session.batchState.answerAcknowledgement = { ...safeEventData(event) };
+    } else if (type === 'batch_answer_no_response') {
+      session.batchState.pendingNoResponse = { batchId: String(event.batchId || ''), memberIds, answerState: event.answerState || null, at: now };
+      session.batchState.answerHandoff = event.handoff ? { ...event.handoff } : session.batchState.answerHandoff;
+    } else if (type === 'no_response_resolved') {
+      session.batchState.pendingNoResponse = String(event.action || '') === 'wait' ? session.batchState.pendingNoResponse : null;
+    } else if (type === 'interrupt_preview_created') {
+      session.batchState.interruptPlan = { ...safeEventData(event) };
+    } else if (type === 'batch_interrupted') {
+      session.batchState.interruptPlan = null;
     }
     session.batchState.lastEvent = { ...safeEventData(event), at: now };
     session.updatedAt = now;
@@ -960,11 +994,30 @@ export class RuntimePilotState {
     return removed.length;
   }
 
-  setLayout(sessionId, layout, now = Date.now()) {
+  setLayout(sessionId, layout, now = Date.now(), { pushHistory = false, record = true } = {}) {
     const session = this.ensure(sessionId, now);
-    session.layout = { ...session.layout, ...(layout || {}) };
+    if (pushHistory) session.layout.history = pushLayoutHistory(session.layout.history, session.layout, now);
+    session.layout = {
+      ...session.layout,
+      ...(layout || {}),
+      history: normalizeLayoutHistory(layout?.history || session.layout.history)
+    };
     session.updatedAt = now;
-    this.record(sessionId, 'layout_changed', session.layout, now);
+    if (record) this.record(sessionId, 'layout_changed', {
+      mode: session.layout.mode,
+      hidden: session.layout.hidden,
+      focusedRole: session.layout.focusedRole,
+      historyDepth: session.layout.history.length
+    }, now);
+    return JSON.parse(JSON.stringify(session.layout));
+  }
+
+  popLayoutHistory(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const popped = popLayoutHistory(session.layout.history);
+    session.layout.history = popped.history;
+    session.updatedAt = now;
+    return popped.value ? { ok: true, value: { ...popped.value }, history: [...popped.history] } : { ok: false, error: 'layout_history_empty', history: [] };
   }
 
   setRepair(sessionId, report, now = Date.now(), { record = true } = {}) {
