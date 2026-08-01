@@ -362,6 +362,10 @@ kbd { display: inline-block; padding: .08rem .25rem; border: 1px solid var(--lin
 .incident-actions button { padding: .34rem .44rem; font-size: .6rem; }
 .incident-runbook { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; margin-top: .55rem; padding-top: .55rem; border-top: 1px solid var(--line); }
 .incident-runbook strong { flex: 1 1 14rem; }
+.interruption-recovery-card { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: .7rem; border-color: var(--ochre) !important; background: var(--ochre-soft) !important; }
+.interruption-recovery-card[hidden] { display: none; }
+.interruption-recovery-card strong { display: block; margin: .12rem 0; }
+.interruption-recovery-card p { margin: 0; color: var(--muted); font-size: .66rem; }
 body[data-focus-mode="true"] .incident-list { display: none; }
 
 .command-palette { position: fixed; inset: 0; z-index: 120; display: grid; place-items: start center; padding: min(10vh, 5rem) .8rem .8rem; background: rgba(30,24,27,.58); }
@@ -406,6 +410,10 @@ body[data-focus-mode="true"] .runbook-block { display: none; }
 .question-inspector { margin-top: .7rem; padding: .8rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
 .question-inspector-text { margin: .6rem 0; max-height: 8rem; overflow: auto; padding: .6rem; background: var(--surface-2); border-left: 4px solid var(--aubergine); font-size: .72rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .question-inspector-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.landmark-controls { margin-bottom: .65rem; padding: .65rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.landmark-list { display: flex; gap: .35rem; margin-top: .5rem; overflow-x: auto; padding-bottom: .2rem; }
+.landmark-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: .28rem; padding: .32rem .42rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); font-size: .61rem; }
+.landmark-chip button { padding: .1rem .25rem; border: 0; background: transparent; color: var(--muted); }
 .question-inspector-actions { display: flex; flex-wrap: wrap; align-items: end; gap: .45rem; margin-top: .65rem; }
 .question-inspector-actions label { display: grid; gap: .25rem; min-width: 8rem; color: var(--muted); font-size: .62rem; }
 .question-inspector-actions input, .question-inspector-actions select { min-width: 0; width: 100%; padding: .48rem .55rem; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); color: var(--ink); }

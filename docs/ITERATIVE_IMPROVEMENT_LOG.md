@@ -799,3 +799,30 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Bug fixes:** visual urgency can no longer be confused with delivery order changes.
 - **New features:** pinned, due, and priority emphasis in the queue and inspector.
 - **Implementation:** emphasis decorates the original sequence and explicitly reports sequence preservation.
+
+## Live interview UX cycles 116–120
+
+### Cycle 116 — Operator Markers
+- **Bug fixes:** important interview moments no longer require transcript notes or memory.
+- **New features:** bounded Follow-up, Strong answer, Weak answer, Needs review, Metric gap, and Execution gap markers.
+- **Implementation:** markers reference only session, envelope, batch, or trace identity and never copy prompt or answer text.
+
+### Cycle 117 — Interviewer Activity Markers
+- **Bug fixes:** question arrival, answer boundaries, silence changes, and recovery transitions no longer disappear inside generic telemetry.
+- **New features:** automatic safe activity landmarks reconstructed from existing timeline metadata.
+- **Implementation:** semantic event/category/identity fingerprints deduplicate activity without adding storage writes.
+
+### Cycle 118 — Phase Checkpoints and Resume
+- **Bug fixes:** reload or recovery no longer leaves the operator unsure which phase, clock, or protected batch to resume.
+- **New features:** one compact last-safe checkpoint with phase, mode, clock, active/next batch identity, and unresolved count.
+- **Implementation:** semantic commits refresh one session-only checkpoint; preview and transient batch commits are excluded.
+
+### Cycle 119 — Interruption Recovery Card
+- **Bug fixes:** a live interruption no longer requires disconnected checks across readiness, self-test, repair, and resume.
+- **New features:** one recovery card with retained-final count, checkpoint age, ordered steps, and one current safe action.
+- **Implementation:** the card is a pure projection over checkpoint, lifecycle, delivery policy, role, and verification evidence.
+
+### Cycle 120 — Session Timeline Landmarks
+- **Bug fixes:** the operational timeline no longer hides interview-oriented review points.
+- **New features:** merged phase, question, answer, incident, recovery, and operator marker landmarks.
+- **Implementation:** bounded metadata landmarks are sorted by timestamp while the existing virtualized timeline remains authoritative.

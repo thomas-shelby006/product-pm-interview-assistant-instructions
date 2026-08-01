@@ -105,6 +105,10 @@
               <button id="incidentRunbookAction" hidden>Run step</button>
             </div>
           </section>
+          <section id="interruptionRecoveryCard" class="interruption-recovery-card" hidden aria-live="polite">
+            <div><span class="eyebrow">Resume checkpoint</span><strong id="recoveryCheckpointTitle">No checkpoint</strong><p id="recoveryCheckpointDetail">The current live session has no recovery action.</p></div>
+            <button id="recoveryCheckpointAction" hidden>Run recovery step</button>
+          </section>
         </section>
 
         <div class="control-grid" aria-label="Runtime controls">
@@ -371,6 +375,14 @@
             <option value="answer">Answers</option>
           </select>
         </div>
+        <section class="landmark-controls" aria-label="Interview landmarks">
+          <div class="inline-actions">
+            <button data-marker-category="needs_review">Mark needs review</button>
+            <button data-marker-category="strong_answer">Mark strong answer</button>
+            <button data-marker-category="follow_up">Mark follow-up</button>
+          </div>
+          <div id="landmarkList" class="landmark-list" aria-live="polite"></div>
+        </section>
         <div class="timeline" id="timelineViewport">
           <div id="timelineCanvas"></div>
         </div>

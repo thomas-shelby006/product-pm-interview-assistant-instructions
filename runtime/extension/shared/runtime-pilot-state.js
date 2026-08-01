@@ -8,6 +8,8 @@ import { normalizeLiveSession, transitionLiveSession as transitionLiveSessionVal
 import { normalizeQuestionMetadataIndex, updateQuestionMetadata } from './question-metadata-index.js';
 import { consumeUndo, normalizeUndoJournal, recordUndo } from './operator-undo-journal.js';
 import { updateIncidentControl } from './incident-center.js';
+import { addOperatorMarker, removeOperatorMarker } from './operator-markers.js';
+import { normalizeSessionCheckpoint } from './session-checkpoint.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -204,7 +206,9 @@ function normalizeSession(item) {
       metadata: normalizeQuestionMetadataIndex(item.questionOperations?.metadata || {}),
       undoJournal: normalizeUndoJournal(item.questionOperations?.undoJournal || [])
     },
-    incidentControls: normalizeIncidentControls(item.incidentControls || {})
+    incidentControls: normalizeIncidentControls(item.incidentControls || {}),
+    operatorMarkers: Array.isArray(item.operatorMarkers) ? item.operatorMarkers.map(value => ({ ...value })).slice(-100) : [],
+    checkpoint: item.checkpoint && typeof item.checkpoint === 'object' ? normalizeSessionCheckpoint(item.checkpoint) : null
   };
 }
 
@@ -334,6 +338,41 @@ export class RuntimePilotState {
     session.updatedAt = now;
     this.record(sessionId, 'quiet_attention_changed', { enabled: Boolean(enabled) }, now);
     return { ok: true, enabled: session.incidentControls.quietMode };
+  }
+
+  addOperatorMarker(sessionId, value = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const before = session.operatorMarkers.length;
+    session.operatorMarkers = addOperatorMarker(session.operatorMarkers, { ...value, createdAt: value.createdAt || now, source: 'operator' });
+    session.updatedAt = now;
+    const marker = session.operatorMarkers.at(-1) || null;
+    if (marker && session.operatorMarkers.length >= before) this.record(sessionId, 'operator_marker_added', {
+      markerId: marker.id, category: marker.category, targetType: marker.targetType, targetId: marker.targetId
+    }, now);
+    return marker ? { ok: true, marker: { ...marker } } : { ok: false, error: 'invalid_marker' };
+  }
+
+  removeOperatorMarker(sessionId, markerId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const id = String(markerId || '').trim();
+    const before = session.operatorMarkers.length;
+    session.operatorMarkers = removeOperatorMarker(session.operatorMarkers, id);
+    session.updatedAt = now;
+    if (session.operatorMarkers.length !== before) this.record(sessionId, 'operator_marker_removed', { markerId: id }, now);
+    return { ok: session.operatorMarkers.length !== before, markerId: id };
+  }
+
+  setCheckpoint(sessionId, value = null, now = Date.now(), { record = false } = {}) {
+    const session = this.ensure(sessionId, now);
+    session.checkpoint = value && typeof value === 'object' ? normalizeSessionCheckpoint(value) : null;
+    session.updatedAt = now;
+    if (record && session.checkpoint) this.record(sessionId, 'session_checkpoint', {
+      checkpointId: session.checkpoint.id,
+      phase: session.checkpoint.phase,
+      unresolvedCount: session.checkpoint.unresolvedCount,
+      reason: session.checkpoint.reason
+    }, now);
+    return session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null;
   }
 
   replayCommandResult(sessionId, requestId, now = Date.now()) {
@@ -1090,7 +1129,9 @@ export class RuntimePilotState {
         metadata: JSON.parse(JSON.stringify(session.questionOperations.metadata || {})),
         undoJournal: JSON.parse(JSON.stringify(session.questionOperations.undoJournal || []))
       },
-      incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false }))
+      incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false })),
+      operatorMarkers: JSON.parse(JSON.stringify(session.operatorMarkers || [])),
+      checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null
     };
   }
 
@@ -1133,7 +1174,9 @@ export class RuntimePilotState {
         metadata: JSON.parse(JSON.stringify(session.questionOperations.metadata || {})),
         undoJournal: JSON.parse(JSON.stringify(session.questionOperations.undoJournal || []))
       },
-      incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false }))
+      incidentControls: JSON.parse(JSON.stringify(session.incidentControls || { controls: {}, quietMode: false })),
+      operatorMarkers: JSON.parse(JSON.stringify(session.operatorMarkers || [])),
+      checkpoint: session.checkpoint ? JSON.parse(JSON.stringify(session.checkpoint)) : null
     }));
   }
 }

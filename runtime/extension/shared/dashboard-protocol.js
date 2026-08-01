@@ -8,6 +8,9 @@ const COMMANDS = new Set([
   'snooze_incident',
   'clear_incident',
   'set_quiet_mode',
+  'add_marker',
+  'remove_marker',
+  'resume_checkpoint',
   'resume_catch_up',
   'set_question_pin',
   'defer_question',
@@ -105,6 +108,17 @@ export function normalizeDashboardCommand(value) {
   }
   if (command === 'snooze_incident') {
     payload.durationMs = Math.max(60_000, Math.min(3_600_000, Number(payload.durationMs) || 300_000));
+  }
+  if (command === 'add_marker') {
+    payload.category = cleanText(payload.category, 40);
+    payload.targetType = cleanText(payload.targetType, 24);
+    payload.targetId = cleanText(payload.targetId, 160);
+    if (!['follow_up','strong_answer','weak_answer','needs_review','metric_gap','execution_gap'].includes(payload.category)) return null;
+    if (!['trace','envelope','batch','session'].includes(payload.targetType)) return null;
+  }
+  if (command === 'remove_marker') {
+    payload.markerId = cleanText(payload.markerId, 200);
+    if (!payload.markerId) return null;
   }
   if (['set_auto_submit', 'set_hold', 'set_focus_mode', 'set_quiet_mode'].includes(command)) {
     payload.value = Boolean(payload.value);

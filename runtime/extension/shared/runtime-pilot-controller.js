@@ -38,6 +38,10 @@ import { deriveIncidentRunbook } from './incident-runbook.js';
 import { deriveQuietAttention } from './quiet-attention-policy.js';
 import { deriveBatchPreview } from './batch-preview-model.js';
 import { validateQuestionRelation } from './question-relation-model.js';
+import { deriveActivityMarkers } from './activity-markers.js';
+import { deriveSessionCheckpoint } from './session-checkpoint.js';
+import { deriveInterruptionRecoveryCard } from './interruption-recovery-card.js';
+import { deriveSessionLandmarks } from './session-landmarks.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -252,6 +256,13 @@ export function createRuntimePilotController({
       Date.now()
     ) : null;
     const primaryIncident = quietAttention?.visibleIncidents?.[0] || null;
+    const activityMarkers = enrichedBase ? deriveActivityMarkers(enrichedBase.timeline || []) : [];
+    const sessionLandmarks = enrichedBase ? deriveSessionLandmarks({
+      timeline: enrichedBase.timeline || [],
+      operatorMarkers: enrichedBase.operatorMarkers || [],
+      activityMarkers
+    }) : [];
+    const recoveryCard = enrichedBase ? deriveInterruptionRecoveryCard(enrichedBase, enrichedBase.checkpoint, Date.now()) : null;
     const liveOperations = enrichedBase ? {
       phase: deriveSessionPhase(enrichedBase),
       runbook: deriveInterviewRunbook(enrichedBase, Date.now()),
@@ -273,6 +284,9 @@ export function createRuntimePilotController({
         hiddenCount: Number(quietAttention?.hiddenCount || 0),
         currentRunbook: primaryIncident ? deriveIncidentRunbook(primaryIncident, enrichedBase) : null
       },
+      activityMarkers,
+      sessionLandmarks,
+      recoveryCard,
       questionOperationsDerived: deriveQuestionOperations(enrichedBase, Date.now()),
       batchPreview: deriveBatchPreview(enrichedBase),
       performanceBudget: {
@@ -326,6 +340,12 @@ export function createRuntimePilotController({
     const current = pilot || await state();
     const auditEligible = !/^coalesced:(preview|batch_checkpoint)$/.test(String(reason || ''));
     if (!skipConsistency && auditEligible) await refreshDerivedPolicies(sessionId, current);
+    if (auditEligible) {
+      const checkpointSource = current.snapshot(sessionId);
+      if (checkpointSource && !['ended'].includes(String(checkpointSource.liveSession?.phase || ''))) {
+        current.setCheckpoint(sessionId, deriveSessionCheckpoint(checkpointSource, Date.now(), reason), Date.now(), { record: false });
+      }
+    }
     current.recordPerformance(sessionId, {
       kind: 'persistence',
       operations: 1,
@@ -1439,6 +1459,34 @@ export function createRuntimePilotController({
         const roles = await sendToRoles(registry, sessionId, 'resume');
         const catchUp = await reconcileSession(sessionId, { registry, pilot, commitResult: false });
         result = { ok: catchUp?.ok !== false, reason: catchUp?.reason || 'catch_up_started', roles, catchUp };
+        break;
+      }
+      case 'add_marker':
+        result = pilot.addOperatorMarker(sessionId, {
+          category: payload.category,
+          targetType: payload.targetType,
+          targetId: payload.targetId
+        });
+        break;
+      case 'remove_marker':
+        result = pilot.removeOperatorMarker(sessionId, payload.markerId);
+        break;
+      case 'resume_checkpoint': {
+        const snapshot = pilot.snapshot(sessionId);
+        if (!snapshot?.checkpoint) { result = { ok: false, error: 'checkpoint_missing' }; break; }
+        const live = snapshot.checkpoint;
+        pilot.setLiveSession(sessionId, {
+          ...snapshot.liveSession,
+          phase: ['setup','ready','active','paused','debrief'].includes(live.phase) ? live.phase : snapshot.liveSession?.phase,
+          startedAt: live.clock?.startedAt || snapshot.liveSession?.startedAt || 0,
+          pausedAt: live.clock?.pausedAt || 0,
+          pausedTotalMs: live.clock?.pausedTotalMs || 0,
+          segmentId: live.clock?.segmentId || snapshot.liveSession?.segmentId || ''
+        });
+        pilot.setMode(sessionId, live.mode === 'paused' ? 'paused' : 'active');
+        const roles = await sendToRoles(registry, sessionId, live.mode === 'paused' ? 'pause' : 'resume');
+        const catchUp = live.mode === 'paused' ? null : await reconcileSession(sessionId, { registry, pilot, commitResult: false });
+        result = { ok: catchUp?.ok !== false, checkpointId: live.id, roles, catchUp };
         break;
       }
       case 'set_question_pin':

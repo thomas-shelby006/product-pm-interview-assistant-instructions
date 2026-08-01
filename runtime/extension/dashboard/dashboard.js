@@ -396,6 +396,22 @@ function renderIncidentCenter(snapshot, now) {
   }
 }
 
+function renderRecoveryCard(snapshot) {
+  const model = snapshot?.recoveryCard || { visible: false };
+  const card = byId('interruptionRecoveryCard');
+  card.hidden = !model.visible;
+  if (!model.visible) return;
+  const checkpoint = model.checkpoint || {};
+  text('recoveryCheckpointTitle', `${humanizeCode(checkpoint.phase || 'session')} checkpoint · ${model.retainedFinals || 0} retained final${model.retainedFinals === 1 ? '' : 's'}`);
+  text('recoveryCheckpointDetail', model.current
+    ? `${model.current.label}. Checkpoint age ${formatDuration(model.ageMs || 0)}.`
+    : 'Inspect the current runtime before resuming.');
+  const action = byId('recoveryCheckpointAction');
+  action.hidden = !model.current?.command;
+  action.dataset.command = model.current?.command || '';
+  action.textContent = model.current?.command === 'resume_checkpoint' ? 'Resume checkpoint' : 'Run recovery step';
+}
+
 function renderLiveOperations(snapshot, now) {
   const operations = snapshot?.liveOperations || {};
   const liveSession = snapshot?.liveSession || {};
@@ -453,6 +469,7 @@ function renderLiveOperations(snapshot, now) {
     : silence.state === 'inactive' ? 'Starts when the mock interview becomes active.'
       : `${formatDuration(silence.ageMs || 0)} since the last interviewer activity signal.`);
   renderIncidentCenter(snapshot, now);
+  renderRecoveryCard(snapshot);
   applyFocusMode(document, deriveFocusMode(snapshot));
   const toolbar = byId('phaseRail');
   if (toolbar) applyRovingTabIndex(toolbar, state.toolbarIndex);
@@ -1017,7 +1034,38 @@ function filteredTimeline(snapshot) {
   return events.filter(event => eventCategory(event.type) === state.timelineFilter);
 }
 
+function renderLandmarks(snapshot) {
+  const container = byId('landmarkList');
+  container.replaceChildren();
+  const values = Array.isArray(snapshot?.sessionLandmarks) ? snapshot.sessionLandmarks.slice(-24) : [];
+  if (!values.length) {
+    const empty = document.createElement('span');
+    empty.className = 'empty';
+    empty.textContent = 'No interview landmarks yet.';
+    container.append(empty);
+    return;
+  }
+  for (const landmark of values) {
+    const chip = document.createElement('span');
+    chip.className = 'landmark-chip';
+    chip.title = landmark.targetId || landmark.category;
+    const label = document.createElement('span');
+    label.textContent = `${new Date(landmark.at).toLocaleTimeString([], { hour12: false })} · ${humanizeCode(landmark.category)}`;
+    chip.append(label);
+    if (landmark.source === 'operator') {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.setAttribute('aria-label', `Remove ${humanizeCode(landmark.category)} marker`);
+      remove.dataset.markerRemove = landmark.id;
+      chip.append(remove);
+    }
+    container.append(chip);
+  }
+}
+
 function renderTimeline(snapshot) {
+  renderLandmarks(snapshot);
   const events = filteredTimeline(snapshot);
   const slice = virtualSlice(events, timelineViewport.scrollTop, timelineViewport.clientHeight, 52, 6);
   timelineCanvas.style.height = `${Math.max(slice.totalHeight, timelineViewport.clientHeight)}px`;
@@ -1236,6 +1284,22 @@ document.addEventListener('click', event => {
   if (traceButton) {
     state.selectedTraceId = traceButton.dataset.traceId || '';
     renderReview(state.snapshot);
+    return;
+  }
+  const markerButton = event.target.closest('[data-marker-category]');
+  if (markerButton) {
+    const targetId = state.selectedQueueId || 'session';
+    const targetType = state.selectedQueueId ? 'envelope' : 'session';
+    void runCommand(markerButton, 'add_marker', {
+      category: markerButton.dataset.markerCategory,
+      targetType,
+      targetId
+    });
+    return;
+  }
+  const markerRemove = event.target.closest('[data-marker-remove]');
+  if (markerRemove) {
+    void runCommand(markerRemove, 'remove_marker', { markerId: markerRemove.dataset.markerRemove || '' });
     return;
   }
   const incidentButton = event.target.closest('[data-incident-action]');
