@@ -719,6 +719,9 @@ export function createRuntimePilotController({
       case 'repair_runtime':
         result = await repair(sessionId, registry, pilot);
         break;
+      case 'retry_outbox':
+        result = await sendRuntimeCommand(registry, sessionId, 'sender', 'retry_outbox');
+        break;
       case 'resend_context':
         result = await sendRuntimeCommand(registry, sessionId, 'sender', 'resend_context');
         break;

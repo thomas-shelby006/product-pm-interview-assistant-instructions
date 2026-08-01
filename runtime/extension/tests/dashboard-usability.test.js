@@ -120,3 +120,10 @@ test('Pilot exposes Gap Watch for protected out-of-order finals', () => {
   assert.match(markup, /id="gapState"/);
   assert.match(markup, /id="gapDetail"/);
 });
+
+
+test('Pilot exposes sender outbox status and a safe retry control', () => {
+  assert.match(markup, /class="live-panel outbox-panel"/);
+  assert.match(markup, /data-command="retry_outbox"/);
+  assert.match(markup, /id="outboxDetail"/);
+});

@@ -178,7 +178,8 @@ async function startRuntime(runtimeConfig) {
   const senderOutbox = runtimeConfig.role === 'sender'
     ? createSenderOutbox({
         storage: sessionStorage,
-        key: `pmia_sender_outbox_${runtimeConfig.sessionId}`
+        key: `pmia_sender_outbox_${runtimeConfig.sessionId}`,
+        onState: value => telemetry?.event('outbox_state', value)
       })
     : null;
 
@@ -209,9 +210,12 @@ async function startRuntime(runtimeConfig) {
     return response;
   }
 
-  async function replaySenderOutbox() {
+  async function replaySenderOutbox({ immediate = false } = {}) {
     if (!senderOutbox?.size || !runtimeRegistered || paused) return [];
-    return senderOutbox.replay(envelope => persistEnvelope(envelope));
+    if (immediate) return senderOutbox.retryNow(envelope => persistEnvelope(envelope));
+    const results = await senderOutbox.replay(envelope => persistEnvelope(envelope));
+    if (senderOutbox.size) senderOutbox.schedule(envelope => persistEnvelope(envelope));
+    return results;
   }
 
   rolePort = createRuntimeRolePort({
@@ -250,6 +254,7 @@ async function startRuntime(runtimeConfig) {
     getVoiceActive: isCombinedVoiceActive,
     getBatchState: () => safeBatchTelemetry(receiverBatchRuntime?.snapshot())
   });
+  if (senderOutbox) telemetry.event('outbox_state', senderOutbox.snapshot());
 
   async function register() {
     const response = await message({
@@ -268,7 +273,7 @@ async function startRuntime(runtimeConfig) {
       }
       rolePort?.connect();
       void telemetry.publish({ force: true, event: { type: 'registration' } });
-      if (senderOutbox?.size) setTimeout(() => { void replaySenderOutbox(); }, 0);
+      if (senderOutbox?.size) senderOutbox.schedule(envelope => persistEnvelope(envelope), { immediate: true });
       return true;
     }
     if (response?.terminal) {
@@ -376,6 +381,7 @@ async function startRuntime(runtimeConfig) {
       overlay.setStatus(response?.queued ? 'STAGED' : 'PERSISTED', 'warn', 1600);
     } else {
       overlay.setStatus('OUTBOX RETAINED', 'error', 2000);
+      senderOutbox?.schedule(envelope => persistEnvelope(envelope));
     }
     await logEvent('sender_text', {
       envelopeId: envelope.id,
@@ -775,6 +781,13 @@ async function startRuntime(runtimeConfig) {
         telemetry.event('runtime_recovery_requested', { scheduled });
         return { ok: true, scheduled };
       }
+      case 'retry_outbox':
+        if (runtimeConfig.role !== 'sender') return { ok: false, error: 'sender_only' };
+        return {
+          ok: true,
+          results: await replaySenderOutbox({ immediate: true }),
+          outbox: senderOutbox?.snapshot() || { count: 0 }
+        };
       case 'resend_context':
         if (runtimeConfig.role !== 'sender') return { ok: false, error: 'sender_only' };
         if (!latestBootContext) return { ok: false, error: 'boot_context_missing' };

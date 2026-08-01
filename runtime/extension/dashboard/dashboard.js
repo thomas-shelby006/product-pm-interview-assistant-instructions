@@ -13,6 +13,7 @@ import { catchUpLabel, deriveLatencyRail, deriveLiveInbox } from './live-inbox-m
 import { derivePaceGuard, paceLabel } from './pace-guard-model.js';
 import { diagnosticTone, groupRuntimeWarnings } from './diagnostics-model.js';
 import { deriveGapWatch } from './gap-watch-model.js';
+import { deriveOutboxStatus } from './outbox-status-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -264,6 +265,9 @@ function renderLiveCommandCenter(snapshot, now) {
     text('gapState', '--');
     text('gapTitle', 'Waiting for sequence state');
     text('gapDetail', 'No receiver sequence evidence is available yet.');
+    text('outboxState', '--');
+    text('outboxTitle', 'Waiting for sender state');
+    text('outboxDetail', 'No sender outbox evidence is available yet.');
     text('storagePressureBadge', '--');
     text('storagePressureValue', '--');
     text('storagePressureDetail', 'Session memory status is not available yet.');
@@ -320,6 +324,15 @@ function renderLiveCommandCenter(snapshot, now) {
       : pace.state === 'falling_behind'
         ? `${pace.unresolved} unresolved - intake is exceeding rendered proof.`
         : `${pace.unresolved} unresolved - waiting for a positive recovery rate.`);
+
+  const outbox = deriveOutboxStatus(snapshot, now);
+  const outboxPanel = document.querySelector('.outbox-panel');
+  if (outboxPanel) outboxPanel.dataset.outbox = outbox.state;
+  text('outboxState', outbox.state === 'clear' ? 'Clear' : outbox.replaying ? 'Retrying' : `${outbox.count} retained`);
+  text('outboxTitle', outbox.count ? `${outbox.count} final(s) awaiting persistence` : 'No unpersisted finals');
+  text('outboxDetail', outbox.count
+    ? `${outbox.lastError || 'Waiting for service-worker acknowledgement'}${outbox.retryInMs ? ` - retry in ${formatDuration(outbox.retryInMs)}` : ''}.`
+    : 'Window 1 has no pending persistence acknowledgement.');
 
   const gap = deriveGapWatch(snapshot, now);
   const gapPanel = document.querySelector('.gap-panel');
@@ -597,6 +610,7 @@ function updateControlAvailability() {
     byId('submitNow').disabled ||= !nextCount || active;
     byId('interruptLatest').disabled ||= !nextCount || !(active || generating);
     byId('copyLatest').disabled ||= !state.snapshot?.latestFinal?.text;
+    byId('retryOutbox').disabled ||= deriveOutboxStatus(state.snapshot).count === 0;
     byId('submitSelected').disabled ||= !state.selectedQueueId;
     byId('archiveSelected').disabled ||= !state.selectedQueueId;
   }

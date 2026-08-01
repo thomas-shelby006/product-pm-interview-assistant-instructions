@@ -84,6 +84,13 @@
             <p id="paceForecast">No unresolved finals.</p>
           </article>
 
+          <article class="live-panel outbox-panel" data-outbox="clear">
+            <div class="panel-title"><span class="eyebrow">Sender outbox</span><b id="outboxState">Clear</b></div>
+            <strong id="outboxTitle">No unpersisted finals</strong>
+            <p id="outboxDetail">Window 1 has no pending persistence acknowledgement.</p>
+            <button id="retryOutbox" data-command="retry_outbox">Retry outbox now</button>
+          </article>
+
           <article class="live-panel gap-panel" data-gap="clear">
             <div class="panel-title"><span class="eyebrow">Gap watch</span><b id="gapState">No gap</b></div>
             <strong id="gapTitle">Sequences are contiguous</strong>

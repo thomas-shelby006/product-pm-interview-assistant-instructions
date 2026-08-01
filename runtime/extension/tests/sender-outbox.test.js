@@ -1,6 +1,6 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSenderOutbox } from '../content/sender-outbox.js';
+import { createSenderOutbox, nextRetryDelay } from '../content/sender-outbox.js';
 
 function storage(initial = {}) {
   const values = new Map(Object.entries(initial));
@@ -60,4 +60,41 @@ test('sender outbox stops replay after the first unpersisted final', async () =>
   });
   assert.deepEqual(seen, ['q-1']);
   assert.equal(outbox.size, 2);
+});
+
+
+test('sender outbox schedules one ordered retry with capped jittered backoff', async () => {
+  let now = 1000;
+  const timers = [];
+  const outbox = createSenderOutbox({
+    storage: storage(), key: 'outbox', now: () => now, random: () => .5,
+    setTimer(fn, delay) { timers.push({ fn, delay }); return timers.length; },
+    clearTimer() {}
+  });
+  outbox.enqueue(envelope('q-2', 2));
+  outbox.enqueue(envelope('q-1', 1));
+  await outbox.replay(async () => ({ ok: false, persisted: false, error: 'offline' }));
+  assert.equal(outbox.snapshot().attempts, 1);
+  assert.equal(outbox.schedule(async () => ({ ok: true, persisted: true })), true);
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].delay, nextRetryDelay(0, () => .5));
+});
+
+test('retry now resets to immediate ordered replay without duplicating persisted entries', async () => {
+  const outbox = createSenderOutbox({ storage: storage(), key: 'outbox' });
+  outbox.enqueue(envelope('q-2', 2));
+  outbox.enqueue(envelope('q-1', 1));
+  const seen = [];
+  await outbox.retryNow(async item => {
+    seen.push(item.id);
+    return { ok: true, persisted: true };
+  });
+  assert.deepEqual(seen, ['q-1', 'q-2']);
+  assert.equal(outbox.size, 0);
+});
+
+test('retry delay is capped and jitter remains bounded', () => {
+  assert.equal(nextRetryDelay(0, () => 0), 200);
+  assert.equal(nextRetryDelay(0, () => 1), 300);
+  assert.ok(nextRetryDelay(99, () => 1) <= 9600);
 });
