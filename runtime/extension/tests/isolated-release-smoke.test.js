@@ -20,6 +20,10 @@ test('isolated smoke owns a temporary profile and exact Edge process tree', () =
   assert.doesNotMatch(powershell, /Edge\\User Data\\Default|--profile-directory=Default/);
 });
 
+test('isolated smoke decodes legacy arrays and versioned session envelopes', () => {
+  assert.match(runner, /Array\.isArray\(stored\)\?stored:\(Array\.isArray\(stored\?\.sessions\)\?stored\.sessions:\[\]\)/);
+});
+
 test('isolated smoke uses fixed synthetic questions and exact proof checks', () => {
   assert.match(runner, /Synthetic PMIA release Q1/);
   assert.match(runner, /Synthetic PMIA release Q2/);

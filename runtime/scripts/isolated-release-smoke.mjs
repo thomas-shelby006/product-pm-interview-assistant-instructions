@@ -142,7 +142,7 @@ let failure = null;
 
 async function pilotState() {
   if (!worker) return null;
-  const raw = await worker.evaluate(`(async()=>{const value=await chrome.storage.session.get('pmia_runtime_pilot_v1');return JSON.stringify((value.pmia_runtime_pilot_v1||[]).find(item=>item.sessionId===${JSON.stringify(session)})||null)})()`);
+  const raw = await worker.evaluate(`(async()=>{const value=await chrome.storage.session.get('pmia_runtime_pilot_v1');const stored=value.pmia_runtime_pilot_v1;const sessions=Array.isArray(stored)?stored:(Array.isArray(stored?.sessions)?stored.sessions:[]);return JSON.stringify(sessions.find(item=>item.sessionId===${JSON.stringify(session)})||null)})()`);
   return JSON.parse(raw);
 }
 async function pageState(client) {
