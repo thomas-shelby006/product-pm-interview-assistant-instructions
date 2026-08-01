@@ -30,6 +30,7 @@ import { renderTruthRail } from './render-live-status.js';
 import { renderRuntimeRole } from './render-runtime-health.js';
 import { ReconnectPolicy } from '../shared/reconnect-policy.js';
 import { buildTraceIndex, searchDeliveryTraces, inspectDeliveryTrace } from './trace-inspector-model.js';
+import { deriveStateCompatibility } from './state-compatibility-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -794,6 +795,15 @@ function formatForecastDuration(value) {
 }
 
 function renderMechanics(snapshot) {
+  const compatibility = deriveStateCompatibility(snapshot);
+  const compatibilityCard = document.querySelector('.compatibility-card');
+  if (compatibilityCard) compatibilityCard.dataset.state = compatibility.state;
+  text('stateCompatibilityState', compatibility.label);
+  text('stateCompatibilityDetail', compatibility.detail);
+  text('stateCompatibilitySchema', compatibility.schemaPath);
+  text('stateCompatibilityIntegrity', compatibility.integrityState.replaceAll('_', ' '));
+  text('stateCompatibilityAction', compatibility.nextAction.replaceAll('_', ' '));
+
   const forecast = snapshot?.deliveryForecast || {};
   text('forecastRisk', String(forecast.risk || 'clear').replaceAll('_', ' '));
   text('forecastDrain', formatForecastDuration(forecast.drainEstimateMs));

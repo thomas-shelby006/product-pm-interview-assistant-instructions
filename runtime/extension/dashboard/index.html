@@ -300,6 +300,16 @@
         <div class="section-heading"><div><h2>Session review</h2><p>Safe metadata and runtime outcomes only.</p></div></div>
         <div class="review-grid" id="reviewGrid"></div>
         <section class="mechanics-grid" aria-label="Transport mechanics">
+          <article class="mechanics-card compatibility-card" data-state="unknown">
+            <div class="section-heading"><div><h3>State compatibility</h3><p>Schema, migration, integrity, and recovery status.</p></div></div>
+            <p class="mechanics-primary" id="stateCompatibilityState">Waiting</p>
+            <p id="stateCompatibilityDetail">No state audit is available.</p>
+            <dl class="mechanics-stats">
+              <div><dt>Schema</dt><dd id="stateCompatibilitySchema">--</dd></div>
+              <div><dt>Integrity</dt><dd id="stateCompatibilityIntegrity">--</dd></div>
+              <div><dt>Next action</dt><dd id="stateCompatibilityAction">None</dd></div>
+            </dl>
+          </article>
           <article class="mechanics-card">
             <div class="section-heading"><div><h3>Delivery forecast</h3><p>Proof latency, drain estimate, and predicted SLO risk.</p></div></div>
             <dl class="mechanics-stats">

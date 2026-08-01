@@ -285,3 +285,11 @@ test('dashboard supports 320 CSS pixel reflow and print ordering', () => {
   assert.match(styles, /@media print/);
   assert.match(styles, /truth-rail/);
 });
+
+test('Runtime Pilot exposes metadata-only state compatibility', () => {
+  for (const id of ['stateCompatibilityState', 'stateCompatibilitySchema', 'stateCompatibilityIntegrity', 'stateCompatibilityAction']) {
+    assert.match(markup, new RegExp(`id="${id}"`));
+  }
+  assert.match(dashboard, /deriveStateCompatibility\(snapshot\)/);
+  assert.match(styles, /\.compatibility-card/);
+});

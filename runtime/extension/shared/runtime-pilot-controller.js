@@ -68,6 +68,28 @@ export function createRuntimePilotController({
     return store.load();
   }
 
+  function blockedStateSnapshot(sessionId, error = null) {
+    const now = Date.now();
+    return {
+      sessionId: String(sessionId || ''),
+      createdAt: now,
+      updatedAt: now,
+      now,
+      uptimeMs: 0,
+      mode: 'blocked',
+      sender: { connected: false, phase: 'missing', composerReady: false, provider: '' },
+      receiver: { connected: false, phase: 'missing', composerReady: false, provider: '' },
+      ledger: [],
+      ledgerCounts: { pending: 0, inFlight: 0, proven: 0, archived: 0, failed: 0 },
+      warnings: [{ code: 'runtime_state_blocked', severity: 'error', reason: safeError(error) }],
+      timeline: [],
+      commandJournal: [],
+      metrics: {},
+      dashboardConnections: sessionPorts(sessionId).size,
+      stateAudit: store.audit()
+    };
+  }
+
   async function broadcast(sessionId, pilot = null) {
     const current = pilot || await state();
     const baseSnapshot = current.snapshot(sessionId, Date.now());
@@ -1216,7 +1238,11 @@ export function createRuntimePilotController({
         windowId: entry.windowId
       });
       await commit(sessionId, pilot);
-    }).catch(() => {});
+    }).catch(error => {
+      const snapshot = blockedStateSnapshot(sessionId, error);
+      entry.lastSnapshot = snapshot;
+      post(port, { type: 'PMIA_DASHBOARD_SNAPSHOT', sessionId, snapshot });
+    });
 
     port.onMessage.addListener(raw => {
       mutationCoordinator.run(sessionId, () => handleCommand(raw))
@@ -1305,9 +1331,13 @@ export function createRuntimePilotController({
   }
 
   async function snapshot(sessionId) {
-    const pilot = await state();
-    const value = pilot.snapshot(sessionId, Date.now());
-    return value ? { ...value, stateAudit: store.audit() } : null;
+    try {
+      const pilot = await state();
+      const value = pilot.snapshot(sessionId, Date.now());
+      return value ? { ...value, stateAudit: store.audit() } : null;
+    } catch (error) {
+      return blockedStateSnapshot(sessionId, error);
+    }
   }
 
   return {

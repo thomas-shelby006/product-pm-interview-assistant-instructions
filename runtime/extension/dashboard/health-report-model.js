@@ -7,6 +7,7 @@ import { deriveMemoryGuard } from './memory-guard-model.js';
 import { deriveRecoveryProgress } from './recovery-progress-model.js';
 import { derivePaceGuard } from './pace-guard-model.js';
 import { deriveSelfTestTrust } from './self-test-trust-model.js';
+import { deriveStateCompatibility } from './state-compatibility-model.js';
 
 export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {}) {
   if (!snapshot) return { generatedAt: now, status: 'disconnected' };
@@ -18,6 +19,7 @@ export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {
   const recovery = deriveRecoveryProgress(snapshot);
   const pace = derivePaceGuard(snapshot, now);
   const verification = deriveSelfTestTrust(snapshot, now);
+  const compatibility = deriveStateCompatibility(snapshot);
   return {
     generatedAt: now,
     sessionId: String(snapshot.sessionId || ''),
@@ -26,6 +28,15 @@ export function buildSafeHealthReport(snapshot, now = Date.now(), efficiency = {
       blockers: readiness.blockers.map(item => ({ code: item.code, label: item.label }))
     },
     runtime: buildDiagnostics(snapshot, now),
+    stateCompatibility: {
+      state: compatibility.state,
+      schemaVersion: compatibility.schemaVersion,
+      schemaPath: compatibility.schemaPath,
+      integrityState: compatibility.integrityState,
+      code: compatibility.code,
+      nextAction: compatibility.nextAction,
+      quarantinePresent: compatibility.quarantinePresent
+    },
     verification: { state: verification.state, source: verification.source, expiresAt: verification.expiresAt },
     delivery: {
       gap: { state: gap.state, expectedSeq: gap.expectedSeq, bufferedCount: gap.bufferedCount, ageMs: gap.ageMs },
