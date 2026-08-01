@@ -1,6 +1,7 @@
 import { isEnvelope } from './protocol.js';
 import { memberSetFingerprint, sameMemberSet } from './batch-planner.js';
 import { acquireAttemptLease, normalizeAttemptLease, releaseAttemptLease } from './delivery-attempt-lease.js';
+import { DeliveryLedgerIndex } from './delivery-ledger-index.js';
 
 export const ACTIVE_LEDGER_STATES = new Set(['persisted', 'staged', 'submitting', 'failed']);
 const ALL_LEDGER_STATES = new Set([...ACTIVE_LEDGER_STATES, 'proven', 'archived']);
@@ -51,19 +52,14 @@ function normalizeEntry(value) {
   };
 }
 
-function sameSequence(first, second) {
-  const a = Number(first?.seq || 0);
-  const b = Number(second?.seq || 0);
-  return Boolean(a && b && a === b && first?.sourceProvider === second?.sourceProvider);
-}
-
 export class DeliveryLedger {
   #entries = [];
+  #index = new DeliveryLedgerIndex();
 
   constructor(state = []) {
     for (const value of Array.isArray(state) ? state : []) {
       const entry = normalizeEntry(value);
-      if (!entry || this.#entries.some(existing => existing.id === entry.id)) continue;
+      if (!entry || !this.#index.insert(entry).accepted) continue;
       this.#entries.push(entry);
     }
     this.#sort();
@@ -77,9 +73,8 @@ export class DeliveryLedger {
     if (!isEnvelope(envelope) || envelope.kind === 'boot') {
       return { accepted: false, persisted: false, reason: 'invalid_final', entry: null };
     }
-    const duplicate = this.#entries.find(entry => (
-      entry.id === String(envelope.id) || sameSequence(entry.envelope, envelope)
-    ));
+    const duplicate = this.#index.byId(envelope.id)
+      || this.#index.bySequence(envelope.sourceProvider, envelope.seq);
     if (duplicate) {
       return {
         accepted: true,
@@ -90,6 +85,10 @@ export class DeliveryLedger {
       };
     }
     const entry = normalizeEntry({ envelope, persistedAt: now, updatedAt: now, state: 'persisted' });
+    const indexed = this.#index.insert(entry);
+    if (!indexed.accepted) {
+      return { accepted: true, persisted: true, duplicate: true, reason: indexed.reason, entry: cloneEntry(indexed.entry) };
+    }
     this.#entries.push(entry);
     this.#sort();
     return {
@@ -102,7 +101,7 @@ export class DeliveryLedger {
   }
 
   get(id) {
-    const entry = this.#entries.find(candidate => candidate.id === String(id));
+    const entry = this.#index.byId(id);
     return entry ? cloneEntry(entry) : null;
   }
 
@@ -170,7 +169,7 @@ export class DeliveryLedger {
   }
 
   acquireAttemptLease(id, options = {}) {
-    const entry = this.#entries.find(candidate => candidate.id === String(id));
+    const entry = this.#index.byId(id);
     if (!entry || !ACTIVE_LEDGER_STATES.has(entry.state)) {
       return { accepted: false, reason: 'ledger_item_unavailable', lease: null, entry: entry ? cloneEntry(entry) : null };
     }
@@ -183,7 +182,7 @@ export class DeliveryLedger {
   }
 
   releaseAttemptLease(id, options = {}) {
-    const entry = this.#entries.find(candidate => candidate.id === String(id));
+    const entry = this.#index.byId(id);
     if (!entry) return { released: false, reason: 'ledger_item_missing', lease: null, entry: null };
     const result = releaseAttemptLease(entry.attemptLease, options);
     if (result.released) {
@@ -294,7 +293,9 @@ export class DeliveryLedger {
     const removeCount = Math.max(0, proven.length - keep);
     if (!removeCount) return [];
     const removeIds = new Set(proven.slice(0, removeCount).map(entry => entry.id));
-    const removed = this.#entries.filter(entry => removeIds.has(entry.id)).map(cloneEntry);
+    const removedEntries = this.#entries.filter(entry => removeIds.has(entry.id));
+    const removed = removedEntries.map(cloneEntry);
+    for (const entry of removedEntries) this.#index.remove(entry);
     this.#entries = this.#entries.filter(entry => !removeIds.has(entry.id));
     return removed;
   }
@@ -331,10 +332,11 @@ export class DeliveryLedger {
   }
 
   #transition(ids, mutate) {
-    const wanted = new Set((Array.isArray(ids) ? ids : [ids]).map(String));
+    const wanted = [...new Set((Array.isArray(ids) ? ids : [ids]).map(String))];
     const changed = [];
-    for (const entry of this.#entries) {
-      if (!wanted.has(entry.id) || !mutate(entry)) continue;
+    for (const id of wanted) {
+      const entry = this.#index.byId(id);
+      if (!entry || !mutate(entry)) continue;
       changed.push(cloneEntry(entry));
     }
     return changed;
