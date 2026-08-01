@@ -135,3 +135,12 @@ test('safe heartbeat checkpoint preserves richer active batch proof metadata', (
     proof: 'new_rendered_turn'
   });
 });
+
+
+test('context armed is durable session state rather than timeline-only evidence', () => {
+  const state = new RuntimePilotState();
+  state.setContextArmed('s1', true, 100);
+  const restored = new RuntimePilotState(state.exportState());
+  assert.equal(restored.snapshot('s1', 101).contextArmed, true);
+  assert.equal(restored.snapshot('s1', 101).contextArmedAt, 100);
+});

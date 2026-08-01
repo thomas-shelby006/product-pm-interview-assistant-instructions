@@ -404,6 +404,9 @@ export function createRuntimePilotController({
         verified: true
       });
     }
+    if (event?.type === 'session_armed') {
+      pilot.setContextArmed(sessionId, true);
+    }
     if (event?.type === 'answer') {
       pilot.recordAnswer(sessionId, {
         envelopeId: event.envelopeId,

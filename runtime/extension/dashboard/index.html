@@ -27,6 +27,19 @@
       <div id="operationGuard"><span>Operation</span><strong id="operationActivity">Idle</strong></div>
     </section>
 
+    <section id="readinessGate" class="readiness-gate" data-readiness="not_ready" aria-live="polite" aria-atomic="true">
+      <div>
+        <span class="eyebrow">Interview readiness</span>
+        <strong id="readinessLabel">Not ready</strong>
+        <p id="readinessSummary">Waiting for live runtime evidence.</p>
+        <ul id="readinessBlockers" class="readiness-blockers"></ul>
+      </div>
+      <div class="readiness-actions">
+        <button data-command="check_live">Check live</button>
+        <button data-command="repair_runtime">Repair</button>
+      </div>
+    </section>
+
     <nav class="tabs" aria-label="Dashboard views" role="tablist">
       <button class="tab active" data-view="overview" role="tab" aria-selected="true" aria-controls="panelOverview">Live</button>
       <button class="tab" data-view="queue" role="tab" aria-selected="false" aria-controls="panelQueue">Inbox <span id="queueBadge">0</span></button>

@@ -140,3 +140,10 @@ test('Pilot exposes Memory Guard and safe proven-history compaction', () => {
   assert.match(markup, /id="memoryBreakdown"/);
   assert.match(markup, /data-command="compact_proven"/);
 });
+
+
+test('Pilot exposes an accessible decisive Interview Readiness Gate', () => {
+  assert.match(markup, /id="readinessGate"[^>]*aria-live="polite"/);
+  assert.match(markup, /id="readinessBlockers"/);
+  assert.match(markup, /Interview readiness/);
+});

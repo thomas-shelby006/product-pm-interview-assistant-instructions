@@ -111,7 +111,9 @@ function normalizeSession(item) {
     lastRepair: item.lastRepair || null,
     endedAt: Number.isFinite(item.endedAt) ? item.endedAt : 0,
     storagePressure: item.storagePressure || { bytes: 0, quotaBytes: 10485760, percent: 0, level: 'normal' },
-    proofArchive: item.proofArchive || { count: 0, lastProvenAt: 0 }
+    proofArchive: item.proofArchive || { count: 0, lastProvenAt: 0 },
+    contextArmed: Boolean(item.contextArmed),
+    contextArmedAt: Number(item.contextArmedAt || 0)
   };
 }
 
@@ -190,6 +192,15 @@ export class RuntimePilotState {
     const session = this.ensure(sessionId, now);
     session.latestPreview = preview ? { ...preview, observedAt: now } : null;
     session.updatedAt = now;
+  }
+
+  setContextArmed(sessionId, value = true, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.contextArmed = Boolean(value);
+    session.contextArmedAt = session.contextArmed ? now : 0;
+    session.updatedAt = now;
+    this.record(sessionId, session.contextArmed ? 'context_armed' : 'context_disarmed', {}, now);
+    return session.contextArmed;
   }
 
   recordFinal(sessionId, envelope, now = Date.now()) {
@@ -608,7 +619,9 @@ export class RuntimePilotState {
       lastRepair: session.lastRepair ? { ...session.lastRepair } : null,
       endedAt: session.endedAt,
       storagePressure: { ...session.storagePressure },
-      proofArchive: { ...session.proofArchive }
+      proofArchive: { ...session.proofArchive },
+      contextArmed: session.contextArmed,
+      contextArmedAt: session.contextArmedAt
     };
   }
 
@@ -632,7 +645,9 @@ export class RuntimePilotState {
       lastRepair: session.lastRepair,
       endedAt: session.endedAt,
       storagePressure: { ...session.storagePressure },
-      proofArchive: { ...session.proofArchive }
+      proofArchive: { ...session.proofArchive },
+      contextArmed: session.contextArmed,
+      contextArmedAt: session.contextArmedAt
     }));
   }
 }

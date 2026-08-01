@@ -16,6 +16,7 @@ import { deriveGapWatch } from './gap-watch-model.js';
 import { deriveOutboxStatus } from './outbox-status-model.js';
 import { deriveProofInspector } from './proof-inspector-model.js';
 import { deriveMemoryGuard } from './memory-guard-model.js';
+import { deriveReadiness } from './readiness-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -253,6 +254,25 @@ function renderLatencyRail(snapshot) {
   });
 }
 
+function renderReadiness(snapshot, now) {
+  const readiness = deriveReadiness(snapshot, now);
+  const gate = byId('readinessGate');
+  gate.dataset.readiness = readiness.state;
+  text('readinessLabel', readiness.label);
+  text('readinessSummary', readiness.state === 'ready'
+    ? 'Window 1, Window 2, context, delivery, and storage checks are healthy.'
+    : readiness.state === 'repairing'
+      ? 'Repair is running. Ready will appear only after every check passes.'
+      : `${readiness.blockers.length} blocker(s) must be resolved before relying on the runtime.`);
+  const list = byId('readinessBlockers');
+  list.replaceChildren();
+  for (const value of readiness.blockers.slice(0, 5)) {
+    const item = document.createElement('li');
+    item.textContent = value.label;
+    list.append(item);
+  }
+}
+
 function renderLiveCommandCenter(snapshot, now) {
   if (!snapshot) {
     const stateCard = document.querySelector('.live-state-card');
@@ -468,6 +488,7 @@ function renderOverview(snapshot, now) {
   text('transportMode', snapshot?.mode || '--');
   text('uptime', snapshot ? formatDuration(now - snapshot.createdAt) : '--');
   renderOperationActivity();
+  renderReadiness(snapshot, now);
   renderLiveCommandCenter(snapshot, now);
   renderRole('sender', snapshot?.sender, now);
   renderRole('receiver', snapshot?.receiver, now);
