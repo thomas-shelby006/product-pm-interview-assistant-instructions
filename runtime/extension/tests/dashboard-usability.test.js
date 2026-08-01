@@ -190,3 +190,11 @@ test('Runtime Pilot exposes recent command results and replay counts', () => {
   assert.match(dashboardJs, /snapshot\?\.commandJournal/);
   assert.match(dashboardJs, /replayed \$\{command\.replayCount\}/);
 });
+
+
+test('Runtime Pilot exposes direct-port circuit and fallback state', () => {
+  assert.match(markup, /id="senderTransportLane"/);
+  assert.match(markup, /id="receiverTransportLane"/);
+  assert.match(dashboard, /deriveTransportLanes\(snapshot, now\)/);
+  assert.match(styles, /\.transport-lane-list/);
+});

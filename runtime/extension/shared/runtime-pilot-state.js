@@ -22,7 +22,8 @@ function emptyRole() {
     localPaused: false,
     heartbeatAt: 0,
     lastActivityAt: 0,
-    pageUrl: ''
+    pageUrl: '',
+    transportLane: { state: 'unknown', lastMode: '', lastRttMs: 0, consecutiveFailures: 0, nextProbeAt: 0, lastFailureReason: '', updatedAt: 0 }
   };
 }
 
@@ -180,6 +181,21 @@ export class RuntimePilotState {
     };
     session.updatedAt = now;
     return { ...session[role] };
+  }
+
+  updateTransportLane(sessionId, role, value = {}, now = Date.now()) {
+    if (!ROLE_NAMES.includes(role)) return null;
+    const session = this.ensure(sessionId, now);
+    session[role] = {
+      ...session[role],
+      transportLane: {
+        ...(session[role].transportLane || {}),
+        ...(value && typeof value === 'object' ? value : {}),
+        updatedAt: Number(value?.updatedAt || now)
+      }
+    };
+    session.updatedAt = now;
+    return { ...session[role].transportLane };
   }
 
   disconnectRole(sessionId, role, now = Date.now()) {

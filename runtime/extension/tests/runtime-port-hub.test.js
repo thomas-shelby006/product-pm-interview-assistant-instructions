@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRuntimePortHub, parseRolePortName, rolePortName } from '../shared/runtime-port-hub.js';
 
@@ -65,4 +65,55 @@ test('replacing a role port rejects requests owned by the old connection', async
   hub.connect(nextPort);
   await assert.rejects(pending, /port_replaced/);
   assert.equal(hub.get('s1', 'receiver').instanceId, 'new');
+});
+
+
+test('runtime port hub opens circuit and fails fast after repeated timeouts', async () => {
+  let now = 1000;
+  const timers = [];
+  const states = [];
+  const hub = createRuntimePortHub({
+    timeoutMs: 100,
+    now: () => now,
+    setTimer(fn) { timers.push(fn); return timers.length; },
+    clearTimer() {},
+    onCircuitState(value) { states.push(value); }
+  });
+  const port = fakePort(rolePortName('s1', 'receiver', 'i2'), 20);
+  hub.connect(port);
+  const first = hub.request('s1', 'receiver', { operation: 'deliver', payload: {} });
+  timers.shift()();
+  await assert.rejects(first, /port_request_timeout/);
+  const second = hub.request('s1', 'receiver', { operation: 'deliver', payload: {} });
+  timers.shift()();
+  await assert.rejects(second, /port_request_timeout/);
+  assert.equal(hub.getTransportState('s1', 'receiver').state, 'open');
+  await assert.rejects(
+    hub.request('s1', 'receiver', { operation: 'deliver', payload: {} }),
+    /port_circuit_open/
+  );
+  assert.ok(states.some(value => value.state === 'open'));
+});
+
+test('runtime port hub successful probe closes transport circuit', async () => {
+  let now = 1000;
+  const hub = createRuntimePortHub({ now: () => now });
+  const port = fakePort(rolePortName('s1', 'receiver', 'i2'), 20);
+  hub.connect(port);
+  const pending = hub.request('s1', 'receiver', { operation: 'deliver', payload: {} });
+  const request = port.sent.at(-1);
+  now = 1030;
+  port.onMessage.emit({ type: 'response', requestId: request.requestId, result: { ok: true } });
+  await pending;
+  assert.equal(hub.getTransportState('s1', 'receiver').state, 'closed');
+  assert.equal(hub.getTransportState('s1', 'receiver').lastRttMs, 30);
+});
+
+
+test('runtime port hub records message fallback when direct port is missing', () => {
+  const states = [];
+  const hub = createRuntimePortHub({ onCircuitState: value => states.push(value) });
+  const state = hub.noteFallback('s1', 'receiver', 'role_port_missing');
+  assert.equal(state.lastMode, 'fallback');
+  assert.equal(states.at(-1).lastFailureReason, 'role_port_missing');
 });

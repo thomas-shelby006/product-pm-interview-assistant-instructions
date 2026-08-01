@@ -216,6 +216,24 @@ export function createRuntimePilotController({
     return result;
   }
 
+  async function transportLane(value = {}) {
+    const sessionId = String(value.sessionId || '').trim();
+    const role = String(value.role || '');
+    if (!sessionId || !['sender', 'receiver'].includes(role)) return { ok: false, error: 'invalid_transport_lane' };
+    const pilot = await state();
+    pilot.updateTransportLane(sessionId, role, {
+      state: value.state,
+      lastMode: value.lastMode,
+      lastRttMs: value.lastRttMs,
+      consecutiveFailures: value.consecutiveFailures,
+      nextProbeAt: value.nextProbeAt,
+      lastFailureReason: value.lastFailureReason,
+      updatedAt: value.updatedAt
+    });
+    await commit(sessionId, pilot);
+    return { ok: true };
+  }
+
   async function syncRegistration(registration) {
     const pilot = await state();
     const tab = await tabState(registration.tabId);
@@ -1056,6 +1074,7 @@ export function createRuntimePilotController({
       registration?.sessionId,
       () => syncRegistration(registration)
     ),
+    transportLane: value => mutationCoordinator.run(value?.sessionId, () => transportLane(value)),
     recordRegistrationRecovery: (sessionId, data) => mutationCoordinator.run(
       sessionId,
       () => recordRegistrationRecovery(sessionId, data)

@@ -20,6 +20,7 @@ import { deriveReadiness } from './readiness-model.js';
 import { applySnapshotDelta } from '../shared/snapshot-delta.js';
 import { deriveRecoveryProgress } from './recovery-progress-model.js';
 import { buildSafeHealthReport } from './health-report-model.js';
+import { deriveTransportLanes } from './transport-lane-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -337,6 +338,11 @@ function renderLiveCommandCenter(snapshot, now) {
     text('commandJournalState', '--');
     text('commandJournalTitle', 'Waiting for operator command history');
     byId('commandJournalList')?.replaceChildren();
+    text('transportLaneState', '--');
+    text('senderTransportLane', 'Unknown');
+    text('receiverTransportLane', 'Unknown');
+    text('senderTransportDetail', 'No direct-port evidence.');
+    text('receiverTransportDetail', 'No direct-port evidence.');
     text('oldestInboxAge', '--');
     renderLatencyRail(null);
     return;
@@ -444,6 +450,18 @@ function renderLiveCommandCenter(snapshot, now) {
       : inbox.storage.level === 'high'
         ? 'Proven history is compacting; unresolved finals are untouched.'
         : 'Critical pressure. Unresolved finals remain protected; export or end the session soon.');
+  const lanes = deriveTransportLanes(snapshot, now);
+  text('transportLaneState', lanes.sender.state === 'closed' && lanes.receiver.state === 'closed' ? 'Direct' : 'Guarded');
+  for (const [role, value] of Object.entries(lanes)) {
+    const prefix = role === 'sender' ? 'sender' : 'receiver';
+    text(`${prefix}TransportLane`, value.label);
+    text(`${prefix}TransportDetail`, value.rttMs
+      ? `${value.rttMs} ms RTT${value.failures ? ` - ${value.failures} failure(s)` : ''}`
+      : value.retryInMs
+        ? `${value.reason || 'Direct port unavailable'} - probe in ${formatDuration(value.retryInMs)}`
+        : value.reason || 'No direct-port sample yet.');
+  }
+
   const commands = Array.isArray(snapshot?.commandJournal) ? snapshot.commandJournal : [];
   text('commandJournalState', commands.length ? `${commands.length} recent` : 'No history');
   text('commandJournalTitle', commands[0]

@@ -25,7 +25,11 @@ void logStore.purgeLegacyLocalLogs().catch(() => {});
 const operationCoordinator = createSessionMutationCoordinator();
 const registryWriteCoordinator = createSessionMutationCoordinator();
 let registryPromise = null;
+let pilotController = null;
 const rolePortHub = createRuntimePortHub({
+  onCircuitState(value) {
+    void pilotController?.transportLane(value).catch(() => {});
+  },
   async onFrame(frame) {
     if (frame.operation !== 'final' || frame.identity?.role !== 'sender') {
       return { ok: false, error: 'unsupported_role_port_frame' };
@@ -40,7 +44,7 @@ const rolePortHub = createRuntimePortHub({
     }, frame.identity.sessionId);
   }
 });
-const pilotController = createRuntimePilotController({
+pilotController = createRuntimePilotController({
   chromeApi: chrome,
   storageArea: chrome.storage.session,
   registryProvider: loadRegistry,
@@ -49,7 +53,10 @@ const pilotController = createRuntimePilotController({
   exportManagedSession,
   clearSessionLogs: sessionId => logStore.clearSession(sessionId),
   async requestRole({ sessionId, role, command, payload, fallback }) {
-    if (!rolePortHub.has(sessionId, role)) return fallback();
+    if (!rolePortHub.has(sessionId, role)) {
+      rolePortHub.noteFallback(sessionId, role, 'role_port_missing');
+      return fallback();
+    }
     try {
       return await rolePortHub.request(sessionId, role, {
         operation: 'command',
@@ -123,6 +130,7 @@ async function deliver(route, registry) {
           payload: { envelope: outgoing.envelope }
         }, { timeout: 1200 }).catch(() => chrome.tabs.sendMessage(tabId, outgoing));
       }
+      if (sessionId) rolePortHub.noteFallback(sessionId, 'receiver', 'role_port_missing');
       return chrome.tabs.sendMessage(tabId, outgoing);
     },
     wakeTab: wakeManagedTab
