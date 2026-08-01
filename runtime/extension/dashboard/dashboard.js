@@ -122,6 +122,21 @@ function handlePortMessage(message) {
     render();
     return;
   }
+  if (
+    message?.type === 'PMIA_DASHBOARD_HEARTBEAT'
+    && state.snapshot
+    && ['sender', 'receiver'].includes(message.role)
+  ) {
+    state.snapshot = {
+      ...state.snapshot,
+      [message.role]: {
+        ...state.snapshot[message.role],
+        ...(message.patch || {})
+      }
+    };
+    render();
+    return;
+  }
   if (message?.type === 'PMIA_DASHBOARD_COMMAND_RESULT') {
     const resolve = state.pending.get(message.requestId);
     if (!resolve) return;

@@ -145,3 +145,21 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** The capability probe checks function presence only and never reads conversations, writes composers, submits, stops generation, or toggles microphones.
 
 **Why this is superior:** It detects adapter contract drift before a live question reaches the submission boundary without adding brittle selector-specific checks or side effects.
+
+## Cycle 9 - Long-session performance and memory bounds
+
+**Evidence inspected:** Five-second role heartbeats, pilot storage commits, full dashboard snapshot broadcasts, existing queue/timeline/metric bounds, and client-side age rendering.
+
+**Issue/opportunity:** Unchanged heartbeats caused two full session-storage writes and full snapshots every five seconds, despite heartbeat age already being derived in the dashboard.
+
+**Classification:** Long-session storage, messaging, and rendering efficiency improvement.
+
+**Implementation:** Added telemetry fingerprinting that excludes volatile heartbeat age fields. Meaningful transitions and events still persist/broadcast full snapshots; heartbeat-only changes use a lightweight role patch over the existing dashboard port and skip storage writes.
+
+**Files changed:** New telemetry coalescer, Runtime Pilot controller, dashboard port handler, and coalescer/controller tests.
+
+**Coverage added:** Heartbeat-only equality, meaningful-state detection, safe lightweight patch shape, and controller coalescing after state establishment.
+
+**Source review:** Queue, timeline, and metric bounds remain unchanged. Lightweight patches contain no transcript, queue, timeline, or setup payload.
+
+**Why this is superior:** It cuts steady-state session-storage writes and full-snapshot traffic by roughly the heartbeat frequency while preserving immediate semantic updates and restart-safe state.

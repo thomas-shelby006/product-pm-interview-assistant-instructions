@@ -138,3 +138,19 @@ test('runtime repair remains repairing until both roles publish healthy telemetr
   assert.equal(snapshot.mode, 'active');
   assert.equal(snapshot.lastRepair.verified, true);
 });
+
+
+test('heartbeat-only telemetry is coalesced after the semantic role state is established', async () => {
+  const { controller, registry } = setup();
+  await controller.syncRegistration(registry.getSession('s1').sender);
+  const first = await controller.telemetry({
+    sessionId: 's1', role: 'sender', tabId: 1,
+    telemetry: { composerReady: true, phase: 'ready', sourceSilenceState: 'healthy', sourceSilenceMs: 1000 }
+  });
+  const heartbeat = await controller.telemetry({
+    sessionId: 's1', role: 'sender', tabId: 1,
+    telemetry: { composerReady: true, phase: 'ready', sourceSilenceState: 'healthy', sourceSilenceMs: 6000 }
+  });
+  assert.equal(first.coalesced, false);
+  assert.equal(heartbeat.coalesced, true);
+});

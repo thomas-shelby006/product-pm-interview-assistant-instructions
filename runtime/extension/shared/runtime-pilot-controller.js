@@ -1,6 +1,7 @@
 import { normalizeDashboardCommand, parseDashboardPortName } from './dashboard-protocol.js';
 import { createRuntimePilotStore } from './runtime-pilot-store.js';
 import { getRuntimeWindowLayout, windowUpdateForBounds } from './window-layout.js';
+import { hasMeaningfulTelemetryChange, heartbeatPatch } from './telemetry-coalescer.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -66,6 +67,18 @@ export function createRuntimePilotController({
     const current = pilot || await state();
     await store.save(current);
     return broadcast(sessionId, current);
+  }
+
+  function broadcastHeartbeat(sessionId, role, roleState) {
+    const patch = heartbeatPatch(roleState);
+    for (const entry of sessionPorts(sessionId)) {
+      post(entry.port, {
+        type: 'PMIA_DASHBOARD_HEARTBEAT',
+        sessionId,
+        role,
+        patch
+      });
+    }
   }
 
   function schedulePreviewCommit(sessionId) {
@@ -164,15 +177,20 @@ export function createRuntimePilotController({
 
   async function telemetry({ sessionId, role, tabId, telemetry: value }) {
     const pilot = await state();
+    const previousRole = pilot.snapshot(sessionId)?.[role] || {};
     const tab = await tabState(tabId);
     const event = value?.event;
     const telemetryState = value && typeof value === 'object' ? { ...value } : {};
     delete telemetryState.event;
-    pilot.updateRole(sessionId, role, {
+    const nextRole = {
+      ...previousRole,
       ...tab,
       ...telemetryState,
+      connected: true,
       heartbeatAt: Date.now()
-    });
+    };
+    const meaningful = Boolean(event) || hasMeaningfulTelemetryChange(previousRole, nextRole);
+    const updatedRole = pilot.updateRole(sessionId, role, nextRole);
     const refreshed = pilot.snapshot(sessionId);
     if (
       refreshed?.mode === 'repairing'
@@ -203,8 +221,12 @@ export function createRuntimePilotController({
     } else if (event?.type) {
       pilot.record(sessionId, event.type, event);
     }
+    if (!meaningful) {
+      broadcastHeartbeat(sessionId, role, updatedRole);
+      return { ok: true, coalesced: true };
+    }
     await commit(sessionId, pilot);
-    return { ok: true };
+    return { ok: true, coalesced: false };
   }
 
   async function sendRuntimeCommand(registry, sessionId, role, command, payload = {}) {
