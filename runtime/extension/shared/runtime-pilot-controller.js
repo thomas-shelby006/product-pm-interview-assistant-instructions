@@ -268,7 +268,9 @@ export function createRuntimePilotController({
       phase: previous?.phase === 'ready' ? 'ready' : 'registered',
       heartbeatAt: registration.registeredAt || Date.now(),
       lastRegistrationAt: registration.registeredAt || Date.now(),
-      registrationHeartbeatCount: heartbeatCount
+      registrationHeartbeatCount: heartbeatCount,
+      ownerGeneration: Math.max(0, Number(registration.ownerGeneration) || 0),
+      leaseExpiresAt: Math.max(0, Number(registration.leaseExpiresAt) || 0)
     });
     if (classification === 'heartbeat') {
       return { ok: true, classification, persisted: false };
@@ -277,7 +279,9 @@ export function createRuntimePilotController({
       role: registration.role,
       provider: registration.provider,
       tabId: registration.tabId,
-      instanceId: String(registration.instanceId || '')
+      instanceId: String(registration.instanceId || ''),
+      ownerGeneration: Math.max(0, Number(registration.ownerGeneration) || 0),
+      leaseExpiresAt: Math.max(0, Number(registration.leaseExpiresAt) || 0)
     });
     await commit(registration.sessionId, pilot);
     if (registration.role === 'receiver') {

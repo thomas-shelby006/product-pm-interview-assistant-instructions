@@ -1,19 +1,22 @@
-﻿const DEFAULT_STALE_AFTER_MS = 45_000;
+import { electRegistryOwner } from './owner-election.js';
+
+const DEFAULT_STALE_AFTER_MS = 45_000;
 const emptySession = () => ({ sender: null, receiver: null });
 
 function cloneRegistration(value) {
   if (!value || typeof value !== 'object') return null;
   const { sessionId, role, provider, tabId, registeredAt, instanceId } = value;
-  if (!sessionId || !['sender', 'receiver'].includes(role) || !provider || !Number.isInteger(tabId)) {
-    return null;
-  }
+  if (!sessionId || !['sender', 'receiver'].includes(role) || !provider || !Number.isInteger(tabId)) return null;
+  const registered = Number.isFinite(registeredAt) ? registeredAt : Date.now();
   return {
     sessionId,
     role,
     provider,
     tabId,
-    registeredAt: Number.isFinite(registeredAt) ? registeredAt : Date.now(),
-    instanceId: String(instanceId || '').trim()
+    registeredAt: registered,
+    instanceId: String(instanceId || '').trim(),
+    ownerGeneration: Math.max(1, Number(value.ownerGeneration) || 1),
+    leaseExpiresAt: Math.max(registered, Number(value.leaseExpiresAt) || (registered + DEFAULT_STALE_AFTER_MS))
   };
 }
 
@@ -37,108 +40,72 @@ export class SessionRegistry {
   constructor(state = []) {
     for (const item of Array.isArray(state) ? state : []) {
       if (!item?.sessionId) continue;
-      const session = {
-        sender: cloneRegistration(item.sender),
-        receiver: cloneRegistration(item.receiver)
-      };
+      const session = { sender: cloneRegistration(item.sender), receiver: cloneRegistration(item.receiver) };
       if (session.sender || session.receiver) this.#sessions.set(item.sessionId, session);
     }
   }
 
-  getSession(sessionId) {
-    return this.#sessions.get(sessionId) || null;
-  }
+  getSession(sessionId) { return this.#sessions.get(sessionId) || null; }
 
   register(registration, options = {}) {
     validateRegistration(registration);
     const now = Number.isFinite(options.now) ? options.now : Date.now();
-    const staleAfterMs = Number.isFinite(options.staleAfterMs)
-      ? options.staleAfterMs
-      : DEFAULT_STALE_AFTER_MS;
+    const staleAfterMs = Number.isFinite(options.staleAfterMs) ? options.staleAfterMs : DEFAULT_STALE_AFTER_MS;
     const allowInstanceMigration = options.allowInstanceMigration !== false;
     const { sessionId, role, provider, tabId } = registration;
     const session = this.#sessions.get(sessionId) || emptySession();
     const existing = session[role];
     const incomingInstanceId = String(registration.instanceId || '').trim();
     const existingInstanceId = String(existing?.instanceId || '').trim();
-    const sameRuntimeLease = Boolean(
-      existing
-      && existing.provider === provider
-      && incomingInstanceId
-      && existingInstanceId === incomingInstanceId
-    );
+    const sameRuntimeLease = Boolean(existing && existing.provider === provider && incomingInstanceId && existingInstanceId === incomingInstanceId);
 
     if (sameRuntimeLease && existing.tabId !== tabId && !allowInstanceMigration) {
-      return { accepted: false, changed: false, conflict: true, registration: existing };
-    }
-    if (sameRuntimeLease) {
-      const replacedRegistration = existing.tabId === tabId ? null : { ...existing };
-      existing.tabId = tabId;
-      existing.registeredAt = now;
-      this.#sessions.set(sessionId, session);
-      return {
-        accepted: true,
-        changed: Boolean(replacedRegistration),
-        conflict: false,
-        replacedTabId: replacedRegistration?.tabId || null,
-        replacedRegistration,
-        registration: existing
-      };
+      return { accepted: false, changed: false, conflict: true, reason: 'instance_migration_disabled', registration: { ...existing } };
     }
 
-    if (existing && existing.tabId === tabId && existing.provider === provider) {
-      const replacementInstance = Boolean(
-        incomingInstanceId && existingInstanceId && incomingInstanceId !== existingInstanceId
-      );
-      if (replacementInstance) {
-        const replacedRegistration = { ...existing };
-        const next = {
-          sessionId,
-          role,
-          provider,
-          tabId,
-          registeredAt: now,
-          instanceId: incomingInstanceId
-        };
-        session[role] = next;
-        this.#sessions.set(sessionId, session);
-        return {
-          accepted: true,
-          changed: true,
-          conflict: false,
-          replacedTabId: tabId,
-          replacedRegistration,
-          registration: next
-        };
-      }
-      existing.registeredAt = now;
-      if (incomingInstanceId && !existingInstanceId) existing.instanceId = incomingInstanceId;
-      this.#sessions.set(sessionId, session);
-      return { accepted: true, changed: false, conflict: false, registration: existing };
+    let ownerGeneration = Math.max(0, Number(registration.ownerGeneration) || 0);
+    if (!ownerGeneration) ownerGeneration = existing ? 1 : 1;
+    if (existing && existing.tabId === tabId && incomingInstanceId && existingInstanceId && incomingInstanceId !== existingInstanceId) {
+      ownerGeneration = Math.max(ownerGeneration, Number(existing.ownerGeneration || 1) + 1);
     }
+    if (sameRuntimeLease) ownerGeneration = Math.max(ownerGeneration, Number(existing.ownerGeneration || 1));
 
-    const existingIsFresh = existing && now - existing.registeredAt <= staleAfterMs;
-    if (existingIsFresh) {
-      return { accepted: false, changed: false, conflict: true, registration: existing };
-    }
-
-    const next = {
+    const candidate = {
       sessionId,
       role,
       provider,
       tabId,
-      registeredAt: now,
-      instanceId: incomingInstanceId
+      instanceId: incomingInstanceId,
+      ownerGeneration
     };
+    const election = electRegistryOwner(existing, candidate, { now, leaseMs: staleAfterMs });
+    if (election.winner === 'existing') {
+      return {
+        accepted: false,
+        changed: false,
+        conflict: true,
+        reason: election.reason,
+        registration: { ...election.registration }
+      };
+    }
+
+    const next = cloneRegistration(election.registration);
+    const replacedRegistration = existing && (
+      existing.tabId !== next.tabId
+      || existing.instanceId !== next.instanceId
+      || existing.provider !== next.provider
+      || existing.ownerGeneration !== next.ownerGeneration
+    ) ? { ...existing } : null;
     session[role] = next;
     this.#sessions.set(sessionId, session);
     return {
       accepted: true,
-      changed: true,
+      changed: Boolean(replacedRegistration),
       conflict: false,
-      replacedTabId: existing?.tabId || null,
-      replacedRegistration: existing ? { ...existing } : null,
-      registration: next
+      reason: election.reason,
+      replacedTabId: replacedRegistration?.tabId || null,
+      replacedRegistration,
+      registration: { ...next }
     };
   }
 
@@ -153,9 +120,7 @@ export class SessionRegistry {
 
   roleForTab(sessionId, tabId, instanceId = '') {
     const session = this.#sessions.get(sessionId);
-    for (const role of ['sender', 'receiver']) {
-      if (ownsRegistration(session?.[role], tabId, instanceId)) return role;
-    }
+    for (const role of ['sender', 'receiver']) if (ownsRegistration(session?.[role], tabId, instanceId)) return role;
     return null;
   }
 
@@ -190,8 +155,10 @@ export class SessionRegistry {
     for (const [sessionId, session] of this.#sessions) {
       for (const role of ['sender', 'receiver']) {
         const registration = session[role];
-        if (!registration || now - registration.registeredAt <= staleAfterMs) continue;
-        removed.push({ sessionId, role, tabId: registration.tabId });
+        if (!registration) continue;
+        const expiresAt = Number(registration.leaseExpiresAt || (registration.registeredAt + staleAfterMs));
+        if (Number(now) <= expiresAt) continue;
+        removed.push({ sessionId, role, tabId: registration.tabId, ownerGeneration: registration.ownerGeneration });
         session[role] = null;
       }
       if (!session.sender && !session.receiver) this.#sessions.delete(sessionId);
@@ -202,12 +169,10 @@ export class SessionRegistry {
   exportState() {
     return [...this.#sessions.entries()].map(([sessionId, session]) => ({
       sessionId,
-      sender: session.sender,
-      receiver: session.receiver
+      sender: session.sender ? { ...session.sender } : null,
+      receiver: session.receiver ? { ...session.receiver } : null
     }));
   }
 
-  snapshot() {
-    return this.exportState();
-  }
+  snapshot() { return this.exportState(); }
 }

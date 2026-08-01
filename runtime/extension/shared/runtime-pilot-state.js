@@ -133,7 +133,11 @@ function normalizeSession(item) {
       autoSubmit: item.batchState?.autoSubmit !== false,
       lastEvent: item.batchState?.lastEvent || null,
       lastCompleted: item.batchState?.lastCompleted || null,
-      draftConflict: item.batchState?.draftConflict || null
+      draftConflict: item.batchState?.draftConflict || null,
+      transaction: item.batchState?.transaction || null,
+      lastTransaction: item.batchState?.lastTransaction || null,
+      budget: item.batchState?.budget || null,
+      scheduling: item.batchState?.scheduling || null
     },
     ledger: new DeliveryLedger(item.ledger || item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
@@ -520,13 +524,21 @@ export class RuntimePilotState {
       active,
       next: next.next || null,
       hold: Boolean(next.hold),
-      autoSubmit: next.autoSubmit !== false
+      autoSubmit: next.autoSubmit !== false,
+      transaction: next.transaction || null,
+      lastTransaction: next.lastTransaction || null,
+      budget: next.budget || null,
+      scheduling: next.scheduling || null
     };
     const previous = JSON.stringify({
       active: session.batchState.active,
       next: session.batchState.next,
       hold: session.batchState.hold,
-      autoSubmit: session.batchState.autoSubmit
+      autoSubmit: session.batchState.autoSubmit,
+      transaction: session.batchState.transaction,
+      lastTransaction: session.batchState.lastTransaction,
+      budget: session.batchState.budget,
+      scheduling: session.batchState.scheduling
     });
     const changed = previous !== JSON.stringify(normalized);
     if (!changed) return false;
@@ -545,8 +557,10 @@ export class RuntimePilotState {
         memberIds,
         questionCount: Number(event.questionCount || memberIds.length),
         submitted: type === 'batch_submitted',
-        proof: type === 'batch_submitted' ? (event.proof || null) : null
+        proof: type === 'batch_submitted' ? (event.proof || null) : null,
+        transaction: event.transaction || session.batchState.transaction || null
       };
+      if (event.transaction) session.batchState.transaction = event.transaction;
       session.batchState.next = null;
     } else if (type === 'next_batch_draft') {
       session.batchState.next = {
@@ -581,6 +595,15 @@ export class RuntimePilotState {
         owner: String(event.owner || 'unknown'),
         state: String(event.action || 'resolved'),
         at: now
+      };
+    } else if (type === 'batch_schedule_evaluated') {
+      session.batchState.scheduling = {
+        memberIds,
+        urgency: String(event.urgency || ''),
+        reason: String(event.reason || ''),
+        ageMs: Math.max(0, Number(event.ageMs) || 0),
+        submitRecommended: Boolean(event.submitRecommended),
+        evaluatedAt: Number(event.evaluatedAt || now)
       };
     } else if (type === 'batch_policy_changed') {
       if ('hold' in event) session.batchState.hold = Boolean(event.hold);

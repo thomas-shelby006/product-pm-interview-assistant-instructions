@@ -396,3 +396,30 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** scheduling controls timing only and preserves exact ledger/member sequence; explicit hold and disabled auto-submit remain authoritative.
 
 **Source-complete status:** Cycles 56-60 are implemented. Executable verification remains deferred until Cycle 70.
+
+## Cycle 61 - Structural Composer Ownership Fingerprint
+- **Bug fixes:** provider DOM rerenders no longer create a false manual-draft conflict when normalized composer content is unchanged.
+- **New features:** text hash, length, structure hash, role, tag, and revision metadata without storing composer text in the fingerprint.
+- **Implementation:** the composer arbiter adopts a new fingerprint after every owned write and conflict resolution.
+
+## Cycle 62 - Adapter Capability Drift Detection
+- **Bug fixes:** a provider surface removed after initial readiness now degrades the runtime instead of leaving a stale green capability report.
+- **New features:** critical/degraded/recovering/stable drift states, removed/restored surface names, and stable recovery count.
+- **Implementation:** runtime telemetry re-evaluates adapter capabilities and readiness fails closed on required-surface drift.
+
+## Cycle 63 - Unified Page Lifecycle Coordinator
+- **Bug fixes:** pageshow, pagehide, freeze, resume, online, and visibility bursts no longer create competing recovery attempts.
+- **New features:** active, hidden, frozen, BFCache, and restored lifecycle phases with coalesced reasons.
+- **Implementation:** runtime recovery delegates to one lifecycle coordinator and preserves background operation without focus.
+
+## Cycle 64 - Duplicate Content Runtime Fence
+- **Bug fixes:** duplicate content-script injection in one document cannot create competing observers, ports, or sender authorities.
+- **New features:** document-scoped runtime generation, owner instance, acquisition result, and clean release.
+- **Implementation:** startup acquires the fence before overlay and observer creation; losing instances return immediately.
+
+## Cycle 65 - Registry Owner Election and Lease Expiry
+- **Bug fixes:** stale owners can be replaced while responsive fresh owners cannot be displaced by an unrelated registration.
+- **New features:** owner generation, lease expiry, deterministic election reason, renewal, and takeover evidence.
+- **Implementation:** the document-fence generation travels with registration; Session Registry delegates ownership to the election policy and exposes lease state in Pilot telemetry.
+
+**Source-complete status:** Cycles 61-65 are implemented. Executable verification remains deferred until Cycle 70.

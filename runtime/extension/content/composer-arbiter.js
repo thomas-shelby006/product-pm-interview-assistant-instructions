@@ -1,3 +1,5 @@
+import { createComposerFingerprint, sameComposerOwnership } from './composer-fingerprint.js';
+
 function normalize(value) {
   return String(value || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 }
@@ -6,21 +8,29 @@ export function createComposerArbiter({ adapter, onConflict = () => {} } = {}) {
   if (!adapter?.setComposerText) throw new TypeError('Composer arbiter requires an adapter');
   let owner = 'none';
   let ownedText = '';
+  let ownedFingerprint = null;
   let conflict = null;
   let mergedSubmissionText = '';
+  let fingerprintRevision = 0;
 
   const currentText = () => normalize(adapter.getComposerText?.() || '');
+  const currentFingerprint = () => createComposerFingerprint(adapter.findComposer?.(), { revision: ++fingerprintRevision });
+  const adoptCurrentFingerprint = () => { ownedFingerprint = currentFingerprint(); };
 
   function observe() {
     const current = currentText();
-    if ((owner === 'preview' || owner === 'batch') && current && current !== normalize(ownedText)) {
+    const fingerprint = currentFingerprint();
+    const ownershipChanged = Boolean(ownedFingerprint && !sameComposerOwnership(ownedFingerprint, fingerprint));
+    if ((owner === 'preview' || owner === 'batch') && current && ownershipChanged) {
       conflict = { owner, expected: ownedText, current, at: Date.now(), state: 'unresolved' };
       owner = 'manual';
       ownedText = current;
+      ownedFingerprint = fingerprint;
       try { onConflict({ ...conflict }); } catch {}
     } else if (owner === 'manual' && !current) {
       owner = 'none';
       ownedText = '';
+      ownedFingerprint = null;
       conflict = null;
       mergedSubmissionText = '';
     }
@@ -35,6 +45,7 @@ export function createComposerArbiter({ adapter, onConflict = () => {} } = {}) {
     if (!adapter.setComposerText(normalized)) return false;
     owner = nextOwner;
     ownedText = normalized;
+    adoptCurrentFingerprint();
     conflict = null;
     mergedSubmissionText = '';
     return true;
@@ -49,6 +60,7 @@ export function createComposerArbiter({ adapter, onConflict = () => {} } = {}) {
     if (action === 'keep_manual') {
       owner = 'manual';
       ownedText = current;
+      adoptCurrentFingerprint();
       conflict = null;
       mergedSubmissionText = '';
       return { ok: true, action, owner, text: current };
@@ -58,19 +70,17 @@ export function createComposerArbiter({ adapter, onConflict = () => {} } = {}) {
       if (!adapter.setComposerText(expected)) return { ok: false, error: 'composer_write_failed' };
       owner = source.owner === 'preview' ? 'preview' : 'batch';
       ownedText = expected;
+      adoptCurrentFingerprint();
       conflict = null;
       mergedSubmissionText = '';
       return { ok: true, action, owner, text: expected };
     }
     if (action === 'merge') {
-      const merged = current ? `${current}
-
----
-
-${expected}` : expected;
+      const merged = current ? `${current}\n\n---\n\n${expected}` : expected;
       if (!adapter.setComposerText(merged)) return { ok: false, error: 'composer_write_failed' };
       owner = 'batch';
       ownedText = merged;
+      adoptCurrentFingerprint();
       mergedSubmissionText = merged;
       conflict = null;
       return { ok: true, action, owner, text: merged };
@@ -95,13 +105,19 @@ ${expected}` : expected;
       if (owner === 'manual') return false;
       owner = 'none';
       ownedText = '';
+      ownedFingerprint = null;
       conflict = null;
       mergedSubmissionText = '';
       return true;
     },
     snapshot() {
       const state = observe();
-      return { ...state, ownedText, mergedSubmissionText };
+      return {
+        ...state,
+        ownedText,
+        mergedSubmissionText,
+        fingerprint: ownedFingerprint ? { ...ownedFingerprint } : null
+      };
     }
   };
 }

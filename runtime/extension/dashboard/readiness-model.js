@@ -30,6 +30,7 @@ export function deriveReadiness(snapshot, now = Date.now()) {
       if (value.phase !== 'ready') blockers.push(blocker(`${role}_not_ready`, `${role === 'sender' ? 'Window 1' : 'Window 2'} has not reached READY`, 'repair_runtime'));
       if (!value.composerReady) blockers.push(blocker(`${role}_composer`, `${role === 'sender' ? 'Window 1' : 'Window 2'} composer is unavailable`, 'repair_runtime'));
       if (value.adapterCapabilities?.complete !== true) blockers.push(blocker(`${role}_adapter`, `${role === 'sender' ? 'Window 1' : 'Window 2'} adapter capability check is incomplete`, 'repair_runtime'));
+      if (['critical', 'degraded'].includes(String(value.adapterCapabilityDrift?.state || ''))) blockers.push(blocker(`${role}_adapter_drift`, `${role === 'sender' ? 'Window 1' : 'Window 2'} provider capability changed after readiness`, 'repair_runtime'));
       const heartbeatAge = value.heartbeatAt ? Math.max(0, Number(now) - Number(value.heartbeatAt)) : Infinity;
       if (heartbeatAge > 15000) blockers.push(blocker(`${role}_heartbeat`, `${role === 'sender' ? 'Window 1' : 'Window 2'} heartbeat is stale`, 'repair_runtime'));
     }

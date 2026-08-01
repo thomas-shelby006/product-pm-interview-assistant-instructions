@@ -41,6 +41,7 @@ import { createReceiverBatchRuntime } from './receiver-batch-runtime.js';
 import { createRuntimeRolePort } from './runtime-role-port.js';
 import { createComposerArbiter } from './composer-arbiter.js';
 import { safeBatchTelemetry } from '../shared/batch-event-policy.js';
+import { acquireRuntimeInstanceFence } from './runtime-instance-fence.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 
@@ -93,6 +94,19 @@ async function startRuntime(runtimeConfig) {
   const runtimeVersion = chrome.runtime.getManifest().version;
   const runtimeInstanceKey = `pmia_runtime_instance_${runtimeConfig.sessionId}_${runtimeConfig.role}`;
   const runtimeInstanceId = getOrCreateRuntimeInstanceId(sessionStorage, runtimeInstanceKey);
+  const runtimeFence = acquireRuntimeInstanceFence(globalThis, {
+    sessionId: runtimeConfig.sessionId,
+    role: runtimeConfig.role,
+    instanceId: runtimeInstanceId
+  });
+  if (!runtimeFence.acquired) {
+    console.warn('[PMIA] duplicate runtime instance fenced', {
+      sessionId: runtimeConfig.sessionId,
+      role: runtimeConfig.role,
+      generation: runtimeFence.generation
+    });
+    return;
+  }
   const respondToPreflight = createPreflightResponder({
     runtimeConfig,
     adapter,
@@ -271,13 +285,14 @@ async function startRuntime(runtimeConfig) {
     getVoiceActive: isCombinedVoiceActive,
     getBatchState: () => safeBatchTelemetry(receiverBatchRuntime?.snapshot()),
     getGenerationState: () => receiverAnswerOrchestrator?.snapshot().generationState || null,
-    getAnswerState: () => receiverAnswerOrchestrator?.snapshot().answerState || null
+    getAnswerState: () => receiverAnswerOrchestrator?.snapshot().answerState || null,
+    getLifecycleState: () => runtimeRecovery?.snapshot?.() || { phase: document.visibilityState || 'unknown' }
   });
 
   async function register() {
     const response = await message({
       type: 'PMIA_REGISTER',
-      registration: { ...runtimeConfig, instanceId: runtimeInstanceId }
+      registration: { ...runtimeConfig, instanceId: runtimeInstanceId, ownerGeneration: runtimeFence.generation }
     });
     if (response?.ok) {
       const firstRegistration = !runtimeRegistered;
@@ -1183,6 +1198,7 @@ async function startRuntime(runtimeConfig) {
     if (providerSignalBridge) providerSignalBridge.disconnect();
     restoreTitle.disconnect?.();
     removeOverflowSafety();
+    runtimeFence.release();
   };
 
   window.addEventListener('pagehide', event => {

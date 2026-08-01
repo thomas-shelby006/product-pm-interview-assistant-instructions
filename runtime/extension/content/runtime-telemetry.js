@@ -1,5 +1,6 @@
 import { describeAdapterCapabilities } from './adapter-health.js';
 import { reconcileGenerationTruth } from './generation-truth.js';
+import { evaluateAdapterCapabilityDrift } from './adapter-capability-drift.js';
 
 export function classifySourceSilence({
   role,
@@ -48,6 +49,7 @@ export function createRuntimeTelemetry({
   getGenerationState = null,
   getAnswerState = () => null,
   getVisibilityState = () => String(globalThis.document?.visibilityState || 'unknown'),
+  getLifecycleState = () => null,
   heartbeatMs = 5000,
   silenceWarningMs = 90000,
   now = () => Date.now(),
@@ -64,7 +66,8 @@ export function createRuntimeTelemetry({
   let latestAnswerState = null;
   let generationState = reconcileGenerationTruth({ now: now() });
   let lastAssistantText = String(adapter?.getLatestAssistantText?.() || '');
-  const adapterCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
+  let adapterCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
+  let adapterCapabilityDrift = evaluateAdapterCapabilityDrift(adapterCapabilities, adapterCapabilities, null, now());
   let lastFingerprint = '';
   let closed = false;
 
@@ -95,6 +98,9 @@ export function createRuntimeTelemetry({
       }
       latestAnswerState = typeof getAnswerState === 'function' ? (getAnswerState() || latestAnswerState) : latestAnswerState;
     }
+    const currentCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
+    adapterCapabilityDrift = evaluateAdapterCapabilityDrift(adapterCapabilities, currentCapabilities, adapterCapabilityDrift, current);
+    adapterCapabilities = currentCapabilities;
     return {
       role: runtimeConfig?.role || '',
       provider: runtimeConfig?.provider || '',
@@ -106,7 +112,9 @@ export function createRuntimeTelemetry({
       voiceActive: Boolean(getVoiceActive()),
       micState,
       adapterCapabilities,
+      adapterCapabilityDrift: { ...adapterCapabilityDrift, removed: [...adapterCapabilityDrift.removed], restored: [...adapterCapabilityDrift.restored], criticalRemoved: [...adapterCapabilityDrift.criticalRemoved] },
       pageVisibility: getVisibilityState(),
+      pageLifecycle: typeof getLifecycleState === 'function' ? getLifecycleState() : null,
       schedulerState: runtimeConfig?.role === 'receiver' ? { ...schedulerState } : null,
       ...(runtimeConfig?.role === 'receiver' ? { batchState: getBatchState() } : {}),
       scrollLocked: Boolean(getScrollLocked()),
