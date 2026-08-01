@@ -63,7 +63,8 @@
         "content/registration-recovery.js",
         "content/sender-outbox.js",
         "content/receiver-batch-runtime.js",
-        "content/runtime-role-port.js"
+        "content/runtime-role-port.js",
+        "content/composer-arbiter.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

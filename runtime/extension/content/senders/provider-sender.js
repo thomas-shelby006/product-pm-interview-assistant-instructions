@@ -7,6 +7,7 @@ export function createProviderSender({
   tracker = new DomTurnTracker(),
   isVoiceActive = () => Boolean(adapter.isVoiceActive?.()),
   isComposerEmpty = () => Boolean(adapter.isComposerEmpty?.() ?? true),
+  isProviderGenerating = () => Boolean(adapter.isGenerating?.()),
   nowFn = Date.now,
   setTimeoutFn = globalThis.setTimeout,
   clearTimeoutFn = globalThis.clearTimeout,
@@ -52,7 +53,9 @@ export function createProviderSender({
   return {
     observe(now = nowFn()) {
       if (stopped) return [];
-      const finals = tracker.update(adapter.getConversationMessages?.() || [], now);
+      const finals = tracker.update(adapter.getConversationMessages?.() || [], now, {
+        renderedBoundary: isProviderGenerating()
+      });
       const preview = tracker.takePreview?.();
       if (preview) emitPreview(preview);
       for (const final of finals) emitFinal(final);

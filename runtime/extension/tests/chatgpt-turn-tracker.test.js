@@ -240,3 +240,27 @@ test('external final shadow does not fuzzy-suppress short unrelated text', () =>
   ], 1500);
   assert.equal(emitted.length, 1);
 });
+
+
+test('provider-generation evidence finalizes a rendered user turn immediately', () => {
+  const tracker = createTracker({ fallbackMs: 5000 });
+  tracker.prime([]);
+  assert.deepEqual(tracker.update([
+    message('rendered-u1', 'user', 'How would you measure onboarding activation?')
+  ], 10, { renderedBoundary: true }), [{
+    id: 'rendered-u1',
+    text: 'How would you measure onboarding activation?',
+    boundary: 'rendered_user_turn'
+  }]);
+});
+
+test('stable identity without generation evidence remains provisional', () => {
+  const tracker = createTracker({ fallbackMs: 5000 });
+  tracker.prime([]);
+  assert.deepEqual(tracker.update([
+    message('voice-u1', 'user', 'How would')
+  ], 10, { renderedBoundary: false }), []);
+  assert.deepEqual(tracker.update([
+    message('voice-u1', 'user', 'How would you prioritize this roadmap?')
+  ], 20, { renderedBoundary: false }), []);
+});

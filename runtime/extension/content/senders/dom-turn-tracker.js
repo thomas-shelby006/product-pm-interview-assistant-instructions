@@ -194,7 +194,7 @@ export class DomTurnTracker {
     return { id: message.id, text: message.text, boundary };
   }
 
-  update(messages, now = Date.now()) {
+  update(messages, now = Date.now(), { renderedBoundary = false } = {}) {
     const ordered = normalizeMessages(messages, this.scanMessageLimit);
     this.lastScanSize = ordered.length;
     const emitted = [];
@@ -231,6 +231,13 @@ export class DomTurnTracker {
         allowRecentRepeat: this.hasEarlierEmittedMatchingTurn(ordered, tailIndex, tailUser)
       };
       this.queuePreview(tailUser);
+      const stableRenderedIdentity = !String(tailUser.id || '').startsWith('dom-');
+      if (stableRenderedIdentity && renderedBoundary) {
+        const final = this.emit(tailUser, 'rendered_user_turn', now, {
+          allowRecentRepeat: Boolean(this.pending?.allowRecentRepeat)
+        });
+        if (final) emitted.push(final);
+      }
     }
     return emitted;
   }

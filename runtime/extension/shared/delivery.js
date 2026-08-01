@@ -52,7 +52,7 @@ export async function deliverWithWakeRetry({
   sendToTab,
   wakeTab = async () => {},
   wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
-  retryDelaysMs = [80, 180, 360, 700, 1400]
+  retryDelaysMs = [25, 60, 140, 300, 600]
 } = {}) {
   if (!route) return classifyDelivery({ route });
   const attempt = async () => {

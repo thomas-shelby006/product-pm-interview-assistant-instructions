@@ -113,6 +113,7 @@ export function createReceiverController({
   sleep,
   onStatus = () => {},
   onProof = () => {},
+  writePreview = text => adapter.setComposerText(text),
   stopTimeoutMs = 2500,
   stopPollMs = 75,
   yieldFn = yieldToProvider,
@@ -181,7 +182,7 @@ ${normalizedQuestion}`;
       const lastPreviewSeq = lastPreviewSeqByStream.get(streamId) || 0;
       if (Number.isSafeInteger(seq) && seq > 0 && seq <= lastPreviewSeq) return false;
       if (revision <= (previewRevisions.get(key) || 0)) return false;
-      if (!adapter.setComposerText(text)) return false;
+      if (!writePreview(text)) return false;
       boundedSet(previewRevisions, key, revision, maxPreviewTurns);
       if (Number.isSafeInteger(seq) && seq > 0) {
         boundedSet(lastPreviewSeqByStream, streamId, seq, maxPreviewStreams);

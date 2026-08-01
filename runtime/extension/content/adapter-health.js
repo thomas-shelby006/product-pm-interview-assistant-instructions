@@ -7,6 +7,7 @@ export function describeAdapterCapabilities(adapter, role = '') {
     composerFinder: hasFunction(adapter, 'findComposer'),
     messageReader: hasFunction(adapter, 'getConversationMessages'),
     composerWriter: hasFunction(adapter, 'setComposerText'),
+    composerReader: hasFunction(adapter, 'getComposerText'),
     submit: hasFunction(adapter, 'submit'),
     generationState: hasFunction(adapter, 'isGenerating'),
     stopGeneration: hasFunction(adapter, 'stopGenerating'),
@@ -14,7 +15,7 @@ export function describeAdapterCapabilities(adapter, role = '') {
     voiceState: hasFunction(adapter, 'isVoiceActive')
   };
   const required = role === 'receiver'
-    ? ['composerFinder', 'messageReader', 'composerWriter', 'submit', 'generationState']
+    ? ['composerFinder', 'messageReader', 'composerWriter', 'composerReader', 'submit', 'generationState']
     : ['composerFinder', 'messageReader'];
   const missingRequired = required.filter(name => !capabilities[name]);
   return {

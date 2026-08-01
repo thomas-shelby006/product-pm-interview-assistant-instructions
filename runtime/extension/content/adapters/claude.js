@@ -194,6 +194,7 @@ export function createClaudeAdapter(doc = document) {
     dismissBlockingUi,
     findComposer,
     setComposerText(text) { return setEditableText(findComposer(), text); },
+    getComposerText() { return composerText(findComposer()); },
     composerContains(text) {
       return composerText(findComposer()) === String(text ?? '').trim();
     },

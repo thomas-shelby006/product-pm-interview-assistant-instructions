@@ -1,8 +1,9 @@
-﻿import { BatchPlanner } from '../shared/batch-planner.js';
+import { BatchPlanner } from '../shared/batch-planner.js';
 
 export function createReceiverBatchRuntime({
   adapter,
   planner = new BatchPlanner(),
+  draftArbiter = null,
   submitBatch,
   onEvent = () => {},
   nowFn = Date.now
@@ -21,7 +22,7 @@ export function createReceiverBatchRuntime({
   const mirrorNext = () => {
     const next = planner.next();
     if (!next.count) return false;
-    const written = Boolean(adapter.setComposerText?.(next.prompt.text));
+    const written = Boolean(draftArbiter?.writeBatch?.(next.prompt.text) ?? adapter.setComposerText?.(next.prompt.text));
     emit('next_batch_draft', {
       memberIds: next.prompt.memberIds,
       questionCount: next.prompt.questionCount,
@@ -68,6 +69,7 @@ export function createReceiverBatchRuntime({
       return { ok: false, staged: true, batchId: batch.id, memberIds: batch.prompt.memberIds, error: result?.error || 'submit_failed' };
     }
     planner.markSubmitted(nowFn());
+    draftArbiter?.release?.('batch');
     emit('batch_submitted', {
       batchId: batch.id,
       memberIds: batch.prompt.memberIds,
@@ -126,6 +128,7 @@ export function createReceiverBatchRuntime({
 
     mirrorNext,
     submitNext,
+    draftState() { return draftArbiter?.snapshot?.() || { owner: 'none', conflict: null }; },
     setHold(value) { planner.setHold(value); return planner.snapshot(); },
     setAutoSubmit(value) { planner.setAutoSubmit(value); return planner.snapshot(); },
     snapshot() { return planner.snapshot(); }

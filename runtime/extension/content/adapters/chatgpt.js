@@ -129,6 +129,7 @@ export function createChatGptAdapter(doc = document) {
     dismissBlockingUi() { return false; },
     findComposer,
     setComposerText(text) { return setEditableText(findComposer(), text); },
+    getComposerText() { return composerText(findComposer()); },
     composerContains(text) {
       return composerText(findComposer()) === String(text ?? '').trim();
     },

@@ -34,6 +34,7 @@ import { sendWithRegistrationRecovery } from './registration-recovery.js';
 import { createSenderOutbox } from './sender-outbox.js';
 import { createReceiverBatchRuntime } from './receiver-batch-runtime.js';
 import { createRuntimeRolePort } from './runtime-role-port.js';
+import { createComposerArbiter } from './composer-arbiter.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -181,7 +182,7 @@ async function startRuntime(runtimeConfig) {
     let response;
     try {
       response = rolePort?.connected
-        ? await rolePort.request('final', { envelope }, { timeoutMs: 1200, fallback })
+        ? await rolePort.request('final', { envelope }, { timeoutMs: 500, fallback })
         : await fallback();
     } catch {
       response = await fallback();
@@ -375,7 +376,7 @@ async function startRuntime(runtimeConfig) {
     senderController = createProviderSender({
       adapter,
       tracker: runtimeConfig.provider === 'chatgpt'
-        ? createChatGptTurnTracker({ fallbackMs: 900 })
+        ? createChatGptTurnTracker({ fallbackMs: 180 })
         : undefined,
       isVoiceActive: isCombinedVoiceActive,
       isComposerEmpty: () => adapter.isComposerEmpty?.() ?? true,
@@ -479,6 +480,18 @@ async function startRuntime(runtimeConfig) {
     return { ok: false, timeout: true };
   }
 
+  const composerArbiter = createComposerArbiter({
+    adapter,
+    onConflict(conflict) {
+      overlay.setStatus('DRAFT CONFLICT', 'warn', 2400);
+      telemetry.event('draft_conflict', { owner: conflict.owner });
+      void message({
+        type: 'PMIA_BATCH_EVENT',
+        sessionId: runtimeConfig.sessionId,
+        event: { type: 'draft_conflict', owner: conflict.owner }
+      });
+    }
+  });
   let latestReceiverProof = null;
   const receiver = createReceiverController({
     adapter,
@@ -490,12 +503,16 @@ async function startRuntime(runtimeConfig) {
     onProof(proof) {
       latestReceiverProof = proof;
       telemetry.event('receiver_proof', proof);
+    },
+    writePreview(text) {
+      return composerArbiter.writePreview(text);
     }
   });
 
   if (runtimeConfig.role === 'receiver') {
     receiverBatchRuntime = createReceiverBatchRuntime({
       adapter,
+      draftArbiter: composerArbiter,
       async submitBatch(batch) {
         const latest = batch.entries.at(-1)?.envelope;
         if (!latest) return { ok: false, error: 'batch_empty' };

@@ -78,7 +78,8 @@ function normalizeSession(item) {
       hold: Boolean(item.batchState?.hold),
       autoSubmit: item.batchState?.autoSubmit !== false,
       lastEvent: item.batchState?.lastEvent || null,
-      lastCompleted: item.batchState?.lastCompleted || null
+      lastCompleted: item.batchState?.lastCompleted || null,
+      draftConflict: item.batchState?.draftConflict || null
     },
     queue: new DeliveryLedger(item.ledger || item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
@@ -356,6 +357,8 @@ export class RuntimePilotState {
     } else if (type === 'batch_submit_failed') {
       session.batchState.active = null;
       session.batchState.next = { memberIds, questionCount: memberIds.length, written: true };
+    } else if (type === 'draft_conflict') {
+      session.batchState.draftConflict = { owner: String(event.owner || 'unknown'), at: now };
     } else if (type === 'batch_policy_changed') {
       if ('hold' in event) session.batchState.hold = Boolean(event.hold);
       if ('autoSubmit' in event) session.batchState.autoSubmit = Boolean(event.autoSubmit);
@@ -468,6 +471,7 @@ export class RuntimePilotState {
         ageMs: now - oldestQueuedAt
       });
     }
+    if (session.batchState.draftConflict) warnings.push({ code: 'receiver_draft_conflict', severity: 'warn' });
     if (session.mode === 'repairing') warnings.push({ code: 'repair_in_progress', severity: 'warn' });
     if (session.mode === 'degraded') warnings.push({ code: 'runtime_degraded', severity: 'error' });
     if (session.mode === 'paused') warnings.push({ code: 'transport_paused', severity: 'warn' });
