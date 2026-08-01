@@ -13,6 +13,7 @@ import { runRuntimeSelfTest } from './runtime-self-test.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
 import { SnapshotSectionCache } from './snapshot-section-cache.js';
+import { createCoalescedCommitLane } from './persistence-urgency-policy.js';
 import { outboxAlarmName } from './alarm-rehydration.js';
 import { runTransportDrill } from './transport-drill.js';
 import { deriveSequenceFeedback } from './sequence-feedback.js';
@@ -47,11 +48,17 @@ export function createRuntimePilotController({
 } = {}) {
   const store = createRuntimePilotStore({ storageArea });
   const ports = new Map();
-  const previewTimers = new Map();
   const recoveryCoordinator = createRuntimeRecoveryCoordinator({ chromeApi });
-  const batchCommitTimers = new Map();
   const snapshotCaches = new Map();
   const mutationCoordinator = createSessionMutationCoordinator();
+  const coalescedCommitLane = createCoalescedCommitLane({
+    delayMs: 60,
+    commit: sessionId => mutationCoordinator.run(sessionId, async () => {
+      const pilot = await state();
+      if (!pilot.snapshot(sessionId)) return;
+      await commit(sessionId, pilot);
+    })
+  });
 
   function sessionPorts(sessionId) {
     return ports.get(sessionId) || new Set();
@@ -164,11 +171,7 @@ export function createRuntimePilotController({
   }
 
   function schedulePreviewCommit(sessionId) {
-    clearTimeout(previewTimers.get(sessionId));
-    previewTimers.set(sessionId, setTimeout(() => {
-      previewTimers.delete(sessionId);
-      mutationCoordinator.run(sessionId, () => commit(sessionId)).catch(() => {});
-    }, 140));
+    return coalescedCommitLane.schedule(sessionId, 'preview');
   }
 
   async function tabState(tabId) {
@@ -458,24 +461,11 @@ export function createRuntimePilotController({
   }
 
   function cancelBatchCheckpoint(sessionId) {
-    const timer = batchCommitTimers.get(sessionId);
-    if (!timer) return false;
-    clearTimeout(timer);
-    batchCommitTimers.delete(sessionId);
-    return true;
+    return coalescedCommitLane.cancel(sessionId);
   }
 
   function scheduleBatchCheckpoint(sessionId) {
-    cancelBatchCheckpoint(sessionId);
-    const timer = setTimeout(() => {
-      batchCommitTimers.delete(sessionId);
-      void mutationCoordinator.run(sessionId, async () => {
-        const pilot = await state();
-        if (!pilot.snapshot(sessionId)) return;
-        await commit(sessionId, pilot);
-      });
-    }, 60);
-    batchCommitTimers.set(sessionId, timer);
+    return coalescedCommitLane.schedule(sessionId, 'batch_checkpoint');
   }
 
   async function batchEvent({ sessionId, event }) {
