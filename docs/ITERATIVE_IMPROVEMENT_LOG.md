@@ -310,3 +310,8 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Bug fixes:** truth-summary and role-health updates no longer depend on the monolithic queue/timeline renderer.
 - **New features:** focused live-status and runtime-health render modules, 320 CSS-pixel reflow and print-safe ordering.
 - **Implementation:** connection, commands, queue, timeline and diagnostics remain in `dashboard.js`; extracted renderers mutate only their owned IDs and expose no browser or transport APIs.
+
+## Cycle 45 - Repeatable Isolated Release Evidence
+- **Bug fixes:** browser smoke no longer depends on hand-built command lines, ambiguous profiles or manual cleanup.
+- **New features:** repository-owned temporary-profile smoke for exact extension identity, managed roles, active self-test, Q1 plus accumulated Q2/Q3, rendered proof, outbox, sequence gap, answer capability and cleanup.
+- **Implementation:** PowerShell owns quoted Edge isolation and process-tree cleanup; Node owns DevTools validation and structured synthetic evidence. Anonymous answer unavailability is reported separately from delivery proof.

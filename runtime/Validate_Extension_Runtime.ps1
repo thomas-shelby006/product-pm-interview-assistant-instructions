@@ -7,11 +7,15 @@ $repo = Split-Path -Parent $PSScriptRoot
 $extension = Join-Path $PSScriptRoot 'extension'
 $launcher = Join-Path $PSScriptRoot 'Final_2_Window_Extension.ahk'
 $reviewCompanion = Join-Path $PSScriptRoot 'Session_Tracker_End_Session.ahk'
+$isolatedSmoke = Join-Path $PSScriptRoot 'scripts\run-isolated-release-smoke.ps1'
+$isolatedRunner = Join-Path $PSScriptRoot 'scripts\isolated-release-smoke.mjs'
 
 if (-not (Test-Path $AutoHotkeyExe)) { throw "AutoHotkey v2 not found: $AutoHotkeyExe" }
 if (-not (Test-Path (Join-Path $extension 'manifest.json'))) { throw 'Extension manifest missing.' }
 if (-not (Test-Path $launcher)) { throw 'Extension launcher missing.' }
 if (-not (Test-Path $reviewCompanion)) { throw 'Session review companion missing.' }
+if (-not (Test-Path $isolatedSmoke)) { throw 'Isolated release smoke PowerShell owner missing.' }
+if (-not (Test-Path $isolatedRunner)) { throw 'Isolated release smoke Node runner missing.' }
 
 $launcherSource = Get-Content $launcher -Raw
 $requiredHotkeys = @('!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::', '!h::', '!+r::', '!+e::')
@@ -83,6 +87,7 @@ try {
     Write-Host "Extension:        $extension"
     Write-Host "Launcher:         $launcher"
     Write-Host "Review companion: $reviewCompanion"
+    Write-Host "Isolated smoke:   $isolatedSmoke"
 }
 finally {
     Pop-Location
