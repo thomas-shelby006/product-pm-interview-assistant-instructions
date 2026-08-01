@@ -1,4 +1,4 @@
-﻿# PMIA Lossless Runtime Hardening Cycles 11-20 Implementation Plan
+# PMIA Lossless Runtime Hardening Cycles 11-20 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -17,6 +17,19 @@
 - Work only in `C:\Users\Sundar\Documents\product-pm-interview-assistant-improvement`.
 - Do not push, merge, tag, install over the active runtime, or change the original checkout.
 - Author tests cycle by cycle; defer executable verification until Task 20.
+
+---
+
+
+## Mandatory three-bucket cycle contract
+
+Every Task 11-20 must deliver and document all three categories below before its commit:
+
+- **Bug fixes:** correct a concrete defect in the existing system.
+- **New features:** introduce one useful live operator capability tied to that defect/risk.
+- **Implementation:** improve the owning architecture, speed, reliability, cleanup, or maintainability.
+
+The per-cycle feature additions are: verification diagnostics, operation activity, Gap Watch, Outbox Retry, Batch Proof Inspector, Memory Guard, Readiness Gate, Runtime Efficiency, Recovery Progress, and Safe Health Report. These surfaces derive from existing authoritative state; none becomes a new state owner.
 
 ---
 

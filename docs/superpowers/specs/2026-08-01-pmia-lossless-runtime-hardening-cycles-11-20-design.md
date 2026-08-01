@@ -1,4 +1,4 @@
-﻿# PMIA Lossless Runtime Hardening: Cycles 11-20 Design
+# PMIA Lossless Runtime Hardening: Cycles 11-20 Design
 
 ## Objective
 
@@ -23,6 +23,32 @@ Use owning-boundary hardening rather than adding another compatibility layer. Th
 - **Patch only the failing tests:** fast but leaves the concurrency and restart hazards unaddressed.
 - **Replace the runtime wholesale:** too risky after the lossless migration and would invalidate proven provider adapters.
 - **Add more dashboard features first:** visible but does not improve the highest-risk delivery guarantees.
+
+
+## Required cycle buckets
+
+Every cycle is planned, reviewed, logged, and accepted under exactly three buckets:
+
+1. **Bug fixes:** defects or failure modes in the existing runtime.
+2. **New features:** practical operator capabilities tied directly to the defect or operational risk addressed in that cycle.
+3. **Implementation:** owning-boundary architecture, speed, cleanup, testability, and maintainability work.
+
+A cycle is not complete unless all three buckets contain meaningful work. New features may expose state, provide a safe control, or reduce operator effort, but they may not duplicate state ownership or weaken lossless-delivery invariants.
+
+## Cycles 11-20 bucket map
+
+| Cycle | Bug fixes | New features | Implementation |
+|---|---|---|---|
+| 11 | Repair malformed/stale release assertions | Add categorized verification diagnostics for failures | Align the gate with ledger/batch ownership |
+| 12 | Prevent stale session snapshots overwriting newer state | Show live operation activity and blocked command state in Pilot | Keyed per-session mutation coordinator |
+| 13 | Preserve out-of-order finals and missing sequence gaps | Add Gap Watch with missing sequence and buffered count | Contiguous sequence buffer and ledger refill |
+| 14 | Prevent replay loss, storms, and ambiguous acknowledgement | Add Outbox Retry status and safe Retry Now control | Ordered replay with capped jittered backoff |
+| 15 | Prevent duplicate/partial proof from closing the wrong finals | Add Batch Proof Inspector | Stable member-set fingerprint and idempotent proof transitions |
+| 16 | Prevent quota pressure from dropping actionable text | Add Memory Guard and safe compact-proven control | Category-level byte accounting and backpressure |
+| 17 | Prevent false Ready signals | Add decisive Interview Readiness Gate | Pure readiness model and accessible rendering |
+| 18 | Prevent redundant writes and full-dashboard rerenders | Add live Runtime Efficiency indicator | Snapshot deltas, section invalidation, and event coalescing |
+| 19 | Prevent heartbeat-only recovery and repair-state lies | Add Recovery Progress checklist | Explicit recovery state machine and reconciliation gates |
+| 20 | Fix final integration/browser defects | Add one-click Safe Health Report | Release validation, evidence capture, documentation, and cleanup |
 
 ## Architecture additions
 
