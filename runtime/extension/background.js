@@ -9,6 +9,7 @@ import { exportManagedSession, exportManagedSessionForTab } from './shared/sessi
 import { probeRegistrationOwner } from './shared/registration-health.js';
 import { createRuntimePilotController } from './shared/runtime-pilot-controller.js';
 import { shouldAllowRuntimeLeaseMigration } from './shared/registration-migration.js';
+import { createRuntimePortHub } from './shared/runtime-port-hub.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -22,6 +23,21 @@ const logStore = createSessionLogStore({
 void logStore.purgeLegacyLocalLogs().catch(() => {});
 let operationQueue = Promise.resolve();
 let registryPromise = null;
+const rolePortHub = createRuntimePortHub({
+  async onFrame(frame) {
+    if (frame.operation !== 'final' || frame.identity?.role !== 'sender') {
+      return { ok: false, error: 'unsupported_role_port_frame' };
+    }
+    return serialize(async () => {
+      const registry = await loadRegistry();
+      return handleForward({
+        type: 'PMIA_FORWARD',
+        envelope: frame.payload?.envelope,
+        runtimeInstanceId: frame.identity.instanceId
+      }, frame.tabId, registry);
+    });
+  }
+});
 const pilotController = createRuntimePilotController({
   chromeApi: chrome,
   storageArea: chrome.storage.session,
@@ -88,6 +104,13 @@ async function deliver(route, registry) {
     route,
     sendToTab: (tabId, outgoing) => {
       attempts += 1;
+      const sessionId = route?.message?.sessionId;
+      if (sessionId && rolePortHub.has(sessionId, 'receiver')) {
+        return rolePortHub.request(sessionId, 'receiver', {
+          operation: 'deliver',
+          payload: { envelope: outgoing.envelope }
+        }, { timeout: 1200 }).catch(() => chrome.tabs.sendMessage(tabId, outgoing));
+      }
       return chrome.tabs.sendMessage(tabId, outgoing);
     },
     wakeTab: wakeManagedTab
@@ -283,6 +306,7 @@ async function broadcastLinkStatus(sessionId, registry) {
 
 
 chrome.runtime.onConnect.addListener(port => {
+  if (rolePortHub.connect(port)) return;
   pilotController.connectPort(port);
 });
 

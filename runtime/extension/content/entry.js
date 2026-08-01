@@ -33,6 +33,7 @@ import { getOrCreateRuntimeInstanceId, shouldApplyRoleRevocation } from './role-
 import { sendWithRegistrationRecovery } from './registration-recovery.js';
 import { createSenderOutbox } from './sender-outbox.js';
 import { createReceiverBatchRuntime } from './receiver-batch-runtime.js';
+import { createRuntimeRolePort } from './runtime-role-port.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -96,6 +97,7 @@ async function startRuntime(runtimeConfig) {
   const removeOverflowSafety = installOverflowSafety(document);
   const restoreTitle = defendTitle(document, runtimeLifecycleTitle(runtimeConfig, 'boot'));
   let runtimeRegistered = false;
+  let rolePort = null;
   const refreshLifecycleTitle = () => {
     const phase = runtimeRegistered
       ? (adapter.findComposer() ? 'ready' : 'registered')
@@ -162,19 +164,29 @@ async function startRuntime(runtimeConfig) {
     : null;
 
   async function persistEnvelope(envelope) {
-    const forwarding = await sendWithRegistrationRecovery({
-      send: payload => message(payload),
-      register,
-      payload: { type: 'PMIA_FORWARD', envelope }
-    });
-    const response = forwarding.response || { ok: false, persisted: false, error: 'no_response' };
-    if (response.persisted && senderOutbox) senderOutbox.ackPersisted(envelope.id);
-    if (forwarding.recovered) {
-      telemetry?.event('registration_recovered_before_forward', {
-        envelopeId: envelope.id,
-        attempts: forwarding.attempts
+    const fallback = async () => {
+      const forwarding = await sendWithRegistrationRecovery({
+        send: payload => message(payload),
+        register,
+        payload: { type: 'PMIA_FORWARD', envelope }
       });
+      if (forwarding.recovered) {
+        telemetry?.event('registration_recovered_before_forward', {
+          envelopeId: envelope.id,
+          attempts: forwarding.attempts
+        });
+      }
+      return forwarding.response || { ok: false, persisted: false, error: 'no_response' };
+    };
+    let response;
+    try {
+      response = rolePort?.connected
+        ? await rolePort.request('final', { envelope }, { timeoutMs: 1200, fallback })
+        : await fallback();
+    } catch {
+      response = await fallback();
     }
+    if (response?.persisted && senderOutbox) senderOutbox.ackPersisted(envelope.id);
     return response;
   }
 
@@ -182,6 +194,22 @@ async function startRuntime(runtimeConfig) {
     if (!senderOutbox?.size || !runtimeRegistered || paused) return [];
     return senderOutbox.replay(envelope => persistEnvelope(envelope));
   }
+
+  rolePort = createRuntimeRolePort({
+    chromeApi: chrome,
+    sessionId: runtimeConfig.sessionId,
+    role: runtimeConfig.role,
+    instanceId: runtimeInstanceId,
+    async onRequest(frame) {
+      if (frame.operation === 'deliver' && runtimeConfig.role === 'receiver') {
+        return receiveEnvelope(frame.payload?.envelope);
+      }
+      if (frame.operation === 'command') {
+        return handleRuntimeCommand(frame.payload?.command, frame.payload?.payload || {});
+      }
+      return { ok: false, error: 'unsupported_role_port_operation' };
+    }
+  });
 
   const logEvent = async (type, data = {}) => {
     const safe = { ...data };
@@ -218,6 +246,7 @@ async function startRuntime(runtimeConfig) {
         const status = describeRuntimeStatus(response.status);
         overlay.setStatus(status.text, status.tone);
       }
+      rolePort?.connect();
       void telemetry.publish({ force: true, event: { type: 'registration' } });
       if (senderOutbox?.size) setTimeout(() => { void replaySenderOutbox(); }, 0);
       return true;
@@ -909,6 +938,7 @@ async function startRuntime(runtimeConfig) {
     if (runtimeDisposed) return;
     runtimeDisposed = true;
     clearInterval(registerTimer);
+    rolePort?.disconnect();
     runtimeRecovery?.disconnect();
     if (senderObserver) senderObserver.disconnect();
     if (receiverObserver) receiverObserver.disconnect();
