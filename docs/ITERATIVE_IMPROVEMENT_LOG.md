@@ -450,3 +450,31 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Implementation:** the controller reuses `self_test_probe`, the established one-time fallback, synthetic sequence feedback, alarm audit, and invariant audit; no prompt, answer, clipboard, or delivery state is read or mutated.
 
 **Verified status:** Cycles 46–70 are implemented and verified on committed HEAD `6682f03`. The complete gate passed 719/719 tests and validated 244 JavaScript files, 18 required runtime surfaces, 121 reachable production modules, and both active AutoHotkey programs. The isolated Edge smoke proved three synthetic finals, exact Q2/Q3 accumulation behind Q1, an empty sender outbox, clear sequence state, all seven no-content transport-drill checks, desktop and 320 CSS-pixel Pilot reflow without horizontal overflow, and complete process/profile cleanup. Normal Edge remained unchanged. The technical HTML remains deferred until the requested Cycles 71–95 mechanics phase is complete.
+
+
+## Cycle 71 - Versioned Runtime State Envelope
+- **Bug fixes:** extension upgrades no longer depend on an unversioned session array whose shape cannot be distinguished from future state.
+- **New features:** schema version, writer version, commit time, and immutable session records in one runtime envelope.
+- **Implementation:** Runtime Pilot Store reads legacy arrays as schema 1 and writes schema 2 while the commit journal remains state-shape agnostic.
+
+## Cycle 72 - Ordered Runtime State Migrations
+- **Bug fixes:** future or unsupported state cannot be partially interpreted and overwritten by an older runtime.
+- **New features:** explicit one-way migration registry, applied migration path, idempotent current-schema handling, and reason-coded missing steps.
+- **Implementation:** migration runs before invariant hydration; schema 1 upgrades to schema 2 and future schemas fail closed.
+
+## Cycle 73 - Last-Known-Good State Quarantine
+- **Bug fixes:** repeated startup retries can no longer replace the first ambiguous blocked snapshot or silently activate it.
+- **New features:** one bounded session-only quarantine record with reason, schema, writer, timestamp, and byte count.
+- **Implementation:** invalid, future, or invariant-blocked state is cloned once into `chrome.storage.session`; audits expose metadata only.
+
+## Cycle 74 - State Integrity Digest and Recovery
+- **Bug fixes:** corrupted current state is detected before hydration instead of failing later as unrelated ledger or batch symptoms.
+- **New features:** canonical digest, explicit verified/sealed/recovered/blocked integrity states, and last-applied recovery.
+- **Implementation:** envelopes are sealed on save; digest mismatch recovers a valid previous generation or quarantines and blocks when both fail.
+
+## Cycle 75 - State Compatibility Operator Surface
+- **Bug fixes:** blocked store hydration no longer leaves Runtime Pilot indefinitely at Connecting with no owning reason.
+- **New features:** State Compatibility card and Safe Health Report section for schema path, integrity, quarantine presence, and next action.
+- **Implementation:** the controller emits a metadata-only blocked snapshot; the dashboard derives compatible, migrated, recovered, or blocked state without state payloads.
+
+**Block A verification:** 81/81 focused integration tests passed across schema, migrations, quarantine, integrity, store, invariants, compatibility, dashboard, health report, and controller. HTML atlas remains deferred.
