@@ -183,3 +183,10 @@ test('Runtime Pilot exposes hidden receiver scheduler evidence', () => {
   assert.match(dashboardHtml, /id="hiddenRuntimeDetail"/);
   assert.match(dashboardJs, /receiver\?\.schedulerState/);
 });
+
+
+test('Runtime Pilot exposes recent command results and replay counts', () => {
+  assert.match(dashboardHtml, /id="commandJournalList"/);
+  assert.match(dashboardJs, /snapshot\?\.commandJournal/);
+  assert.match(dashboardJs, /replayed \$\{command\.replayCount\}/);
+});

@@ -144,3 +144,15 @@ test('context armed is durable session state rather than timeline-only evidence'
   assert.equal(restored.snapshot('s1', 101).contextArmed, true);
   assert.equal(restored.snapshot('s1', 101).contextArmedAt, 100);
 });
+
+
+test('Runtime Pilot stores and replays exact dashboard command results', () => {
+  const state = new stateModule.RuntimePilotState();
+  state.recordCommandResult('session', 'request-1', 'check_live', { ok: true, reason: 'healthy' }, 10, 25);
+  const replay = state.replayCommandResult('session', 'request-1');
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.result.reason, 'healthy');
+  const snapshot = state.snapshot('session', 30);
+  assert.equal(snapshot.commandJournal[0].durationMs, 15);
+  assert.equal(snapshot.commandJournal[0].replayCount, 1);
+});

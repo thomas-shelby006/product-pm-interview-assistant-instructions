@@ -796,10 +796,13 @@ export function createRuntimePilotController({
     if (!command) return { ok: false, error: 'invalid_dashboard_command' };
     const registry = await registryProvider();
     const pilot = await state();
-    if (!pilot.markCommand(command.sessionId, command.requestId)) {
-      return { ok: true, duplicate: true };
+    const replay = pilot.replayCommandResult(command.sessionId, command.requestId);
+    if (replay) {
+      await commit(command.sessionId, pilot);
+      return { ...(replay.result || { ok: false, error: 'empty_command_result' }), replayed: true };
     }
     const { sessionId, payload } = command;
+    const commandStartedAt = Date.now();
     pilot.ensure(sessionId);
     let result;
 
@@ -916,10 +919,20 @@ export function createRuntimePilotController({
     }
 
     if (command.command === 'end_session') return result;
+    const commandCompletedAt = Date.now();
+    pilot.recordCommandResult(
+      sessionId,
+      command.requestId,
+      command.command,
+      result,
+      commandStartedAt,
+      commandCompletedAt
+    );
     pilot.record(sessionId, 'dashboard_command', {
       command: command.command,
       ok: Boolean(result?.ok),
-      error: result?.error || ''
+      error: result?.error || '',
+      durationMs: Math.max(0, commandCompletedAt - commandStartedAt)
     });
     await commit(sessionId, pilot);
     return result;

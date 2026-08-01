@@ -27,9 +27,9 @@ export function estimateStorageCategories(state = []) {
     categories.telemetry += utf8Bytes({
       timeline: session?.timeline || [],
       metrics: session?.metrics || {},
-      processedCommandIds: session?.processedCommandIds || []
+      commandJournal: session?.commandJournal || []
     });
-    const snapshot = { ...session, ledger: [], timeline: [], metrics: {}, processedCommandIds: [] };
+    const snapshot = { ...session, ledger: [], timeline: [], metrics: {}, commandJournal: [] };
     categories.snapshots += utf8Bytes(snapshot);
   }
   categories.total = categories.actionable + categories.proven + categories.telemetry + categories.snapshots;

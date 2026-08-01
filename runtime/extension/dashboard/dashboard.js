@@ -334,6 +334,9 @@ function renderLiveCommandCenter(snapshot, now) {
     text('hiddenRuntimeState', '--');
     text('hiddenRuntimeTitle', 'Waiting for receiver scheduler state');
     text('hiddenRuntimeDetail', 'No hidden-window progress evidence is available yet.');
+    text('commandJournalState', '--');
+    text('commandJournalTitle', 'Waiting for operator command history');
+    byId('commandJournalList')?.replaceChildren();
     text('oldestInboxAge', '--');
     renderLatencyRail(null);
     return;
@@ -441,6 +444,20 @@ function renderLiveCommandCenter(snapshot, now) {
       : inbox.storage.level === 'high'
         ? 'Proven history is compacting; unresolved finals are untouched.'
         : 'Critical pressure. Unresolved finals remain protected; export or end the session soon.');
+  const commands = Array.isArray(snapshot?.commandJournal) ? snapshot.commandJournal : [];
+  text('commandJournalState', commands.length ? `${commands.length} recent` : 'No history');
+  text('commandJournalTitle', commands[0]
+    ? `${operationLabel(commands[0].command)} - ${commands[0].result?.ok ? 'Succeeded' : 'Failed'} in ${formatDuration(commands[0].durationMs || 0)}`
+    : 'No command completed');
+  const commandList = byId('commandJournalList');
+  commandList.replaceChildren();
+  for (const command of commands.slice(0, 5)) {
+    const item = document.createElement('span');
+    item.dataset.ok = command.result?.ok ? 'true' : 'false';
+    item.textContent = `${operationLabel(command.command)} - ${command.result?.ok ? 'OK' : command.result?.error || 'Failed'} - ${formatDuration(command.durationMs || 0)}${command.replayCount ? ` - replayed ${command.replayCount}` : ''}`;
+    commandList.append(item);
+  }
+
   const scheduler = snapshot?.receiver?.schedulerState || {};
   const visibility = String(snapshot?.receiver?.pageVisibility || scheduler.visibilityState || 'unknown');
   const hiddenPanel = document.querySelector('.hidden-runtime-panel');

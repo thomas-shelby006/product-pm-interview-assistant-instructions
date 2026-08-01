@@ -1,9 +1,10 @@
 import { DeliveryLedger } from './delivery-ledger.js';
+import { CommandResultJournal } from './command-result-journal.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
 const MAX_TIMELINE = 200;
-const MAX_COMMAND_IDS = 128;
+const MAX_COMMAND_RESULTS = 128;
 const MAX_METRIC_SAMPLES = 40;
 
 function emptyRole() {
@@ -100,9 +101,16 @@ function normalizeSession(item) {
     ledger: new DeliveryLedger(item.ledger || item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
     metrics: normalizeMetrics(item.metrics),
-    processedCommandIds: Array.isArray(item.processedCommandIds)
-      ? item.processedCommandIds.slice(-MAX_COMMAND_IDS)
-      : [],
+    commandJournal: new CommandResultJournal(
+      Array.isArray(item.commandJournal)
+        ? item.commandJournal
+        : (Array.isArray(item.processedCommandIds)
+          ? item.processedCommandIds.slice(-MAX_COMMAND_RESULTS).map(requestId => ({
+              requestId, command: 'legacy_command', result: { ok: true, duplicate: true, reason: 'legacy_processed' }
+            }))
+          : []),
+      { maxEntries: MAX_COMMAND_RESULTS }
+    ),
     dashboardConnections: 0,
     layout: {
       mode: String(item.layout?.mode || 'three_window'),
@@ -149,14 +157,16 @@ export class RuntimePilotState {
     return session.mode;
   }
 
-  markCommand(sessionId, requestId) {
-    const session = this.ensure(sessionId);
-    const normalized = String(requestId || '').trim();
-    if (!normalized) return false;
-    if (session.processedCommandIds.includes(normalized)) return false;
-    session.processedCommandIds.push(normalized);
-    if (session.processedCommandIds.length > MAX_COMMAND_IDS) session.processedCommandIds.shift();
-    return true;
+  replayCommandResult(sessionId, requestId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    return session.commandJournal.replay(requestId, now);
+  }
+
+  recordCommandResult(sessionId, requestId, command, result, startedAt = Date.now(), completedAt = Date.now()) {
+    const session = this.ensure(sessionId, completedAt);
+    const entry = session.commandJournal.record(requestId, command, result, startedAt, completedAt);
+    session.updatedAt = completedAt;
+    return entry;
   }
 
   updateRole(sessionId, role, telemetry, now = Date.now()) {
@@ -445,16 +455,16 @@ export class RuntimePilotState {
     const session = this.ensure(sessionId, now);
     const before = {
       timeline: session.timeline.length,
-      commands: session.processedCommandIds.length,
+      commands: session.commandJournal.size,
       proofSamples: session.metrics.deliveryProofMs.length,
       answerSamples: session.metrics.answerElapsedMs.length
     };
     session.timeline = session.timeline.slice(-Math.max(20, Number(timelineRetain) || 80));
-    session.processedCommandIds = session.processedCommandIds.slice(-Math.max(16, Number(commandRetain) || 64));
+    const compactedCommands = session.commandJournal.compact(Math.max(16, Number(commandRetain) || 64));
     session.metrics.deliveryProofMs = session.metrics.deliveryProofMs.slice(-Math.max(10, Number(metricRetain) || 20));
     session.metrics.answerElapsedMs = session.metrics.answerElapsedMs.slice(-Math.max(10, Number(metricRetain) || 20));
     const removed = (before.timeline - session.timeline.length)
-      + (before.commands - session.processedCommandIds.length)
+      + compactedCommands
       + (before.proofSamples - session.metrics.deliveryProofMs.length)
       + (before.answerSamples - session.metrics.answerElapsedMs.length);
     if (removed > 0) this.record(sessionId, 'transient_history_compacted', { removed, before }, now);
@@ -607,6 +617,7 @@ export class RuntimePilotState {
       ledgerCounts: session.ledger.counts(),
       warnings,
       timeline: session.timeline.map(event => ({ ...event, data: { ...event.data } })),
+      commandJournal: session.commandJournal.recent(5),
       metrics: {
         ...session.metrics,
         deliverySuccessRate: session.metrics.delivered + session.metrics.failed
@@ -641,7 +652,7 @@ export class RuntimePilotState {
       ledger: session.ledger.exportState(),
       timeline: session.timeline,
       metrics: session.metrics,
-      processedCommandIds: session.processedCommandIds,
+      commandJournal: session.commandJournal.exportState(),
       layout: session.layout,
       lastRepair: session.lastRepair,
       endedAt: session.endedAt,

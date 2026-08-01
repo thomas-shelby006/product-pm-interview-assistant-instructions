@@ -229,3 +229,7 @@ tbody tr.archived { opacity: .5; background: var(--surface-2); }
 
 .hidden-runtime-panel[data-visibility="hidden"] { border-color: color-mix(in srgb, var(--amber) 55%, var(--line)); }
 .hidden-runtime-panel[data-visibility="hidden"] #hiddenRuntimeState { color: var(--amber); }
+
+.command-journal-list { display: grid; gap: .35rem; margin-top: .65rem; }
+.command-journal-list span { display: block; font-size: .76rem; color: var(--muted); }
+.command-journal-list span[data-ok="false"] { color: var(--danger); }

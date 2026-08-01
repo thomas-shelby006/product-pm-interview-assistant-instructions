@@ -367,3 +367,14 @@ test('repair schedules bounded background verification without activating tabs',
   const helper = source.slice(source.indexOf('function scheduleRecoveryVerification'), source.indexOf('async function repair'));
   assert.doesNotMatch(helper, /active:\s*true|focused:\s*true/);
 });
+
+
+test('duplicate dashboard request returns the original command result', async () => {
+  const harness = createHarness();
+  const command = { sessionId: 'session', requestId: 'same-request', command: 'check_live', payload: {} };
+  const first = await harness.controller.handleCommand(command);
+  const second = await harness.controller.handleCommand(command);
+  assert.equal(second.ok, first.ok);
+  assert.equal(second.replayed, true);
+  assert.equal(second.roles?.sender?.responsive, first.roles?.sender?.responsive);
+});
