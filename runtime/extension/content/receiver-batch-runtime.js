@@ -198,9 +198,19 @@ export function createReceiverBatchRuntime({
     applyProviderBudget();
     const next = planner.next();
     if (!next.count) return { ok: true, staged: false, reason: 'batch_empty' };
+    const entriesById = new Map(next.entries.map(entry => [String(entry.id), entry]));
+    const partitions = next.partitions.map(partition => {
+      const entries = partition.memberIds.map(id => entriesById.get(String(id))).filter(Boolean);
+      return {
+        ...partition,
+        oldestAt: entries.length ? Math.min(...entries.map(entry => Number(entry.addedAt || 0)).filter(Boolean)) : 0,
+        firstSeq: entries.length ? Math.min(...entries.map(entry => Number(entry.envelope?.seq || 0)).filter(Boolean)) : 0
+      };
+    });
     lastSchedulingDecision = deriveBatchSchedulingDecision({
       memberIds: next.entries.map(entry => entry.id),
       oldestAt: next.entries[0]?.addedAt || 0,
+      partitions,
       now: nowFn(),
       hold: planner.hold,
       autoSubmit: planner.autoSubmit,

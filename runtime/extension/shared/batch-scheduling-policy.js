@@ -1,3 +1,5 @@
+import { selectDuePartition } from './delivery-deadline-queue.js';
+
 export function deriveBatchSchedulingDecision({
   memberIds = [],
   oldestAt = 0,
@@ -5,23 +7,30 @@ export function deriveBatchSchedulingDecision({
   hold = false,
   autoSubmit = true,
   receiverBusy = false,
-  draftConflict = false
+  draftConflict = false,
+  partitions = null
 } = {}) {
   const ids = (Array.isArray(memberIds) ? memberIds : []).map(String);
-  const ageMs = oldestAt ? Math.max(0, Number(now) - Number(oldestAt)) : 0;
-  const urgency = ageMs >= 60000 ? 'critical' : ageMs >= 20000 ? 'elevated' : ids.length ? 'normal' : 'idle';
-  let reason = 'ready';
-  if (!ids.length) reason = 'batch_empty';
-  else if (hold) reason = 'operator_hold';
-  else if (!autoSubmit) reason = 'auto_submit_disabled';
-  else if (draftConflict) reason = 'draft_conflict';
-  else if (receiverBusy) reason = 'receiver_busy';
+  const sourcePartitions = Array.isArray(partitions) && partitions.length
+    ? partitions
+    : ids.length
+      ? [{ index: 0, memberIds: ids, oldestAt, firstSeq: 0 }]
+      : [];
+  const decision = selectDuePartition(sourcePartitions, {
+    now,
+    hold,
+    active: receiverBusy,
+    autoSubmit,
+    draftConflict
+  });
   return {
-    memberIds: ids,
-    ageMs,
-    urgency,
-    reason,
-    submitRecommended: reason === 'ready',
-    evaluatedAt: Number(now)
+    memberIds: decision.selected?.memberIds || sourcePartitions[0]?.memberIds || ids,
+    selectedPartitionIndex: decision.selected?.index ?? null,
+    ageMs: decision.ageMs,
+    deadlineAt: decision.deadlineAt,
+    urgency: decision.urgency,
+    reason: decision.reason,
+    submitRecommended: decision.submitRecommended,
+    evaluatedAt: decision.evaluatedAt
   };
 }
