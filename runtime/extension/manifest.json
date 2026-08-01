@@ -60,7 +60,9 @@
         "content/runtime-telemetry.js",
         "content/adapter-health.js",
         "content/role-revocation.js",
-        "content/registration-recovery.js"
+        "content/registration-recovery.js",
+        "content/sender-outbox.js",
+        "content/receiver-batch-runtime.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

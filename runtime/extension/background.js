@@ -352,6 +352,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
+    if (message?.type === 'PMIA_BATCH_EVENT') {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
+        sendResponse({ ok: false, error: 'session_not_owned' });
+        return;
+      }
+      const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
+      if (role !== 'receiver') {
+        sendResponse({ ok: false, error: 'receiver_only' });
+        return;
+      }
+      sendResponse(await pilotController.batchEvent({
+        sessionId: message.sessionId,
+        event: message.event
+      }));
+      return;
+    }
+
     if (message?.type === 'PMIA_RUNTIME_TELEMETRY') {
       if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
         sendResponse({ ok: false, error: 'session_not_owned' });

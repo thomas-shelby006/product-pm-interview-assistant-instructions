@@ -72,6 +72,13 @@ function normalizeSession(item) {
     latestPreview: item.latestPreview || null,
     latestFinal: item.latestFinal || null,
     latestProof: item.latestProof || null,
+    batchState: {
+      active: item.batchState?.active || null,
+      next: item.batchState?.next || null,
+      hold: Boolean(item.batchState?.hold),
+      autoSubmit: item.batchState?.autoSubmit !== false,
+      lastEvent: item.batchState?.lastEvent || null
+    },
     queue: new DeliveryLedger(item.ledger || item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
     metrics: { ...emptyMetrics(), ...(item.metrics || {}) },
@@ -318,6 +325,38 @@ export class RuntimePilotState {
     this.record(sessionId, event.timeout ? 'answer_timeout' : 'answer_captured', safeEventData(event), now);
   }
 
+  updateBatchState(sessionId, event = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const type = String(event.type || 'batch_event');
+    const memberIds = Array.isArray(event.memberIds) ? event.memberIds.map(String) : [];
+    if (type === 'batch_submitting' || type === 'batch_submitted') {
+      session.batchState.active = {
+        batchId: String(event.batchId || ''),
+        memberIds,
+        questionCount: Number(event.questionCount || memberIds.length),
+        submitted: type === 'batch_submitted'
+      };
+    } else if (type === 'next_batch_draft') {
+      session.batchState.next = {
+        memberIds,
+        questionCount: Number(event.questionCount || memberIds.length),
+        written: event.written !== false
+      };
+    } else if (type === 'batch_answer_complete' || type === 'batch_answer_timeout') {
+      session.batchState.active = null;
+    } else if (type === 'batch_submit_failed') {
+      session.batchState.active = null;
+      session.batchState.next = { memberIds, questionCount: memberIds.length, written: true };
+    } else if (type === 'batch_policy_changed') {
+      if ('hold' in event) session.batchState.hold = Boolean(event.hold);
+      if ('autoSubmit' in event) session.batchState.autoSubmit = Boolean(event.autoSubmit);
+    }
+    session.batchState.lastEvent = { ...safeEventData(event), at: now };
+    session.updatedAt = now;
+    this.record(sessionId, type, event, now);
+    return { ...session.batchState };
+  }
+
   setLayout(sessionId, layout, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     session.layout = { ...session.layout, ...(layout || {}) };
@@ -435,6 +474,7 @@ export class RuntimePilotState {
       latestPreview: session.latestPreview ? { ...session.latestPreview } : null,
       latestFinal: session.latestFinal ? { ...session.latestFinal } : null,
       latestProof: session.latestProof ? { ...session.latestProof } : null,
+      batchState: { ...session.batchState, active: session.batchState.active ? { ...session.batchState.active } : null, next: session.batchState.next ? { ...session.batchState.next } : null },
       queue: session.queue.list(),
       ledger: session.queue.snapshot(),
       ledgerCounts: session.queue.counts(),
@@ -466,6 +506,7 @@ export class RuntimePilotState {
       latestPreview: session.latestPreview,
       latestFinal: session.latestFinal,
       latestProof: session.latestProof,
+      batchState: session.batchState,
       queue: session.queue.list(),
       ledger: session.queue.exportState(),
       timeline: session.timeline,

@@ -32,6 +32,7 @@ import { createRuntimeTelemetry } from './runtime-telemetry.js';
 import { getOrCreateRuntimeInstanceId, shouldApplyRoleRevocation } from './role-revocation.js';
 import { sendWithRegistrationRecovery } from './registration-recovery.js';
 import { createSenderOutbox } from './sender-outbox.js';
+import { createReceiverBatchRuntime } from './receiver-batch-runtime.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -116,6 +117,7 @@ async function startRuntime(runtimeConfig) {
   let senderObserver = null;
   let receiverObserver = null;
   let senderController = null;
+  let receiverBatchRuntime = null;
   let runtimeRecovery = null;
   const answerWake = createWakeSignal();
   const senderSequenceKey = `pmia_sender_seq_${runtimeConfig.sessionId}`;
@@ -415,7 +417,7 @@ async function startRuntime(runtimeConfig) {
       noGenerationGraceMs: 600
     });
     while (Date.now() - startedAt < ANSWER_TIMEOUT_MS) {
-      if (token !== answerCaptureToken) return;
+      if (token !== answerCaptureToken) return { ok: false, cancelled: true };
       const result = tracker.observe({
         now: Date.now(),
         text: adapter.getLatestAssistantText(),
@@ -438,15 +440,17 @@ async function startRuntime(runtimeConfig) {
         });
         overlay.setStatus(`ANSWER ${words}w`, 'ok', 1800);
         scrollToLatest();
-        return;
+        return { ok: true, text: result.text, wordCount: words, elapsedMs: result.elapsedMs };
       }
       await answerWake.wait(500);
     }
     await logEvent('answer_timeout', { envelopeId: envelope.id });
     telemetry.answerTimeout(envelope.id);
     overlay.setStatus('ANSWER TIMEOUT', 'warn', 2500);
+    return { ok: false, timeout: true };
   }
 
+  let latestReceiverProof = null;
   const receiver = createReceiverController({
     adapter,
     sleep,
@@ -455,9 +459,70 @@ async function startRuntime(runtimeConfig) {
       overlay.setStatus(status, tone, 1500);
     },
     onProof(proof) {
+      latestReceiverProof = proof;
       telemetry.event('receiver_proof', proof);
     }
   });
+
+  if (runtimeConfig.role === 'receiver') {
+    receiverBatchRuntime = createReceiverBatchRuntime({
+      adapter,
+      async submitBatch(batch) {
+        const latest = batch.entries.at(-1)?.envelope;
+        if (!latest) return { ok: false, error: 'batch_empty' };
+        const batchEnvelope = {
+          ...latest,
+          id: batch.id,
+          text: batch.prompt.text,
+          metadata: {
+            ...(latest.metadata || {}),
+            batchId: batch.id,
+            memberIds: batch.prompt.memberIds,
+            focusId: batch.prompt.focusId,
+            questionCount: batch.prompt.questionCount,
+            batchFingerprint: batch.prompt.fingerprint
+          }
+        };
+        const beforeText = adapter.getLatestAssistantText();
+        const hintVersionAtStart = assistantFinalHintVersion;
+        answerCaptureToken += 1;
+        const token = answerCaptureToken;
+        latestReceiverProof = null;
+        const submitted = await receiver.deliver(batchEnvelope);
+        if (!submitted) return { ok: false, error: 'receiver_delivery_failed' };
+        const proof = latestReceiverProof || {
+          envelopeId: batch.id,
+          ok: true,
+          verified: false,
+          proof: 'submit_action_only'
+        };
+        void captureAnswer(batchEnvelope, beforeText, token, hintVersionAtStart)
+          .then(async answer => {
+            await message({
+              type: 'PMIA_BATCH_EVENT',
+              sessionId: runtimeConfig.sessionId,
+              event: {
+                type: answer?.timeout ? 'batch_answer_timeout' : 'batch_answer_complete',
+                batchId: batch.id,
+                memberIds: batch.prompt.memberIds,
+                answer: answer || null,
+                proof
+              }
+            });
+            await receiverBatchRuntime?.answerComplete(batch.id);
+          });
+        return { ok: true, proof };
+      },
+      onEvent(event) {
+        telemetry.event(event.type, event);
+        void message({
+          type: 'PMIA_BATCH_EVENT',
+          sessionId: runtimeConfig.sessionId,
+          event
+        });
+      }
+    });
+  }
 
   if (runtimeConfig.role === 'receiver') {
     receiverObserver = createProviderObserver({
@@ -480,81 +545,50 @@ async function startRuntime(runtimeConfig) {
       return { ok: false, error: 'receiver_paused' };
     }
 
+    if (envelope?.kind === 'boot') {
+      const armed = await receiver.deliver(envelope);
+      if (!armed) return { ok: false, error: 'receiver_delivery_failed' };
+      overlay.setStatus('ARMED', 'ok', 3500);
+      const sessionContext = extractSafeSessionContext(envelope.text);
+      void logEvent('session_armed', { envelopeId: envelope.id, sessionContext });
+      telemetry.event('session_armed', { envelopeId: envelope.id, sessionContext });
+      return { ok: true, reason: 'accepted', duplicate: false };
+    }
+
     const sequenceDecision = receiverSequenceGate.admit(envelope?.seq);
     if (sequenceDecision.duplicate) {
       overlay.setStatus('DUPLICATE ACK', 'warn', 1400);
-      void logEvent('delivery_ignored', {
-        envelopeId: envelope?.id || '',
-        seq: envelope?.seq || 0,
-        reason: 'duplicate_ack'
-      });
       return { ok: true, reason: 'duplicate_ack', duplicate: true };
     }
     if (!sequenceDecision.accepted) {
-      overlay.setStatus('STALE IGNORED', 'warn', 1400);
-      void logEvent('delivery_ignored', {
-        envelopeId: envelope?.id || '',
-        seq: envelope?.seq || 0,
-        reason: 'stale_ack'
-      });
-      return { ok: true, reason: 'stale_ack', duplicate: true };
+      overlay.setStatus('STALE RETAINED', 'warn', 1400);
+      return { ok: false, staged: true, error: 'sequence_gap_or_stale' };
     }
 
-    const previousAcceptedSeq = sequenceDecision.previousAcceptedSeq;
+    const result = await receiverBatchRuntime.accept(envelope);
+    if (!result?.ok) return result || { ok: false, error: 'batch_rejected' };
     receiverSequenceGate.accept(envelope.seq);
-    sessionStorage.setItem(
-      receiverSequenceKey,
-      String(receiverSequenceGate.lastAcceptedSeq)
-    );
-    answerCaptureToken += 1;
-    answerWake.pulse();
-    const token = answerCaptureToken;
-    const beforeText = adapter.getLatestAssistantText();
-    const hintVersionAtStart = assistantFinalHintVersion;
-    const deliveryStartedAt = Date.now();
-    const submitted = await receiver.deliver(envelope);
-    if (!submitted) {
-      receiverSequenceGate.restore(previousAcceptedSeq);
-      if (previousAcceptedSeq > 0) {
-        sessionStorage.setItem(receiverSequenceKey, String(previousAcceptedSeq));
-      } else {
-        sessionStorage.removeItem(receiverSequenceKey);
-      }
-      return {
-        ok: false,
-        error: adapter.findComposer?.() ? 'receiver_delivery_failed' : 'receiver_composer_missing'
-      };
-    }
-    const deliveryElapsedMs = Date.now() - deliveryStartedAt;
-    telemetry.event('delivery_proof', {
-      envelopeId: envelope.id,
-      seq: envelope.seq || 0,
-      kind: envelope.kind,
-      deliveryElapsedMs
-    });
+    sessionStorage.setItem(receiverSequenceKey, String(receiverSequenceGate.lastAcceptedSeq));
     void logEvent('received_text', {
       envelopeId: envelope.id,
       kind: envelope.kind,
       sourceProvider: envelope.sourceProvider,
       text: envelope.text,
-      ...(envelope.kind === 'boot' ? {
-        sessionContext: extractSafeSessionContext(envelope.text)
-      } : {}),
-      deliveryElapsedMs
+      staged: Boolean(result.staged),
+      batchId: result.batchId || '',
+      memberIds: result.memberIds || [envelope.id]
     });
     scrollToLatest();
-    if (envelope.kind === 'boot') {
-      overlay.setStatus('ARMED', 'ok', 3500);
-      const sessionContext = extractSafeSessionContext(envelope.text);
-      void logEvent('session_armed', {
-        envelopeId: envelope.id,
-        sessionContext
-      });
-      telemetry.event('session_armed', { envelopeId: envelope.id, sessionContext });
-    } else {
-      captureAnswer(envelope, beforeText, token, hintVersionAtStart);
-    }
-    return { ok: true, reason: 'accepted', duplicate: false };
+    return {
+      ok: true,
+      reason: result.staged ? 'staged' : 'accepted',
+      duplicate: Boolean(result.duplicate),
+      staged: Boolean(result.staged),
+      delivered: Boolean(result.delivered),
+      batchId: result.batchId || '',
+      memberIds: result.memberIds || [envelope.id],
+      proof: result.proof || null
+    };
   }
 
   async function handleRuntimeCommand(command, payload = {}) {

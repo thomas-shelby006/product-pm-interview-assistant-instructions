@@ -188,7 +188,20 @@ export function createRuntimePilotController({
   async function afterForward(envelope, outcome) {
     const pilot = await state();
     if (envelope.kind !== 'boot') {
-      pilot.completeQueueSend(envelope.sessionId, envelope.id, outcome);
+      const memberIds = outcome?.memberIds?.length ? outcome.memberIds : [envelope.id];
+      const batchId = outcome?.batchId || (outcome?.staged ? 'next' : `single-${envelope.id}`);
+      if (outcome?.staged || outcome?.delivered) {
+        pilot.markLedgerStaged(envelope.sessionId, memberIds, batchId);
+      }
+      if (outcome?.delivered) {
+        pilot.markLedgerSubmitting(envelope.sessionId, batchId);
+        pilot.markLedgerProven(envelope.sessionId, batchId, outcome.proof || {
+          proof: 'receiver_ack',
+          verified: Boolean(outcome.proof?.verified)
+        });
+      } else if (!outcome?.staged) {
+        pilot.completeQueueSend(envelope.sessionId, envelope.id, outcome);
+      }
     }
     pilot.recordDelivery(envelope.sessionId, {
       envelopeId: envelope.id,
@@ -198,6 +211,26 @@ export function createRuntimePilotController({
       ...outcome
     });
     await commit(envelope.sessionId, pilot);
+  }
+
+  async function batchEvent({ sessionId, event }) {
+    const pilot = await state();
+    const value = event && typeof event === 'object' ? { ...event } : {};
+    const memberIds = Array.isArray(value.memberIds) ? value.memberIds.map(String) : [];
+    const batchId = String(value.batchId || '');
+    pilot.updateBatchState(sessionId, value);
+    if (value.type === 'batch_submitting' && batchId) {
+      pilot.markLedgerStaged(sessionId, memberIds, batchId);
+      pilot.markLedgerSubmitting(sessionId, batchId);
+    } else if (value.type === 'batch_submitted' && batchId) {
+      pilot.markLedgerStaged(sessionId, memberIds, batchId);
+      pilot.markLedgerSubmitting(sessionId, batchId);
+      pilot.markLedgerProven(sessionId, batchId, value.proof || {});
+    } else if (value.type === 'batch_submit_failed') {
+      pilot.ensure(sessionId).queue.markFailed(memberIds, value.reason || 'batch_submit_failed');
+    }
+    await commit(sessionId, pilot);
+    return { ok: true, batchId, memberIds };
   }
 
   async function telemetry({ sessionId, role, tabId, telemetry: value }) {
@@ -706,6 +739,7 @@ export function createRuntimePilotController({
     beforeForward,
     afterForward,
     telemetry,
+    batchEvent,
     syncRegistration,
     recordRegistrationRecovery,
     disconnectTab,

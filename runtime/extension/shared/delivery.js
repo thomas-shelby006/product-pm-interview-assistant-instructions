@@ -5,20 +5,37 @@ export function classifyDelivery({ route, response, error } = {}) {
   if (error) {
     return { delivered: false, queued: true, reason: 'transport_error' };
   }
+  if (response?.ok === true && response?.staged === true) {
+    return {
+      delivered: false,
+      queued: true,
+      staged: true,
+      reason: String(response.reason || 'staged'),
+      batchId: String(response.batchId || 'next'),
+      memberIds: Array.isArray(response.memberIds) ? response.memberIds.map(String) : [],
+      duplicate: Boolean(response.duplicate)
+    };
+  }
   if (response?.ok === true) {
     const reason = String(response.reason || 'accepted');
     if (reason === 'stale_ack') {
       return {
         delivered: false,
-        queued: false,
-        superseded: true,
-        reason
+        queued: true,
+        staged: true,
+        reason,
+        batchId: String(response.batchId || 'next'),
+        memberIds: Array.isArray(response.memberIds) ? response.memberIds.map(String) : []
       };
     }
     const outcome = {
-      delivered: true,
+      delivered: response.delivered !== false,
       queued: false,
-      reason
+      reason,
+      staged: false,
+      batchId: String(response.batchId || ''),
+      memberIds: Array.isArray(response.memberIds) ? response.memberIds.map(String) : [],
+      proof: response.proof || null
     };
     if (response.duplicate === true) outcome.duplicate = true;
     return outcome;
