@@ -18,6 +18,7 @@ const required = [
   'shared/delivery-ledger.js',
   'shared/contiguous-sequence-buffer.js',
   'shared/session-mutation-coordinator.js',
+  'shared/runtime-recovery-coordinator.js',
   'shared/storage-accounting.js',
   'shared/runtime-self-test.js',
   'shared/snapshot-delta.js',

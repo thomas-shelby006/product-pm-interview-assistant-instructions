@@ -7,13 +7,12 @@ import { buildReconciliationPayload } from './delivery-reconciler.js';
 import { shouldPersistBatchEvent } from './batch-event-policy.js';
 import { utf8Bytes } from './storage-accounting.js';
 import { deriveDeliverySla } from './delivery-sla-policy.js';
-import { clearRecoveryAlarms, parseRecoveryAlarmName, scheduleRecoveryAlarm } from './recovery-schedule.js';
+import { createRuntimeRecoveryCoordinator } from './runtime-recovery-coordinator.js';
 import { prepareSessionEnd, senderOutboxStorageKey, validateSessionEnd } from './session-end-guard.js';
 import { runRuntimeSelfTest } from './runtime-self-test.js';
 import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 import { buildSnapshotDelta } from './snapshot-delta.js';
-import { transitionRecovery } from './recovery-state-machine.js';
-import { createRepairEventCoalescer } from './repair-event-coalescer.js';
+
 import { classifyRegistration } from './registration-heartbeat.js';
 
 function safeError(error) {
@@ -45,7 +44,7 @@ export function createRuntimePilotController({
   const store = createRuntimePilotStore({ storageArea });
   const ports = new Map();
   const previewTimers = new Map();
-  const repairEventCoalescer = createRepairEventCoalescer({ cooldownMs: 1000 });
+  const recoveryCoordinator = createRuntimeRecoveryCoordinator({ chromeApi });
   const batchCommitTimers = new Map();
   const mutationCoordinator = createSessionMutationCoordinator();
 
@@ -167,21 +166,11 @@ export function createRuntimePilotController({
   }
 
   function persistRepairReport(pilot, sessionId, report, now = Date.now()) {
-    const decision = repairEventCoalescer.accept(sessionId, report, now);
-    pilot.setRepair(sessionId, decision.report, now, { record: decision.persist });
-    return decision.report;
+    return recoveryCoordinator.persistReport(pilot, sessionId, report, now);
   }
 
   function applyRecoveryTransition(pilot, sessionId, event) {
-    const snapshot = pilot.snapshot(sessionId);
-    const previous = snapshot?.lastRepair || null;
-    const next = transitionRecovery(previous, event, Date.now());
-    const report = JSON.stringify(previous) !== JSON.stringify(next)
-      ? persistRepairReport(pilot, sessionId, next)
-      : next;
-    const mode = report.phase === 'healthy' ? 'active' : report.phase;
-    if (pilot.snapshot(sessionId)?.mode !== mode) pilot.setMode(sessionId, mode);
-    return report;
+    return recoveryCoordinator.applyTransition(pilot, sessionId, event);
   }
 
   async function reconcileSession(sessionId, {
@@ -758,34 +747,15 @@ export function createRuntimePilotController({
   }
 
   async function scheduleRecoveryVerification(sessionId, pilot, attempt = 0) {
-    if (attempt >= 4) return false;
-    const schedule = await scheduleRecoveryAlarm(chromeApi, {
-      sessionId,
-      kind: 'verify',
-      attempt,
-      delayMs: Math.min(8000, 1200 * (2 ** attempt)),
-      source: 'repair_verification'
-    });
-    pilot.upsertRecoverySchedule(sessionId, schedule);
-    return true;
+    return recoveryCoordinator.scheduleVerification(sessionId, pilot, attempt);
   }
 
   async function scheduleRecoveryTimeout(sessionId, pilot) {
-    const schedule = await scheduleRecoveryAlarm(chromeApi, {
-      sessionId,
-      kind: 'timeout',
-      attempt: 0,
-      delayMs: 30000,
-      source: 'repair_timeout'
-    });
-    pilot.upsertRecoverySchedule(sessionId, schedule);
-    return schedule;
+    return recoveryCoordinator.scheduleTimeout(sessionId, pilot);
   }
 
   async function cancelRecoverySchedules(sessionId, pilot) {
-    const schedules = pilot.clearRecoverySchedules(sessionId);
-    await clearRecoveryAlarms(chromeApi, schedules);
-    return schedules.length;
+    return recoveryCoordinator.cancelSchedules(sessionId, pilot);
   }
 
   async function repair(sessionId, registry, pilot) {
@@ -856,13 +826,12 @@ export function createRuntimePilotController({
   }
 
   async function handleRecoveryAlarm(alarm) {
-    const identity = parseRecoveryAlarmName(alarm?.name);
-    if (!identity) return { ok: false, ignored: true, error: 'unrelated_alarm' };
     const current = await state();
-    const snapshot = current.snapshot(identity.sessionId);
-    const scheduled = snapshot?.recoverySchedules?.find(value => value.alarmName === identity.alarmName);
-    if (!scheduled) return { ok: true, ignored: true, reason: 'stale_alarm' };
-    current.removeRecoverySchedule(identity.sessionId, identity.alarmName);
+    const inspected = recoveryCoordinator.inspectAlarm(current, alarm);
+    if (inspected.reason === 'unrelated_alarm') return { ok: false, ignored: true, error: 'unrelated_alarm' };
+    if (inspected.reason === 'stale_alarm') return { ok: true, ignored: true, reason: 'stale_alarm' };
+    const identity = inspected.identity;
+    const snapshot = inspected.snapshot;
     if (!['repairing', 'blocked'].includes(snapshot?.lastRepair?.phase)) {
       await commit(identity.sessionId, current);
       return { ok: true, ignored: true, reason: 'recovery_complete' };
@@ -1241,7 +1210,7 @@ export function createRuntimePilotController({
     const pilot = await state();
     await cancelRecoverySchedules(sessionId, pilot);
     pilot.remove(sessionId);
-    repairEventCoalescer.clear(sessionId);
+    recoveryCoordinator.clear(sessionId);
     await store.save(pilot);
     await broadcast(sessionId, pilot);
     if (dashboardTabIds.length) {
@@ -1287,7 +1256,7 @@ export function createRuntimePilotController({
     removeSession: sessionId => mutationCoordinator.run(sessionId, () => removeSession(sessionId)),
     snapshot,
     handleAlarm: alarm => {
-      const identity = parseRecoveryAlarmName(alarm?.name);
+      const identity = recoveryCoordinator.alarmIdentity(alarm);
       if (!identity) return Promise.resolve({ ok: false, ignored: true, error: 'unrelated_alarm' });
       return mutationCoordinator.run(identity.sessionId, () => handleRecoveryAlarm(alarm));
     },

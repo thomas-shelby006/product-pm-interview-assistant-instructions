@@ -295,3 +295,8 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 - **Bug fixes:** Delivery “Caught up” no longer conflicts with a separate answer lifecycle or stale raw generation boolean.
 - **New features:** independent Delivery, Answer and Verification truth rails with explicit labels, evidence and accessible live updates.
 - **Implementation:** pure answer-status model, delivery-only inbox and Pace Guard state, reconciled generation display and trust-aware self-test labels.
+
+## Cycle 42 - Recovery and SLA Controller Boundary
+- **Bug fixes:** answer-state and delivery-repair ownership can no longer drift through duplicated controller helper logic.
+- **New features:** one recovery coordinator owns semantic transitions, durable alarm schedules, alarm identity and duplicate-report suppression.
+- **Implementation:** Runtime Pilot controller delegates repair persistence, verification/timeout scheduling, cancellation and alarm inspection while retaining routing and command ownership.
