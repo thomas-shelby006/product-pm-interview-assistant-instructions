@@ -81,3 +81,12 @@ test('pilot state exposes and warns on unverified receiver proof', () => {
   assert.equal(snapshot.latestProof.verified, false);
   assert.ok(snapshot.warnings.some(item => item.code === 'receiver_proof_unverified'));
 });
+
+
+test('pilot state exposes repair progress and degraded warnings', () => {
+  const state = new RuntimePilotState();
+  state.setMode('pmia_session', 'repairing', 1000);
+  assert.ok(state.snapshot('pmia_session', 1001).warnings.some(item => item.code === 'repair_in_progress'));
+  state.setMode('pmia_session', 'degraded', 1002);
+  assert.ok(state.snapshot('pmia_session', 1003).warnings.some(item => item.code === 'runtime_degraded'));
+});

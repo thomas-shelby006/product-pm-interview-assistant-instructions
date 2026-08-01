@@ -85,12 +85,20 @@ function connect() {
     port.onMessage.addListener(handlePortMessage);
     port.onDisconnect.addListener(() => {
       state.port = null;
+      failPendingCommands();
       setConnection('Reconnecting', 'warn');
       scheduleReconnect();
     });
   } catch {
     scheduleReconnect();
   }
+}
+
+function failPendingCommands(reason = 'dashboard_disconnected') {
+  for (const resolve of state.pending.values()) {
+    resolve({ ok: false, error: reason });
+  }
+  state.pending.clear();
 }
 
 function scheduleReconnect() {

@@ -173,6 +173,22 @@ export function createRuntimePilotController({
       ...telemetryState,
       heartbeatAt: Date.now()
     });
+    const refreshed = pilot.snapshot(sessionId);
+    if (
+      refreshed?.mode === 'repairing'
+      && refreshed.sender?.connected
+      && refreshed.sender?.composerReady
+      && refreshed.receiver?.connected
+      && refreshed.receiver?.composerReady
+    ) {
+      pilot.setMode(sessionId, 'active');
+      pilot.setRepair(sessionId, {
+        ...(refreshed.lastRepair || {}),
+        ok: true,
+        pendingVerification: false,
+        verified: true
+      });
+    }
     if (event?.type === 'answer') {
       pilot.recordAnswer(sessionId, {
         envelopeId: event.envelopeId,
@@ -287,6 +303,16 @@ export function createRuntimePilotController({
       }
     }
     const ok = Boolean(roles.sender?.responsive && roles.receiver?.responsive);
+    if (pilot.snapshot(sessionId)?.mode === 'repairing') {
+      pilot.setMode(sessionId, ok ? 'active' : 'degraded');
+      pilot.setRepair(sessionId, {
+        ...(pilot.snapshot(sessionId)?.lastRepair || {}),
+        ok,
+        pendingVerification: false,
+        verified: ok,
+        verification: roles
+      });
+    }
     pilot.record(sessionId, 'live_check', { ok, roles });
     return { ok, roles };
   }
@@ -340,9 +366,11 @@ export function createRuntimePilotController({
       }
     }
 
-    pilot.setRepair(sessionId, report);
-    pilot.setMode(sessionId, report.ok ? 'active' : 'degraded');
-    return report;
+    const pendingVerification = report.ok && report.actions.length > 0;
+    const finalReport = { ...report, pendingVerification, verified: false };
+    pilot.setRepair(sessionId, finalReport);
+    pilot.setMode(sessionId, pendingVerification ? 'repairing' : 'degraded');
+    return finalReport;
   }
 
   async function managedWindowIds(sessionId, registry) {

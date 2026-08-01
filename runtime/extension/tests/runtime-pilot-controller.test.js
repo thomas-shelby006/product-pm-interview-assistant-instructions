@@ -114,3 +114,27 @@ test('send selected temporarily admits one receiver delivery while transport sta
   assert.deepEqual(deliveries, ['q1']);
   assert.equal((await controller.snapshot('s1')).mode, 'paused');
 });
+
+
+test('runtime repair remains repairing until both roles publish healthy telemetry', async () => {
+  const { controller, registry } = setup();
+  await controller.syncRegistration(registry.getSession('s1').sender);
+  await controller.syncRegistration(registry.getSession('s1').receiver);
+  const repair = await controller.handleCommand({
+    sessionId: 's1', requestId: 'repair-1', command: 'repair_runtime'
+  });
+  assert.equal(repair.pendingVerification, true);
+  assert.equal((await controller.snapshot('s1')).mode, 'repairing');
+  await controller.telemetry({
+    sessionId: 's1', role: 'sender', tabId: 1,
+    telemetry: { composerReady: true, phase: 'ready' }
+  });
+  assert.equal((await controller.snapshot('s1')).mode, 'repairing');
+  await controller.telemetry({
+    sessionId: 's1', role: 'receiver', tabId: 2,
+    telemetry: { composerReady: true, phase: 'ready' }
+  });
+  const snapshot = await controller.snapshot('s1');
+  assert.equal(snapshot.mode, 'active');
+  assert.equal(snapshot.lastRepair.verified, true);
+});

@@ -91,3 +91,21 @@ This log records the ten post-implementation audit cycles required for PMIA 0.7.
 **Source review:** Both supported provider adapters expose conversation-message IDs, so supported routes remain provider-rendered-proof capable. Submit-action-only fallback is explicitly unhealthy rather than silently trusted.
 
 **Why this is superior:** It preserves the existing transport API while making the actual proof boundary observable and auditable.
+
+## Cycle 6 - Recovery and service-worker restart behavior
+
+**Evidence inspected:** Browser-native repair actions, role telemetry, pilot mode transitions, dashboard port reconnect, and pending command promises.
+
+**Issue/opportunity:** Repair was labeled successful after issuing a recover/reload action, before both roles returned healthy. A service-worker disconnect left dashboard commands waiting for their full timeout.
+
+**Classification:** Recovery truthfulness and reconnection responsiveness bug.
+
+**Implementation:** Repair now remains in repairing mode with pending verification. Healthy telemetry from both roles or an explicit live check completes verification; failures enter degraded mode. Dashboard port disconnect immediately fails outstanding commands and reconnects.
+
+**Files changed:** Runtime Pilot controller/state, dashboard model/controller, and controller/state/manifest tests.
+
+**Coverage added:** Repair remains pending after one role, completes after both, exposes repairing/degraded warnings, and calls the pending-command failure path on disconnect.
+
+**Source review:** Verification is driven by the existing heartbeat/telemetry path, so it survives worker restart and adds no new timer or polling loop.
+
+**Why this is superior:** It reports recovered state only after observed health and gives the operator immediate feedback when the control channel restarts.

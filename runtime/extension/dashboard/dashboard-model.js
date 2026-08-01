@@ -37,6 +37,8 @@ export function warningLabel(warning) {
     sender_source_silent: 'No actionable sender transcript has been observed for 90 seconds',
     receiver_proof_unverified: 'Receiver submission was not verified by a rendered provider turn',
     receiver_proof_failed: 'Receiver delivery did not produce provider-rendered proof',
+    repair_in_progress: 'Runtime repair is waiting for both roles to report healthy',
+    runtime_degraded: 'Runtime repair could not restore full health',
     transport_paused: 'Forwarding is paused'
   };
   return labels[warning?.code] || String(warning?.code || 'Runtime warning');

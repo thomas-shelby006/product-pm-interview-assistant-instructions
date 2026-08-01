@@ -369,6 +369,8 @@ export class RuntimePilotState {
         ageMs: now - oldestQueuedAt
       });
     }
+    if (session.mode === 'repairing') warnings.push({ code: 'repair_in_progress', severity: 'warn' });
+    if (session.mode === 'degraded') warnings.push({ code: 'runtime_degraded', severity: 'error' });
     if (session.mode === 'paused') warnings.push({ code: 'transport_paused', severity: 'warn' });
     return {
       sessionId: session.sessionId,
