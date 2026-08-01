@@ -10,6 +10,7 @@ import { probeRegistrationOwner } from './shared/registration-health.js';
 import { createRuntimePilotController } from './shared/runtime-pilot-controller.js';
 import { shouldAllowRuntimeLeaseMigration } from './shared/registration-migration.js';
 import { createRuntimePortHub } from './shared/runtime-port-hub.js';
+import { createSessionMutationCoordinator } from './shared/session-mutation-coordinator.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -21,7 +22,8 @@ const logStore = createSessionLogStore({
   maxEvents: MAX_LOG_EVENTS
 });
 void logStore.purgeLegacyLocalLogs().catch(() => {});
-let operationQueue = Promise.resolve();
+const operationCoordinator = createSessionMutationCoordinator();
+const registryWriteCoordinator = createSessionMutationCoordinator();
 let registryPromise = null;
 const rolePortHub = createRuntimePortHub({
   async onFrame(frame) {
@@ -35,7 +37,7 @@ const rolePortHub = createRuntimePortHub({
         envelope: frame.payload?.envelope,
         runtimeInstanceId: frame.identity.instanceId
       }, frame.tabId, registry);
-    });
+    }, frame.identity.sessionId);
   }
 });
 const pilotController = createRuntimePilotController({
@@ -56,14 +58,11 @@ const pilotController = createRuntimePilotController({
     } catch {
       return fallback();
     }
-  },
-  serializeOperation: serialize
+  }
 });
 
-function serialize(operation) {
-  const next = operationQueue.then(operation, operation);
-  operationQueue = next.catch(() => {});
-  return next;
+function serialize(operation, sessionId = '__background__') {
+  return operationCoordinator.run(sessionId, operation);
 }
 
 async function loadRegistry() {
@@ -81,12 +80,14 @@ async function loadRegistry() {
 }
 
 async function saveRegistry(registry) {
-  try {
-    await registryStorage.set({ [REGISTRY_KEY]: registry.exportState() });
-  } catch (error) {
-    registryPromise = null;
-    throw error;
-  }
+  return registryWriteCoordinator.run('__registry_write__', async () => {
+    try {
+      await registryStorage.set({ [REGISTRY_KEY]: registry.exportState() });
+    } catch (error) {
+      registryPromise = null;
+      throw error;
+    }
+  });
 }
 
 async function appendLog(sessionId, role, event) {
@@ -494,7 +495,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     sendResponse({ ok: false, error: 'unsupported_message' });
-  }).catch(error => {
+  }, message?.sessionId || message?.envelope?.sessionId || '__registry__').catch(error => {
     sendResponse({ ok: false, error: String(error?.message || error) });
   });
   return true;

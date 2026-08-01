@@ -298,3 +298,17 @@ test('unverified batch submission does not close ledger members', async () => {
   });
   assert.equal((await controller.snapshot('s1')).ledger[0].state, 'proven');
 });
+
+
+test('controller serializes external mutations by session without a global state lane', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { dirname, resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
+  assert.match(source, /createSessionMutationCoordinator/);
+  assert.match(source, /handleCommand: raw => \{[\s\S]*mutationCoordinator\.run\(command\.sessionId/);
+  assert.match(source, /scheduleBatchCheckpoint[\s\S]*mutationCoordinator\.run\(sessionId/);
+  assert.doesNotMatch(source, /operationQueue/);
+  assert.doesNotMatch(source, /serializeOperation/);
+});

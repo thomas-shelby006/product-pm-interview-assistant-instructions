@@ -107,3 +107,9 @@ test('Pilot groups health markers into operational diagnostic categories', () =>
   assert.match(markup, /id="diagnosticGroups"/);
   assert.match(markup, /Diagnostic categories/);
 });
+
+
+test('Pilot exposes an operation guard for in-flight commands', () => {
+  assert.match(markup, /id="operationGuard"/);
+  assert.match(markup, /id="operationActivity">Idle/);
+});

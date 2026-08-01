@@ -58,11 +58,16 @@ function sendCommand(command, payload = {}) {
   }
   const id = requestId();
   const promise = new Promise(resolve => {
-    state.pending.set(id, resolve);
+    state.pending.set(id, { resolve, command, startedAt: Date.now() });
+    renderOperationActivity();
+    updateControlAvailability();
     setTimeout(() => {
-      if (!state.pending.has(id)) return;
+      const pending = state.pending.get(id);
+      if (!pending) return;
       state.pending.delete(id);
-      resolve({ ok: false, error: 'command_timeout' });
+      pending.resolve({ ok: false, error: 'command_timeout' });
+      renderOperationActivity();
+      updateControlAvailability();
     }, 12000);
   });
   state.port.postMessage({
@@ -104,10 +109,12 @@ function connect() {
 }
 
 function failPendingCommands(reason = 'dashboard_disconnected') {
-  for (const resolve of state.pending.values()) {
-    resolve({ ok: false, error: reason });
+  for (const pending of state.pending.values()) {
+    pending.resolve({ ok: false, error: reason });
   }
   state.pending.clear();
+  renderOperationActivity();
+  updateControlAvailability();
 }
 
 function scheduleReconnect() {
@@ -151,11 +158,30 @@ function handlePortMessage(message) {
     return;
   }
   if (message?.type === 'PMIA_DASHBOARD_COMMAND_RESULT') {
-    const resolve = state.pending.get(message.requestId);
-    if (!resolve) return;
+    const pending = state.pending.get(message.requestId);
+    if (!pending) return;
     state.pending.delete(message.requestId);
-    resolve(message.result || { ok: false, error: 'empty_command_result' });
+    pending.resolve(message.result || { ok: false, error: 'empty_command_result' });
+    renderOperationActivity();
+    updateControlAvailability();
   }
+}
+
+function operationLabel(command) {
+  return String(command || '')
+    .replaceAll('_', ' ')
+    .replace(/^./, value => value.toUpperCase());
+}
+
+function renderOperationActivity() {
+  const node = byId('operationActivity');
+  const guard = byId('operationGuard');
+  if (!node || !guard) return;
+  const pending = [...state.pending.values()];
+  guard.dataset.tone = pending.length ? 'busy' : 'idle';
+  node.textContent = pending.length
+    ? `${operationLabel(pending[0].command)}${pending.length > 1 ? ` +${pending.length - 1}` : ''}`
+    : 'Idle';
 }
 
 function text(id, value) {
@@ -381,6 +407,7 @@ function renderOverview(snapshot, now) {
   text('route', snapshot ? `${snapshot.sender?.provider || '?'} -> ${snapshot.receiver?.provider || '?'}` : '--');
   text('transportMode', snapshot?.mode || '--');
   text('uptime', snapshot ? formatDuration(now - snapshot.createdAt) : '--');
+  renderOperationActivity();
   renderLiveCommandCenter(snapshot, now);
   renderRole('sender', snapshot?.sender, now);
   renderRole('receiver', snapshot?.receiver, now);
@@ -546,7 +573,8 @@ function updateControlAvailability() {
   const unavailable = !state.snapshot || state.sessionEnded;
   document.querySelectorAll('[data-command], #submitSelected, #archiveSelected, #archiveProven, #archiveAll, #copyLatest').forEach(node => {
     const busy = node.dataset.busy === 'true';
-    node.disabled = unavailable || busy;
+    const commandBlocked = state.pending.size > 0 && Boolean(node.dataset.command);
+    node.disabled = unavailable || busy || commandBlocked;
   });
   if (!unavailable) {
     const batch = state.snapshot?.batchState || {};

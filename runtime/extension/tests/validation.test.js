@@ -635,3 +635,15 @@ test('production runtime contains no latest-only delivery authority', async () =
   assert.doesNotMatch(source, /queueLatest|acceptSequence|lastAcceptedSeq|supersedeBefore|resume_latest/);
   assert.match(source, /persistFinal|DeliveryLedger|resume_catch_up/);
 });
+
+
+test('background separates per-session operations from serialized registry writes', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { dirname, resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'background.js'), 'utf8');
+  assert.match(source, /operationCoordinator\.run\(sessionId, operation\)/);
+  assert.match(source, /registryWriteCoordinator\.run\('__registry_write__'/);
+  assert.match(source, /message\?\.sessionId \|\| message\?\.envelope\?\.sessionId/);
+});

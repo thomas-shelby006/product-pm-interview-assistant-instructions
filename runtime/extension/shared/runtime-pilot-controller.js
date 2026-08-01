@@ -5,6 +5,7 @@ import { hasMeaningfulTelemetryChange, heartbeatPatch } from './telemetry-coales
 import { classifyStoragePressure, DEFAULT_SESSION_QUOTA_BYTES } from './storage-pressure.js';
 import { buildReconciliationPayload } from './delivery-reconciler.js';
 import { shouldPersistBatchEvent } from './batch-event-policy.js';
+import { createSessionMutationCoordinator } from './session-mutation-coordinator.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -30,13 +31,13 @@ export function createRuntimePilotController({
   deliverFinal,
   exportManagedSession,
   clearSessionLogs,
-  requestRole = null,
-  serializeOperation = operation => operation()
+  requestRole = null
 } = {}) {
   const store = createRuntimePilotStore({ storageArea });
   const ports = new Map();
   const previewTimers = new Map();
   const batchCommitTimers = new Map();
+  const mutationCoordinator = createSessionMutationCoordinator();
 
   function sessionPorts(sessionId) {
     return ports.get(sessionId) || new Set();
@@ -100,7 +101,7 @@ export function createRuntimePilotController({
     clearTimeout(previewTimers.get(sessionId));
     previewTimers.set(sessionId, setTimeout(() => {
       previewTimers.delete(sessionId);
-      commit(sessionId).catch(() => {});
+      mutationCoordinator.run(sessionId, () => commit(sessionId)).catch(() => {});
     }, 140));
   }
 
@@ -161,7 +162,12 @@ export function createRuntimePilotController({
     });
     await commit(registration.sessionId, pilot);
     if (registration.role === 'receiver') {
-      setTimeout(() => { void reconcileSession(registration.sessionId); }, 0);
+      setTimeout(() => {
+        void mutationCoordinator.run(
+          registration.sessionId,
+          () => reconcileSession(registration.sessionId)
+        );
+      }, 0);
     }
   }
 
@@ -274,7 +280,7 @@ export function createRuntimePilotController({
     cancelBatchCheckpoint(sessionId);
     const timer = setTimeout(() => {
       batchCommitTimers.delete(sessionId);
-      void serializeOperation(async () => {
+      void mutationCoordinator.run(sessionId, async () => {
         const pilot = await state();
         if (!pilot.snapshot(sessionId)) return;
         await commit(sessionId, pilot);
@@ -775,7 +781,8 @@ export function createRuntimePilotController({
     if (!ports.has(sessionId)) ports.set(sessionId, new Set());
     ports.get(sessionId).add(entry);
 
-    state().then(async pilot => {
+    mutationCoordinator.run(sessionId, async () => {
+      const pilot = await state();
       pilot.ensure(sessionId);
       pilot.setDashboardConnections(sessionId, sessionPorts(sessionId).size);
       pilot.record(sessionId, 'dashboard_connected', {
@@ -786,7 +793,7 @@ export function createRuntimePilotController({
     }).catch(() => {});
 
     port.onMessage.addListener(raw => {
-      serializeOperation(() => handleCommand(raw))
+      mutationCoordinator.run(sessionId, () => handleCommand(raw))
         .then(result => {
           post(port, {
             type: 'PMIA_DASHBOARD_COMMAND_RESULT',
@@ -810,7 +817,8 @@ export function createRuntimePilotController({
       const entries = ports.get(sessionId);
       entries?.delete(entry);
       if (entries && !entries.size) ports.delete(sessionId);
-      state().then(async pilot => {
+      mutationCoordinator.run(sessionId, async () => {
+        const pilot = await state();
         if (!pilot.snapshot(sessionId)) return;
         pilot.setDashboardConnections(sessionId, sessionPorts(sessionId).size);
         pilot.record(sessionId, 'dashboard_disconnected', { tabId: entry.tabId });
@@ -821,14 +829,19 @@ export function createRuntimePilotController({
   }
 
   async function disconnectTab(tabId, affectedSessionIds = []) {
-    const pilot = await state();
+    const results = [];
     for (const sessionId of affectedSessionIds) {
-      const snapshot = pilot.snapshot(sessionId);
-      for (const role of ['sender', 'receiver']) {
-        if (snapshot?.[role]?.tabId === tabId) pilot.disconnectRole(sessionId, role);
-      }
-      await commit(sessionId, pilot);
+      results.push(await mutationCoordinator.run(sessionId, async () => {
+        const pilot = await state();
+        const snapshot = pilot.snapshot(sessionId);
+        for (const role of ['sender', 'receiver']) {
+          if (snapshot?.[role]?.tabId === tabId) pilot.disconnectRole(sessionId, role);
+        }
+        await commit(sessionId, pilot);
+        return sessionId;
+      }));
     }
+    return results;
   }
 
   async function removeSession(sessionId) {
@@ -858,18 +871,35 @@ export function createRuntimePilotController({
 
   return {
     connectPort,
-    handlePreview,
-    beforeForward,
-    afterForward,
-    telemetry,
-    batchEvent,
-    reconcileSession,
-    syncRegistration,
-    recordRegistrationRecovery,
+    handlePreview: input => mutationCoordinator.run(input?.preview?.sessionId, () => handlePreview(input)),
+    beforeForward: envelope => mutationCoordinator.run(envelope?.sessionId, () => beforeForward(envelope)),
+    afterForward: (envelope, outcome) => mutationCoordinator.run(
+      envelope?.sessionId,
+      () => afterForward(envelope, outcome)
+    ),
+    telemetry: input => mutationCoordinator.run(input?.sessionId, () => telemetry(input)),
+    batchEvent: input => mutationCoordinator.run(input?.sessionId, () => batchEvent(input)),
+    reconcileSession: (sessionId, options) => mutationCoordinator.run(
+      sessionId,
+      () => reconcileSession(sessionId, options)
+    ),
+    syncRegistration: registration => mutationCoordinator.run(
+      registration?.sessionId,
+      () => syncRegistration(registration)
+    ),
+    recordRegistrationRecovery: (sessionId, data) => mutationCoordinator.run(
+      sessionId,
+      () => recordRegistrationRecovery(sessionId, data)
+    ),
     disconnectTab,
-    removeSession,
+    removeSession: sessionId => mutationCoordinator.run(sessionId, () => removeSession(sessionId)),
     snapshot,
-    handleCommand,
-    commit
+    handleCommand: raw => {
+      const command = normalizeDashboardCommand(raw);
+      if (!command) return Promise.resolve({ ok: false, error: 'invalid_dashboard_command' });
+      return mutationCoordinator.run(command.sessionId, () => handleCommand(raw));
+    },
+    commit: (sessionId, pilot) => mutationCoordinator.run(sessionId, () => commit(sessionId, pilot)),
+    pendingMutation: sessionId => mutationCoordinator.pending(sessionId)
   };
 }
