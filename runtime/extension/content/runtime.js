@@ -297,6 +297,31 @@ export function defendTitle(doc, target, Observer = globalThis.MutationObserver)
   return restore;
 }
 
+export function installOverflowSafety(doc) {
+  const id = 'pmia-overflow-safety';
+  doc.getElementById(id)?.remove?.();
+  const style = doc.createElement('style');
+  style.id = id;
+  style.textContent = `
+    [data-message-author-role="assistant"],
+    [data-message-author-role="user"],
+    article,
+    .prose,
+    pre,
+    code {
+      max-width: 100% !important;
+      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
+    }
+    pre {
+      white-space: pre-wrap !important;
+      overflow-x: auto !important;
+    }
+  `;
+  (doc.head || doc.documentElement).appendChild(style);
+  return () => style.remove();
+}
+
 export function redactSensitiveSessionText(text) {
   const value = String(text ?? '');
   const isSessionSetup = /\bSESSION CONTEXT\b/i.test(value)

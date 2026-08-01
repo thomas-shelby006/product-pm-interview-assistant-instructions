@@ -9,6 +9,7 @@ import {
   runtimeLifecycleTitle,
   defendTitle,
   redactSensitiveSessionText,
+  installOverflowSafety,
   sleep
 } from './runtime.js';
 import { createStatusOverlay } from './status-overlay.js';
@@ -27,6 +28,7 @@ import { extractSafeSessionContext } from '../shared/session-context.js';
 import { renderRuntimeFatal } from './runtime-fatal.js';
 import { createRecentTranscriptCache, isActionableTranscript, sanitizeTranscriptCandidate } from '../shared/transcript-filter.js';
 import { createPreflightResponder } from './preflight-responder.js';
+import { createRuntimeTelemetry } from './runtime-telemetry.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 const ANSWER_TIMEOUT_MS = 90000;
@@ -84,6 +86,7 @@ async function startRuntime(runtimeConfig) {
     version: runtimeVersion
   });
   const overlay = createStatusOverlay(document, runtimeConfig);
+  const removeOverflowSafety = installOverflowSafety(document);
   const restoreTitle = defendTitle(document, runtimeLifecycleTitle(runtimeConfig, 'boot'));
   let runtimeRegistered = false;
   const refreshLifecycleTitle = () => {
@@ -94,7 +97,10 @@ async function startRuntime(runtimeConfig) {
     return phase;
   };
   let paused = false;
+  let transportPaused = false;
   let scrollLocked = false;
+  let latestBootContext = '';
+  let telemetry = null;
   let answerCaptureToken = 0;
   let registrationActive = true;
   let assistantFinalHintVersion = 0;
@@ -116,6 +122,13 @@ async function startRuntime(runtimeConfig) {
     Number(sessionStorage.getItem(receiverSequenceKey) || 0)
   );
   const outboundTranscriptCache = createRecentTranscriptCache();
+
+  function isCombinedVoiceActive() {
+    return Boolean(
+      adapter.isVoiceActive?.() ||
+      (runtimeConfig.provider === 'claude' && claudeProtocolVoiceActive)
+    );
+  }
 
   const message = async payload => {
     try {
@@ -143,6 +156,16 @@ async function startRuntime(runtimeConfig) {
     });
   };
 
+  telemetry = createRuntimeTelemetry({
+    runtimeConfig,
+    adapter,
+    send: message,
+    getPhase: refreshLifecycleTitle,
+    getTransportPaused: () => transportPaused,
+    getScrollLocked: () => scrollLocked,
+    getVoiceActive: isCombinedVoiceActive
+  });
+
   async function register() {
     const response = await message({
       type: 'PMIA_REGISTER',
@@ -158,6 +181,7 @@ async function startRuntime(runtimeConfig) {
         const status = describeRuntimeStatus(response.status);
         overlay.setStatus(status.text, status.tone);
       }
+      void telemetry.publish({ force: true, event: { type: 'registration' } });
       return true;
     }
     if (response?.terminal) {
@@ -203,6 +227,7 @@ async function startRuntime(runtimeConfig) {
       return false;
     }
     previewSequence = nextPreviewSequence;
+    telemetry.preview(preview);
     try {
       const response = await chrome.runtime.sendMessage({ type: 'PMIA_PREVIEW', preview });
       if (!response?.ok && phase !== 'clear') outboundTranscriptCache.forget(text, 'preview', transcriptIdentity);
@@ -220,6 +245,7 @@ async function startRuntime(runtimeConfig) {
       ? sanitizeTranscriptCandidate(text)
       : String(text || '').trim();
     if (!normalized || paused) return false;
+    if (kind === 'boot') latestBootContext = normalized;
     if (kind === 'question' && !isActionableTranscript(normalized)) return false;
     const transcriptPhase = kind === 'question' ? 'final' : '';
     const transcriptIdentity = String(metadata.turnKey || metadata.messageId || '').trim();
@@ -241,6 +267,7 @@ async function startRuntime(runtimeConfig) {
       if (transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
       return false;
     }
+    telemetry.final(envelope);
     const response = await message({ type: 'PMIA_FORWARD', envelope });
     if (!response?.ok && transcriptPhase) outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
     if (response?.terminal) {
@@ -268,12 +295,6 @@ async function startRuntime(runtimeConfig) {
     return Boolean(response?.ok);
   }
 
-
-
-  const isCombinedVoiceActive = () => Boolean(
-    adapter.isVoiceActive?.() ||
-    (runtimeConfig.provider === 'claude' && claudeProtocolVoiceActive)
-  );
 
   if (runtimeConfig.role === 'sender') {
     senderController = createProviderSender({
@@ -365,6 +386,12 @@ async function startRuntime(runtimeConfig) {
           wordCount: words,
           elapsedMs: result.elapsedMs
         });
+        telemetry.answer({
+          envelopeId: envelope.id,
+          text: result.text,
+          wordCount: words,
+          elapsedMs: result.elapsedMs
+        });
         overlay.setStatus(`ANSWER ${words}w`, 'ok', 1800);
         scrollToLatest();
         return;
@@ -372,6 +399,7 @@ async function startRuntime(runtimeConfig) {
       await answerWake.wait(500);
     }
     await logEvent('answer_timeout', { envelopeId: envelope.id });
+    telemetry.answerTimeout(envelope.id);
     overlay.setStatus('ANSWER TIMEOUT', 'warn', 2500);
   }
 
@@ -401,6 +429,9 @@ async function startRuntime(runtimeConfig) {
       return { ok: false, error: 'receiver_role_mismatch' };
     }
     if (paused) return { ok: false, error: 'receiver_paused' };
+    if (transportPaused && envelope?.kind !== 'boot') {
+      return { ok: false, error: 'receiver_paused' };
+    }
 
     const sequenceDecision = receiverSequenceGate.admit(envelope?.seq);
     if (sequenceDecision.duplicate) {
@@ -448,6 +479,12 @@ async function startRuntime(runtimeConfig) {
       };
     }
     const deliveryElapsedMs = Date.now() - deliveryStartedAt;
+    telemetry.event('delivery_proof', {
+      envelopeId: envelope.id,
+      seq: envelope.seq || 0,
+      kind: envelope.kind,
+      deliveryElapsedMs
+    });
     void logEvent('received_text', {
       envelopeId: envelope.id,
       kind: envelope.kind,
@@ -461,14 +498,81 @@ async function startRuntime(runtimeConfig) {
     scrollToLatest();
     if (envelope.kind === 'boot') {
       overlay.setStatus('ARMED', 'ok', 3500);
+      const sessionContext = extractSafeSessionContext(envelope.text);
       void logEvent('session_armed', {
         envelopeId: envelope.id,
-        sessionContext: extractSafeSessionContext(envelope.text)
+        sessionContext
       });
+      telemetry.event('session_armed', { envelopeId: envelope.id, sessionContext });
     } else {
       captureAnswer(envelope, beforeText, token, hintVersionAtStart);
     }
     return { ok: true, reason: 'accepted', duplicate: false };
+  }
+
+  async function handleRuntimeCommand(command, payload = {}) {
+    switch (String(command || '')) {
+      case 'pause':
+        transportPaused = true;
+        overlay.setStatus('FORWARDING PAUSED', 'warn');
+        telemetry.event('transport_paused');
+        return { ok: true, transportPaused };
+      case 'resume':
+        transportPaused = false;
+        overlay.setStatus('FORWARDING ACTIVE', 'ok', 1600);
+        telemetry.event('transport_resumed');
+        return { ok: true, transportPaused };
+      case 'recover': {
+        const scheduled = runtimeRecovery?.trigger('dashboard_repair') || false;
+        senderObserver?.refresh();
+        receiverObserver?.refresh();
+        senderController?.observe();
+        answerWake.pulse();
+        telemetry.event('runtime_recovery_requested', { scheduled });
+        return { ok: true, scheduled };
+      }
+      case 'resend_context':
+        if (runtimeConfig.role !== 'sender') return { ok: false, error: 'sender_only' };
+        if (!latestBootContext) return { ok: false, error: 'boot_context_missing' };
+        setTimeout(() => {
+          void forwardText(latestBootContext, 'boot', { source: 'dashboard_resend' });
+        }, 0);
+        return { ok: true, scheduled: true };
+      case 'toggle_mic': {
+        if (runtimeConfig.role !== 'sender') return { ok: false, error: 'sender_only' };
+        const toggled = adapter.toggleMute();
+        telemetry.setMicState(toggled ? 'toggled' : 'unavailable');
+        overlay.setStatus(
+          toggled ? 'MIC TOGGLED' : 'MIC CONTROL NOT FOUND',
+          toggled ? 'ok' : 'warn',
+          1800
+        );
+        void logEvent('mute_toggle', { toggled, source: payload.source || 'runtime_command' });
+        return toggled ? { ok: true } : { ok: false, error: 'mic_control_missing' };
+      }
+      case 'toggle_scroll':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        scrollLocked = !scrollLocked;
+        overlay.setStatus(
+          scrollLocked ? 'SCROLL LOCKED' : 'SCROLL FREE',
+          scrollLocked ? 'warn' : 'ok',
+          1500
+        );
+        telemetry.event('scroll_lock_changed', { scrollLocked });
+        return { ok: true, scrollLocked };
+      case 'focus_composer':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        adapter.findComposer()?.focus?.();
+        overlay.setStatus('COMPOSER FOCUSED', 'info', 1000);
+        return { ok: true };
+      case 'export':
+        setTimeout(() => { void exportSession(); }, 0);
+        return { ok: true, scheduled: true };
+      case 'get_state':
+        return { ok: true, telemetry: telemetry.snapshot() };
+      default:
+        return { ok: false, error: 'unsupported_runtime_command' };
+    }
   }
 
   chrome.runtime.onMessage.addListener((incoming, _sender, sendResponse) => {
@@ -480,6 +584,15 @@ async function startRuntime(runtimeConfig) {
       const scheduled = runtimeRecovery?.trigger('tab_restored') || false;
       sendResponse({ ok: true, scheduled });
       return false;
+    }
+    if (
+      incoming?.type === 'PMIA_RUNTIME_COMMAND' &&
+      incoming.sessionId === runtimeConfig.sessionId
+    ) {
+      handleRuntimeCommand(incoming.command, incoming.payload)
+        .then(sendResponse)
+        .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
+      return true;
     }
     if (
       incoming?.type === 'PMIA_LINK_STATUS' &&
@@ -507,12 +620,13 @@ async function startRuntime(runtimeConfig) {
       answerCaptureToken += 1;
       answerWake.pulse();
       receiver.supersede({ id: `revoked-${Date.now()}` });
+      telemetry.event('role_revoked');
       overlay.setStatus('ROLE REVOKED', 'error');
       sendResponse({ ok: true });
       return false;
     }
     if (incoming?.type === 'PMIA_PREVIEW_DELIVER') {
-      const accepted = runtimeConfig.role === 'receiver' && !paused && receiver.preview(incoming.preview);
+      const accepted = runtimeConfig.role === 'receiver' && !paused && !transportPaused && receiver.preview(incoming.preview);
       sendResponse(accepted ? { ok: true } : { ok: false, error: 'preview_rejected' });
       return false;
     }
@@ -606,8 +720,15 @@ async function startRuntime(runtimeConfig) {
   document.addEventListener('keydown', async event => {
     if (event.ctrlKey && event.altKey && event.key === '0') {
       event.preventDefault();
-      paused = !paused;
-      overlay.setStatus(paused ? 'PAUSED' : 'READY', paused ? 'warn' : 'ok');
+      const command = transportPaused ? 'resume_without_send' : 'pause';
+      const response = await message({
+        type: 'PMIA_DASHBOARD_COMMAND',
+        sessionId: runtimeConfig.sessionId,
+        requestId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+        command,
+        payload: { source: 'managed_hotkey' }
+      });
+      if (!response?.ok) overlay.setStatus('PAUSE CONTROL FAILED', 'error', 2200);
       return;
     }
     if (!event.ctrlKey || !event.shiftKey) return;
@@ -644,9 +765,7 @@ async function startRuntime(runtimeConfig) {
     if (key === 'F6' && runtimeConfig.role === 'sender') {
       event.preventDefault();
       event.stopImmediatePropagation();
-      const toggled = adapter.toggleMute();
-      overlay.setStatus(toggled ? 'MIC TOGGLED' : 'MIC CONTROL NOT FOUND', toggled ? 'ok' : 'warn', 1800);
-      await logEvent('mute_toggle', { toggled });
+      await handleRuntimeCommand('toggle_mic', { source: 'managed_hotkey' });
       return;
     }
     if (key === 'F7' && runtimeConfig.role === 'receiver') {
@@ -668,21 +787,19 @@ async function startRuntime(runtimeConfig) {
     if (key === 'F8') {
       event.preventDefault();
       event.stopImmediatePropagation();
-      await exportSession();
+      await handleRuntimeCommand('export');
       return;
     }
 
     if (key === 'F9' && runtimeConfig.role === 'receiver') {
       event.preventDefault();
-      adapter.findComposer()?.focus?.();
-      overlay.setStatus('COMPOSER FOCUSED', 'info', 1000);
+      await handleRuntimeCommand('focus_composer');
       return;
     }
 
     if (key === 'F10' && runtimeConfig.role === 'receiver') {
       event.preventDefault();
-      scrollLocked = !scrollLocked;
-      overlay.setStatus(scrollLocked ? 'SCROLL LOCKED' : 'SCROLL FREE', scrollLocked ? 'warn' : 'ok', 1500);
+      await handleRuntimeCommand('toggle_scroll');
       return;
     }
 
@@ -717,9 +834,11 @@ async function startRuntime(runtimeConfig) {
     senderController?.disconnect();
     previewScheduler.disconnect();
     answerWake.disconnect();
+    telemetry.disconnect();
     unsubscribeProviderSignals?.();
     if (providerSignalBridge) providerSignalBridge.disconnect();
     restoreTitle.disconnect?.();
+    removeOverflowSafety();
   };
 
   window.addEventListener('pagehide', event => {

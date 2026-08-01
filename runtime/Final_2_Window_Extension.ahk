@@ -1,10 +1,11 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
 
 ; ============================================================
 ;  PM INTERVIEW ASSISTANT — ChatGPT + Claude (Edge Default Profile)
 ;  Win1 = Sender (Voice/Transcription)
 ;  Win2 = Receiver (Answer / ChatGPT or Claude)
+;  Win3 = Runtime Pilot Dashboard
 ;
 ;  ALT+R         = Resume/JD + optional Session-setup GUI; launch/relaunch Win1/Win2 (PWA Mode)
 ;  ALT+ESC       = Resend PM boot prompt + current Resume/JD directly to Win2
@@ -18,6 +19,7 @@
 ;  ALT+E         = Export sender and receiver PM session records
 ;  ALT+H         = Check the live sender/receiver runtime link
 ;  ALT+SHIFT+R   = Fast-repair the current route with in-memory context
+;  ALT+D         = Show/focus the Runtime Pilot Dashboard
 ;  ALT+SHIFT+E   = Open/focus the PM Session Review Studio
 ; ============================================================
 
@@ -260,38 +262,43 @@ BuildBootPrompt() {
 ; ============================================================
 ;  LAYOUTS & STATE
 ;
-;  g_mode:  1 = 2-window   (Win1 and Win2 visible)
-;           2 = Win1-only  (Win1 visible, Win2 off-screen)
-;           3 = Win2-only  (Win2 visible, Win1 ghosted/off-screen)
+;  g_mode:  1 = three-window (Win1 + Win2 + dashboard)
+;           2 = sender + dashboard
+;           3 = receiver + dashboard
+;           4 = dashboard-only
 ;           hidden state is tracked separately by g_hidden and is used only by Alt+Tab.
 ;
 ;  Win2-only mode keeps Win1 alive/ghosted to avoid breaking the sender voice session.
 ; ============================================================
 
-; 2-win layouts: [Win1_x, Win1_y, Win1_w, Win1_h, Win2_x, Win2_y, Win2_w, Win2_h]
-; 16px overlap on all layouts to eliminate browser chrome gap.
-; All layouts are Win1-left Win2-right.
+; Three-window provider layouts: sender and receiver share the left 1424px; dashboard is docked right.
+; [Win1_x, Win1_y, Win1_w, Win1_h, Win2_x, Win2_y, Win2_w, Win2_h]
 global layout2Win := [
-    [0,    0, 420, 740,  404,  0, 420, 740],   ; 1. Left  Short  (Win1@0→420, Win2@404→824)
-    [380,  0, 580, 740,  944,  0, 580, 740],   ; 2. Mid   Short  (Win1@380→960, Win2@944→1524)
-    [1080, 0, 420, 740,  1484, 0, 420, 740],   ; 3. Right Short  (Win1@1080→1500, Win2@1484→1904)
-    [0,    0, 440, 1032, 424,  0, 440, 1032],  ; 4. Left  Tall   (Win1@0→440, Win2@424→864)
-    [360,  0, 600, 1032, 944,  0, 600, 1032],  ; 5. Mid   Tall   (Win1@360→960, Win2@944→1544)
-    [1080, 0, 428, 1032, 1492, 0, 428, 1032],  ; 6. Right Tall   (Win1@1080→1508, Win2@1492→1920, 16px overlap)
+    [0, 0, 420, 740, 404, 0, 1020, 740],
+    [0, 0, 520, 740, 504, 0, 920, 740],
+    [0, 0, 360, 740, 344, 0, 1080, 740],
+    [0, 0, 420, 1032, 404, 0, 1020, 1032],
+    [0, 0, 520, 1032, 504, 0, 920, 1032],
+    [0, 0, 360, 1032, 344, 0, 1080, 1032],
 ]
 
-; Solo layouts for the currently visible single window: [x, y, w, h]
+; Solo provider layouts stay inside the left 1424px while the dashboard remains docked.
 global layoutSolo := [
-    [0,    0, 535, 1032],  ; 1. Left
-    [692,  0, 535, 1032],  ; 2. Center
-    [1385, 0, 535, 1032],  ; 3. Right
+    [0,   0, 700, 1032],
+    [362, 0, 700, 1032],
+    [724, 0, 700, 1032],
 ]
+
+global DASHBOARD_X := 1408
+global DASHBOARD_W := 512
+global DASHBOARD_H := 1032
 
 global OFF_X := 3840
 global OFF_Y := 0
 
 global g_hWin1               := 0
 global g_hWin2               := 0
+global g_hDashboard          := 0
 global g_mode                := 1
 global g_pos2Win             := 1
 global g_posWin1             := 1
@@ -299,7 +306,8 @@ global g_posWin2             := 1
 global g_muted               := false
 global g_suppressClipMonitor := false
 global g_layoutEnteredAt     := A_TickCount
-global g_currentLayout       := {mode: 1, pos2Win: 1, posWin1: 1, posWin2: 1}
+global g_dashboardVisible   := true
+global g_currentLayout       := {mode: 1, pos2Win: 1, posWin1: 1, posWin2: 1, dashboardVisible: true}
 global g_lastStableLayout    := 0
 global g_hidden              := false
 global g_hiddenLayout        := 0
@@ -342,7 +350,7 @@ global EXPECTED_EXTENSION_PATH := A_ScriptDir "\extension"
 global LOG_DIR               := SETTINGS_DIR "\logs"
 global LOG_FILE              := LOG_DIR "\session_debug.log"
 global g_selectedProfileDirectory := "Default"
-global g_layoutMode          := "TwoWindow"
+global g_layoutMode          := "ThreeWindow"
 global g_profileRecords      := []
 global g_profileChoiceMap    := Map()
 global g_selectedProfileRecord := Map()
@@ -368,6 +376,7 @@ if !g_controlSmokeMode {
     ShowSessionLaunchGui()
 }
 ~LAlt::return
+SetTimer MonitorManagedSession, 2000
 
 
 ; ============================================================
@@ -382,6 +391,7 @@ if !g_controlSmokeMode {
 }
 
 !h::CheckLiveSessionHealth()
+!d::FocusRuntimeDashboard()
 !+r::FastRepairActiveSession()
 
 !+e::OpenSessionReviewStudio()
@@ -442,12 +452,12 @@ LoadStudioPreferences() {
         g_selectedProfileDirectory := IniRead(SETTINGS_FILE, "Studio", "ProfileDirectory", "Default")
         g_senderProvider := NormalizeProvider(IniRead(SETTINGS_FILE, "Studio", "SenderProvider", "chatgpt"))
         g_receiverProvider := NormalizeProvider(IniRead(SETTINGS_FILE, "Studio", "ReceiverProvider", "chatgpt"))
-        g_layoutMode := NormalizeLayoutMode(IniRead(SETTINGS_FILE, "Studio", "LayoutMode", "TwoWindow"))
+        g_layoutMode := NormalizeLayoutMode(IniRead(SETTINGS_FILE, "Studio", "LayoutMode", "ThreeWindow"))
     } catch {
         g_selectedProfileDirectory := "Default"
         g_senderProvider := "chatgpt"
         g_receiverProvider := "chatgpt"
-        g_layoutMode := "TwoWindow"
+        g_layoutMode := "ThreeWindow"
     }
 }
 
@@ -557,7 +567,24 @@ NormalizeProvider(value) {
 
 NormalizeLayoutMode(value) {
     normalized := Trim(value)
-    return (normalized = "SenderOnly" || normalized = "ReceiverOnly") ? normalized : "TwoWindow"
+    allowed := ["ThreeWindow", "TwoWindow", "SenderOnly", "ReceiverOnly", "DashboardOnly"]
+    for option in allowed {
+        if (normalized = option)
+            return option
+    }
+    return "ThreeWindow"
+}
+
+LayoutModeIndex(value) {
+    if (value = "TwoWindow")
+        return 2
+    if (value = "SenderOnly")
+        return 3
+    if (value = "ReceiverOnly")
+        return 4
+    if (value = "DashboardOnly")
+        return 5
+    return 1
 }
 
 ChooseOptionIndex(value, options, defaultIndex := 1) {
@@ -658,8 +685,8 @@ ShowSessionLaunchGui() {
     g_launchGui.Add("Text", "x52 y704 w610 h20", "Additional notes (optional)")
     g_metaEdit := g_launchGui.Add("Edit", "x52 y727 w610 h38 -Wrap WantTab", g_sessionMeta)
     g_launchGui.Add("Text", "x678 y704 w210 h20", "Initial layout")
-    g_layoutDdl := g_launchGui.Add("DropDownList", "x678 y727 w212", ["Two windows", "Sender only", "Receiver only"])
-    g_layoutDdl.Choose(g_layoutMode = "SenderOnly" ? 2 : g_layoutMode = "ReceiverOnly" ? 3 : 1)
+    g_layoutDdl := g_launchGui.Add("DropDownList", "x678 y727 w212", ["Three windows", "Two provider windows", "Sender + dashboard", "Receiver + dashboard", "Dashboard only"])
+    g_layoutDdl.Choose(LayoutModeIndex(g_layoutMode))
     g_contextStatus := g_launchGui.Add("Text", "x52 y768 w838 h18", "")
     g_contextStatus.SetFont("s9 c475569", "Segoe UI")
 
@@ -774,7 +801,7 @@ UpdateLaunchLayoutMode(*) {
     global g_layoutDdl, g_layoutMode
     if !IsObject(g_layoutDdl)
         return
-    g_layoutMode := g_layoutDdl.Value = 2 ? "SenderOnly" : g_layoutDdl.Value = 3 ? "ReceiverOnly" : "TwoWindow"
+    g_layoutMode := g_layoutDdl.Value = 2 ? "TwoWindow" : g_layoutDdl.Value = 3 ? "SenderOnly" : g_layoutDdl.Value = 4 ? "ReceiverOnly" : g_layoutDdl.Value = 5 ? "DashboardOnly" : "ThreeWindow"
     SaveStudioPreferences()
 }
 
@@ -941,6 +968,38 @@ WaitForLifecycleTitle(role, provider, sessionId, phase, timeoutMs) {
         Sleep 100
     }
 }
+
+RuntimeDashboardTitle(sessionId) {
+    return "PMIA_DASHBOARD_" StrUpper(RegExReplace(sessionId, "[^A-Za-z0-9]+", "_"))
+}
+
+FindDashboardWindow(sessionId) {
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try {
+        title := RuntimeDashboardTitle(sessionId)
+        hwnd := WinExist(title)
+        return hwnd ? Map("hwnd", hwnd, "title", title) : Map()
+    } finally {
+        DetectHiddenWindows previousDetectHidden
+    }
+}
+
+WaitForDashboardWindow(sessionId, timeoutMs) {
+    deadline := A_TickCount + Max(0, timeoutMs)
+    loop {
+        match := FindDashboardWindow(sessionId)
+        if match.Count
+            return match
+        if (A_TickCount >= deadline)
+            return Map()
+        Sleep 100
+    }
+}
+
+DashboardUrl(extensionId, sessionId) {
+    return "chrome-extension://" extensionId "/dashboard/index.html?session=" sessionId
+}
 DiagnoseLaunchFailure(stage, role := "") {
     global g_selectedProfileRecord, g_lastLaunchFailure
     RefreshSelectedProfileDoctor()
@@ -974,7 +1033,7 @@ WaitForLifecyclePair(phase, timeoutMs) {
 }
 
 RunManagedLaunch(reuseSession := false) {
-    global g_hWin1, g_hWin2, BrowserExe, g_interviewActive
+    global g_hWin1, g_hWin2, g_hDashboard, BrowserExe, g_interviewActive
     global g_mode, g_pos2Win, g_posWin1, g_posWin2
     global g_layoutEnteredAt, g_currentLayout, g_lastStableLayout
     global g_senderProvider, g_receiverProvider, g_sessionId
@@ -1061,17 +1120,36 @@ RunManagedLaunch(reuseSession := false) {
             g_launchButton.Enabled := true
         return false
     }
-    readyPair := Map("ok", true, "sender", senderReady, "receiver", receiverReady)
+    extensionId := g_selectedProfileRecord.Count ? g_selectedProfileRecord["extensionId"] : ""
+    if (extensionId = "") {
+        SetLaunchState("ERROR", "DASHBOARD_EXTENSION_ID_MISSING: Profile Doctor did not return the active PMIA extension ID.", "error")
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
+    }
+    dashboardUrl := DashboardUrl(extensionId, g_sessionId)
+    Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' dashboardUrl '"' . flags
+    SetLaunchState("WAITING_DASHBOARD", "Sender and receiver ready; waiting for Runtime Pilot Dashboard...", "info")
+    dashboardReady := WaitForDashboardWindow(g_sessionId, RUNTIME_LIFECYCLE_TIMEOUT_MS)
+    if !dashboardReady.Count {
+        SetLaunchState("ERROR", "DASHBOARD_NOT_READY: The Runtime Pilot Dashboard did not open for this session.", "error")
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
+    }
 
+    readyPair := Map("ok", true, "sender", senderReady, "receiver", receiverReady)
     g_hWin1 := readyPair["sender"]["hwnd"]
     g_hWin2 := readyPair["receiver"]["hwnd"]
+    g_hDashboard := dashboardReady["hwnd"]
     EnsureAlwaysOnTop(g_hWin1)
     EnsureAlwaysOnTop(g_hWin2)
+    EnsureAlwaysOnTop(g_hDashboard)
     ApplyConfiguredInitialLayout()
     SendToWindow(BuildBootPrompt(), "^+{F5}", g_hWin1)
     g_interviewActive := true
     SaveStudioPreferences()
-    SetLaunchState("READY", "Session linked and boot context delivered.", "ok")
+    SetLaunchState("READY", "Sender, receiver, and Runtime Pilot Dashboard linked; boot context delivered.", "ok")
     if IsObject(g_launchButton)
         g_launchButton.Enabled := true
     Sleep 500
@@ -1094,9 +1172,17 @@ ApplyConfiguredInitialLayout() {
         g_mode := 3
         ApplyWin2OnlyLayout(1)
         RecordLayoutChange(3, 1, 1, 1)
+    } else if (g_layoutMode = "DashboardOnly") {
+        g_mode := 4
+        ApplyDashboardOnlyLayout()
+        RecordLayoutChange(4, 1, 1, 1)
+    } else if (g_layoutMode = "TwoWindow") {
+        g_mode := 1
+        Apply2WinLayout(1, false)
+        RecordLayoutChange(1, 1, 1, 1)
     } else {
         g_mode := 1
-        Apply2WinLayout(1)
+        Apply2WinLayout(1, true)
         RecordLayoutChange(1, 1, 1, 1)
     }
 }
@@ -1119,7 +1205,7 @@ RepairLaunch(*) {
 }
 
 CheckLiveSessionHealth(*) {
-    global g_hWin1, g_hWin2, g_launchGui, g_runtimeHealth
+    global g_hWin1, g_hWin2, g_hDashboard, g_launchGui, g_runtimeHealth
     global g_senderProvider, g_receiverProvider, g_sessionId
 
     if GetKeyState("Alt", "P")
@@ -1145,9 +1231,10 @@ CheckLiveSessionHealth(*) {
     if IsObject(g_launchGui)
         try WinActivate "ahk_id " g_launchGui.Hwnd
 
-    route := StrTitle(g_senderProvider) " ? " StrTitle(g_receiverProvider)
-    if senderChecked && receiverChecked {
-        message := "Live session READY (" route "). Runtime preflight requested in both managed windows."
+    route := StrTitle(g_senderProvider) " â†’ " StrTitle(g_receiverProvider)
+    dashboardReady := IsAlive(g_hDashboard)
+    if senderChecked && receiverChecked && dashboardReady {
+        message := "Live session READY (" route "). Sender, receiver, and dashboard are present."
         if IsObject(g_runtimeHealth) {
             g_runtimeHealth.Text := message
             g_runtimeHealth.SetFont("s9 c15803D", "Segoe UI")
@@ -1156,7 +1243,7 @@ CheckLiveSessionHealth(*) {
         return true
     }
 
-    message := "Managed windows are present, but one runtime preflight command could not be sent. Use Fast Repair."
+    message := dashboardReady ? "A provider runtime preflight failed. Use Fast Repair." : "Runtime Pilot Dashboard is missing. Press Alt+D to reopen it."
     if IsObject(g_runtimeHealth) {
         g_runtimeHealth.Text := message
         g_runtimeHealth.SetFont("s9 cB45309", "Segoe UI")
@@ -1173,6 +1260,49 @@ FastRepairActiveSession(*) {
     return RepairLaunch()
 }
 
+FocusRuntimeDashboard(*) {
+    global g_hDashboard, g_sessionId, g_selectedProfileRecord
+    global BrowserExe, g_selectedProfileDirectory, g_mode, g_hidden
+
+    if GetKeyState("Alt", "P")
+        KeyWait "Alt"
+    if !IsActiveSession() {
+        LogEvent("Alt+D ignored: no active interview session")
+        return false
+    }
+    if !IsAlive(g_hDashboard) {
+        RefreshSelectedProfileDoctor()
+        extensionId := g_selectedProfileRecord.Count ? g_selectedProfileRecord["extensionId"] : ""
+        if (extensionId = "") {
+            LogEvent("Alt+D failed: extension ID unavailable")
+            return false
+        }
+        dashboardUrl := DashboardUrl(extensionId, g_sessionId)
+        Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' dashboardUrl '"'
+        dashboard := WaitForDashboardWindow(g_sessionId, RUNTIME_LIFECYCLE_TIMEOUT_MS)
+        if !dashboard.Count {
+            LogEvent("Alt+D failed: dashboard did not reach lifecycle title")
+            return false
+        }
+        g_hDashboard := dashboard["hwnd"]
+        EnsureAlwaysOnTop(g_hDashboard)
+    }
+    if g_hidden {
+        g_hidden := false
+        g_mode := 4
+        ApplyDashboardOnlyLayout()
+        RecordLayoutChange(4, 1, 1, 1)
+    } else {
+        WinShow "ahk_id " g_hDashboard
+        if (g_mode = 4)
+            ApplyDashboardOnlyLayout()
+        else
+            DockDashboard()
+    }
+    WinActivate "ahk_id " g_hDashboard
+    return true
+}
+
 CloseManagedPmiaWindows(sessionId := "") {
     managed := []
     previousDetectHidden := A_DetectHiddenWindows
@@ -1184,7 +1314,9 @@ CloseManagedPmiaWindows(sessionId := "") {
             try title := WinGetTitle("ahk_id " hwnd)
             catch
                 continue
-            if !RegExMatch(title, "^PMIA_(?:BOOT_|REGISTERED_)?(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_")
+            isRoleWindow := RegExMatch(title, "^PMIA_(?:BOOT_|REGISTERED_)?(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_")
+            isDashboardWindow := RegExMatch(title, "^PMIA_DASHBOARD_")
+            if (!isRoleWindow && !isDashboardWindow)
                 continue
             if (suffix != "" && !InStr(title, suffix))
                 continue
@@ -1260,47 +1392,42 @@ EnsureAlwaysOnTop(hwnd) {
 ; ============================================================
 
 !CapsLock:: {
-    global g_mode, g_pos2Win, g_posWin1, g_posWin2, g_hWin1, g_hWin2, g_hidden
+    global g_mode, g_pos2Win, g_posWin1, g_posWin2, g_hWin1, g_hWin2, g_hDashboard, g_hidden
 
     SetCapsLockState "AlwaysOff"
-
     if (!IsActiveSession()) {
         LogEvent("Alt+CapsLock ignored: no active interview session")
         return
     }
-
-    if (!IsAlive(g_hWin1) || !IsAlive(g_hWin2))
-        return
-
-    if (g_hidden)
+    if (!IsAlive(g_hWin1) || !IsAlive(g_hWin2) || g_hidden)
         return
 
     if (g_mode = 1) {
-        ; 2-window → Win1-only
         g_mode := 2
         ApplyWin1OnlyLayout(g_posWin1)
         RecordLayoutChange(2, g_pos2Win, g_posWin1, g_posWin2)
         WinActivate "ahk_id " g_hWin1
         return
     }
-
     if (g_mode = 2) {
-        ; Win1-only → Win2-only
         g_mode := 3
         ApplyWin2OnlyLayout(g_posWin2)
         RecordLayoutChange(3, g_pos2Win, g_posWin1, g_posWin2)
         WinActivate "ahk_id " g_hWin2
         return
     }
-
     if (g_mode = 3) {
-        ; Win2-only → 2-window
-        g_mode := 1
-        Apply2WinLayout(g_pos2Win)
-        RecordLayoutChange(1, g_pos2Win, g_posWin1, g_posWin2)
-        WinActivate "ahk_id " g_hWin2
+        g_mode := 4
+        ApplyDashboardOnlyLayout()
+        RecordLayoutChange(4, g_pos2Win, g_posWin1, g_posWin2)
+        if IsAlive(g_hDashboard)
+            WinActivate "ahk_id " g_hDashboard
         return
     }
+    g_mode := 1
+    Apply2WinLayout(g_pos2Win, true)
+    RecordLayoutChange(1, g_pos2Win, g_posWin1, g_posWin2)
+    WinActivate "ahk_id " g_hWin2
 }
 
 ; ============================================================
@@ -1334,6 +1461,8 @@ CapsLock:: {
         next := Mod(g_posWin2, layoutSolo.Length) + 1
         ApplyWin2OnlyLayout(next)
         RecordLayoutChange(3, g_pos2Win, g_posWin1, next)
+    } else if (g_mode = 4) {
+        ApplyDashboardOnlyLayout()
     }
 }
 
@@ -1350,7 +1479,7 @@ CapsLock:: {
 
 ToggleHide() {
     global g_hidden, g_hiddenLayout, g_hiddenActive, g_currentLayout
-    global g_hWin1, g_hWin2, g_mode
+    global g_hWin1, g_hWin2, g_hDashboard, g_mode
 
     if (!IsActiveSession()) {
         LogEvent("Alt+Tab ignored: no active interview session")
@@ -1366,7 +1495,8 @@ ToggleHide() {
             mode:    g_currentLayout.mode,
             pos2Win: g_currentLayout.pos2Win,
             posWin1: g_currentLayout.posWin1,
-            posWin2: g_currentLayout.posWin2
+            posWin2: g_currentLayout.posWin2,
+            dashboardVisible: g_currentLayout.dashboardVisible
         }
         g_hiddenActive := WinGetID("A")
         RestoreWin1Visibility()
@@ -1380,10 +1510,14 @@ ToggleHide() {
     RestoreLayout(g_hiddenLayout)
 
     ; Restore focus sensibly within the restored mode.
-    if (g_mode = 1 && g_hiddenActive = g_hWin1 && IsAlive(g_hWin1)) {
+    if (g_hiddenActive = g_hDashboard && IsAlive(g_hDashboard)) {
+        WinActivate "ahk_id " g_hDashboard
+    } else if (g_mode = 1 && g_hiddenActive = g_hWin1 && IsAlive(g_hWin1)) {
         WinActivate "ahk_id " g_hWin1
     } else if (g_mode = 2 && IsAlive(g_hWin1)) {
         WinActivate "ahk_id " g_hWin1
+    } else if (g_mode = 4 && IsAlive(g_hDashboard)) {
+        WinActivate "ahk_id " g_hDashboard
     } else if IsAlive(g_hWin2) {
         WinActivate "ahk_id " g_hWin2
     }
@@ -1414,43 +1548,75 @@ RestoreWin1Visibility() {
 ; ============================================================
 
 HideAllManaged() {
-    global g_hWin1, g_hWin2, OFF_X, OFF_Y
+    global g_hWin1, g_hWin2, g_hDashboard, OFF_X, OFF_Y
     if IsAlive(g_hWin1)
         WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin1
     if IsAlive(g_hWin2)
         WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin2
+    if IsAlive(g_hDashboard)
+        WinMove OFF_X, OFF_Y, 512, 1032, "ahk_id " g_hDashboard
 }
 
-Apply2WinLayout(idx) {
-    global layout2Win, g_pos2Win, g_hWin1, g_hWin2
+DockDashboard() {
+    global g_hDashboard, DASHBOARD_X, DASHBOARD_W, DASHBOARD_H
+    if IsAlive(g_hDashboard)
+        WinMove DASHBOARD_X, 0, DASHBOARD_W, DASHBOARD_H, "ahk_id " g_hDashboard
+}
+
+HideDashboard() {
+    global g_hDashboard, OFF_X, OFF_Y
+    if IsAlive(g_hDashboard)
+        WinMove OFF_X, OFF_Y, 512, 1032, "ahk_id " g_hDashboard
+}
+
+Apply2WinLayout(idx, showDashboard := true) {
+    global layout2Win, g_pos2Win, g_hWin1, g_hWin2, g_dashboardVisible
     g_pos2Win := idx
+    g_dashboardVisible := showDashboard
     p := layout2Win[idx]
-    ; Always ensure Win1 is fully visible when applying 2-win layout
     RestoreWin1Visibility()
     if IsAlive(g_hWin1)
         WinMove p[1], p[2], p[3], p[4], "ahk_id " g_hWin1
     if IsAlive(g_hWin2)
         WinMove p[5], p[6], p[7], p[8], "ahk_id " g_hWin2
+    if showDashboard
+        DockDashboard()
+    else
+        HideDashboard()
 }
 
 ApplyWin1OnlyLayout(idx) {
-    global layoutSolo, g_posWin1, g_hWin1, g_hWin2, OFF_X, OFF_Y
+    global layoutSolo, g_posWin1, g_hWin1, g_hWin2, OFF_X, OFF_Y, g_dashboardVisible
     g_posWin1 := idx
+    g_dashboardVisible := true
     p := layoutSolo[idx]
     RestoreWin1Visibility()
     if IsAlive(g_hWin1)
         WinMove p[1], p[2], p[3], p[4], "ahk_id " g_hWin1
     if IsAlive(g_hWin2)
         WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin2
+    DockDashboard()
 }
 
 ApplyWin2OnlyLayout(idx) {
-    global layoutSolo, g_posWin2, g_hWin2
+    global layoutSolo, g_posWin2, g_hWin2, g_dashboardVisible
     g_posWin2 := idx
+    g_dashboardVisible := true
     p := layoutSolo[idx]
     if IsAlive(g_hWin2)
         WinMove p[1], p[2], p[3], p[4], "ahk_id " g_hWin2
     GhostWin1()
+    DockDashboard()
+}
+
+ApplyDashboardOnlyLayout() {
+    global g_hDashboard, g_hWin2, OFF_X, OFF_Y, g_dashboardVisible
+    g_dashboardVisible := true
+    GhostWin1()
+    if IsAlive(g_hWin2)
+        WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin2
+    if IsAlive(g_hDashboard)
+        WinMove 0, 0, 1920, 1032, "ahk_id " g_hDashboard
 }
 
 ; ============================================================
@@ -1458,17 +1624,18 @@ ApplyWin2OnlyLayout(idx) {
 ; ============================================================
 
 RecordLayoutChange(newMode, newPos2Win, newPosWin1, newPosWin2) {
-    global g_layoutEnteredAt, g_currentLayout, g_lastStableLayout
+    global g_layoutEnteredAt, g_currentLayout, g_lastStableLayout, g_dashboardVisible
     now := A_TickCount
     if (now - g_layoutEnteredAt >= 5000) {
         g_lastStableLayout := {
             mode:    g_currentLayout.mode,
             pos2Win: g_currentLayout.pos2Win,
             posWin1: g_currentLayout.posWin1,
-            posWin2: g_currentLayout.posWin2
+            posWin2: g_currentLayout.posWin2,
+            dashboardVisible: g_currentLayout.dashboardVisible
         }
     }
-    g_currentLayout := {mode: newMode, pos2Win: newPos2Win, posWin1: newPosWin1, posWin2: newPosWin2}
+    g_currentLayout := {mode: newMode, pos2Win: newPos2Win, posWin1: newPosWin1, posWin2: newPosWin2, dashboardVisible: g_dashboardVisible}
     g_layoutEnteredAt := now
 }
 
@@ -1481,11 +1648,13 @@ RestoreLayout(layout) {
     g_posWin2 := layout.posWin2
 
     if (layout.mode = 1) {
-        Apply2WinLayout(layout.pos2Win)
+        Apply2WinLayout(layout.pos2Win, layout.HasOwnProp("dashboardVisible") ? layout.dashboardVisible : true)
     } else if (layout.mode = 2) {
         ApplyWin1OnlyLayout(layout.posWin1)
     } else if (layout.mode = 3) {
         ApplyWin2OnlyLayout(layout.posWin2)
+    } else if (layout.mode = 4) {
+        ApplyDashboardOnlyLayout()
     }
     RecordLayoutChange(layout.mode, layout.pos2Win, layout.posWin1, layout.posWin2)
 }
@@ -1634,16 +1803,54 @@ LogEvent(message) {
     }
 }
 
+ClearSessionMemory(reason := "session ended") {
+    global g_sessionResume, g_sessionJD, g_sessionMeta
+    global g_sessionCompany, g_sessionRole, g_sessionRound
+    global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode
+    global g_sessionId, g_interviewActive, g_hWin1, g_hWin2, g_hDashboard
+    global g_hidden, g_hiddenLayout, g_hiddenActive
+
+    g_sessionResume := ""
+    g_sessionJD := ""
+    g_sessionMeta := ""
+    g_sessionCompany := ""
+    g_sessionRole := ""
+    g_sessionRound := ""
+    g_sessionEmphasis := ""
+    g_sessionAvoid := ""
+    g_sessionAnswerMode := "normal"
+    g_sessionId := ""
+    g_interviewActive := false
+    g_hWin1 := 0
+    g_hWin2 := 0
+    g_hDashboard := 0
+    g_hidden := false
+    g_hiddenLayout := 0
+    g_hiddenActive := 0
+    LogEvent("Session memory cleared: " reason)
+}
+
+MonitorManagedSession() {
+    global g_interviewActive, g_sessionId, g_senderProvider, g_receiverProvider
+    if (!g_interviewActive || g_sessionId = "")
+        return
+    sender := FindLifecycleWindow("sender", g_senderProvider, g_sessionId, "boot")
+    receiver := FindLifecycleWindow("receiver", g_receiverProvider, g_sessionId, "boot")
+    if (!sender.Count && !receiver.Count)
+        ClearSessionMemory("both managed provider windows closed")
+}
+
 IsActiveSession() {
     return RefreshManagedWindowHandles()
 }
 
 RefreshManagedWindowHandles() {
     global g_sessionId, g_senderProvider, g_receiverProvider
-    global g_hWin1, g_hWin2
+    global g_hWin1, g_hWin2, g_hDashboard
     if (g_sessionId != "") {
         g_hWin1 := 0
         g_hWin2 := 0
+        g_hDashboard := 0
         previousDetectHidden := A_DetectHiddenWindows
         DetectHiddenWindows true
         try {
@@ -1653,6 +1860,9 @@ RefreshManagedWindowHandles() {
                 g_hWin1 := sender["hwnd"]
             if receiver.Count
                 g_hWin2 := receiver["hwnd"]
+            dashboard := FindDashboardWindow(g_sessionId)
+            if dashboard.Count
+                g_hDashboard := dashboard["hwnd"]
         } finally {
             DetectHiddenWindows previousDetectHidden
         }
@@ -1666,7 +1876,7 @@ RefreshManagedWindowHandles() {
 
 RecoverUnambiguousManagedSession() {
     global g_sessionId, g_senderProvider, g_receiverProvider
-    global g_hWin1, g_hWin2, g_interviewActive
+    global g_hWin1, g_hWin2, g_hDashboard, g_interviewActive
     sessions := Map()
     previousDetectHidden := A_DetectHiddenWindows
     DetectHiddenWindows true
@@ -1710,6 +1920,8 @@ RecoverUnambiguousManagedSession() {
     g_receiverProvider := StrLower(recovered["receiverProvider"])
     g_hWin1 := recovered["senderHwnd"]
     g_hWin2 := recovered["receiverHwnd"]
+    dashboard := FindDashboardWindow(g_sessionId)
+    g_hDashboard := dashboard.Count ? dashboard["hwnd"] : 0
     g_interviewActive := true
     if !IsAlive(g_hWin1) || !IsAlive(g_hWin2)
         return false

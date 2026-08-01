@@ -7,7 +7,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await readFile(resolve(root, 'manifest.json'), 'utf8'));
 const required = [
   manifest.background.service_worker,
-  ...manifest.content_scripts.flatMap(item => item.js)
+  ...manifest.content_scripts.flatMap(item => item.js),
+  'dashboard/index.html',
+  'dashboard/dashboard.css',
+  'dashboard/dashboard.js',
+  'dashboard/dashboard-model.js'
 ];
 
 for (const path of required) {
@@ -43,4 +47,4 @@ for (const file of runtimeFiles) {
   }
 }
 
-console.log(`Extension validation passed: ${files.length} JavaScript files checked.`);
+console.log(`Extension validation passed: ${files.length} JavaScript files and ${required.length} required runtime surfaces checked.`);

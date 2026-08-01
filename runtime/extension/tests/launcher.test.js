@@ -403,3 +403,65 @@ test('fast repair reuses the current in-memory route and session implementation'
   assert.match(repair, /RepairLaunch\(\)/);
   assert.doesNotMatch(repair, /CreateSessionId|BuildBootPrompt|Run BrowserExe/);
 });
+
+
+test('launcher opens the Runtime Pilot Dashboard only after both provider roles are ready', () => {
+  const launch = launcher.slice(
+    launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
+    launcher.indexOf('ApplyConfiguredInitialLayout()')
+  );
+  const senderReady = launch.indexOf('senderReady :=');
+  const receiverReady = launch.indexOf('receiverReady :=');
+  const dashboardUrl = launch.indexOf('dashboardUrl := DashboardUrl');
+  const dashboardWait = launch.indexOf('WaitForDashboardWindow');
+  const bootSend = launch.indexOf('SendToWindow(BuildBootPrompt()');
+  assert.ok(senderReady >= 0 && receiverReady > senderReady);
+  assert.ok(dashboardUrl > receiverReady);
+  assert.ok(dashboardWait > dashboardUrl);
+  assert.ok(bootSend > dashboardWait);
+  assert.match(launch, /WAITING_DASHBOARD/);
+  assert.match(launch, /DASHBOARD_NOT_READY/);
+});
+
+test('dashboard lifecycle is session-scoped and uses the selected profile extension id', () => {
+  assert.match(launcher, /RuntimeDashboardTitle\(sessionId\)/);
+  assert.match(launcher, /PMIA_DASHBOARD_/);
+  assert.match(launcher, /chrome-extension:\/\//);
+  assert.match(launcher, /g_selectedProfileRecord\["extensionId"\]/);
+  assert.match(launcher, /--profile-directory=\\?"' g_selectedProfileDirectory '\\?"/);
+  assert.match(launcher, /--app=\\?"' dashboardUrl/);
+});
+
+test('launcher manages dashboard layout, hide, restore and exact cleanup', () => {
+  assert.match(launcher, /global g_hDashboard/);
+  assert.match(launcher, /ApplyDashboardOnlyLayout\(\)/);
+  assert.match(launcher, /DockDashboard\(\)/);
+  assert.match(launcher, /dashboardVisible/);
+  const hide = block('HideAllManaged() {', 'DockDashboard() {');
+  assert.match(hide, /g_hDashboard/);
+  assert.match(hide, /WinMove OFF_X/);
+  const cleanup = block('CloseManagedPmiaWindows(sessionId := "")', 'AutoStartup()');
+  assert.match(cleanup, /isDashboardWindow/);
+  assert.match(cleanup, /\^PMIA_DASHBOARD_/);
+});
+
+test('Alt+D focuses or reopens the current session dashboard without relaunching providers', () => {
+  assert.match(launcher, /!d::FocusRuntimeDashboard\(\)/);
+  const focus = block('FocusRuntimeDashboard(*) {', 'CloseManagedPmiaWindows(');
+  assert.match(focus, /FindDashboardWindow/);
+  assert.match(focus, /DashboardUrl/);
+  assert.match(focus, /WaitForDashboardWindow/);
+  assert.match(focus, /WinActivate "ahk_id " g_hDashboard/);
+  assert.doesNotMatch(focus, /RunManagedLaunch/);
+});
+
+test('launcher clears sensitive in-memory context after both provider windows close', () => {
+  assert.match(launcher, /SetTimer MonitorManagedSession, 2000/);
+  const clear = block('ClearSessionMemory(reason := "session ended") {', 'MonitorManagedSession() {');
+  for (const value of [
+    'g_sessionResume', 'g_sessionJD', 'g_sessionMeta', 'g_sessionAvoid', 'g_sessionId'
+  ]) assert.match(clear, new RegExp(`${value}\\s*:=\\s*""`));
+  const monitor = block('MonitorManagedSession() {', 'IsActiveSession() {');
+  assert.match(monitor, /!sender\.Count && !receiver\.Count/);
+  assert.match(monitor, /ClearSessionMemory/);
+});

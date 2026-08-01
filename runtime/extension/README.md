@@ -1,12 +1,13 @@
 # PM Interview Dual-Provider Runtime 0.7.0
 
-Manifest V3 extension used by `runtime/Final_2_Window_Extension.ahk`.
+Manifest V3 provider and Runtime Pilot Dashboard extension used by `runtime/Final_2_Window_Extension.ahk`.
 
 ## Architecture
 
-- AutoHotkey owns provider selection, exact managed windows, layout, and the PM-only global hotkeys.
-- The service worker owns role registration, sender authorization, durable final ordering, latest-only recovery, acknowledgements, and role-scoped logs.
-- Content scripts own provisional transcript previews, provider-specific finalization, receiver prefill/submission, answer capture, recovery events, status UI, and export.
+- AutoHotkey owns provider selection, exact sender/receiver/dashboard windows, initial layout, full-route repair, and PM-only global hotkeys.
+- The service worker owns role registration, sender authorization, durable final ordering, transport pause, the bounded operator queue, dashboard state, acknowledgements, recovery, and session cleanup.
+- Content scripts own provisional transcript previews, provider-specific finalization, receiver prefill/submission/proof, answer capture, semantic commands, telemetry, compact status UI, and export.
+- `dashboard/` is a trusted extension page connected by a long-lived port. It receives snapshots and sends validated commands; it never writes provider DOM directly.
 - Provider adapters own semantic composer discovery, message extraction, submit readiness, generation controls, and microphone controls.
 - Provider APIs, cookies, authorization headers, and raw audio are never used by the runtime.
 
@@ -21,6 +22,25 @@ Normal ChatGPT and Claude tabs without PMIA runtime configuration are untouched.
 - Session Studio exposes **Check Live** (`Alt+H`) and **Fast Repair** (`Alt+Shift+R`). Check Live uses the authorized counterpart preflight in both managed windows; Fast Repair reuses the current in-memory route and context.
 - Exports use schema 2.1 with safe session metadata and mock-review summaries. Full setup text, Resume, JD, avoid text, and notes are redacted from event text.
 
+
+## Runtime Pilot Dashboard
+
+Session Studio opens `dashboard/index.html?session=<SESSION>` as the third managed Edge app window after both provider roles are ready. Its defended title is `PMIA_DASHBOARD_<SESSION>`.
+
+- Overview shows route, transport mode, uptime, role health, heartbeat, source silence, composer/generation/microphone/scroll state, warnings, delivery metrics and latest artifacts.
+- Queue shows up to 20 authoritative final envelopes with age, sequence, status and text. Previews never enter this queue.
+- Timeline virtualizes the latest 200 operational events.
+- Review shows only safe session metadata and runtime outcomes. Resume, JD, avoid text and notes are excluded.
+- Controls cover pause, resume latest, resume without sending, selected send/discard, clear queue, live check, runtime repair, context resend, microphone, scroll, composer focus, export, layouts, hide/restore and end session.
+- Dashboard refresh or service-worker suspension recovers from `chrome.storage.session`. Closing only the dashboard does not stop provider transport; `Alt+D` reopens it.
+
+### Queue semantics
+
+- Pause does not stop sender observation. Preview delivery is suppressed and new authoritative finals are queued.
+- Resume Latest sends the newest non-superseded final through the normal receiver sequence gate and provider-rendered proof path.
+- Delivering a newer queued final marks older retained finals superseded.
+- `duplicate_ack` is delivered without resubmission. `stale_ack` is terminal supersession, not delivery and not a failure retry.
+
 ## Preview and commit lanes
 
 Provisional text and final questions use separate paths.
@@ -30,7 +50,7 @@ Provisional text and final questions use separate paths.
 - Each sender page has a unique preview stream ID, so sender reloads can safely restart preview sequence numbers.
 - Receiver preview state is bounded and the exact provisional turn is removed after a successful final submission.
 - Final envelopes remain durable, sequenced, acknowledged, and latest-only when a receiver is unavailable.
-- A replayed envelope is acknowledged as `duplicate_ack` without writing or submitting the prompt again; stale envelopes are acknowledged and discarded.
+- A replayed envelope is acknowledged as `duplicate_ack` without writing or submitting the prompt again. A `stale_ack` marks the older envelope superseded and is never counted as delivered.
 ## Provider boundaries
 
 ### ChatGPT
@@ -77,7 +97,7 @@ Binary microphone and playback frames are ignored.
 
 ## Session Studio
 
-`runtime/Final_2_Window_Extension.ahk` opens a 960-by-780 operational Session Studio before launching managed tabs.
+`runtime/Final_2_Window_Extension.ahk` opens a 960-by-900 operational Session Studio before launching the two provider tabs and the dashboard.
 
 - Microsoft Edge Stable is the only supported browser executable.
 - The profile doctor reads Edge profile metadata and unpacked-extension registration without reading cookies, account data, or provider conversation content.
@@ -88,7 +108,7 @@ Binary microphone and playback frames are ignored.
 - Session Studio also exposes **Target company**, **Target role**, **Interview round**, **Emphasis**, **Avoid mentioning**, and **Answer mode** as structured memory-only controls; freeform notes remain available.
 - Structured metadata is assembled into the boot prompt but is not persisted to `settings.ini`.
 - Short context uses an inline two-step action: the first click arms **Launch Anyway** for ten seconds; the second click proceeds. No modal confirmation is used.
-- Launch progress is explicit: `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `READY`, or `ERROR`.
+- Launch progress is explicit: `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `WAITING_DASHBOARD`, `READY`, or `ERROR`.
 - **Fast Repair** opens the selected profile's PMIA extension page for registration/path/version failures, or retries the same session route after a partial lifecycle failure.
 - Diagnostics are written under `%LOCALAPPDATA%\PMInterviewAssistant\logs`, never into the repository.
 
@@ -100,7 +120,7 @@ Managed tabs expose title phases that the launcher treats as a deterministic han
 - `PMIA_REGISTERED_<ROLE>_<PROVIDER>_<SESSION>`: the tab registered with the background service.
 - `PMIA_<ROLE>_<PROVIDER>_<SESSION>`: the provider composer is available and the tab is ready.
 
-Boot context is sent only after both sender and receiver reach the final ready title. Polling is condition-driven at 100 milliseconds; the launcher no longer treats a browser window merely opening as runtime readiness.
+The dashboard adds `PMIA_DASHBOARD_<SESSION>`. Boot context is sent only after sender, receiver, and dashboard reach their lifecycle boundary. Polling is condition-driven at 100 milliseconds; the launcher no longer treats a browser window merely opening as runtime readiness.
 
 ### Persistence boundary
 
@@ -123,7 +143,7 @@ No Resume, Job Description, notes, prompt, answer, session identifier, cookie, t
 - `Ctrl+Shift+F9`: focus the receiver composer.
 - `Ctrl+Shift+F10`: toggle receiver auto-scroll.
 - `Ctrl+Shift+F11`: actively ping the opposite managed runtime and report `LINK OK`, a missing role, `FINAL QUEUED`, `RUNTIME UNREACHABLE`, or `COMPOSER NOT READY`.
-- `Ctrl+Alt+0`: pause or resume the managed tab.
+- `Ctrl+Alt+0`: pause or resume the session-level transport through the same dashboard command path.
 
 ## Session tracker companion
 
@@ -153,6 +173,6 @@ npm run validate
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-Manual release checks should cover all four sender/receiver provider combinations, both native-voice senders, long-question growth, interruption, receiver reload, missing receiver recovery, preflight status, and a long-session soak.
+Manual release checks should cover all four sender/receiver provider combinations, dashboard connect/reconnect, pause/queue/resume, selected send, stale supersession, context resend, repair, layouts, export, full three-window shutdown, native-voice senders, receiver reload and a long-session soak.
 
 The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.7.0 runtime.

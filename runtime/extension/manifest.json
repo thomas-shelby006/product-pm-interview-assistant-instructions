@@ -2,10 +2,11 @@
   "manifest_version": 3,
   "name": "PM Interview Dual-Provider Runtime",
   "version": "0.7.0",
-  "description": "Low-latency self-healing dual-provider interview runtime with ephemeral session state, background-safe recovery, live health checks, fast repair, provisional previews, and evidence-backed final turn boundaries.",
+  "description": "Low-latency self-healing PM interview runtime with a live Runtime Pilot Dashboard, bounded final queue, ephemeral session state, background-safe recovery, provisional previews, and provider-rendered delivery proof.",
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "windows"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
@@ -55,7 +56,8 @@
         "content/preview-scheduler.js",
         "content/runtime-recovery.js",
         "content/runtime-fatal.js",
-        "content/preflight-responder.js"
+        "content/preflight-responder.js",
+        "content/runtime-telemetry.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

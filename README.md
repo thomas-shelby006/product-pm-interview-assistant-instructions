@@ -1,15 +1,16 @@
 # Product PM Interview Assistant
 
-This repository contains Sundar's live Product Management mock-interview system: a structured Session Studio, a Manifest V3 dual-provider runtime, and an optional post-session review loop.
+This repository contains Sundar's live Product Management mock-interview system: Session Studio, two managed provider windows, a third Runtime Pilot Dashboard, a Manifest V3 control plane, and an optional post-session review loop.
 
 **Current release: PMIA runtime 0.7.0.**
 
 ## Active architecture
 
-- `runtime/Final_2_Window_Extension.ahk` owns Session Studio, provider selection, exact managed Edge windows, layouts, and PM-only hotkeys.
-- `runtime/extension/` is the authoritative provider runtime for ChatGPT and Claude in Microsoft Edge Stable.
-- The extension service worker owns role registration, durable final ordering, latest-only recovery, ephemeral role logs, and deterministic session cleanup.
-- Content scripts own transcript previews, provider-specific final commits, receiver submission, answer capture, status overlays, health checks, and export.
+- `runtime/Final_2_Window_Extension.ahk` owns Session Studio, provider selection, exact sender/receiver/dashboard windows, layouts, PM-only hotkeys, and in-memory setup context.
+- `runtime/extension/` is the authoritative provider and dashboard runtime for ChatGPT and Claude in Microsoft Edge Stable.
+- The extension service worker owns role registration, durable final ordering, transport mode, the bounded operator queue, dashboard state, recovery, ephemeral logs, and deterministic cleanup.
+- Content scripts own transcript previews, provider-specific final commits, receiver submission/proof, answer capture, semantic commands, telemetry, and compact overlays.
+- `runtime/extension/dashboard/` is the live Runtime Pilot Dashboard; it observes state and sends validated commands but never mutates provider pages directly.
 - `runtime/Session_Tracker_End_Session.ahk` optionally exports the exact session pair and sends it to the private review tracker.
 
 The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retained only for rollback and history. Do not enable them beside the active runtime.
@@ -24,16 +25,20 @@ The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retai
 - **Check Live** / `Alt+H` runs the real sender-receiver preflight in both managed windows.
 - **Fast Repair** / `Alt+Shift+R` relaunches the current route using the existing in-memory context.
 - Exports use schema 2.1 and include safe session metadata plus answer-length, delivery-latency, queue, duplicate/stale, and timeout summaries.
+- The third Runtime Pilot Dashboard shows live role health, source silence, generation state, previews, finals, queue state, delivery proof, answers, warnings, repair reports, and bounded timeline history.
+- Pause keeps sender observation running while suppressing previews and queuing authoritative finals; Resume Latest sends only the newest valid item through normal proof.
+- Stale queued finals become superseded instead of being submitted after a newer question has already rendered.
 
 ## Session flow
 
 1. Press `Alt+R` and select the verified Edge Stable profile and provider route.
 2. Enter Resume, Job Description, and optional session fields. These remain in AutoHotkey process memory.
 3. Session Studio waits for sender BOOT, REGISTERED, and READY before opening and waiting for the receiver.
-4. Boot context is delivered only after both provider composers are ready.
-5. Provisional transcript growth uses the disposable preview lane; one authoritative final uses the sequenced durable lane.
-6. The receiver acknowledges success only after the matching provider user turn renders.
-7. Use `Alt+H` to check the live link or `Alt+Shift+R` to repair the current session without re-entering context.
+4. After both providers are READY, Session Studio opens the session-scoped Runtime Pilot Dashboard and waits for its exact lifecycle title.
+5. Boot context is delivered only after sender, receiver, and dashboard are present.
+6. Provisional transcript growth uses the disposable preview lane; one authoritative final uses the sequenced durable lane.
+7. The receiver acknowledges success only after the matching provider user turn renders.
+8. Use the dashboard for live health, pause/queue/resume, selected sending, recovery, layouts and safe diagnostics. `Alt+D` restores it without restarting providers.
 
 ## Privacy boundary
 
@@ -46,12 +51,13 @@ The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retai
 ## Shortcut surface
 
 - `Alt+R`: open Session Studio.
-- `Alt+H`: check the live sender/receiver link.
+- `Alt+D`: show or reopen the current Runtime Pilot Dashboard.
+- `Alt+H`: check sender, receiver, and dashboard health.
 - `Alt+Shift+R`: fast-repair the current route and context.
 - `Alt+Esc`: resend current in-memory context.
 - `Alt+Delete`: end the exact managed session and exit.
 - `Alt+Tab`: hide or restore managed windows.
-- `Alt+CapsLock`: cycle two-window, sender-only, and receiver-only modes.
+- `Alt+CapsLock`: cycle three-window, sender + dashboard, receiver + dashboard, and dashboard-only modes.
 - `CapsLock`: cycle layouts.
 - `Alt+Q`: toggle the sender microphone.
 - `Alt+W`: toggle receiver scroll lock.
@@ -61,7 +67,9 @@ The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retai
 ## Main files
 
 - `runtime/Final_2_Window_Extension.ahk`: active launcher and Session Studio.
-- `runtime/extension/`: active Manifest V3 runtime.
+- `runtime/extension/`: active Manifest V3 provider and dashboard runtime.
+- `runtime/extension/dashboard/`: Runtime Pilot Dashboard.
+- `docs/LEGACY_FEATURE_PARITY.md`: feature-by-feature old-to-new decision record.
 - `runtime/README_INSTALL_TEST.md`: installation, operation, recovery, and verification.
 - `runtime/Session_Tracker_End_Session.ahk`: optional Review Studio.
 - `project_upload_bundle/`: recommended ChatGPT Project upload bundle.

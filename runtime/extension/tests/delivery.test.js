@@ -6,6 +6,7 @@ test('delivery is successful only when receiver explicitly acknowledges it', () 
   assert.deepEqual(classifyDelivery({ route: { tabId: 2 }, response: { ok: true } }), {
     delivered: true,
     queued: false,
+    terminal: true,
     reason: 'accepted'
   });
   assert.deepEqual(classifyDelivery({ route: { tabId: 2 }, response: { ok: false, error: 'no_composer' } }), {
@@ -39,6 +40,7 @@ test('delivery preserves receiver acknowledgement reason for accepted retries', 
   }), {
     delivered: true,
     queued: false,
+    terminal: true,
     reason: 'duplicate_ack',
     duplicate: true
   });
@@ -76,5 +78,19 @@ test('delivery wakes and retries the same envelope before queueing', async () =>
   assert.deepEqual(calls, [
     ['send', 22, 'q1'], ['wake', 22], ['wait', 80], ['send', 22, 'q1']
   ]);
-  assert.deepEqual(outcome, { delivered: true, queued: false, reason: 'accepted' });
+  assert.deepEqual(outcome, { delivered: true, queued: false, terminal: true, reason: 'accepted' });
+});
+
+
+test('stale acknowledgement is terminal supersession, not delivery', () => {
+  assert.deepEqual(classifyDelivery({
+    route: { tabId: 2 },
+    response: { ok: true, reason: 'stale_ack', duplicate: true }
+  }), {
+    delivered: false,
+    queued: false,
+    terminal: true,
+    superseded: true,
+    reason: 'stale_ack'
+  });
 });

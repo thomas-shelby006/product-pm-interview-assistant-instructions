@@ -23,6 +23,14 @@ export function buildSessionStatus(
 }
 
 export function describeRuntimeStatus(status, counterpart = null) {
+  const queueCount = Math.max(0, Number(status?.queueCount) || 0);
+  if (status?.transportMode === 'paused') {
+    return {
+      text: queueCount ? `PAUSED Â· ${queueCount} QUEUED` : 'FORWARDING PAUSED',
+      tone: 'warn'
+    };
+  }
+  if (queueCount) return { text: `${queueCount} FINAL${queueCount === 1 ? '' : 'S'} QUEUED`, tone: 'warn' };
   if (status?.hasPending) return { text: 'FINAL QUEUED', tone: 'warn' };
   const sender = Boolean(status?.sender?.connected);
   const receiver = Boolean(status?.receiver?.connected);

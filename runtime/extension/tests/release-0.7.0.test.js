@@ -16,6 +16,8 @@ test('release surfaces identify PMIA runtime 0.7.0', async () => {
   assert.equal(manifest.version, '0.7.0');
   assert.match(rootReadme, /0\.7\.0/);
   assert.match(extensionReadme, /Runtime 0\.7\.0/);
+  assert.match(rootReadme, /Runtime Pilot Dashboard/);
+  assert.match(extensionReadme, /Runtime Pilot Dashboard/);
 });
 
 test('active docs describe structured memory-only session setup', async () => {
@@ -42,6 +44,8 @@ test('tracker documentation matches the Edge Stable extension-native workflow', 
   assert.match(setup, /PMIA_RUNTIME_CONTROL_V1/);
   assert.match(setup, /Export and Pair/);
   assert.match(setup, /one fresh sender and one fresh receiver/);
+  assert.match(status, /Runtime Pilot Dashboard/);
+  assert.match(handoff, /Runtime Pilot Dashboard/);
   assert.match(setup, /auto-merge/i);
   assert.doesNotMatch(setup, /## Edge Beta setup|Tampermonkey.*enabled/i);
 });
@@ -63,4 +67,22 @@ test('project upload bundle identifies the active extension runtime', async () =
   assert.match(runtime, /Edge Stable/);
   assert.doesNotMatch(runtime, /Live runtime \(AHK two-window \+ Tampermonkey bridge\)/);
   assert.match(manifest, /Manifest V3 extension/);
+});
+
+
+test('active release documents dashboard queue and legacy parity', async () => {
+  const docs = [
+    await read('README.md'),
+    await read('runtime/README_INSTALL_TEST.md'),
+    await read('runtime/extension/README.md'),
+    await read('docs/LEGACY_FEATURE_PARITY.md')
+  ].join('
+');
+  assert.match(docs, /Pause forwarding/i);
+  assert.match(docs, /Resume Latest/i);
+  assert.match(docs, /bounded 20/i);
+  assert.match(docs, /stale_ack/i);
+  assert.match(docs, /provider-rendered/i);
+  assert.match(docs, /screenshot injection[\s\S]*Rejected/i);
+  assert.match(docs, /localStorage[\s\S]*Rejected/i);
 });

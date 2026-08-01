@@ -20,7 +20,7 @@ test('manifest is MV3 and registers module service worker', async () => {
 test('manifest grants only required provider hosts and storage', async () => {
   const manifest = await readManifest();
   assert.ok(manifest, 'manifest.json must exist');
-  assert.deepEqual(manifest.permissions.sort(), ['storage', 'tabs'].sort());
+  assert.deepEqual(manifest.permissions.sort(), ['storage', 'tabs', 'windows'].sort());
   assert.deepEqual(manifest.host_permissions.sort(), [
     'https://chat.openai.com/*',
     'https://chatgpt.com/*',
@@ -67,7 +67,9 @@ test('manifest identifies the low-latency preview/commit runtime', async () => {
   assert.equal(manifest.version, '0.7.0');
   assert.match(manifest.description, /low-latency/i);
   assert.match(manifest.description, /preview/i);
-  assert.match(manifest.description, /turn boundar/i);
+  assert.match(manifest.description, /delivery proof/i);
+  assert.match(manifest.description, /Runtime Pilot Dashboard/i);
+  assert.match(manifest.description, /bounded final queue/i);
 });
 
 test('manifest exposes all dynamically imported sender and answer modules', async () => {
@@ -79,6 +81,7 @@ test('manifest exposes all dynamically imported sender and answer modules', asyn
   assert.ok(resources.includes('content/runtime-recovery.js'));
   assert.ok(resources.includes('content/runtime-fatal.js'));
   assert.ok(resources.includes('content/preflight-responder.js'));
+  assert.ok(resources.includes('content/runtime-telemetry.js'));
   assert.ok(resources.includes('shared/*.js'));
 });
 
@@ -86,7 +89,8 @@ test('manifest versions the low-latency evidence-driven runtime', async () => {
   const manifest = await readManifest();
   assert.equal(manifest.version, '0.7.0');
   assert.match(manifest.description, /provisional previews/i);
-  assert.match(manifest.description, /final turn boundar/i);
+  assert.match(manifest.description, /provider-rendered delivery proof/i);
+  assert.match(manifest.description, /Runtime Pilot Dashboard/i);
   assert.match(manifest.description, /self-healing/i);
   assert.match(manifest.description, /ephemeral session state/i);
   assert.match(manifest.description, /background-safe recovery/i);
@@ -112,4 +116,19 @@ test('manifest registers a browser-level exact-session export command', async ()
   assert.ok(command);
   assert.equal(command.suggested_key?.default, 'Ctrl+Shift+8');
   assert.match(command.description, /export/i);
+});
+
+
+test('dashboard is a packaged extension surface with no external runtime dependency', async () => {
+  const root = new URL('../', import.meta.url);
+  const [html, css, js] = await Promise.all([
+    readFile(new URL('dashboard/index.html', root), 'utf8'),
+    readFile(new URL('dashboard/dashboard.css', root), 'utf8'),
+    readFile(new URL('dashboard/dashboard.js', root), 'utf8')
+  ]);
+  assert.match(html, /Runtime Pilot/);
+  assert.match(html, /dashboard\.js/);
+  assert.match(css, /--aubergine/);
+  assert.match(js, /pmia-dashboard:/);
+  assert.doesNotMatch(`${html}${css}${js}`, /https?:\/\/|<script[^>]+src=["']https:/i);
 });

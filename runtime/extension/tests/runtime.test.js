@@ -667,3 +667,24 @@ test('receiver retries one swallowed provider submit and confirms the rendered t
   assert.equal(submitCalls, 2);
   assert.equal(messages.at(-1).text, question);
 });
+
+
+test('overflow safety wraps long provider content without removing provider nodes', async () => {
+  const module = await import('../content/runtime.js');
+  const appended = [];
+  const doc = {
+    getElementById() { return null; },
+    createElement() {
+      return { id: '', textContent: '', remove() { this.removed = true; } };
+    },
+    head: { appendChild(node) { appended.push(node); } },
+    documentElement: { appendChild(node) { appended.push(node); } }
+  };
+  const remove = module.installOverflowSafety(doc);
+  assert.equal(appended.length, 1);
+  assert.match(appended[0].textContent, /overflow-wrap: anywhere/);
+  assert.match(appended[0].textContent, /white-space: pre-wrap/);
+  assert.doesNotMatch(appended[0].textContent, /display:\s*none|removeChild|innerHTML/);
+  remove();
+  assert.equal(appended[0].removed, true);
+});

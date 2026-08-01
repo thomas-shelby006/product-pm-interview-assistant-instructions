@@ -50,6 +50,8 @@ Entered through Session Studio's structured memory-only controls and emitted in 
 
 Flow: Session Studio (`Alt+R`) collects Resume, JD, structured metadata, and optional notes in memory → Microsoft Edge Stable opens one managed sender and receiver → each content runtime registers through BOOT/REGISTERED/READY lifecycle titles → the service worker mirrors provisional text and forwards one durable final envelope → the receiver stages context, submits automatically, and acknowledges only after the provider renders the matching user turn. `Alt+Esc` resends current in-memory context; `Alt+Delete` ends the exact managed session.
 
+The dashboard exposes live health, source silence, pause/queue/resume, selected sending, repair, layouts, export, safe diagnostics and shutdown. Pause keeps sender observation running while suppressing previews and queuing authoritative finals; stale queued items become superseded after a newer final is proven.
+
 The active runtime does not use Tampermonkey or `localStorage` transport. Resume/JD and structured metadata remain only in the AutoHotkey process. Role-scoped runtime logs use browser-session-only storage, are cleared when the managed session ends, and replace the full setup event with a redaction placeholder. Only allow-listed company/role/round/emphasis/answer-mode and missing-context flags may appear in review metadata.
 
 ## Noisy transcript handling

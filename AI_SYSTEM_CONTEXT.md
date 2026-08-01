@@ -10,7 +10,7 @@ The engineering priority order is:
 
 1. do not lose or duplicate the latest actionable question;
 2. do not submit stale or partial transcript text;
-3. keep the managed sender and receiver recoverable without disturbing unrelated browser windows;
+3. keep sender, receiver, and dashboard recoverable without disturbing unrelated browser windows;
 4. keep Resume, JD, notes, prompts, answers, and session identifiers out of persistent runtime storage;
 5. make operational failure visible and repairable in one action;
 6. produce useful explicit exports for mock review.
@@ -19,10 +19,10 @@ The engineering priority order is:
 
 - **Browser:** Microsoft Edge Stable, one profile selected and verified by Profile Doctor.
 - **Launcher:** `runtime/Final_2_Window_Extension.ahk`, AutoHotkey v2.
-- **Provider runtime:** `runtime/extension/`, Manifest V3.
+- **Provider/dashboard runtime:** `runtime/extension/`, Manifest V3.
 - **Providers:** ChatGPT and Claude independently selectable as sender or receiver.
-- **Windows:** exactly one managed sender and one managed receiver.
-- **Transport:** disposable preview lane plus durable sequenced final lane through the extension service worker.
+- **Windows:** one managed sender, one managed receiver, and one session-scoped Runtime Pilot Dashboard.
+- **Transport:** disposable preview lane plus durable sequenced final lane, session-level pause, and bounded final queue through the extension service worker.
 - **Review:** `runtime/Session_Tracker_End_Session.ahk` plus exact Markdown pairing and private tracker push scripts.
 
 Edge Beta, Tampermonkey, `Final_2_Window_Fixed.ahk`, and archives are inactive rollback/reference assets.
@@ -31,15 +31,15 @@ Edge Beta, Tampermonkey, `Final_2_Window_Fixed.ahk`, and archives are inactive r
 
 ### AutoHotkey launcher
 
-Owns Session Studio, profile/route/layout preferences, managed Edge process launch, exact lifecycle-window discovery, layout/hide controls, boot-context delivery, and global PM hotkeys. Sensitive session context remains only in the current AutoHotkey process.
+Owns Session Studio, profile/route/layout preferences, three-window Edge launch, exact lifecycle-window discovery, layout/hide controls, dashboard recovery, boot-context delivery, AHK memory cleanup, and global PM hotkeys. Sensitive session context remains only in the current AutoHotkey process.
 
 ### Extension service worker
 
-Owns role registration, ownership conflict resolution, durable sequence admission, final routing, latest-only queueing, counterpart status, ephemeral role logs, export control, and deterministic cleanup.
+Owns role registration, ownership conflict resolution, durable sequence admission, transport mode, bounded operator queue, final routing, Runtime Pilot state/ports, counterpart status, browser-native recovery/layout commands, ephemeral role logs, export control, and deterministic cleanup.
 
 ### Content runtime
 
-Owns provider observation, provisional transcript preview, authoritative finalization, receiver composer staging/submission, generation supersede, answer capture, status overlay, health preflight response, and role-scoped export.
+Owns provider observation, provisional preview, authoritative finalization, receiver staging/submission/proof, generation supersede, answer capture, source-silence/heartbeat telemetry, semantic runtime commands, compact status overlay, health response, and role-scoped export.
 
 ### Provider adapters
 
@@ -53,7 +53,7 @@ Managed tabs progress through deterministic titles:
 - `PMIA_REGISTERED_<ROLE>_<PROVIDER>_<SESSION>` — service-worker ownership accepted;
 - `PMIA_<ROLE>_<PROVIDER>_<SESSION>` — provider composer available and role ready.
 
-The launcher opens the sender first and waits for READY before opening the receiver. Boot context is sent only after both roles are READY.
+The launcher opens the sender first and waits for READY before opening the receiver. After both roles are READY it opens `PMIA_DASHBOARD_<SESSION>`. Boot context is sent only after all three managed windows exist.
 
 Each registration heartbeat refreshes ownership. A competing fresh role is normally rejected. PMIA 0.7 probes the current owner first; a missing or non-responsive runtime is replaced immediately, while a healthy duplicate remains blocked.
 
@@ -65,7 +65,7 @@ Provisional transcript growth is disposable, in-memory, coalesced, and never que
 
 ### Final lane
 
-Authoritative provider boundaries create a sequenced envelope. The background accepts each increasing sequence once, routes it to the registered receiver, and retains only the latest final when delivery is unavailable. A replay is duplicate-acknowledged; stale work is discarded.
+Authoritative provider boundaries create a sequenced envelope. When active, the service worker routes it normally. When paused or unavailable, question finals enter a bounded 20-item operator queue while previews remain disposable. A replay is duplicate-acknowledged. `stale_ack` marks an older item superseded and is not counted as delivery.
 
 ### ChatGPT boundary
 
@@ -84,25 +84,26 @@ Delivery recovery is background-safe. The service worker disables tab discard an
 ## Runtime privacy
 
 - Session Studio persists only profile directory, sender provider, receiver provider, and layout mode.
-- Role logs use `chrome.storage.session`, not `chrome.storage.local`.
+- Registry, role logs, queue, dashboard snapshot and timeline use `chrome.storage.session`, not disk-backed extension local storage.
 - Legacy `pmia_log_*` local records are removed at service-worker startup.
 - Setup events are replaced by `[Session setup redacted from session log]`.
 - Only company, target role, interview round, emphasis, answer mode, and missing Resume/JD flags are allowed into review metadata.
-- Ending the session or closing its final managed tab removes registrations, pending final, sequence state, and both role logs.
+- Ending the session or closing both provider tabs removes registrations, pending final, queue, pilot state, sequence state, both role logs, dashboard, and AHK setup context.
 - Explicit export is the only supported path that writes transcript or answer material to files.
 
 ## User-facing operations
 
 - `Alt+R` opens Session Studio.
-- `Alt+H` opens Session Studio, verifies the exact READY pair, and requests the authorized F11 counterpart preflight in both managed windows.
+- `Alt+D` shows or reopens the current dashboard without relaunching providers.
+- `Alt+H` verifies both provider runtimes and dashboard presence.
 - `Alt+Shift+R` runs Fast Repair using the current in-memory context and existing route.
 - `Alt+Esc` resends current context.
 - `Alt+Delete` closes the exact managed session and exits the launcher.
-- `Alt+Tab`, `Alt+CapsLock`, and `CapsLock` control visibility and layout.
+- `Alt+Tab`, `Alt+CapsLock`, and `CapsLock` control three-window, sender + dashboard, receiver + dashboard, dashboard-only and preserved two-provider layouts.
 - `Alt+Q` controls sender microphone; `Alt+W` controls receiver auto-scroll.
 - `Alt+E` exports both role records; `Alt+Shift+E` opens Review Studio.
 
-Normal health states include `LINK OK`, missing sender/receiver, `FINAL QUEUED`, `RUNTIME UNREACHABLE`, and `COMPOSER NOT READY`. Session Studio launch states include `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `READY`, and `ERROR`.
+Normal health states include `LINK OK`, `FORWARDING PAUSED`, queue count, missing/unresponsive sender/receiver, source silence, `FINAL QUEUED`, and `COMPOSER NOT READY`. Session Studio launch states include `PREFLIGHT`, `LAUNCHING`, `WAITING_BOOT`, `WAITING_REGISTRATION`, `WAITING_COMPOSER`, `WAITING_DASHBOARD`, `READY`, and `ERROR`.
 
 ## Export and review
 
@@ -128,7 +129,9 @@ Review Studio detects exactly one complete READY pair, requests both role export
 6. Setup text or transcript data reaches persistent extension storage.
 7. Ending or manually closing a session leaves orphaned registry/log state.
 8. Health or repair controls use a separate workaround rather than the production lifecycle.
-9. Launcher actions affect unrelated Edge windows.
+9. Launcher or dashboard layout actions affect unrelated Edge windows.
+10. Dashboard reconnect, service-worker restart, or command idempotency recreates stale/ghost state.
+11. An older queued final remains sendable after a newer final is proven.
 
 ## Verification contract
 

@@ -1,13 +1,13 @@
 import { SessionRegistry } from './shared/session-registry.js';
 import { isEnvelope } from './shared/protocol.js';
-import { deliverPreview } from './shared/preview.js';
+import { deliverPreview, routePreview } from './shared/preview.js';
 import { deliverWithWakeRetry } from './shared/delivery.js';
 import { createSessionLogStore } from './shared/session-log-store.js';
 import { buildSessionStatus } from './shared/session-status.js';
 import { runCounterpartPreflight } from './shared/preflight.js';
-import { closeOwnedSessionTabs } from './shared/end-session.js';
-import { exportManagedSessionForTab } from './shared/session-control.js';
+import { exportManagedSession, exportManagedSessionForTab } from './shared/session-control.js';
 import { probeRegistrationOwner } from './shared/registration-health.js';
+import { createRuntimePilotController } from './shared/runtime-pilot-controller.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const MAX_LOG_EVENTS = 500;
@@ -21,6 +21,16 @@ const logStore = createSessionLogStore({
 void logStore.purgeLegacyLocalLogs().catch(() => {});
 let operationQueue = Promise.resolve();
 let registryPromise = null;
+const pilotController = createRuntimePilotController({
+  chromeApi: chrome,
+  storageArea: chrome.storage.session,
+  registryProvider: loadRegistry,
+  saveRegistry,
+  deliverFinal: deliver,
+  exportManagedSession,
+  clearSessionLogs: sessionId => logStore.clearSession(sessionId),
+  serializeOperation: serialize
+});
 
 function serialize(operation) {
   const next = operationQueue.then(operation, operation);
@@ -71,16 +81,25 @@ async function wakeManagedTab(tabId) {
 }
 
 async function deliver(route, registry) {
+  const startedAt = Date.now();
+  let attempts = 0;
   const outcome = await deliverWithWakeRetry({
     route,
-    sendToTab: (tabId, outgoing) => chrome.tabs.sendMessage(tabId, outgoing),
+    sendToTab: (tabId, outgoing) => {
+      attempts += 1;
+      return chrome.tabs.sendMessage(tabId, outgoing);
+    },
     wakeTab: wakeManagedTab
   });
   if (!outcome.delivered && route?.message?.sessionId) {
     registry.queueLatest(route.message.sessionId, route.message);
     await saveRegistry(registry);
   }
-  return outcome;
+  return {
+    ...outcome,
+    attempts,
+    deliveryProofMs: Math.max(0, Date.now() - startedAt)
+  };
 }
 
 async function handleRegistration(message, tabId, registry) {
@@ -118,6 +137,9 @@ async function handleRegistration(message, tabId, registry) {
     };
   }
   await saveRegistry(registry);
+  if (result.changed) {
+    await pilotController.syncRegistration(result.registration);
+  }
 
   try {
     await chrome.tabs.update(tabId, { autoDiscardable: false });
@@ -137,20 +159,30 @@ async function handleRegistration(message, tabId, registry) {
   const pendingOutcome = result.pending
     ? await deliver({ tabId, message: result.pending }, registry)
     : null;
+  if (result.pending && pendingOutcome) {
+    await pilotController.afterForward(result.pending, pendingOutcome);
+  }
 
   if (result.changed) {
+    const registrationEvent = {
+      type: recoveryReason ? 'registration_recovered' : 'registration',
+      role: message.registration.role,
+      provider: message.registration.provider,
+      tabId,
+      replacedTabId: replacedTabId || null,
+      ...(recoveryReason ? { reason: recoveryReason } : {})
+    };
     await appendLog(
       message.registration.sessionId,
       message.registration.role,
-      {
-        type: recoveryReason ? 'registration_recovered' : 'registration',
-        role: message.registration.role,
-        provider: message.registration.provider,
-        tabId,
-        replacedTabId: replacedTabId || null,
-        ...(recoveryReason ? { reason: recoveryReason } : {})
-      }
+      registrationEvent
     );
+    if (recoveryReason) {
+      await pilotController.recordRegistrationRecovery(
+        message.registration.sessionId,
+        registrationEvent
+      );
+    }
   }
 
   const status = await broadcastLinkStatus(
@@ -197,9 +229,26 @@ async function handleForward(message, tabId, registry) {
     };
   }
 
+  const pilotDecision = await pilotController.beforeForward(message.envelope);
+  if (pilotDecision.paused) {
+    await saveRegistry(registry);
+    await appendLog(message.envelope.sessionId, 'sender', {
+      type: 'forward_paused',
+      envelopeId: message.envelope.id,
+      kind: message.envelope.kind,
+      sourceProvider: message.envelope.sourceProvider,
+      delivered: false,
+      queued: pilotDecision.response.queued,
+      reason: pilotDecision.response.reason
+    });
+    await broadcastLinkStatus(message.envelope.sessionId, registry);
+    return pilotDecision.response;
+  }
+
   const route = registry.route(message.envelope.sessionId, message.envelope);
   await saveRegistry(registry);
   const outcome = await deliver(route, registry);
+  await pilotController.afterForward(message.envelope, outcome);
   await appendLog(message.envelope.sessionId, 'sender', {
     type: 'forward',
     envelopeId: message.envelope.id,
@@ -207,7 +256,9 @@ async function handleForward(message, tabId, registry) {
     sourceProvider: message.envelope.sourceProvider,
     delivered: outcome.delivered,
     queued: outcome.queued,
-    reason: outcome.reason
+    reason: outcome.reason,
+    attempts: outcome.attempts,
+    deliveryProofMs: outcome.deliveryProofMs
   });
   await broadcastLinkStatus(message.envelope.sessionId, registry);
   return { ok: true, ...outcome };
@@ -228,6 +279,9 @@ function currentSessionStatus(registry, sessionId) {
 async function broadcastLinkStatus(sessionId, registry) {
   const session = registry.getSession(sessionId);
   const status = currentSessionStatus(registry, sessionId);
+  const pilot = await pilotController.snapshot(sessionId);
+  status.transportMode = pilot?.mode || 'active';
+  status.queueCount = pilot?.queue?.length || 0;
   const deliveries = ['sender', 'receiver']
     .map(role => session?.[role]?.tabId)
     .filter(Number.isInteger)
@@ -240,6 +294,10 @@ async function broadcastLinkStatus(sessionId, registry) {
   return status;
 }
 
+
+chrome.runtime.onConnect.addListener(port => {
+  pilotController.connectPort(port);
+});
 
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command !== 'export-active-pmia-session') return;
@@ -264,12 +322,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab?.id;
   if (message?.type === 'PMIA_PREVIEW') {
     loadRegistry()
-      .then(registry => deliverPreview({
-        registry,
-        preview: message.preview,
-        senderTabId: tabId,
-        sendToTab: (targetTabId, outgoing) => chrome.tabs.sendMessage(targetTabId, outgoing)
-      }))
+      .then(registry => {
+        const route = routePreview(registry, message.preview, tabId);
+        if (!route.accepted) {
+          return { ok: false, delivered: false, dropped: true, reason: route.reason };
+        }
+        return pilotController.handlePreview({
+          preview: message.preview,
+          deliver: () => deliverPreview({
+            registry,
+            preview: message.preview,
+            senderTabId: tabId,
+            sendToTab: (targetTabId, outgoing) => chrome.tabs.sendMessage(targetTabId, outgoing)
+          })
+        });
+      })
       .then(sendResponse)
       .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
     return true;
@@ -285,6 +352,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message?.type === 'PMIA_FORWARD') {
       sendResponse(await handleForward(message, tabId, registry));
+      return;
+    }
+
+    if (message?.type === 'PMIA_DASHBOARD_COMMAND') {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+        sendResponse({ ok: false, error: 'session_not_owned' });
+        return;
+      }
+      sendResponse(await pilotController.handleCommand(message));
+      return;
+    }
+
+    if (message?.type === 'PMIA_RUNTIME_TELEMETRY') {
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+        sendResponse({ ok: false, error: 'session_not_owned' });
+        return;
+      }
+      const role = registry.roleForTab(message.sessionId, tabId);
+      sendResponse(await pilotController.telemetry({
+        sessionId: message.sessionId,
+        role,
+        tabId,
+        telemetry: message.telemetry
+      }));
       return;
     }
 
@@ -334,22 +425,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message?.type === 'PMIA_END_SESSION') {
-      const result = await closeOwnedSessionTabs({
-        registry,
-        sessionId: message.sessionId,
-        requesterTabId: tabId,
-        removeTabs: async tabIds => {
-          setTimeout(() => {
-            chrome.tabs.remove(tabIds).catch(() => {});
-          }, 40);
-        }
-      });
-      if (result.ok) {
-        registry.removeSession(message.sessionId);
-        await saveRegistry(registry);
-        await logStore.clearSession(message.sessionId);
+      if (!authorizeSessionMessage(registry, message.sessionId, tabId)) {
+        sendResponse({ ok: false, error: 'session_not_owned' });
+        return;
       }
+      const result = await pilotController.handleCommand({
+        type: 'PMIA_DASHBOARD_COMMAND',
+        sessionId: message.sessionId,
+        requestId: `content-end-${tabId}-${Date.now()}`,
+        command: 'end_session',
+        payload: { source: 'managed_tab' }
+      });
       sendResponse(result);
+      if (result?.closeTabIds?.length) {
+        setTimeout(() => chrome.tabs.remove(result.closeTabIds).catch(() => {}), 80);
+      }
       return;
     }
 
@@ -360,7 +450,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       sendResponse({
         ok: true,
-        status: currentSessionStatus(registry, message.sessionId)
+        status: currentSessionStatus(registry, message.sessionId),
+        pilot: await pilotController.snapshot(message.sessionId)
       });
       return;
     }
@@ -410,7 +501,11 @@ chrome.tabs.onRemoved.addListener(tabId => {
       }
     }
     await saveRegistry(registry);
-    await Promise.all(orphanedSessionIds.map(sessionId => logStore.clearSession(sessionId)));
+    await pilotController.disconnectTab(tabId, affectedSessionIds);
+    await Promise.all(orphanedSessionIds.map(async sessionId => {
+      await logStore.clearSession(sessionId);
+      await pilotController.removeSession(sessionId);
+    }));
     for (const sessionId of survivingSessionIds) {
       await broadcastLinkStatus(sessionId, registry);
     }

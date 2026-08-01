@@ -11,6 +11,7 @@ extension/
   manifest.json
   background.js
   content/
+  dashboard/
   shared/
   tests/
 scripts/
@@ -34,20 +35,22 @@ Session Studio persists only profile, route, and layout preferences. Resume, JD,
 1. Select question-source and answer-workspace providers.
 2. Enter Resume, Job Description, and optional session metadata.
 3. Choose the initial layout.
-4. Launch. The sender must reach READY before the receiver opens; both must reach READY before boot context is sent.
-5. During a session, press `Alt+H` or choose **Check Live** to run the real counterpart preflight in both managed windows.
-6. Press `Alt+Shift+R` or choose **Fast Repair** to relaunch the same route with current in-memory context.
+4. Launch. The sender reaches READY before the receiver opens. After both providers are READY, Session Studio opens and verifies the Runtime Pilot Dashboard.
+5. Boot context is sent only after all three managed windows are present.
+6. Use the dashboard for live health, pause/queue/resume, selected sending, recovery, layouts, export, safe diagnostics and shutdown.
+7. Press `Alt+D` to reopen/focus the dashboard without restarting providers. Use `Alt+H` for the active health check and `Alt+Shift+R` for the strongest full-route repair.
 
 ## Shortcut map
 
 ```text
 Alt+R          Open Session Studio
-Alt+H          Check the live sender/receiver link
+Alt+D          Show or reopen the Runtime Pilot Dashboard
+Alt+H          Check sender, receiver, and dashboard health
 Alt+Shift+R    Fast-repair the current route and context
 Alt+Esc        Resend current in-memory context
 Alt+Delete     End the exact managed session and exit
 Alt+Tab        Hide or restore managed windows
-Alt+CapsLock   Cycle two-window, sender-only, receiver-only modes
+Alt+CapsLock   Cycle 3-window, sender+dashboard, receiver+dashboard, dashboard-only modes
 CapsLock       Cycle layouts within the visible mode
 Alt+Q          Toggle sender microphone
 Alt+W          Toggle receiver scroll lock
@@ -55,16 +58,28 @@ Alt+E          Export sender and receiver records
 Alt+Shift+E    Open or focus Review Studio
 ```
 
+
+## Runtime Pilot Dashboard operations
+
+- **Pause forwarding** keeps sender capture active, suppresses provisional preview delivery, and queues authoritative finals.
+- **Resume + latest** sends the newest valid queued final through the normal sequence and provider-rendered proof path.
+- **Resume only** re-enables transport without sending queued work.
+- **Send selected** rejects superseded items; **Discard selected/all** changes queue state only and never edits provider conversations.
+- **Check live** separates role reachability, heartbeat freshness, composer readiness, receiver generation, and sender source silence.
+- **Repair runtime** requests semantic recovery, reloads an unresponsive owned tab, or reopens a missing role when a known provider URL exists. Full AHK repair remains the fallback when setup context must be restaged.
+- Layout controls show three windows, sender + dashboard, receiver + dashboard, or dashboard only. Closing the dashboard alone does not stop transport.
+- **Copy diagnostics** contains identifiers, health and metrics only. It excludes setup and transcript text.
+
 ## Runtime expectations
 
 - Preview updates are disposable, coalesced, and never submit.
 - ChatGPT and Claude use provider-specific authoritative final boundaries.
-- Finals are sequenced and accepted once; only the latest unavailable final is retained.
+- Finals are sequenced and accepted once. Unavailable/paused question finals enter a bounded 20-item operator queue; boot context never enters it.
 - Receiver acknowledgement requires a newly rendered matching user turn.
-- A newer question supersedes older generating receiver work.
+- A newer question supersedes older generating receiver work. After a newer queued final is proven, older retained finals are marked superseded and cannot be sent.
 - Dead role registrations are replaced only after an active probe fails.
 - Discard recovery does not activate a tab or focus an Edge window.
-- Closing the final managed tab removes complete session registry/log state.
+- Closing both provider tabs or ending the session removes registry, queue, pilot state, role logs, dashboard, and AHK in-memory setup context.
 
 ## Privacy and export
 
@@ -97,17 +112,22 @@ This runs the Node suite, extension JavaScript validation, main-launcher silent 
 For material browser claims, use Browser Evidence Capture with synthetic context. Verify:
 
 - all four provider routes as applicable;
-- Check Live reports the linked pair;
+- dashboard connects, refreshes, reconnects after service-worker suspension, and reports both roles;
+- pause â†’ queue â†’ resume latest and selected send create one provider-rendered user turn per final;
+- stale queue items become superseded rather than delivered;
+- Check Live reports sender, receiver, dashboard and source-silence state;
 - Fast Repair reuses context and returns both roles to READY;
 - receiver recovery does not steal foreground focus;
 - export files contain schema 2.1 summary and no raw setup content;
-- end-session removes only task-created PMIA windows;
+- end-session removes only the three task-created PMIA windows and clears session-only queue/log/pilot state;
 - unrelated Edge tabs and the original checkout remain untouched.
 
 ## Recovery states
 
 - `LINK OK`: both roles registered and reachable.
-- `FINAL QUEUED`: latest final retained for recovery.
+- `FORWARDING PAUSED`: sender observation continues but transport is suspended.
+- `N FINALS QUEUED`: authoritative question finals are awaiting operator action.
+- `FINAL QUEUED`: service-worker recovery pending state exists.
 - `RUNTIME UNREACHABLE`: registered counterpart did not respond.
 - `COMPOSER NOT READY`: runtime responds but provider composer is unavailable.
 - `ROLE CONFLICT`: a healthy owner already holds the role.
