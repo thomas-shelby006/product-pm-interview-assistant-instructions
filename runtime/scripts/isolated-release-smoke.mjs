@@ -225,9 +225,15 @@ try {
     const selected = (current?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));
     if (selected.length === 3 && selected.every(item => item.state === 'proven')) break;
     if (current?.batchState?.pendingNoResponse) {
+      await dashboard.evaluate(`document.querySelector('[data-view="queue"]')?.click(); true`, { userGesture: true });
+      const control = await waitFor('no-response Continue control ready', async () => {
+        const raw = await dashboard.evaluate(`(()=>{const button=document.getElementById('resolveNoResponseContinue');const panel=document.querySelector('[data-view-panel="queue"]');const visible=Boolean(button&&(button.offsetWidth||button.offsetHeight||button.getClientRects().length));return JSON.stringify({exists:Boolean(button),hidden:Boolean(button?.hidden),disabled:Boolean(button?.disabled),visible,queueActive:Boolean(panel?.classList.contains('active'))})})()`);
+        const value = JSON.parse(raw);
+        return { ok: value.exists && !value.hidden && !value.disabled && value.visible && value.queueActive, value };
+      }, 10000, 100);
       const continued = await dashboard.evaluate(`(()=>{const button=document.getElementById('resolveNoResponseContinue');if(!button||button.hidden||button.disabled)return false;button.click();return true})()`, { userGesture: true });
-      if (!continued) throw new Error('Pending no-response state was visible but Continue was unavailable');
-      evidence.noResponseResolution = { required: true, action: 'continue', completedAt: Date.now() };
+      if (!continued) throw new Error('No-response Continue control was ready but could not be clicked');
+      evidence.noResponseResolution = { required: true, action: 'continue', completedAt: Date.now(), control: control.value };
       break;
     }
     await sleep(250);

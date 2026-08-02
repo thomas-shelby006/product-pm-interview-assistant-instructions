@@ -131,3 +131,10 @@ test('isolated smoke reactivates Review and waits for rendered drill and trace e
   assert.match(runner, /Production evidence ready/);
   assert.match(runner, /value\.health !== 'Waiting'/);
 });
+
+
+test('isolated smoke opens Queue and waits for the visible enabled no-response Continue control', () => {
+  assert.match(runner, /no-response Continue control ready/);
+  assert.equal(runner.includes(`data-view=\"queue\"`), true);
+  assert.match(runner, /value\.exists && !value\.hidden && !value\.disabled && value\.visible && value\.queueActive/);
+});
