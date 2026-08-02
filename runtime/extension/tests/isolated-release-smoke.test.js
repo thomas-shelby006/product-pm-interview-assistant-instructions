@@ -154,3 +154,16 @@ test('isolated smoke wrapper binds evidence to HEAD and preserves every final UI
   assert.match(powershell, /--source-commit \$sourceCommit/);
   for (const gate of ['productionUiOk','assistUiOk','reliabilityUiOk']) assert.match(powershell, new RegExp(`-and \\$evidence\\.${gate}`));
 });
+
+
+test('isolated smoke waits for a late first render before using its one source-submit retry', () => {
+  assert.match(runner, /Q1 late render before retry/);
+  assert.match(runner, /lateGraceUsed/);
+  assert.match(runner, /if \(attempt === 1\)/);
+  assert.match(runner, /20000, 250/);
+});
+
+test('isolated smoke waits for all twenty Reliability Center rows before capture', () => {
+  assert.match(runner, /reliabilityRows===20/);
+  assert.match(runner, /reliabilityState!==['"]Waiting['"]/);
+});

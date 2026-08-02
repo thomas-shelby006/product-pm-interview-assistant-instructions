@@ -254,8 +254,19 @@ try {
   let sourceSubmission = null;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     sourceSubmission = await submitSyntheticQ1Attempt(attempt);
-    evidence.sourceSubmission = { attempts: attempt, rendered: sourceSubmission.ok, error: sourceSubmission.error || '' };
+    evidence.sourceSubmission = { attempts: attempt, rendered: sourceSubmission.ok, error: sourceSubmission.error || '', lateGraceUsed: false };
     if (sourceSubmission.ok) break;
+    if (attempt === 1) {
+      try {
+        const late = await waitFor('Q1 late render before retry', async () => {
+          const value = await pageState(sender);
+          return { ok: value.users.includes(questions.q1), value };
+        }, 20000, 250);
+        sourceSubmission = { ok: true, attempt, rendered: late.value, lateGrace: true };
+        evidence.sourceSubmission = { attempts: attempt, rendered: true, error: '', lateGraceUsed: true };
+        break;
+      } catch {}
+    }
   }
   if (!sourceSubmission?.ok) throw new Error(`Synthetic Q1 did not render in sender after ${evidence.sourceSubmission.attempts} attempt(s)`);
 
@@ -405,8 +416,8 @@ try {
     await dashboard.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     await dashboard.evaluate(`document.querySelector('[data-view="assist"]')?.click(); true`, { userGesture: true });
     await waitFor(`Assist evidence ready (${label})`, async () => {
-      const raw = await dashboard.evaluate(`(()=>{const panel=document.getElementById('panelAssist');const title=(document.getElementById('assistChoiceTitle')?.textContent||'').trim();return JSON.stringify({assistActive:Boolean(panel?.classList.contains('active')),title})})()`);
-      const value=JSON.parse(raw);return { ok:value.assistActive&&Boolean(value.title),value };
+      const raw = await dashboard.evaluate(`(()=>{const panel=document.getElementById('panelAssist');const title=(document.getElementById('assistChoiceTitle')?.textContent||'').trim();const reliabilityState=(document.getElementById('assistReliabilityState')?.textContent||'').trim();const reliabilityRows=document.querySelectorAll('#assistReliabilityGroups .reliability-list li').length;return JSON.stringify({assistActive:Boolean(panel?.classList.contains('active')),title,reliabilityState,reliabilityRows})})()`);
+      const value=JSON.parse(raw);return { ok:value.assistActive&&Boolean(value.title)&&Boolean(value.reliabilityState)&&value.reliabilityState!=='Waiting'&&value.reliabilityRows===20,value };
     },10000,100);
     const raw=await dashboard.evaluate(`(()=>{const required=['panelAssist','choiceWorkspace','assistChoiceTitle','assistMilestones','assistTriageItems','assistRouteState','assistRecoveryState','assistCommandHistory','assistForecastState','assistPolicyTitle','assistWizardSteps','assistReliabilityState','assistReliabilityGroups','liveActionDock','dockPrimaryAction'];const panel=document.getElementById('panelAssist');return JSON.stringify({viewport:{width:innerWidth,height:innerHeight},scrollWidth:document.documentElement.scrollWidth,horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1,required:Object.fromEntries(required.map(id=>[id,Boolean(document.getElementById(id))])),assistActive:Boolean(panel?.classList.contains('active')),controlCount:panel?.querySelectorAll('button,input,select').length||0,actionDock:Boolean(document.getElementById('liveActionDock')),reliabilityState:(document.getElementById('assistReliabilityState')?.textContent||'').trim(),reliabilityRows:document.querySelectorAll('#assistReliabilityGroups .reliability-list li').length,accessibility:{polite:Boolean(document.querySelector('[aria-live="polite"]')),assertive:Boolean(document.querySelector('[aria-live="assertive"]'))}})})()`);
     const value=JSON.parse(raw);const screenshot=await dashboard.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});const screenshotPath=path.join(path.dirname(evidencePath),`assist-${label}.png`);await fs.writeFile(screenshotPath,Buffer.from(screenshot.data,'base64'));return {...value,screenshotPath};
