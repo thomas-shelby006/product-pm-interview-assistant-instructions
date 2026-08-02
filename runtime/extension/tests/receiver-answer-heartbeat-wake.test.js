@@ -9,17 +9,19 @@ test('successful receiver registration pulses the answer observer deadline', () 
     source.indexOf('async function register()'),
     source.indexOf('async function forwardPreview')
   );
-  assert.match(registration, /rolePort\?\.connect\(\);\s*if \(runtimeConfig\.role === 'receiver'\) answerWake\.pulse\(\);/);
+  assert.match(registration, /rolePort\?\.connect\(\);\s*if \(runtimeConfig\.role === 'receiver'\) \{\s*answerWake\.pulse\(\);\s*deliveryWake\.pulse\(\);\s*\}/);
   assert.match(registration, /setInterval\(\(\) => \{\s*if \(registrationActive\) register\(\);/);
 });
 
 test('receiver link-status updates pulse the answer observer before UI work', () => {
   const linkStatus = source.slice(
     source.indexOf("incoming?.type === 'PMIA_LINK_STATUS'"),
-    source.indexOf("incoming?.type === 'PMIA_ROLE_REVOKED'")
+    source.indexOf("incoming?.type === 'PMIA_EXPORT_SESSION'")
   );
-  const pulseAt = linkStatus.indexOf("if (runtimeConfig.role === 'receiver') answerWake.pulse();");
+  const pulseAt = linkStatus.indexOf('answerWake.pulse();');
+  const deliveryAt = linkStatus.indexOf('deliveryWake.pulse();');
   const overlayAt = linkStatus.indexOf('overlay.setStatus');
   assert.ok(pulseAt >= 0);
-  assert.ok(overlayAt > pulseAt);
+  assert.ok(deliveryAt > pulseAt);
+  assert.ok(overlayAt > deliveryAt);
 });

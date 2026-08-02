@@ -777,3 +777,61 @@ test('receiver reports the owning proof failure reason', async () => {
   assert.equal(await controller.deliver({ id: 'q2', kind: 'question', text: 'Question?' }), false);
   assert.equal(proofs.at(-1).reason, 'receiver_composer_missing');
 });
+
+
+test('receiver retries one swallowed submit after elapsed time even when hidden checks are sparse', async () => {
+  let now = 0;
+  let composer = '';
+  let submitCalls = 0;
+  let yields = 0;
+  const messages = [];
+  const question = 'Elapsed-time retry question?';
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter: {
+      setComposerText(text) { composer = text; return true; },
+      composerContains: text => composer === text,
+      canSubmit: () => true,
+      isGenerating: () => false,
+      submit() {
+        submitCalls += 1;
+        if (submitCalls === 2) messages.push({ id: 'u2', role: 'user', text: composer });
+        return true;
+      },
+      getConversationMessages: () => messages
+    },
+    text: question,
+    nowFn: () => now,
+    yieldFn: async () => { yields += 1; now += 13000; return 'heartbeat'; },
+    retryAfterMs: 12000,
+    maxConfirmWaitMs: 45000,
+    maxConfirmChecks: 640
+  });
+  assert.equal(result, true);
+  assert.equal(submitCalls, 2);
+  assert.equal(yields, 1);
+});
+
+test('receiver proof confirmation terminates by elapsed time when no rendered turn appears', async () => {
+  let now = 0;
+  let composer = '';
+  let yields = 0;
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter: {
+      setComposerText(text) { composer = text; return true; },
+      composerContains: text => composer === text,
+      canSubmit: () => true,
+      isGenerating: () => false,
+      submit: () => true,
+      getConversationMessages: () => []
+    },
+    text: 'Bounded confirmation question?',
+    nowFn: () => now,
+    yieldFn: async () => { yields += 1; now += 15000; return 'heartbeat'; },
+    maxSubmitAttempts: 1,
+    retryAfterMs: 12000,
+    maxConfirmWaitMs: 30000,
+    maxConfirmChecks: 640
+  });
+  assert.equal(result, false);
+  assert.equal(yields, 2);
+});

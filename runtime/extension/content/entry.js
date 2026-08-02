@@ -146,6 +146,7 @@ async function startRuntime(runtimeConfig) {
   let receiverBatchRuntime = null;
   let runtimeRecovery = null;
   const answerWake = createWakeSignal();
+  const deliveryWake = createWakeSignal();
   const senderSequenceKey = `pmia_sender_seq_${runtimeConfig.sessionId}`;
   const receiverSequenceKey = `pmia_receiver_seq_${runtimeConfig.sessionId}`;
   const receiverSequenceBufferKey = `pmia_receiver_sequence_buffer_${runtimeConfig.sessionId}`;
@@ -326,7 +327,10 @@ async function startRuntime(runtimeConfig) {
         overlay.setStatus(status.text, status.tone);
       }
       rolePort?.connect();
-      if (runtimeConfig.role === 'receiver') answerWake.pulse();
+      if (runtimeConfig.role === 'receiver') {
+        answerWake.pulse();
+        deliveryWake.pulse();
+      }
       void telemetry.publish(firstRegistration
         ? { force: true, event: { type: 'registration_transition' } }
         : { force: true });
@@ -566,6 +570,7 @@ async function startRuntime(runtimeConfig) {
   const receiver = createReceiverController({
     adapter,
     sleep,
+    yieldFn: () => deliveryWake.wait(500),
     onStatus(status) {
       const tone = /FAIL|NO /.test(status) ? 'error' : status === 'SUPERSEDE' ? 'warn' : 'ok';
       overlay.setStatus(status, tone, 1500);
@@ -652,6 +657,7 @@ async function startRuntime(runtimeConfig) {
       onChange: () => {
         refreshLifecycleTitle();
         answerWake.pulse();
+        deliveryWake.pulse();
         const observed = receiverAnswerOrchestrator?.observeGeneration();
         if (!observed?.truth?.generating) {
           void receiverBatchRuntime?.submitNext();
@@ -983,6 +989,7 @@ async function startRuntime(runtimeConfig) {
       return false;
     }
     if (incoming?.type === 'PMIA_RUNTIME_RESUME') {
+      if (runtimeConfig.role === 'receiver') deliveryWake.pulse();
       const scheduled = runtimeRecovery?.trigger('tab_restored') || false;
       sendResponse({ ok: true, scheduled });
       return false;
@@ -1000,7 +1007,10 @@ async function startRuntime(runtimeConfig) {
       incoming?.type === 'PMIA_LINK_STATUS' &&
       incoming.sessionId === runtimeConfig.sessionId
     ) {
-      if (runtimeConfig.role === 'receiver') answerWake.pulse();
+      if (runtimeConfig.role === 'receiver') {
+        answerWake.pulse();
+        deliveryWake.pulse();
+      }
       if (!paused) {
         const status = describeRuntimeStatus(incoming.status);
         overlay.setStatus(status.text, status.tone);
@@ -1022,6 +1032,7 @@ async function startRuntime(runtimeConfig) {
       paused = true;
       receiverAnswerOrchestrator?.cancel('role_revoked');
       answerWake.pulse();
+      deliveryWake.pulse();
       receiver.supersede({ id: `revoked-${Date.now()}` });
       telemetry.event('role_revoked');
       overlay.setStatus('ROLE REVOKED', 'error');
@@ -1070,6 +1081,7 @@ async function startRuntime(runtimeConfig) {
       receiverObserver?.refresh();
       senderController?.observe();
       answerWake.pulse();
+      deliveryWake.pulse();
       return registered;
     }
   });
@@ -1241,6 +1253,7 @@ async function startRuntime(runtimeConfig) {
     senderController?.disconnect();
     previewScheduler.disconnect();
     answerWake.disconnect();
+    deliveryWake.disconnect();
     telemetry.disconnect();
     unsubscribeProviderSignals?.();
     if (providerSignalBridge) providerSignalBridge.disconnect();

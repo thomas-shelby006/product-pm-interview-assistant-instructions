@@ -96,11 +96,16 @@ export async function submitComposerWhenReady({
   confirmationText = text,
   isCurrent = () => true,
   onSchedulerState = () => {},
-  getVisibilityState = () => String(globalThis.document?.visibilityState || 'unknown')
+  getVisibilityState = () => String(globalThis.document?.visibilityState || 'unknown'),
+  nowFn = Date.now,
+  retryAfterMs = 12000,
+  maxConfirmWaitMs = 45000
 }) {
   const normalized = String(text ?? '').trim();
   if (!normalized || !isCurrent()) return false;
   const attempts = Math.max(1, Number(maxSubmitAttempts) || 1);
+  const retryDelay = Math.max(0, Number(retryAfterMs) || 0);
+  const confirmLimit = Math.max(retryDelay, Number(maxConfirmWaitMs) || 0);
   let composerWritten = false;
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -128,6 +133,7 @@ export async function submitComposerWhenReady({
     if (!(baselineUserIds instanceof Set)) return true;
 
     let retryAllowed = false;
+    const confirmationStartedAt = Number(nowFn());
     for (let check = 0; check <= maxConfirmChecks; check += 1) {
       if (!isCurrent()) return false;
       if (hasNewSubmittedUserTurn(adapter, normalized, baselineUserIds, confirmationText)) {
@@ -135,15 +141,17 @@ export async function submitComposerWhenReady({
         onSchedulerState({ phase: 'idle', reason: 'rendered_turn_confirmed', wakeSource: '', attempt, check, visibilityState: getVisibilityState() });
         return true;
       }
+      const elapsedMs = Math.max(0, Number(nowFn()) - confirmationStartedAt);
       retryAllowed = attempt + 1 < attempts
-        && check >= 48
+        && (check >= 48 || elapsedMs >= retryDelay)
         && (adapter.composerContains?.(normalized) ?? false)
         && !(adapter.isGenerating?.() ?? false);
       if (retryAllowed) break;
+      if (elapsedMs >= confirmLimit) return false;
       if (check < maxConfirmChecks) {
-        onSchedulerState({ phase: 'proof_wait', reason: 'rendered_turn', wakeSource: '', attempt, check, visibilityState: getVisibilityState() });
+        onSchedulerState({ phase: 'proof_wait', reason: 'rendered_turn', wakeSource: '', attempt, check, elapsedMs, visibilityState: getVisibilityState() });
         const wakeSource = await yieldFn();
-        onSchedulerState({ phase: 'proof_wait', reason: 'rendered_turn', wakeSource: String(wakeSource || 'unknown'), attempt, check, visibilityState: getVisibilityState() });
+        onSchedulerState({ phase: 'proof_wait', reason: 'rendered_turn', wakeSource: String(wakeSource || 'unknown'), attempt, check, elapsedMs: Math.max(0, Number(nowFn()) - confirmationStartedAt), visibilityState: getVisibilityState() });
       }
     }
     if (!retryAllowed) return false;
