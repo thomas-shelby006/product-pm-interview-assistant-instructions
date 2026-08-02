@@ -275,6 +275,46 @@ async function handleRegistration(message, incomingTab, registry) {
   };
 }
 
+async function completePersistedDelivery(envelope) {
+  const registry = await loadRegistry();
+  const route = registry.route(envelope.sessionId, envelope);
+  let outcome;
+  try {
+    outcome = await deliver(route, registry);
+  } catch (error) {
+    outcome = {
+      delivered: false,
+      queued: true,
+      reason: 'delivery_exception',
+      error: String(error?.message || error),
+      attempts: 0,
+      deliveryProofMs: 0
+    };
+  }
+  await pilotController.afterForward(envelope, outcome);
+  await appendLog(envelope.sessionId, 'sender', {
+    type: 'forward',
+    envelopeId: envelope.id,
+    kind: envelope.kind,
+    sourceProvider: envelope.sourceProvider,
+    persisted: envelope.kind !== 'boot',
+    delivered: Boolean(outcome.delivered),
+    queued: Boolean(outcome.queued),
+    reason: outcome.reason || outcome.error || '',
+    attempts: outcome.attempts || 0,
+    deliveryProofMs: outcome.deliveryProofMs || 0
+  });
+  await broadcastLinkStatus(envelope.sessionId, registry);
+  return outcome;
+}
+
+function schedulePersistedDelivery(envelope) {
+  void serialize(
+    () => completePersistedDelivery(envelope),
+    envelope.sessionId
+  ).catch(() => {});
+}
+
 async function handleForward(message, tabId, registry) {
   if (!isEnvelope(message.envelope)) {
     return { ok: false, persisted: false, error: 'invalid_envelope' };
@@ -297,22 +337,19 @@ async function handleForward(message, tabId, registry) {
     return pilotDecision.response;
   }
 
-  const route = registry.route(message.envelope.sessionId, message.envelope);
-  const outcome = await deliver(route, registry);
-  await pilotController.afterForward(message.envelope, outcome);
-  await appendLog(message.envelope.sessionId, 'sender', {
-    type: 'forward',
-    envelopeId: message.envelope.id,
-    kind: message.envelope.kind,
-    sourceProvider: message.envelope.sourceProvider,
-    persisted: Boolean(pilotDecision.persisted),
-    delivered: outcome.delivered,
-    queued: outcome.queued,
-    reason: outcome.reason,
-    attempts: outcome.attempts,
-    deliveryProofMs: outcome.deliveryProofMs
-  });
-  await broadcastLinkStatus(message.envelope.sessionId, registry);
+  if (message.envelope.kind !== 'boot') {
+    schedulePersistedDelivery(message.envelope);
+    return {
+      ok: true,
+      persisted: true,
+      delivered: false,
+      queued: true,
+      staged: true,
+      reason: 'delivery_scheduled'
+    };
+  }
+
+  const outcome = await completePersistedDelivery(message.envelope);
   return { ok: true, persisted: true, ...outcome };
 }
 
