@@ -15,6 +15,7 @@ import { senderOutboxStorageKey } from './shared/session-end-guard.js';
 import { auditAndRehydrateAlarms, outboxAlarmName } from './shared/alarm-rehydration.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
+const deliveryAlarmName = sessionId => `pmia-delivery:${String(sessionId || '')}`;
 const MAX_LOG_EVENTS = 500;
 const STALE_AFTER_MS = 45_000;
 const registryStorage = chrome.storage.session;
@@ -294,6 +295,9 @@ async function completePersistedDelivery(envelope) {
     };
   }
   await pilotController.afterForward(envelope, outcome);
+  if (outcome?.delivered || outcome?.staged || outcome?.queued) {
+    await chrome.alarms.clear(deliveryAlarmName(envelope.sessionId)).catch(() => false);
+  }
   await appendLog(envelope.sessionId, 'sender', {
     type: 'forward',
     envelopeId: envelope.id,
@@ -310,7 +314,8 @@ async function completePersistedDelivery(envelope) {
   return outcome;
 }
 
-function schedulePersistedDelivery(envelope) {
+async function schedulePersistedDelivery(envelope) {
+  await chrome.alarms.create(deliveryAlarmName(envelope.sessionId), { when: Date.now() + 250 });
   void deliveryCoordinator.run(
     envelope.sessionId,
     () => completePersistedDelivery(envelope)
@@ -340,7 +345,7 @@ async function handleForward(message, tabId, registry) {
   }
 
   if (message.envelope.kind !== 'boot') {
-    schedulePersistedDelivery(message.envelope);
+    await schedulePersistedDelivery(message.envelope);
     return {
       ok: true,
       persisted: true,
@@ -398,6 +403,14 @@ async function broadcastLinkStatus(sessionId, registry) {
 
 
 chrome.alarms.onAlarm.addListener(alarm => {
+  const deliveryMatch = /^pmia-delivery:(.+)$/.exec(String(alarm?.name || ''));
+  if (deliveryMatch) {
+    const sessionId = deliveryMatch[1];
+    void pilotController.reconcileSession(sessionId)
+      .then(() => pilotController.auditConsistency?.(sessionId))
+      .catch(() => {});
+    return;
+  }
   const outboxMatch = /^pmia-outbox:(.+)$/.exec(String(alarm?.name || ''));
   if (outboxMatch) {
     const sessionId = outboxMatch[1];

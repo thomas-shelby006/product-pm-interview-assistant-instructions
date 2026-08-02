@@ -49,3 +49,23 @@ test('generic session operations do not own PMIA_FORWARD persistence', () => {
   const generic = sliceBetween("serialize(async () => {\n    const registry = await loadRegistry();", 'chrome.runtime.onConnect');
   assert.doesNotMatch(generic, /message\?\.type === 'PMIA_FORWARD'/);
 });
+
+
+test('durable acceptance creates a one-shot delivery wake before acknowledging', () => {
+  const block = sliceBetween('async function schedulePersistedDelivery', 'async function handleForward');
+  assert.match(block, /await chrome\.alarms\.create\(deliveryAlarmName\(envelope\.sessionId\)/);
+  assert.match(block, /when: Date\.now\(\) \+ 250/);
+  assert.match(block, /deliveryCoordinator\.run/);
+});
+
+test('delivery alarm reconciles unresolved ledger ownership after worker suspension', () => {
+  const block = sliceBetween('chrome.alarms.onAlarm.addListener', 'void rehydrateManagedAlarms');
+  assert.match(block, /\^pmia-delivery:/);
+  assert.match(block, /pilotController\.reconcileSession\(sessionId\)/);
+  assert.match(block, /pilotController\.auditConsistency/);
+});
+
+test('successful receiver ownership clears the one-shot delivery alarm', () => {
+  const block = sliceBetween('async function completePersistedDelivery', 'async function schedulePersistedDelivery');
+  assert.match(block, /chrome\.alarms\.clear\(deliveryAlarmName\(envelope\.sessionId\)\)/);
+});
