@@ -958,27 +958,29 @@ export class RuntimePilotState {
   restoreBatchState(sessionId, checkpoint = {}, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     const next = checkpoint && typeof checkpoint === 'object' ? checkpoint : {};
-    const incomingActive = next.active || null;
+    const owns = key => Object.prototype.hasOwnProperty.call(next, key);
     const currentActive = session.batchState.active;
-    const active = incomingActive && currentActive
+    const incomingActive = owns('active') ? (next.active || null) : currentActive;
+    const active = owns('active') && incomingActive && currentActive
       && String(incomingActive.batchId || incomingActive.id || '') === String(currentActive.batchId || currentActive.id || '')
       ? { ...currentActive, ...incomingActive, proof: currentActive.proof || incomingActive.proof || null }
       : incomingActive;
+    const preserveOrNull = key => owns(key) ? (next[key] || null) : session.batchState[key];
     const normalized = {
       active,
-      next: next.next || null,
-      hold: Boolean(next.hold),
-      autoSubmit: next.autoSubmit !== false,
-      transaction: next.transaction || null,
-      lastTransaction: next.lastTransaction || null,
-      budget: next.budget || null,
-      scheduling: next.scheduling || null,
-      receiverPolicy: next.receiverPolicy || null,
-      preview: next.preview || null,
-      answerAcknowledgement: next.answerAcknowledgement || null,
-      pendingNoResponse: next.pendingNoResponse || null,
-      interruptPlan: next.interruptPlan || null,
-      answerHandoff: next.answerHandoff || null
+      next: preserveOrNull('next'),
+      hold: owns('hold') ? Boolean(next.hold) : Boolean(session.batchState.hold),
+      autoSubmit: owns('autoSubmit') ? next.autoSubmit !== false : session.batchState.autoSubmit !== false,
+      transaction: preserveOrNull('transaction'),
+      lastTransaction: preserveOrNull('lastTransaction'),
+      budget: preserveOrNull('budget'),
+      scheduling: preserveOrNull('scheduling'),
+      receiverPolicy: preserveOrNull('receiverPolicy'),
+      preview: preserveOrNull('preview'),
+      answerAcknowledgement: preserveOrNull('answerAcknowledgement'),
+      pendingNoResponse: preserveOrNull('pendingNoResponse'),
+      interruptPlan: preserveOrNull('interruptPlan'),
+      answerHandoff: preserveOrNull('answerHandoff')
     };
     const previous = JSON.stringify({
       active: session.batchState.active,
@@ -1040,6 +1042,17 @@ export class RuntimePilotState {
         cancelled: type === 'batch_answer_cancelled'
       };
       session.answerState = event.answerState ? { ...event.answerState } : session.answerState;
+      if (type === 'batch_answer_no_response') {
+        session.batchState.pendingNoResponse = {
+          batchId: String(event.batchId || ''),
+          memberIds,
+          answerState: event.answerState || null,
+          at: now
+        };
+        session.batchState.answerHandoff = event.handoff ? { ...event.handoff } : session.batchState.answerHandoff;
+      } else {
+        session.batchState.pendingNoResponse = null;
+      }
       session.batchState.active = null;
     } else if (type === 'batch_submit_failed') {
       session.batchState.active = null;
@@ -1068,9 +1081,6 @@ export class RuntimePilotState {
       session.batchState.receiverPolicy = event.policy ? { ...event.policy } : session.batchState.receiverPolicy;
     } else if (type === 'answer_acknowledged') {
       session.batchState.answerAcknowledgement = { ...safeEventData(event) };
-    } else if (type === 'batch_answer_no_response') {
-      session.batchState.pendingNoResponse = { batchId: String(event.batchId || ''), memberIds, answerState: event.answerState || null, at: now };
-      session.batchState.answerHandoff = event.handoff ? { ...event.handoff } : session.batchState.answerHandoff;
     } else if (type === 'no_response_resolved') {
       session.batchState.pendingNoResponse = String(event.action || '') === 'wait' ? session.batchState.pendingNoResponse : null;
     } else if (type === 'interrupt_preview_created') {

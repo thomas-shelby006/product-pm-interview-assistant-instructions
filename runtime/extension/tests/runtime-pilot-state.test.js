@@ -140,6 +140,25 @@ test('safe heartbeat checkpoint preserves richer active batch proof metadata', (
 });
 
 
+test('reduced receiver checkpoint preserves pending no-response until an explicit clear', () => {
+  const state = new RuntimePilotState();
+  state.updateBatchState('pmia_session', {
+    type: 'batch_answer_no_response',
+    batchId: 'batch-1',
+    memberIds: ['q1'],
+    answerState: { state: 'no_response', reason: 'answer_never_started' }
+  }, 1000);
+  state.restoreBatchState('pmia_session', {
+    active: null,
+    next: { memberIds: ['q2'], questionCount: 1 },
+    hold: false,
+    autoSubmit: true
+  }, 1100);
+  assert.equal(state.snapshot('pmia_session', 1200).batchState.pendingNoResponse.batchId, 'batch-1');
+  state.restoreBatchState('pmia_session', { pendingNoResponse: null }, 1300);
+  assert.equal(state.snapshot('pmia_session', 1400).batchState.pendingNoResponse, null);
+});
+
 test('context armed is durable session state rather than timeline-only evidence', () => {
   const state = new RuntimePilotState();
   state.setContextArmed('s1', true, 100);
