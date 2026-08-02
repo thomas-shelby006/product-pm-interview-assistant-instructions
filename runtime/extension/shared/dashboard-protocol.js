@@ -147,6 +147,10 @@ export function normalizeDashboardCommand(value) {
     for (const key of Object.keys(payload)) delete payload[key];
     Object.assign(payload, { enabled, durationMs, reason, preview });
   }
+  if (command === 'record_session_navigator_visit') {
+    const visit = payload.visit && typeof payload.visit === 'object' ? payload.visit : {};
+    payload.visit = { id: cleanText(visit.id, 160), tab: cleanText(visit.tab, 40) || 'now', entityType: cleanText(visit.entityType, 40), entityId: cleanText(visit.entityId, 160), reason: cleanText(visit.reason, 80) || 'operator_navigation' };
+  }
   if (command === 'record_production_navigation') {
     const route = payload.route && typeof payload.route === 'object' ? payload.route : {};
     payload.route = { view: cleanText(route.view, 40) || 'overview', anchor: cleanText(route.anchor, 100), reason: cleanText(route.reason, 120) || 'operator_navigation' };

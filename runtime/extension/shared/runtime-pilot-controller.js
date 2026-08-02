@@ -1776,6 +1776,9 @@ export function createRuntimePilotController({
       case 'probe_transport':
         result = await activeSelfTest(sessionId, registry, pilot);
         break;
+      case 'record_session_navigator_visit':
+        result = { ok: true, navigator: pilot.recordSessionNavigatorVisit(sessionId, payload.visit || {}, Date.now()) };
+        break;
       case 'record_production_navigation':
         result = { ok: true, controls: pilot.setProductionNavigation(sessionId, payload.route || {}, Date.now()) };
         break;

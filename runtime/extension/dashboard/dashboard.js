@@ -59,6 +59,9 @@ import { deriveOperatingProfile } from '../shared/operating-profile.js';
 import { buildPolicyImpactPreview, policySnapshotFingerprint, validatePolicyImpactConfirmation } from '../shared/policy-impact-preview.js';
 import { renderLiveAssist } from './render-live-assist.js';
 import { createOperationsLabLocalState, moveOperationsLabTab, reconcileOperationsLabLocalState, selectOperationsLabScenario, selectOperationsLabView } from './operations-lab-controller.js';
+import { deriveSessionNavigatorNow } from './session-navigator-now-model.js';
+import { createSessionNavigatorLocalState, openSessionNavigator, selectSessionNavigatorTab, navigatorQuickOpenFromKeyboard, navigatorTabFromKey } from './session-navigator-controller.js';
+import { renderSessionNavigator } from './render-session-navigator.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -92,7 +95,8 @@ const state = {
   assistTriageView: 'urgent',
   assistCommandQuery: '',
   assistWizardStage: 'start',
-  operationsLab: createOperationsLabLocalState({ sessionId, view:'flow', scenario:'current' })
+  operationsLab: createOperationsLabLocalState({ sessionId, view:'flow', scenario:'current' }),
+  sessionNavigator: createSessionNavigatorLocalState()
 };
 
 const byId = id => document.getElementById(id);
@@ -1510,6 +1514,7 @@ function render(changedKeys = null) {
   renderPreflightAndCrash(state.snapshot, now);
   renderProduction(state.snapshot);
   renderLiveAssist({ document, snapshot: state.snapshot, state, now, workspace: state.activeView === 'assist' });
+  renderSessionNavigator({ document, model: deriveSessionNavigatorNow(state.snapshot || {}, state.sessionNavigator, now), localState: state.sessionNavigator });
   renderCommandPalette();
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
@@ -1563,6 +1568,20 @@ async function runCommand(button, command, payload = {}) {
 }
 
 document.addEventListener('click', event => {
+  const navigatorTab = event.target.closest('[data-navigator-tab]');
+  if (navigatorTab) { state.sessionNavigator = selectSessionNavigatorTab(state.sessionNavigator, navigatorTab.dataset.navigatorTab); scheduleRender(); return; }
+  const navigatorTarget = event.target.closest('[data-navigator-tab-target]');
+  if (navigatorTarget) { state.sessionNavigator = selectSessionNavigatorTab(openSessionNavigator(state.sessionNavigator), navigatorTarget.dataset.navigatorTabTarget); scheduleRender(); return; }
+  const viewTarget = event.target.closest('[data-view-target]');
+  if (viewTarget) { activateDashboardView(viewTarget.dataset.viewTarget || 'overview'); return; }
+  const navigatorAction = event.target.closest('#sessionNavigatorPrimaryAction');
+  if (navigatorAction) {
+    const command = navigatorAction.dataset.command || '';
+    const view = navigatorAction.dataset.view || '';
+    if (command) void runCommand(navigatorAction, command);
+    else if (view) activateDashboardView(view, navigatorAction.dataset.anchor || '', navigatorAction.dataset.actionId || 'navigator_action');
+    return;
+  }
   const phaseButton = event.target.closest('[data-session-phase]');
   if (phaseButton) {
     void runCommand(phaseButton, 'set_session_phase', { phase: phaseButton.dataset.sessionPhase, reason: 'phase_navigator' });
@@ -2016,6 +2035,9 @@ function runKeyboardCommand(command) {
 }
 
 document.addEventListener('keydown', event => {
+  const nextNavigator = navigatorQuickOpenFromKeyboard(event, state.sessionNavigator);
+  if (nextNavigator.open && !state.sessionNavigator.open) { event.preventDefault(); state.sessionNavigator = nextNavigator; activateDashboardView('navigator'); void sendCommand('record_session_navigator_visit', { visit:{ tab:'now', reason:'keyboard_quick_open' } }); return; }
+  if (event.target.closest?.('.session-navigator-tabs') && ['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); state.sessionNavigator = navigatorTabFromKey(event, state.sessionNavigator); scheduleRender(); document.querySelector(`[data-navigator-tab="${CSS.escape(state.sessionNavigator.activeTab)}"]`)?.focus(); return; }
   const paletteOpen = state.commandPalette.open;
   if (paletteOpen) {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {

@@ -12,7 +12,8 @@ const COMMAND_IDS = Object.freeze([
   'run_stabilization_step','cancel_stabilization','reset_recovery_budget','run_transport_drill','resend_context',
   'toggle_mic','toggle_scroll','focus_composer','export_session','export_support_bundle','prepare_end_session',
   'end_session','focus_sender','focus_receiver','focus_pilot','focus_back','spotlight_sender','spotlight_receiver',
-  'spotlight_pilot','layout_both','layout_sender','layout_receiver','layout_dashboard','hide_managed','restore_managed'
+  'spotlight_pilot','layout_both','layout_sender','layout_receiver','layout_dashboard','hide_managed','restore_managed',
+  'record_session_navigator_visit'
 ]);
 
 const GROUPS = Object.freeze({

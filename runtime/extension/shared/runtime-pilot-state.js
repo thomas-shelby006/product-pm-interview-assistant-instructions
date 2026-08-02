@@ -12,6 +12,7 @@ import { addOperatorMarker, removeOperatorMarker } from './operator-markers.js';
 import { normalizeSessionCheckpoint } from './session-checkpoint.js';
 import { normalizeLayoutHistory, popLayoutHistory, pushLayoutHistory } from './layout-history.js';
 import { defaultShortcutBindings, normalizeShortcutBindings, setShortcutBinding } from './shortcut-bindings.js';
+import { normalizeSessionNavigator, touchSessionNavigator, recordNavigatorHistory, upsertNavigatorBookmark, removeNavigatorBookmark, upsertNavigatorGoal, tagNavigatorCoverage, upsertNavigatorWorkspace, markNavigatorScenarioComplete, recordNavigatorDebriefExport } from './session-navigator-state.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -252,7 +253,8 @@ function normalizeSession(item) {
       shortcutBindings: normalizeShortcutBindings(item.uiPreferences?.shortcutBindings || {}),
       accessibility: normalizeAccessibilityPreferences(item.uiPreferences?.accessibility || {})
     },
-    productionControls: normalizeProductionControls(item.productionControls || {})
+    productionControls: normalizeProductionControls(item.productionControls || {}),
+    sessionNavigator: normalizeSessionNavigator(item.sessionNavigator || {})
   };
 }
 
@@ -321,6 +323,28 @@ export class RuntimePilotState {
     return JSON.parse(JSON.stringify(session.liveSession));
   }
 
+
+  setSessionNavigator(sessionId, value = {}, now = Date.now(), { record = true } = {}) {
+    const session = this.ensure(sessionId, now);
+    session.sessionNavigator = normalizeSessionNavigator({ ...session.sessionNavigator, ...(value && typeof value === 'object' ? value : {}) });
+    session.updatedAt = now;
+    if (record) this.record(sessionId, 'session_navigator_updated', { defaultTab: session.sessionNavigator.defaultTab }, now);
+    return JSON.parse(JSON.stringify(session.sessionNavigator));
+  }
+
+  touchSessionNavigator(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.sessionNavigator = touchSessionNavigator(session.sessionNavigator, now);
+    session.updatedAt = now;
+    return JSON.parse(JSON.stringify(session.sessionNavigator));
+  }
+
+  recordSessionNavigatorVisit(sessionId, entry = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.sessionNavigator = recordNavigatorHistory(session.sessionNavigator, entry, now);
+    session.updatedAt = now;
+    return JSON.parse(JSON.stringify(session.sessionNavigator));
+  }
 
   setOperatingProfile(sessionId, profile, now = Date.now(), source = 'operator') {
     const session = this.ensure(sessionId, now);
@@ -1335,7 +1359,8 @@ export class RuntimePilotState {
       stabilizationRunbook: session.stabilizationRunbook ? JSON.parse(JSON.stringify(session.stabilizationRunbook)) : null,
       crashResumeDismissedAt: Math.max(0, Number(session.crashResumeDismissedAt || 0)),
       uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() })),
-      productionControls: JSON.parse(JSON.stringify(session.productionControls || normalizeProductionControls()))
+      productionControls: JSON.parse(JSON.stringify(session.productionControls || normalizeProductionControls())),
+      sessionNavigator: JSON.parse(JSON.stringify(session.sessionNavigator || normalizeSessionNavigator()))
     };
   }
 
@@ -1385,7 +1410,8 @@ export class RuntimePilotState {
       stabilizationRunbook: session.stabilizationRunbook ? JSON.parse(JSON.stringify(session.stabilizationRunbook)) : null,
       crashResumeDismissedAt: Math.max(0, Number(session.crashResumeDismissedAt || 0)),
       uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() })),
-      productionControls: JSON.parse(JSON.stringify(session.productionControls || normalizeProductionControls()))
+      productionControls: JSON.parse(JSON.stringify(session.productionControls || normalizeProductionControls())),
+      sessionNavigator: JSON.parse(JSON.stringify(session.sessionNavigator || normalizeSessionNavigator()))
     }));
   }
 }
