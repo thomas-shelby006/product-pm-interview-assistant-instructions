@@ -117,6 +117,7 @@ const evidence = {
   extensions: [],
   session: { id: session, senderTarget: '', receiverTarget: '', dashboardTarget: '' },
   selfTest: { ok: false },
+  sourceSubmission: { attempts: 0, rendered: false },
   finals: [],
   batches: {},
   ledger: [],
@@ -198,16 +199,46 @@ try {
   }, 20000, 250);
   evidence.selfTest = selfTest.value;
 
-  const focused = await sender.evaluate(`(()=>{const editor=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);if(!editor)return false;editor.focus();return true})()`, { userGesture: true });
-  if (!focused) throw new Error('Synthetic Q1 composer was unavailable');
-  await sender.send('Input.insertText', { text: questions.q1 });
-  await waitFor('Q1 send control ready', async () => {
-    const raw = await sender.evaluate(`(()=>{const composer=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);const button=[...document.querySelectorAll(${JSON.stringify(chatGptSendSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);return JSON.stringify({composer:composer?String('value' in composer?composer.value:composer.innerText||'').trim():'',sendReady:Boolean(button&&!button.disabled)})})()`);
-    const value = JSON.parse(raw);
-    return { ok: value.composer === questions.q1 && value.sendReady, value };
-  }, 20000, 200);
-  const submitted = await sender.evaluate(`(()=>{const button=[...document.querySelectorAll(${JSON.stringify(chatGptSendSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);if(!button||button.disabled)return false;button.click();return true})()`, { userGesture: true });
-  if (!submitted) throw new Error('Synthetic Q1 send control disappeared before click');
+  async function submitSyntheticQ1Attempt(attempt) {
+    const before = await pageState(sender);
+    if (before.users.includes(questions.q1)) return { ok: true, attempt, alreadyRendered: true };
+    const composer = await sender.evaluate(`(()=>{const editor=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);if(!editor)return JSON.stringify({ok:false});editor.focus();const value=String('value' in editor?editor.value:editor.innerText||'').trim();return JSON.stringify({ok:true,value})})()`, { userGesture: true });
+    const composerState = JSON.parse(composer);
+    if (!composerState.ok) return { ok: false, attempt, error: 'composer_unavailable' };
+    if (composerState.value !== questions.q1) {
+      if (composerState.value) {
+        await sender.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', modifiers: 2 });
+        await sender.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', modifiers: 2 });
+        await sender.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Backspace', code: 'Backspace' });
+        await sender.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace' });
+      }
+      await sender.send('Input.insertText', { text: questions.q1 });
+    }
+    await waitFor(`Q1 send control ready (attempt ${attempt})`, async () => {
+      const raw = await sender.evaluate(`(()=>{const composer=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);const button=[...document.querySelectorAll(${JSON.stringify(chatGptSendSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);return JSON.stringify({composer:composer?String('value' in composer?composer.value:composer.innerText||'').trim():'',sendReady:Boolean(button&&!button.disabled)})})()`);
+      const value = JSON.parse(raw);
+      return { ok: value.composer === questions.q1 && value.sendReady, value };
+    }, 20000, 200);
+    const submitted = await sender.evaluate(`(()=>{const button=[...document.querySelectorAll(${JSON.stringify(chatGptSendSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);if(!button||button.disabled)return false;button.click();return true})()`, { userGesture: true });
+    if (!submitted) return { ok: false, attempt, error: 'send_control_disappeared' };
+    try {
+      const rendered = await waitFor(`Q1 rendered in sender (attempt ${attempt})`, async () => {
+        const value = await pageState(sender);
+        return { ok: value.users.includes(questions.q1), value };
+      }, 12000, 250);
+      return { ok: true, attempt, rendered: rendered.value };
+    } catch (error) {
+      return { ok: false, attempt, error: error.message, last: error.last || null };
+    }
+  }
+
+  let sourceSubmission = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    sourceSubmission = await submitSyntheticQ1Attempt(attempt);
+    evidence.sourceSubmission = { attempts: attempt, rendered: sourceSubmission.ok, error: sourceSubmission.error || '' };
+    if (sourceSubmission.ok) break;
+  }
+  if (!sourceSubmission?.ok) throw new Error(`Synthetic Q1 did not render in sender after ${evidence.sourceSubmission.attempts} attempt(s)`);
 
   await waitFor('Q1 rendered in receiver', async () => {
     const state = await pageState(receiver);

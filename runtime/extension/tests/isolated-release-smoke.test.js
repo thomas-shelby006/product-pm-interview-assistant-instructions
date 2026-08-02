@@ -79,7 +79,7 @@ test('smoke waits for exact ready titles without inventing a lifecycle token', (
 });
 
 test('smoke waits for the provider send control instead of sleeping', () => {
-  assert.match(runner, /waitFor\('Q1 send control ready'/);
+  assert.match(runner, /waitFor\(`Q1 send control ready \(attempt \$\{attempt\}\)`/);
   assert.match(runner, /value\.composer === questions\.q1 && value\.sendReady/);
   assert.doesNotMatch(runner, /Input\.insertText'[\s\S]{0,200}sleep\(/);
 });
@@ -137,4 +137,13 @@ test('isolated smoke opens Queue and waits for the visible enabled no-response C
   assert.match(runner, /no-response Continue control ready/);
   assert.equal(runner.includes(`data-view=\"queue\"`), true);
   assert.match(runner, /value\.exists && !value\.hidden && !value\.disabled && value\.visible && value\.queueActive/);
+});
+
+
+test('isolated smoke proves Q1 in Window 1 and allows one bounded swallowed-submit retry', () => {
+  assert.match(runner, /submitSyntheticQ1Attempt/);
+  assert.match(runner, /Q1 rendered in sender/);
+  assert.match(runner, /attempt <= 2/);
+  assert.match(runner, /sourceSubmission = \{ attempts: attempt, rendered: sourceSubmission\.ok/);
+  assert.match(runner, /Synthetic Q1 did not render in sender/);
 });
