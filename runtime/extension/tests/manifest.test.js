@@ -150,3 +150,10 @@ test('manifest grants alarms for durable recovery scheduling', async () => {
   const manifest = await readManifest();
   assert.ok(manifest.permissions.includes('alarms'));
 });
+
+
+test('manifest packages the hidden-tab persistence lane helper', async () => {
+  const manifest = await readManifest();
+  const resources = manifest.web_accessible_resources.flatMap(item => item.resources || []);
+  assert.ok(resources.includes('content/persistence-lane-race.js'));
+});
