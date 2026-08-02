@@ -208,3 +208,9 @@ test('isolated smoke keeps explicit no-response Continue available through the f
   assert.match(runner, /evidence\.noResponseResolution\.completedAt \? await pilotState\(\) : pilot/);
   assert.match(runner, /three exact rendered proofs[\s\S]*150000/);
 });
+
+
+test('isolated smoke reads long-lived Pilot state through the persistent dashboard target', () => {
+  assert.match(runner, /const storageClient = dashboard \|\| worker/);
+  assert.match(runner, /await storageClient\.evaluate/);
+});
