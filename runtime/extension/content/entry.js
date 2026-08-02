@@ -37,6 +37,7 @@ import { createRuntimeTelemetry } from './runtime-telemetry.js';
 import { getOrCreateRuntimeInstanceId, shouldApplyRoleRevocation } from './role-revocation.js';
 import { sendWithRegistrationRecovery } from './registration-recovery.js';
 import { createSenderOutbox } from './sender-outbox.js';
+import { racePersistenceLanes } from './persistence-lane-race.js';
 import { createSessionStorageAdapter } from './session-storage-adapter.js';
 import { createReceiverBatchRuntime } from './receiver-batch-runtime.js';
 import { createRuntimeRolePort } from './runtime-role-port.js';
@@ -248,14 +249,12 @@ async function startRuntime(runtimeConfig) {
       }
       return forwarding.response || { ok: false, persisted: false, error: 'no_response' };
     };
-    let response;
-    try {
-      response = rolePort?.connected
-        ? await rolePort.request('final', { envelope }, { timeoutMs: 500, fallback })
-        : await fallback();
-    } catch {
-      response = await fallback();
-    }
+    const response = await racePersistenceLanes({
+      direct: rolePort?.connected
+        ? () => rolePort.request('final', { envelope }, { timeoutMs: 500 })
+        : null,
+      fallback
+    });
     if (response?.persisted && senderOutbox) await senderOutbox.ackPersisted(envelope.id);
     return response;
   }
