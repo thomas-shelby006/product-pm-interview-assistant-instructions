@@ -197,3 +197,11 @@ test('isolated smoke retries lifecycle registration with one bounded provider re
   assert.match(runner, /providerReloads = 2/);
   assert.match(runner, /lifecycleRecovery\.recovered/);
 });
+
+
+test('isolated smoke keeps explicit no-response Continue available through the full proof wait', () => {
+  assert.match(runner, /async function resolvePendingNoResponse\(current\)/);
+  assert.match(runner, /await resolvePendingNoResponse\(pilot\)/);
+  assert.match(runner, /evidence\.noResponseResolution\.completedAt \? await pilotState\(\) : pilot/);
+  assert.match(runner, /three exact rendered proofs[\s\S]*150000/);
+});

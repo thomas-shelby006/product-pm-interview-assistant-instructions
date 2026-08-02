@@ -305,32 +305,29 @@ try {
   await manualCopy(questions.q3);
 
   evidence.noResponseResolution = { required: false, action: '', completedAt: 0 };
-  const resolutionDeadline = Date.now() + 30000;
-  while (Date.now() < resolutionDeadline) {
-    const current = await pilotState();
-    const selected = (current?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));
-    if (selected.length === 3 && selected.every(item => item.state === 'proven')) break;
-    if (current?.batchState?.pendingNoResponse) {
-      await dashboard.evaluate(`document.querySelector('[data-view="assist"]')?.click(); true`, { userGesture: true });
-      const control = await waitFor('explicit no-response Continue choice ready', async () => {
-        const raw = await dashboard.evaluate(`(()=>{const button=document.querySelector('[data-choice-option="continue"]');const panel=document.getElementById('panelAssist');const visible=Boolean(button&&(button.offsetWidth||button.offsetHeight||button.getClientRects().length));return JSON.stringify({exists:Boolean(button),hidden:Boolean(button?.hidden),disabled:Boolean(button?.disabled),visible,assistActive:Boolean(panel?.classList.contains('active')),choiceId:String(button?.dataset?.choiceId||''),fingerprint:String(button?.dataset?.fingerprint||'')})})()`);
-        const value = JSON.parse(raw);
-        return { ok: value.exists && !value.hidden && !value.disabled && value.visible && value.assistActive && value.choiceId && value.fingerprint, value };
-      }, 10000, 100);
-      const continued = await dashboard.evaluate(`(()=>{const button=document.querySelector('[data-choice-option="continue"]');if(!button||button.hidden||button.disabled)return false;button.click();return true})()`, { userGesture: true });
-      if (!continued) throw new Error('Explicit no-response Continue choice was ready but could not be clicked');
-      evidence.noResponseResolution = { required: true, action: 'continue', completedAt: Date.now(), control: control.value };
-      break;
-    }
-    await sleep(250);
+
+  async function resolvePendingNoResponse(current) {
+    if (!current?.batchState?.pendingNoResponse || evidence.noResponseResolution.completedAt) return false;
+    await dashboard.evaluate(`document.querySelector('[data-view="assist"]')?.click(); true`, { userGesture: true });
+    const control = await waitFor('explicit no-response Continue choice ready', async () => {
+      const raw = await dashboard.evaluate(`(()=>{const button=document.querySelector('[data-choice-option="continue"]');const panel=document.getElementById('panelAssist');const visible=Boolean(button&&(button.offsetWidth||button.offsetHeight||button.getClientRects().length));return JSON.stringify({exists:Boolean(button),hidden:Boolean(button?.hidden),disabled:Boolean(button?.disabled),visible,assistActive:Boolean(panel?.classList.contains('active')),choiceId:String(button?.dataset?.choiceId||''),fingerprint:String(button?.dataset?.fingerprint||'')})})()`);
+      const value = JSON.parse(raw);
+      return { ok: value.exists && !value.hidden && !value.disabled && value.visible && value.assistActive && value.choiceId && value.fingerprint, value };
+    }, 10000, 100);
+    const continued = await dashboard.evaluate(`(()=>{const button=document.querySelector('[data-choice-option="continue"]');if(!button||button.hidden||button.disabled)return false;button.click();return true})()`, { userGesture: true });
+    if (!continued) throw new Error('Explicit no-response Continue choice was ready but could not be clicked');
+    evidence.noResponseResolution = { required: true, action: 'continue', completedAt: Date.now(), control: control.value };
+    return true;
   }
 
   const proof = await waitFor('three exact rendered proofs', async () => {
     const pilot = await pilotState();
-    const selected = (pilot?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));
+    await resolvePendingNoResponse(pilot);
+    const refreshed = evidence.noResponseResolution.completedAt ? await pilotState() : pilot;
+    const selected = (refreshed?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));
     const deliveryProofOk = selected.length === 3 && selected.every(item => item.state === 'proven');
-    return { ok: deliveryProofOk, value: { pilot, selected, deliveryProofOk } };
-  }, 120000, 500);
+    return { ok: deliveryProofOk, value: { pilot: refreshed, selected, deliveryProofOk } };
+  }, 150000, 500);
 
   const pilot = proof.value.pilot;
   const receiverState = await pageState(receiver);
