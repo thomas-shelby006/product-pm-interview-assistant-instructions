@@ -155,6 +155,7 @@ const evidence = {
   operationsUi: {},
   operationsUiOk: false,
   failureDetails: null,
+  cdpReadRecoveries: [],
   cleanup: { processTreeClosed: false, profileRemoved: false },
   limitations: [],
   deliveryProofOk: false,
@@ -165,16 +166,51 @@ let worker = null;
 let sender = null;
 let receiver = null;
 let dashboard = null;
+let senderTarget = '';
+let receiverTarget = '';
+let dashboardTarget = '';
 let failure = null;
 
+function clientForRole(role) {
+  if (role === 'sender') return sender;
+  if (role === 'receiver') return receiver;
+  if (role === 'dashboard') return dashboard || worker;
+  return worker;
+}
+function targetForRole(role) {
+  if (role === 'sender') return senderTarget;
+  if (role === 'receiver') return receiverTarget;
+  if (role === 'dashboard') return dashboardTarget;
+  return '';
+}
+function setClientForRole(role, client) {
+  if (role === 'sender') sender = client;
+  else if (role === 'receiver') receiver = client;
+  else if (role === 'dashboard') dashboard = client;
+}
+async function evaluateRead(role, expression, label = role) {
+  const first = clientForRole(role);
+  if (!first) throw new Error(`CDP read client missing: ${role}`);
+  try {
+    return await first.evaluate(expression);
+  } catch (error) {
+    const detail = String(error?.message || error);
+    const targetId = targetForRole(role);
+    if (!targetId || !/Runtime\.evaluate timed out|WebSocket|socket|closed/i.test(detail)) throw error;
+    evidence.cdpReadRecoveries.push({ role, label, reason: detail, at: Date.now() });
+    try { first.close(); } catch {}
+    const replacement = await targetClient(targetId);
+    setClientForRole(role, replacement);
+    return replacement.evaluate(expression);
+  }
+}
 async function pilotState() {
-  const storageClient = dashboard || worker;
-  if (!storageClient) return null;
-  const raw = await storageClient.evaluate(`(async()=>{const value=await chrome.storage.session.get('pmia_runtime_pilot_v1');const stored=value.pmia_runtime_pilot_v1;const sessions=Array.isArray(stored)?stored:(Array.isArray(stored?.sessions)?stored.sessions:[]);return JSON.stringify(sessions.find(item=>item.sessionId===${JSON.stringify(session)})||null)})()`);
+  const role = dashboard ? 'dashboard' : 'worker';
+  const raw = await evaluateRead(role, `(async()=>{const value=await chrome.storage.session.get('pmia_runtime_pilot_v1');const stored=value.pmia_runtime_pilot_v1;const sessions=Array.isArray(stored)?stored:(Array.isArray(stored?.sessions)?stored.sessions:[]);return JSON.stringify(sessions.find(item=>item.sessionId===${JSON.stringify(session)})||null)})()`, 'pilot_state');
   return JSON.parse(raw);
 }
-async function pageState(client) {
-  const raw = await client.evaluate(`(()=>{const composer=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);return JSON.stringify({title:document.title,url:location.href,composer:composer?String('value' in composer?composer.value:composer.innerText||'').trim():'',users:[...document.querySelectorAll('[data-message-author-role="user"]')].map(node=>node.innerText.trim()),assistants:[...document.querySelectorAll('[data-message-author-role="assistant"]')].map(node=>node.innerText.trim()),stopAvailable:[...document.querySelectorAll('button')].some(button=>/stop generating|stop response|stop streaming/i.test([button.getAttribute('aria-label'),button.getAttribute('data-testid'),button.innerText].join(' ')))})})()`);
+async function pageState(role) {
+  const raw = await evaluateRead(role, `(()=>{const composer=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);return JSON.stringify({title:document.title,url:location.href,composer:composer?String('value' in composer?composer.value:composer.innerText||'').trim():'',users:[...document.querySelectorAll('[data-message-author-role="user"]')].map(node=>node.innerText.trim()),assistants:[...document.querySelectorAll('[data-message-author-role="assistant"]')].map(node=>node.innerText.trim()),stopAvailable:[...document.querySelectorAll('button')].some(button=>/stop generating|stop response|stop streaming/i.test([button.getAttribute('aria-label'),button.getAttribute('data-testid'),button.innerText].join(' ')))})})()`, `${role}_page_state`);
   return JSON.parse(raw);
 }
 async function manualCopy(text) {
@@ -196,9 +232,9 @@ try {
   const senderUrl = `https://chatgpt.com/?pmia_session=${encodeURIComponent(session)}&pmia_role=sender&pmia_provider=chatgpt`;
   const receiverUrl = `https://chatgpt.com/?pmia_session=${encodeURIComponent(session)}&pmia_role=receiver&pmia_provider=chatgpt`;
   const dashboardUrl = `chrome-extension://${candidate.extensionId}/dashboard/index.html?session=${encodeURIComponent(session)}`;
-  let senderTarget = (await browser.send('Target.createTarget', { url: senderUrl, newWindow: true, background: true })).targetId;
-  let receiverTarget = (await browser.send('Target.createTarget', { url: receiverUrl, newWindow: true, background: true })).targetId;
-  const dashboardTarget = (await browser.send('Target.createTarget', { url: dashboardUrl, newWindow: true, background: true })).targetId;
+  senderTarget = (await browser.send('Target.createTarget', { url: senderUrl, newWindow: true, background: true })).targetId;
+  receiverTarget = (await browser.send('Target.createTarget', { url: receiverUrl, newWindow: true, background: true })).targetId;
+  dashboardTarget = (await browser.send('Target.createTarget', { url: dashboardUrl, newWindow: true, background: true })).targetId;
   createdTargets.push(senderTarget, receiverTarget, dashboardTarget);
   evidence.session = { id: session, senderTarget, receiverTarget, dashboardTarget };
 
@@ -265,7 +301,7 @@ try {
   evidence.selfTest = selfTest.value;
 
   async function submitSyntheticQ1Attempt(attempt) {
-    const before = await pageState(sender);
+    const before = await pageState('sender');
     if (before.users.includes(questions.q1)) return { ok: true, attempt, alreadyRendered: true };
     const composer = await sender.evaluate(`(()=>{const editor=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);if(!editor)return JSON.stringify({ok:false});editor.focus();const value=String('value' in editor?editor.value:editor.innerText||'').trim();return JSON.stringify({ok:true,value})})()`, { userGesture: true });
     const composerState = JSON.parse(composer);
@@ -288,7 +324,7 @@ try {
     if (!submitted) return { ok: false, attempt, error: 'send_control_disappeared' };
     try {
       const rendered = await waitFor(`Q1 rendered in sender (attempt ${attempt})`, async () => {
-        const value = await pageState(sender);
+        const value = await pageState('sender');
         return { ok: value.users.includes(questions.q1), value };
       }, 12000, 250);
       return { ok: true, attempt, rendered: rendered.value };
@@ -305,7 +341,7 @@ try {
     if (attempt === 1) {
       try {
         const late = await waitFor('Q1 late render before retry', async () => {
-          const value = await pageState(sender);
+          const value = await pageState('sender');
           return { ok: value.users.includes(questions.q1), value };
         }, 20000, 250);
         sourceSubmission = { ok: true, attempt, rendered: late.value, lateGrace: true };
@@ -317,7 +353,7 @@ try {
   if (!sourceSubmission?.ok) throw new Error(`Synthetic Q1 did not render in sender after ${evidence.sourceSubmission.attempts} attempt(s)`);
 
   await waitFor('Q1 rendered in receiver', async () => {
-    const state = await pageState(receiver);
+    const state = await pageState('receiver');
     return { ok: state.users.includes(questions.q1), value: state };
   }, 90000, 500);
 
@@ -351,7 +387,7 @@ try {
   }, 150000, 500);
 
   const pilot = proof.value.pilot;
-  const receiverState = await pageState(receiver);
+  const receiverState = await pageState('receiver');
   evidence.finals = Object.entries(questions).map(([key, text]) => ({ key, text, proven: proof.value.selected.some(item => item.envelope?.text === text && item.state === 'proven') }));
   evidence.batches = { active: pilot?.batchState?.active || null, next: pilot?.batchState?.next || null, lastCompleted: pilot?.batchState?.lastCompleted || null, receiverUsers: receiverState.users };
   evidence.ledger = proof.value.selected.map(item => ({ id: item.id, seq: item.envelope?.seq || 0, state: item.state, batchId: item.batchId || '', text: item.envelope?.text || '' }));

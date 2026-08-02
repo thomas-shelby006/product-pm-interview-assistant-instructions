@@ -211,6 +211,25 @@ test('isolated smoke keeps explicit no-response Continue available through the f
 
 
 test('isolated smoke reads long-lived Pilot state through the persistent dashboard target', () => {
-  assert.match(runner, /const storageClient = dashboard \|\| worker/);
-  assert.match(runner, /await storageClient\.evaluate/);
+  assert.match(runner, /const role = dashboard \? 'dashboard' : 'worker'/);
+  assert.match(runner, /evaluateRead\(role,[\s\S]*'pilot_state'\)/);
+});
+
+
+test('isolated smoke reconnects one stalled target only for idempotent reads', () => {
+  assert.match(runner, /async function evaluateRead\(role, expression, label = role\)/);
+  assert.match(runner, /evidence\.cdpReadRecoveries\.push/);
+  assert.match(runner, /const replacement = await targetClient\(targetId\)/);
+  assert.match(runner, /return replacement\.evaluate\(expression\)/);
+  assert.match(runner, /async function pageState\(role\)[\s\S]*evaluateRead\(role/);
+  assert.match(runner, /async function pilotState\(\)[\s\S]*evaluateRead\(role/);
+});
+
+test('isolated smoke never routes provider writes through read retry recovery', () => {
+  const helper = runner.slice(runner.indexOf('async function evaluateRead'), runner.indexOf('async function pilotState'));
+  assert.doesNotMatch(helper, /Input\.|button\.click|insertText|dispatchKeyEvent/);
+  const q1 = runner.slice(runner.indexOf('async function submitSyntheticQ1Attempt'), runner.indexOf('let sourceSubmission'));
+  assert.match(q1, /sender\.send\('Input\.insertText'/);
+  assert.match(q1, /button\.click\(\)/);
+  assert.doesNotMatch(q1, /evaluateRead\([^)]*button\.click/);
 });
