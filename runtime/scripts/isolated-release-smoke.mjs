@@ -201,7 +201,7 @@ try {
   createdTargets.push(senderTarget, receiverTarget, dashboardTarget);
   evidence.session = { id: session, senderTarget, receiverTarget, dashboardTarget };
 
-  await waitFor('managed lifecycle ready', async () => {
+  const sampleManagedLifecycle = async () => {
     const values = await targets();
     const selected = values.filter(value => createdTargets.includes(value.id));
     const suffix = session.replace(/[^A-Za-z0-9]+/g, '_').toUpperCase();
@@ -209,7 +209,28 @@ try {
     const receiverReady = selected.some(value => value.id === receiverTarget && value.title === `PMIA_RECEIVER_CHATGPT_${suffix}`);
     const dashboardReady = selected.some(value => value.id === dashboardTarget && value.url === dashboardUrl);
     return { ok: senderReady && receiverReady && dashboardReady, value: selected.map(value => ({ id: value.id, title: value.title, url: value.url })) };
-  }, 60000, 500);
+  };
+  evidence.lifecycleRecovery = { attempted: false, providerReloads: 0, recovered: false };
+  try {
+    await waitFor('managed lifecycle ready', sampleManagedLifecycle, 30000, 500);
+  } catch (initialLifecycleError) {
+    evidence.lifecycleRecovery.attempted = true;
+    evidence.lifecycleRecovery.initialFailure = String(initialLifecycleError?.message || initialLifecycleError);
+    const reloadSender = await targetClient(senderTarget);
+    const reloadReceiver = await targetClient(receiverTarget);
+    try {
+      await Promise.all([
+        reloadSender.send('Page.reload', { ignoreCache: true }),
+        reloadReceiver.send('Page.reload', { ignoreCache: true })
+      ]);
+      evidence.lifecycleRecovery.providerReloads = 2;
+    } finally {
+      reloadSender.close();
+      reloadReceiver.close();
+    }
+    const recovered = await waitFor('managed lifecycle ready after provider reload', sampleManagedLifecycle, 60000, 500);
+    evidence.lifecycleRecovery.recovered = recovered.ok;
+  }
 
   sender = await targetClient(senderTarget);
   receiver = await targetClient(receiverTarget);

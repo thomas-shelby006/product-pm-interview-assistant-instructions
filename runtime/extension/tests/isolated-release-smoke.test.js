@@ -188,3 +188,12 @@ test('isolated smoke bounds MV3 worker discovery and suppresses Edge onboarding 
   assert.match(powershell, /--disable-sync/);
   assert.match(powershell, /--disable-component-extensions-with-background-pages/);
 });
+
+
+test('isolated smoke retries lifecycle registration with one bounded provider reload', () => {
+  assert.match(runner, /sampleManagedLifecycle/);
+  assert.match(runner, /managed lifecycle ready after provider reload/);
+  assert.match(runner, /Page\.reload/);
+  assert.match(runner, /providerReloads = 2/);
+  assert.match(runner, /lifecycleRecovery\.recovered/);
+});
