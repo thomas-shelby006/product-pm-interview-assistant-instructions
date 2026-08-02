@@ -1,4 +1,4 @@
-# PM Interview Assistant 0.8.0 — Install and Verify
+# PM Interview Assistant 0.10.0 — Install and Verify
 
 ## Active files
 
@@ -26,7 +26,7 @@ The older fixed launcher, Tampermonkey folders, archives, and rollback assets ar
 3. After any source update, reload the PMIA extension card and reload already-open managed PMIA tabs.
 4. Start `runtime/Final_2_Window_Extension.ahk`.
 5. Press `Alt+R`, select the same Edge profile, and choose **Run Preflight**.
-6. Launch only when Profile Doctor reports the expected source path and version `0.8.0`.
+6. Launch only when Profile Doctor reports the expected source path and version `0.10.0`.
 
 Session Studio persists only profile, route, and layout preferences. Resume, JD, structured session fields, notes, prompts, answers, and session IDs remain in process/runtime memory.
 

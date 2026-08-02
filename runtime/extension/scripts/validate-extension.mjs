@@ -2,6 +2,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { auditCommandReachability } from '../shared/command-reachability-audit.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await readFile(resolve(root, 'manifest.json'), 'utf8'));
@@ -105,7 +106,9 @@ const graphRoots = [
   resolve(root, manifest.background.service_worker),
   ...manifest.content_scripts.flatMap(item => item.js).map(path => resolve(root, path)),
   resolve(root, 'content/entry.js'),
-  resolve(root, 'dashboard/dashboard.js')
+  resolve(root, 'dashboard/dashboard.js'),
+  resolve(root, 'shared/command-reachability-audit.js'),
+  resolve(root, 'shared/policy-impact-preview.js')
 ];
 const reachable = new Set();
 const pending = [...graphRoots];
@@ -125,6 +128,15 @@ const unreachable = [...productionFiles]
   .map(file => relative(root, file));
 if (unreachable.length) {
   throw new Error(`Unreachable production JavaScript modules: ${unreachable.join(', ')}`);
+}
+
+const commandAudit = auditCommandReachability({
+  html: await readFile(resolve(root, 'dashboard/index.html'), 'utf8'),
+  dashboardSource: await readFile(resolve(root, 'dashboard/dashboard.js'), 'utf8'),
+  controllerSource: await readFile(resolve(root, 'shared/runtime-pilot-controller.js'), 'utf8')
+});
+if (!commandAudit.ok) {
+  throw new Error(`Command reachability validation failed: ${JSON.stringify(commandAudit.errors)}`);
 }
 
 console.log(`Extension validation passed: ${files.length} JavaScript files, ${required.length} required runtime surfaces, and ${reachable.size} reachable production modules checked.`);

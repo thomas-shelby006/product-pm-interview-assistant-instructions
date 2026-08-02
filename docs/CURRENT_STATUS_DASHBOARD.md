@@ -1,12 +1,12 @@
 # Current Status Dashboard
 
-Last updated: 2026-08-02 (Cycles 46–70 verified; Cycles 71–95 next)
+Last updated: 2026-08-02 (PMIA 0.10 control-plane coherence and live-feature program active)
 
 ## Active candidate system
 
 | Area | Status | Notes |
 |---|---|---|
-| Runtime release | PMIA 0.7.0 worktree candidate | Lossless delivery ledger, non-preemptive receiver batching, Runtime Pilot Live Inbox, Pace Guard, legacy parity and iterative hardening based on verified 0.6.1 main. |
+| Runtime release | PMIA 0.10.0 worktree candidate | Verified lossless delivery, explicit operator choices, canonical command routing, Pilot/Production evidence closure, and the approved live-interview feature and bug-hardening program. |
 | Worktree | Isolated | `C:\Users\Sundar\Documents\product-pm-interview-assistant-improvement`, branch `improvement/pmia-0.7.0`. |
 | Original checkout | Preserved | `product-pm-interview-assistant-instructions` remains unchanged. |
 | Browser | Microsoft Edge Stable | Selected profile verified by Profile Doctor. |
@@ -14,7 +14,7 @@ Last updated: 2026-08-02 (Cycles 46–70 verified; Cycles 71–95 next)
 | Transport | Active candidate | Disposable preview plus sender outbox, persisted delivery ledger, direct role ports, non-preemptive active/next batching, full catch-up and rendered batch proof through the Manifest V3 service worker. |
 | Runtime state | Ephemeral | Registry, role logs, dashboard snapshot, timeline, lossless ledger and safe batch checkpoint use `chrome.storage.session`; cleanup removes complete session state. |
 | Recovery | Hardened | Dead-owner replacement, dashboard reconnect, semantic runtime repair, background-safe tab recovery, Alt+D dashboard reopen and full AHK relaunch fallback. |
-| Dashboard | Active candidate | Live Inbox, Current Answer, Next Draft, Pace Guard, latency rail, role health, delivery/answer metrics, virtualized timeline, safe review, diagnostics and controls. |
+| Runtime Pilot Dashboard | Active candidate | Live Inbox, Current Answer, Next Draft, Pace Guard, latency rail, role health, delivery/answer metrics, virtualized timeline, safe review, diagnostics and controls. |
 | Export | Schema 2.1 | Safe context and review statistics; full setup event text redacted. |
 | Review Studio | Active | Exact READY-pair export, resolver, private tracker push, and exact-session shutdown. |
 | Legacy runtime | Preserved, inactive | Edge Beta, Tampermonkey, fixed launcher, and archives remain rollback/reference only. |
@@ -76,6 +76,6 @@ Cycles 31–45 are verified on `improvement/pmia-0.7.0`. The complete automated 
 
 Cycles 46–70 are verified on committed HEAD `6682f03`. The complete gate passed 719/719 tests and validated 244 JavaScript files, 18 required runtime surfaces, 121 reachable production modules, and both active AutoHotkey programs. The isolated Edge smoke proved three synthetic finals, exact Q2/Q3 accumulation, all seven no-content transport-drill checks, an empty outbox, clear sequence state, desktop and 320 CSS-pixel Pilot reflow, and complete disposable-profile/process cleanup. Normal Edge remained unchanged. Evidence: `docs/evidence/2026-08-02-pmia-cycles-46-70-verification.md`.
 
-## Next authorized phase
+## Current authorized phase
 
-Cycles 71–95 will focus on mechanics, reliability, performance, and operator efficiency. The standalone technical HTML remains frozen until that phase and its verification are complete.
+PMIA 0.10 first closes command/control drift and release-evidence gaps, then adds ten user-facing live-interview cycles followed by thirty reproduced bug-fixing cycles. The standalone technical HTML remains frozen until the complete program is verified.

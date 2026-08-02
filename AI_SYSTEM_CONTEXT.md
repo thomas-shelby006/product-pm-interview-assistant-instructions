@@ -1,6 +1,6 @@
 # AI System Context — PM Interview Assistant
 
-This file is the active technical context for reviewing Sundar's Product Management mock-interview system. It describes PMIA runtime 0.7.0, not the preserved legacy implementation.
+This file is the active technical context for reviewing Sundar's Product Management mock-interview system. It describes the active PMIA runtime 0.10.0 candidate, not the preserved legacy implementation.
 
 ## Product objective
 
@@ -55,7 +55,7 @@ Managed tabs progress through deterministic titles:
 
 The launcher opens the sender first and waits for READY before opening the receiver. After both roles are READY it opens `PMIA_DASHBOARD_<SESSION>`. Boot context is sent only after all three managed windows exist.
 
-Each registration heartbeat refreshes ownership. A competing fresh role is normally rejected. PMIA 0.7 probes the current owner first; a missing or non-responsive runtime is replaced immediately, while a healthy duplicate remains blocked.
+Each registration heartbeat refreshes ownership. A competing fresh role is normally rejected. The active runtime probes the current owner first; a missing or non-responsive runtime is replaced immediately, while a healthy duplicate remains blocked.
 
 ## Question transport
 
@@ -144,9 +144,9 @@ Review Studio detects exactly one complete READY pair, requests both role export
 Automated verification must run the complete Node suite, JavaScript validator, and silent validation of both active AutoHotkey programs from the exact worktree. Browser evidence is required before claiming real-provider rendering, focus behavior, downloads, storage behavior, or action timing. Use synthetic interview content for release checks and preserve unrelated browser state.
 
 
-## Lossless runtime hardening: Cycles 11-20
+## Current control-plane and lossless runtime
 
-The current 0.7 candidate adds a second ten-cycle hardening pass organized into Bug fixes, New features, and Implementation work in every cycle.
+PMIA 0.10 retains the verified lossless runtime and adds one canonical command registry, explicit operator-choice boundaries, and deterministic Pilot and Production release evidence.
 
 - Per-session mutation lanes prevent stale Pilot snapshots from overwriting newer state while preserving cross-session concurrency.
 - Gap Watch protects out-of-order finals until missing sequences arrive and exposes the exact missing sequence.

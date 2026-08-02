@@ -58,12 +58,12 @@ test('Cycle 135: session end is blocked while the mock remains Active or Paused'
 test('session safety source exposes guided preflight, guarded resume, and crash recovery UI', async () => {
   const { readFile } = await import('node:fs/promises');
   const controller = await readFile(new URL('../shared/runtime-pilot-controller.js', import.meta.url), 'utf8');
-  const protocol = await readFile(new URL('../shared/dashboard-protocol.js', import.meta.url), 'utf8');
+  const commandRegistry = await readFile(new URL('../shared/operator-command-registry.js', import.meta.url), 'utf8');
   const html = await readFile(new URL('../dashboard/index.html', import.meta.url), 'utf8');
   assert.match(controller, /derivePreflightWizard/);
   assert.match(controller, /validateResumeBoundary/);
   assert.match(controller, /deriveCrashResume/);
-  assert.match(protocol, /run_preflight/);
-  assert.match(protocol, /resume_live_session/);
+  assert.match(commandRegistry, /run_preflight/);
+  assert.match(commandRegistry, /resume_live_session/);
   assert.match(html, /id="crashResumeCard"/);
 });

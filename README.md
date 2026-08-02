@@ -2,7 +2,7 @@
 
 This repository contains Sundar's live Product Management mock-interview system: Session Studio, two managed provider windows, a third Runtime Pilot Dashboard, a Manifest V3 control plane, and an optional post-session review loop.
 
-**Current release: PMIA runtime 0.9.0.**
+**Current release: PMIA runtime 0.10.0 candidate.**
 
 ## Active architecture
 
@@ -15,7 +15,7 @@ This repository contains Sundar's live Product Management mock-interview system:
 
 The older Edge Beta, Tampermonkey, fixed-launcher, and archived assets are retained only for rollback and history. Do not enable them beside the active runtime.
 
-## PMIA 0.7 improvements
+## Current PMIA 0.10 capabilities
 
 - Transcript and answer logs use `chrome.storage.session`; they are no longer written to disk-backed extension local storage.
 - Startup removes legacy `pmia_log_*` local-storage records using key-only enumeration when supported, without materializing their values.
@@ -89,9 +89,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_R
 The validator runs the Node suite, JavaScript syntax/security validation, and silent validation for both active AutoHotkey programs. Browser evidence is required for final release claims about real provider rendering, focus behavior, or live interaction.
 
 
-## Lossless runtime hardening: Cycles 11-20
+## Verified lossless runtime foundation
 
-The current 0.7 candidate adds a second ten-cycle hardening pass organized into Bug fixes, New features, and Implementation work in every cycle.
+The current PMIA 0.10 candidate builds on the verified lossless runtime and adds a coherent command registry, explicit-choice safety, Production evidence closure, and a new live-operator feature program.
 
 - Per-session mutation lanes prevent stale Pilot snapshots from overwriting newer state while preserving cross-session concurrency.
 - Gap Watch protects out-of-order finals until missing sequences arrive and exposes the exact missing sequence.

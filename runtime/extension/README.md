@@ -1,4 +1,4 @@
-# PM Interview Dual-Provider Runtime 0.9.0
+# PM Interview Dual-Provider Runtime 0.10.0
 
 Manifest V3 provider and Runtime Pilot Dashboard extension used by `runtime/Final_2_Window_Extension.ahk`.
 
@@ -13,7 +13,7 @@ Manifest V3 provider and Runtime Pilot Dashboard extension used by `runtime/Fina
 
 Normal ChatGPT and Claude tabs without PMIA runtime configuration are untouched.
 
-## PMIA 0.8 state, recovery, and operator controls
+## PMIA 0.10 state, recovery, and operator controls
 
 - Registry and role-scoped transcript logs use `chrome.storage.session`. Transcript and answer events are never written to disk-backed extension local storage.
 - Startup removes legacy `pmia_log_*` local-storage records. Explicit end-session and final-tab closure remove the complete session registry, sender outbox, lossless ledger, batch state, receiver sequence state, Pilot state and both role logs.
@@ -177,7 +177,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_R
 
 Manual release checks should cover applicable provider combinations, dashboard connect/reconnect, one-at-a-time delivery, accumulation during generation, latest-focused multi-question submission, duplicate suppression, pause/catch-up, selected submission, hold, submit-now, explicit interrupt, context resend, repair, layouts, export, full three-window shutdown, receiver reload and a long-session soak.
 
-The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.9.0 runtime.
+The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.10.0 runtime.
 
 
 ## New live safety surfaces

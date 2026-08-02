@@ -1,79 +1,6 @@
-const COMMANDS = new Set([
-  'pause',
-  'start_mock',
-  'run_preflight',
-  'set_session_phase',
-  'mark_interviewer_activity',
-  'set_focus_mode',
-  'set_shortcut_binding',
-  'reset_shortcut_bindings',
-  'set_accessibility_preference',
-  'acknowledge_incident',
-  'snooze_incident',
-  'clear_incident',
-  'set_quiet_mode',
-  'add_marker',
-  'remove_marker',
-  'resume_checkpoint',
-  'resume_live_session',
-  'dismiss_crash_resume',
-  'resume_catch_up',
-  'set_question_pin',
-  'defer_question',
-  'set_question_priority',
-  'link_question_follow_up',
-  'undo_question_action',
-  'submit_selected',
-  'resume_without_send',
-  'set_auto_submit',
-  'set_hold',
-  'set_receiver_policy',
-  'submit_now',
-  'interrupt_latest',
-  'acknowledge_answer',
-  'resolve_no_response',
-  'preview_interrupt_latest',
-  'resolve_draft_keep_manual',
-  'resolve_draft_restore_pmia',
-  'resolve_draft_merge',
-  'archive_selected',
-  'archive_all',
-  'archive_proven',
-  'check_live',
-  'run_self_test',
-  'repair_runtime',
-  'repair_live_metadata',
-  'apply_operating_profile',
-  'set_containment_override',
-  'probe_transport',
-  'record_production_navigation',
-  'start_stabilization',
-  'run_stabilization_step',
-  'cancel_stabilization',
-  'reset_recovery_budget',
-  'run_transport_drill',
-  'resend_context',
-  'toggle_mic',
-  'toggle_scroll',
-  'focus_composer',
-  'export_session',
-  'export_support_bundle',
-  'prepare_end_session',
-  'end_session',
-  'focus_sender',
-  'focus_receiver',
-  'focus_pilot',
-  'focus_back',
-  'spotlight_sender',
-  'spotlight_receiver',
-  'spotlight_pilot',
-  'layout_both',
-  'layout_sender',
-  'layout_receiver',
-  'layout_dashboard',
-  'hide_managed',
-  'restore_managed'
-]);
+import { registeredCommandIds, normalizeRegisteredCommand } from './operator-command-registry.js';
+
+const COMMANDS = new Set(registeredCommandIds());
 
 export const DASHBOARD_PORT_PREFIX = 'pmia-dashboard:';
 export const DASHBOARD_COMMANDS = COMMANDS;
@@ -99,8 +26,8 @@ export function normalizeDashboardCommand(value) {
   if (!value || typeof value !== 'object') return null;
   const sessionId = cleanText(value.sessionId, 128);
   const requestId = cleanText(value.requestId, 128);
-  const command = cleanText(value.command, 64).toLowerCase();
-  if (!sessionId || !requestId || !COMMANDS.has(command)) return null;
+  const command = normalizeRegisteredCommand(cleanText(value.command, 64));
+  if (!sessionId || !requestId || !command || !COMMANDS.has(command)) return null;
 
   const payload = value.payload && typeof value.payload === 'object'
     ? { ...value.payload }

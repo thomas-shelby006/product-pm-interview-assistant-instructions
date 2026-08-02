@@ -8,6 +8,7 @@ const status = await readFile(new URL('../shared/session-status.js', import.meta
 const validator = await readFile(new URL('../scripts/validate-extension.mjs', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../dashboard/dashboard.css', import.meta.url), 'utf8');
 const protocol = await readFile(new URL('../shared/dashboard-protocol.js', import.meta.url), 'utf8');
+const commandRegistry = await readFile(new URL('../shared/operator-command-registry.js', import.meta.url), 'utf8');
 
 test('dashboard ends cleanly without reconnecting or leaving controls active', () => {
   assert.match(dashboard, /state\.sessionEnded = true/);
@@ -87,8 +88,8 @@ test('Pilot exposes meaningful real-time inbox controls without removing legacy 
   assert.match(dashboard, /set_auto_submit/);
   assert.match(markup, /id="previewInterrupt"/);
   assert.match(markup, /id="confirmInterrupt"/);
-  assert.match(protocol, /preview_interrupt_latest/);
-  assert.match(protocol, /interrupt_latest/);
+  assert.match(commandRegistry, /preview_interrupt_latest/);
+  assert.match(commandRegistry, /interrupt_latest/);
   assert.match(dashboard, /navigator\.clipboard\.writeText\(latest\)/);
 });
 

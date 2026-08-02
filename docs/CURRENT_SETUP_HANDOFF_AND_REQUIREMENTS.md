@@ -1,6 +1,6 @@
 # Current Setup Handoff and Requirements Ledger
 
-Last updated: 2026-08-01
+Last updated: 2026-08-02
 
 ## Objective
 
@@ -10,7 +10,7 @@ Operate a low-latency, exactly-once Product Management mock-interview assistant 
 
 - **Browser:** Microsoft Edge Stable, one selected profile verified by Profile Doctor.
 - **Launcher:** `runtime/Final_2_Window_Extension.ahk`.
-- **Provider/dashboard runtime:** `runtime/extension/`, Manifest V3 version 0.7.0.
+- **Provider/dashboard runtime:** `runtime/extension/`, Manifest V3 version 0.10.0 candidate.
 - **Transport:** disposable preview plus sender outbox, durable lossless final ledger, session-level pause, direct role ports and active/next receiver batching through the extension service worker.
 - **Dashboard:** `runtime/extension/dashboard/`, a session-scoped third Edge app window connected by a long-lived runtime port.
 - **Providers:** ChatGPT and Claude independently selectable as sender or receiver.

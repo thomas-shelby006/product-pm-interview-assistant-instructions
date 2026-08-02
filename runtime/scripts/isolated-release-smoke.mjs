@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 function args(argv) {
   const values = {};
@@ -17,6 +18,16 @@ if (!port || !extensionPath || !profilePath) throw new Error('Missing isolated s
 
 const endpoint = `http://127.0.0.1:${port}`;
 const localManifest = JSON.parse(await fs.readFile(path.join(extensionPath, 'manifest.json'), 'utf8'));
+const reachabilityModule = await import(pathToFileURL(path.join(extensionPath, 'shared/command-reachability-audit.js')).href);
+const registryModule = await import(pathToFileURL(path.join(extensionPath, 'shared/operator-command-registry.js')).href);
+const [dashboardMarkup, dashboardSource, controllerSource] = await Promise.all([
+  fs.readFile(path.join(extensionPath, 'dashboard/index.html'), 'utf8'),
+  fs.readFile(path.join(extensionPath, 'dashboard/dashboard.js'), 'utf8'),
+  fs.readFile(path.join(extensionPath, 'shared/runtime-pilot-controller.js'), 'utf8')
+]);
+const commandReachability = reachabilityModule.auditCommandReachability({ html:dashboardMarkup, dashboardSource, controllerSource });
+const commandRegistryDigest = registryModule.commandRegistryDigestSource();
+if (!commandReachability.ok) throw new Error(`Command reachability failed: ${JSON.stringify(commandReachability.errors)}`);
 const questions = Object.freeze({
   q1: 'Synthetic PMIA release Q1: Give a 30-point numbered checklist for measuring onboarding activation. Each point must be one short sentence.',
   q2: 'Synthetic PMIA release Q2: Explain activation versus engagement in exactly three bullets.',
@@ -116,6 +127,8 @@ const evidence = {
   isolatedProfile: { path: profilePath, temporary: true, normalProfileTouched: false },
   extensions: [],
   session: { id: session, senderTarget: '', receiverTarget: '', dashboardTarget: '' },
+  commandReachability,
+  commandRegistryDigest,
   selfTest: { ok: false },
   sourceSubmission: { attempts: 0, rendered: false },
   finals: [],

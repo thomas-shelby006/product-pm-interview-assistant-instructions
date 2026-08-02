@@ -1369,7 +1369,12 @@ function renderProduction(snapshot) {
   text('productionDecisionDetail', center.primary?.detail || 'The live system is caught up.');
   text('productionDecisionCount', String(center.count || 0));
   const action = byId('productionDecisionAction');
-  if (action) { action.hidden = !center.primary?.command; action.textContent = center.primary?.command ? `Run ${humanizeCode(center.primary.command)}` : 'Run safe action'; }
+  if (action) {
+    const mode = center.primary?.actionMode || (center.primary?.command ? 'execute' : 'inspect');
+    action.hidden = !center.primary;
+    action.dataset.actionMode = mode;
+    action.textContent = mode === 'choose' ? 'Choose an option' : mode === 'inspect' ? 'Inspect evidence' : `Run ${humanizeCode(center.primary?.command)}`;
+  }
   replaceTextList('productionDecisionList', center.items || [], item => `${String(item.severity || 'info').toUpperCase()} · ${item.title}`);
 
   const selected = document.activeElement === byId('operatingProfileSelect')
@@ -1522,7 +1527,8 @@ document.addEventListener('click', event => {
     return;
   }
   if (event.target.closest('#openCommandPalette')) { openCommandPalette(event.target.closest('#openCommandPalette')); return; }
-  if (event.target.closest('#openShortcutHelp')) { renderAccessibility(state.snapshot); dialogFocus.open(byId('shortcutHelpDialog'), event.target.closest('#openShortcutHelp')); return; }
+  const shortcutHelpTrigger = event.target.closest('#openShortcutHelp, #openShortcutHelpFooter');
+  if (shortcutHelpTrigger) { renderAccessibility(state.snapshot); dialogFocus.open(byId('shortcutHelpDialog'), shortcutHelpTrigger); return; }
   if (event.target.closest('#closeShortcutHelp')) { dialogFocus.close(byId('shortcutHelpDialog')); return; }
   const saveShortcut = event.target.closest('[data-save-shortcut]');
   if (saveShortcut) {
@@ -1611,8 +1617,13 @@ byId('containmentOverride').addEventListener('click', event => {
 });
 byId('productionDecisionAction').addEventListener('click', event => {
   const decision = state.productionDecision;
-  if (!decision?.command) return;
-  void runCommand(event.currentTarget, decision.command, decision.payload || {});
+  if (!decision) return;
+  const mode = decision.actionMode || (decision.command ? 'execute' : 'inspect');
+  if (mode === 'execute' && decision.command) {
+    void runCommand(event.currentTarget, decision.command, decision.payload || {});
+    return;
+  }
+  activateDashboardView(decision.view || 'overview', decision.anchor || 'readinessGate', decision.code || 'decision_navigation');
 });
 byId('productionNavigate').addEventListener('click', () => {
   const route = state.snapshot?.production?.navigation?.route || { view: 'overview', anchor: 'readinessGate', reason: 'production_navigation' };

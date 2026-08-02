@@ -58,6 +58,7 @@ import { buildRestartContinuity } from './restart-continuity.js';
 import { monotonicElapsed, normalizeMonotonicClock } from './monotonic-session-clock.js';
 import { restoreManagedLayout } from './layout-restoration.js';
 import { deriveOperatorDecisionCenter } from './operator-decision-center.js';
+import { deriveOperatorChoice } from './operator-choice-model.js';
 import { deriveOperatingProfile } from './operating-profile.js';
 import { deriveContextualNavigation } from './cockpit-navigation.js';
 import { applyContainmentOverride, deriveContainmentStatus } from './containment-status.js';
@@ -332,6 +333,7 @@ export function createRuntimePilotController({
       sessionLandmarks,
       recoveryCard,
       questionOperationsDerived: deriveQuestionOperations(enrichedBase, Date.now()),
+      operatorChoice: deriveOperatorChoice(enrichedBase, Date.now()),
       batchPreview: deriveBatchPreview(enrichedBase),
       preflightWizard: derivePreflightWizard(enrichedBase),
       resumeGuard: deriveResumeGuard(enrichedBase),
