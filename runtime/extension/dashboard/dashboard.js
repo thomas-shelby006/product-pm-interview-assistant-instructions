@@ -92,7 +92,7 @@ const timelineViewport = byId('timelineViewport');
 const timelineCanvas = byId('timelineCanvas');
 const dialogFocus = createDialogFocusCoordinator();
 const liveAnnouncer = createLiveAnnouncer({ politeNode: byId('screenReaderPolite'), assertiveNode: byId('screenReaderAssertive') });
-const shortcutBindings = normalizeShortcutBindings();
+let shortcutBindings = normalizeShortcutBindings();
 const idleWork = createIdleWorkCoordinator();
 const renderScheduler = createRenderScheduler();
 

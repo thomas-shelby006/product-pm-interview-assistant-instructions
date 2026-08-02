@@ -439,3 +439,24 @@ test('active runtime self-test stores safe role storage and dashboard results', 
   assert.equal(snapshot.selfTest.completedAt, result.completedAt);
   assert.equal(JSON.stringify(snapshot.selfTest).includes('Question'), false);
 });
+
+
+test('dashboard broadcast contains live Production data instead of a blocked fallback', async () => {
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  const messages = [];
+  const port = {
+    name: 'pmia-dashboard:s1',
+    sender: { tab: { id: 3, windowId: 13 } },
+    postMessage(message) { messages.push(message); },
+    onMessage: { addListener() {} },
+    onDisconnect: { addListener() {} }
+  };
+  assert.equal(controller.connectPort(port), true);
+  await new Promise(resolve => setTimeout(resolve, 40));
+  const message = [...messages].reverse().find(item => item.type === 'PMIA_DASHBOARD_SNAPSHOT');
+  assert.ok(message, JSON.stringify(messages));
+  assert.ok(message.snapshot.production, JSON.stringify(message.snapshot.warnings || []));
+  assert.notEqual(message.snapshot.production.diagnostics.state, 'waiting');
+  assert.notEqual(message.snapshot.production.transportAssurance.state, 'unknown');
+});

@@ -275,7 +275,12 @@ try {
 
   async function dashboardUiState(width, height, label) {
     await dashboard.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-    await sleep(180);
+    await dashboard.evaluate(`document.querySelector('[data-view="review"]')?.click(); true`, { userGesture: true });
+    await waitFor(`Review evidence ready (${label})`, async () => {
+      const raw = await dashboard.evaluate(`(()=>{const panel=document.querySelector('[data-view-panel="review"]');const report=document.getElementById('transportDrillReport')?.textContent||'';return JSON.stringify({reviewActive:Boolean(panel?.classList.contains('active')),drillReportReady:report.includes('handshake'),traceResultCount:document.querySelectorAll('[data-trace-id]').length})})()`);
+      const value = JSON.parse(raw);
+      return { ok: value.reviewActive && value.drillReportReady && value.traceResultCount >= 3, value };
+    }, 10000, 100);
     const raw = await dashboard.evaluate(`(()=>{
       const required=['forecastRisk','forecastDrain','forecastP95','forecastThroughput','recoveryBudgetState','runTransportDrill','transportDrillReport','traceSearch','traceResults','traceDetail','exportSupportBundle','supportBundleStatus'];
       const mechanics=document.querySelector('.mechanics-grid');
@@ -308,7 +313,11 @@ try {
   async function productionUiState(width, height, label) {
     await dashboard.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     await dashboard.evaluate(`document.querySelector('[data-view="production"]')?.click(); true`, { userGesture: true });
-    await sleep(180);
+    await waitFor(`Production evidence ready (${label})`, async () => {
+      const raw = await dashboard.evaluate(`(()=>{const panel=document.getElementById('panelProduction');const health=(document.getElementById('productionHealthBadge')?.textContent||'').trim();const transport=(document.getElementById('transportAssuranceState')?.textContent||'').trim();const route=(document.getElementById('routeReadinessState')?.textContent||'').trim();return JSON.stringify({productionActive:Boolean(panel?.classList.contains('active')),health,transport,route})})()`);
+      const value = JSON.parse(raw);
+      return { ok: value.productionActive && value.health && value.health !== 'Waiting' && value.transport && value.transport !== 'Waiting' && value.route && value.route !== 'Waiting', value };
+    }, 10000, 100);
     const raw = await dashboard.evaluate(`(()=>{
       const required=['panelProduction','productionDecisionTitle','operatingProfileSelect','containmentState','transportAssuranceState','routeReadinessState','upgradeReadinessState','liveScoreValue','productionDiagnosticsState','releaseHandoffState','downloadHandoffManifest'];
       const panel=document.getElementById('panelProduction');
@@ -362,10 +371,10 @@ try {
     !value.horizontalOverflow
     && value.productionActive
     && Object.values(value.required).every(Boolean)
-    && value.health
+    && value.health && value.health !== 'Waiting'
     && value.decision
-    && value.transport
-    && value.route
+    && value.transport && value.transport !== 'Waiting'
+    && value.route && value.route !== 'Waiting'
     && value.release
     && value.accessibility.polite
     && value.accessibility.assertive

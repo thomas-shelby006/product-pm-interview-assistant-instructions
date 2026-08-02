@@ -330,3 +330,10 @@ test('Receiver Flow controls are wired through the existing command protocol', (
   assert.match(dashboard, /'preview_interrupt_latest'/);
   assert.match(dashboard, /'interrupt_latest', \{ token: plan\.token \}/);
 });
+
+
+test('dashboard shortcut bindings remain mutable across snapshot renders', () => {
+  assert.match(dashboard, /let shortcutBindings = normalizeShortcutBindings\(\);/);
+  assert.doesNotMatch(dashboard, /const shortcutBindings = normalizeShortcutBindings\(\);/);
+  assert.match(dashboard, /shortcutBindings = normalizeShortcutBindings\(snapshot\?\.uiPreferences/);
+});

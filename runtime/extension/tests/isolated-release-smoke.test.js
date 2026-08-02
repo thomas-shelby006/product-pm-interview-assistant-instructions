@@ -122,3 +122,12 @@ test('isolated smoke validates the Production view at responsive and print width
     assert.match(runner, new RegExp(id));
   }
 });
+
+
+test('isolated smoke reactivates Review and waits for rendered drill and trace evidence per viewport', () => {
+  assert.match(runner, /Review evidence ready/);
+  assert.equal(runner.includes(`data-view=\"review\"`), true);
+  assert.match(runner, /value\.reviewActive && value\.drillReportReady && value\.traceResultCount >= 3/);
+  assert.match(runner, /Production evidence ready/);
+  assert.match(runner, /value\.health !== 'Waiting'/);
+});
