@@ -48,11 +48,12 @@ const chatGptSendSelector = [
 
 class CDP {
   constructor(url) { this.url = url; this.socket = null; this.sequence = 0; this.pending = new Map(); }
-  async open() {
+  async open(timeoutMs = 5000) {
     await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { try { this.socket?.close(); } catch {} reject(new Error('CDP open timed out')); }, timeoutMs);
       this.socket = new WebSocket(this.url);
-      this.socket.onopen = resolve;
-      this.socket.onerror = reject;
+      this.socket.onopen = () => { clearTimeout(timer); resolve(); };
+      this.socket.onerror = error => { clearTimeout(timer); reject(error); };
       this.socket.onmessage = event => {
         const message = JSON.parse(event.data);
         if (!message.id || !this.pending.has(message.id)) return;
@@ -64,10 +65,11 @@ class CDP {
     });
     return this;
   }
-  send(method, params = {}) {
+  send(method, params = {}, timeoutMs = 10000) {
     const id = ++this.sequence;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error(`CDP ${method} timed out`)); }, timeoutMs);
+      this.pending.set(id, { resolve:value => { clearTimeout(timer); resolve(value); }, reject:error => { clearTimeout(timer); reject(error); } });
       this.socket.send(JSON.stringify({ id, method, params }));
     });
   }
@@ -76,12 +78,12 @@ class CDP {
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'Runtime evaluation failed');
     return result.result?.value ?? result.result?.description ?? null;
   }
-  close() { try { this.socket?.close(); } catch {} }
+  close() { for (const pending of this.pending.values()) pending.reject(new Error('CDP connection closed')); this.pending.clear(); try { this.socket?.close(); } catch {} }
 }
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function json(url) {
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
   return response.json();
 }
@@ -104,7 +106,7 @@ async function targetClient(targetId) {
   return new CDP(target.webSocketDebuggerUrl).open();
 }
 async function extensionTargets() {
-  const values = (await targets()).filter(value => ['service_worker', 'background_page'].includes(value.type) && value.url.startsWith('chrome-extension://'));
+  const values = (await targets()).filter(value => value.type === 'service_worker' && value.url.startsWith('chrome-extension://'));
   const output = [];
   for (const target of values) {
     const client = await new CDP(target.webSocketDebuggerUrl).open();

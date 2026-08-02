@@ -178,3 +178,13 @@ test('isolated smoke proves Operations Lab views scenarios keyboard privacy and 
   assert.match(runner, /keyboardMoved===true/);
   assert.match(runner, /operationsUiOk/);
 });
+
+
+test('isolated smoke bounds MV3 worker discovery and suppresses Edge onboarding background noise', () => {
+  assert.match(runner, /value\.type === 'service_worker'/);
+  assert.doesNotMatch(runner, /\['service_worker', 'background_page'\]/);
+  assert.match(runner, /AbortSignal\.timeout\(5000\)/);
+  assert.match(runner, /CDP open timed out/);
+  assert.match(powershell, /--disable-sync/);
+  assert.match(powershell, /--disable-component-extensions-with-background-pages/);
+});
