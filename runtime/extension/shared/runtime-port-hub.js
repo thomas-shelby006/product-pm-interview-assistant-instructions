@@ -180,8 +180,10 @@ export function createRuntimePortHub({
         now: now()
       });
       if (!started.accepted) {
-        const replay = entry.inboundJournal.result(String(frame.requestId));
+        const replay = entry.inboundJournal.result(String(frame.requestId), entry.epoch);
         if (replay !== null) sendResponse(entry, frame.requestId, { ...replay, replayed: true });
+        else if (started.reason === 'request_pending') sendResponse(entry, frame.requestId, { ok:false, error:'request_pending', retryable:true, retryAfterMs:Math.max(50,Math.min(1000,Number(timeoutMs)||1500)) });
+        else sendResponse(entry, frame.requestId, { ok:false, error:started.reason || 'request_rejected', retryable:false });
         return;
       }
       Promise.resolve(onFrame({ ...frame, identity, tabId: entry.tabId, port, protocol: entry.protocol }))

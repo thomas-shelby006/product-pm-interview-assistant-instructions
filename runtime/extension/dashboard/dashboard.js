@@ -16,7 +16,7 @@ import { deriveOutboxStatus } from './outbox-status-model.js';
 import { deriveProofInspector } from './proof-inspector-model.js';
 import { deriveMemoryGuard } from './memory-guard-model.js';
 import { deriveReadiness } from './readiness-model.js';
-import { applySnapshotDelta } from '../shared/snapshot-delta.js';
+import { createDashboardSnapshotSync } from './dashboard-snapshot-sync.js';
 import { deriveRecoveryProgress } from './recovery-progress-model.js';
 import { buildSafeHealthReport } from './health-report-model.js';
 import { deriveTransportLanes } from './transport-lane-model.js';
@@ -58,10 +58,13 @@ import { buildVisualPreferenceProof } from './visual-preference-proof.js';
 import { deriveOperatingProfile } from '../shared/operating-profile.js';
 import { buildPolicyImpactPreview, policySnapshotFingerprint, validatePolicyImpactConfirmation } from '../shared/policy-impact-preview.js';
 import { renderLiveAssist } from './render-live-assist.js';
+import { createOperationsLabLocalState, moveOperationsLabTab, reconcileOperationsLabLocalState, selectOperationsLabScenario, selectOperationsLabView } from './operations-lab-controller.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
 const reconnectPolicy = new ReconnectPolicy({ baseMs: 350, capMs: 8000 });
+const snapshotSync = createDashboardSnapshotSync();
+const MAX_PENDING_COMMANDS = 64;
 const state = {
   snapshot: null,
   port: null,
@@ -74,7 +77,7 @@ const state = {
   activeView: 'overview',
   sessionEnded: false,
   pending: new Map(),
-  efficiency: { full: 0, delta: 0, heartbeat: 0, lastMode: 'Waiting', changedSections: 0 },
+  efficiency: { full: 0, delta: 0, heartbeat: 0, resync: 0, lastResyncReason: '', lastMode: 'Waiting', changedSections: 0 },
   endPreparation: null,
   traceQuery: '',
   selectedTraceId: '',
@@ -88,7 +91,8 @@ const state = {
   policyPreview: null,
   assistTriageView: 'urgent',
   assistCommandQuery: '',
-  assistWizardStage: 'start'
+  assistWizardStage: 'start',
+  operationsLab: createOperationsLabLocalState({ sessionId, view:'flow', scenario:'current' })
 };
 
 const byId = id => document.getElementById(id);
@@ -135,6 +139,10 @@ function sendCommand(command, payload = {}) {
   const operationKey = `${String(command)}:${JSON.stringify(payload || {})}`;
   const duplicate = [...state.pending.values()].find(item => item.operationKey === operationKey);
   if (duplicate?.promise) return duplicate.promise;
+  if (state.pending.size >= MAX_PENDING_COMMANDS) {
+    showToast('Too many dashboard operations are pending.', 'error');
+    return Promise.resolve({ ok:false, error:'dashboard_request_capacity_exhausted', retryable:true });
+  }
   const id = requestId();
   let resolvePending;
   const promise = new Promise(resolve => { resolvePending = resolve; });
@@ -184,6 +192,7 @@ function connect() {
     port.onDisconnect.addListener(() => {
       if (state.port !== port) return;
       state.port = null;
+      snapshotSync.reset();
       state.policyPreview = null;
       failPendingCommands(state.sessionEnded ? 'session_ended' : 'dashboard_disconnected');
       if (state.sessionEnded) {
@@ -223,12 +232,23 @@ function scheduleReconnect() {
   state.reconnectTimer = setTimeout(connect, decision.delayMs);
 }
 
+function requestDashboardResync(reason = 'snapshot_resync_required') {
+  state.efficiency.resync += 1;
+  state.efficiency.lastResyncReason = String(reason || 'snapshot_resync_required');
+  state.efficiency.lastMode = 'Resync';
+  setConnection('Resyncing', 'warn');
+  try { state.port?.postMessage({ type:'PMIA_DASHBOARD_RESYNC_REQUEST', sessionId, reason:state.efficiency.lastResyncReason }); } catch {}
+}
+
 function handlePortMessage(message) {
   if (message?.type === 'PMIA_DASHBOARD_SNAPSHOT') {
+    const synced = snapshotSync.applyFull(message.snapshot, { generation:message.generation });
+    if (!synced.ok) { requestDashboardResync(synced.error); return; }
     state.reconnectAttempt = 0;
     reconnectPolicy.succeed();
     state.sessionEnded = false;
-    state.snapshot = message.snapshot;
+    state.snapshot = synced.snapshot;
+    state.operationsLab = reconcileOperationsLabLocalState(state.operationsLab, state.snapshot?.sessionId || sessionId);
     reconcilePolicyPreview(state.snapshot);
     state.efficiency.full += 1;
     state.efficiency.lastMode = 'Full';
@@ -237,8 +257,10 @@ function handlePortMessage(message) {
     scheduleRender();
     return;
   }
-  if (message?.type === 'PMIA_DASHBOARD_DELTA' && state.snapshot) {
-    state.snapshot = applySnapshotDelta(state.snapshot, message.delta);
+  if (message?.type === 'PMIA_DASHBOARD_DELTA') {
+    const synced = snapshotSync.applyDelta(message.delta);
+    if (!synced.ok) { requestDashboardResync(synced.error); return; }
+    state.snapshot = synced.snapshot;
     reconcilePolicyPreview(state.snapshot);
     state.efficiency.delta += 1;
     state.efficiency.lastMode = 'Delta';
@@ -250,6 +272,8 @@ function handlePortMessage(message) {
   if (message?.type === 'PMIA_DASHBOARD_SESSION_ENDED') {
     state.sessionEnded = true;
     state.snapshot = null;
+    snapshotSync.reset();
+    state.operationsLab = createOperationsLabLocalState({ sessionId });
     reconcilePolicyPreview(null);
     failPendingCommands('session_ended');
     clearTimeout(state.reconnectTimer);
@@ -257,18 +281,10 @@ function handlePortMessage(message) {
     scheduleRender();
     return;
   }
-  if (
-    message?.type === 'PMIA_DASHBOARD_HEARTBEAT'
-    && state.snapshot
-    && ['sender', 'receiver'].includes(message.role)
-  ) {
-    state.snapshot = {
-      ...state.snapshot,
-      [message.role]: {
-        ...state.snapshot[message.role],
-        ...(message.patch || {})
-      }
-    };
+  if (message?.type === 'PMIA_DASHBOARD_HEARTBEAT' && ['sender','receiver'].includes(message.role)) {
+    const synced = snapshotSync.applyHeartbeat(message.role, message.patch || {});
+    if (!synced.ok) { requestDashboardResync('heartbeat_base_missing'); return; }
+    state.snapshot = synced.snapshot;
     state.efficiency.heartbeat += 1;
     state.efficiency.lastMode = 'Heartbeat';
     state.efficiency.changedSections = 1;
@@ -285,7 +301,6 @@ function handlePortMessage(message) {
     updateControlAvailability();
   }
 }
-
 
 
 function renderPreflightAndCrash(snapshot, now = Date.now()) {
@@ -328,7 +343,7 @@ function renderAccessibility(snapshot) {
 
 function renderEfficiency() {
   const value = state.efficiency;
-  text('runtimeEfficiency', `${value.lastMode}${value.changedSections ? ` - ${value.changedSections}` : ''}`);
+  text('runtimeEfficiency', `${value.lastMode}${value.changedSections ? ` - ${value.changedSections}` : ''}${value.resync ? ` - ${value.resync} resync${value.lastResyncReason ? ` (${humanizeCode(value.lastResyncReason)})` : ''}` : ''}`);
 }
 
 function formatBytes(value) {
@@ -1582,6 +1597,12 @@ document.addEventListener('click', event => {
     return;
   }
   if (event.target.closest('#closeCommandPalette')) { closeCommandPalette(); return; }
+  const operationsTab = event.target.closest('[data-operations-lab-view]');
+  if (operationsTab) {
+    state.operationsLab = selectOperationsLabView(state.operationsLab, operationsTab.dataset.operationsLabView);
+    renderLiveAssist({ document, snapshot:state.snapshot, state, now:Date.now() });
+    return;
+  }
   const tab = event.target.closest('[data-view]');
   if (tab) {
     activateDashboardView(tab.dataset.view, '', 'tab_click');
@@ -1777,6 +1798,19 @@ byId('traceSearch').addEventListener('input', event => {
   state.traceQuery = String(event.currentTarget.value || '');
   state.selectedTraceId = '';
   idleWork.schedule(() => renderReview(state.snapshot));
+});
+
+byId('operationsLabScenario').addEventListener('change', event => {
+  state.operationsLab = selectOperationsLabScenario(state.operationsLab, event.currentTarget.value);
+  renderLiveAssist({ document, snapshot:state.snapshot, state, now:Date.now() });
+});
+byId('operationsLabTabs').addEventListener('keydown', event => {
+  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  event.preventDefault();
+  const next = moveOperationsLabTab(state.operationsLab.view, event.key);
+  state.operationsLab = selectOperationsLabView(state.operationsLab, next);
+  renderLiveAssist({ document, snapshot:state.snapshot, state, now:Date.now() });
+  byId(`operationsLabTab-${next}`)?.focus();
 });
 
 byId('assistCommandSearch').addEventListener('input', event => {

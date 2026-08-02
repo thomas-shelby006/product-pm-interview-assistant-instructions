@@ -385,19 +385,24 @@ export function createRuntimePilotController({
       if (!snapshot) {
         if (post(entry.port, { type: 'PMIA_DASHBOARD_SESSION_ENDED', sessionId, snapshot: null })) {
           entry.lastSnapshot = null;
+          entry.generation = 0;
         }
         continue;
       }
       if (!entry.lastSnapshot) {
-        if (post(entry.port, { type: 'PMIA_DASHBOARD_SNAPSHOT', sessionId, snapshot })) {
+        const nextGeneration = Math.max(1, Number(entry.generation || 0) + 1);
+        if (post(entry.port, { type: 'PMIA_DASHBOARD_SNAPSHOT', sessionId, snapshot, generation: nextGeneration })) {
           entry.lastSnapshot = snapshot;
+          entry.generation = nextGeneration;
         }
         continue;
       }
-      const delta = buildSnapshotDelta(entry.lastSnapshot, snapshot);
+      const nextGeneration = Math.max(1, Number(entry.generation || 0) + 1);
+      const delta = buildSnapshotDelta(entry.lastSnapshot, snapshot, { baseGeneration: entry.generation, nextGeneration });
       if (delta.empty) continue;
       if (post(entry.port, { type: 'PMIA_DASHBOARD_DELTA', sessionId, delta })) {
         entry.lastSnapshot = snapshot;
+        entry.generation = nextGeneration;
       }
     }
     return snapshot;
@@ -1931,7 +1936,8 @@ export function createRuntimePilotController({
       port,
       tabId: Number.isInteger(port.sender?.tab?.id) ? port.sender.tab.id : null,
       windowId: Number.isInteger(port.sender?.tab?.windowId) ? port.sender.tab.windowId : null,
-      lastSnapshot: null
+      lastSnapshot: null,
+      generation: 0
     };
     if (!ports.has(sessionId)) ports.set(sessionId, new Set());
     ports.get(sessionId).add(entry);
@@ -1948,10 +1954,17 @@ export function createRuntimePilotController({
     }).catch(error => {
       const snapshot = blockedStateSnapshot(sessionId, error);
       entry.lastSnapshot = snapshot;
-      post(port, { type: 'PMIA_DASHBOARD_SNAPSHOT', sessionId, snapshot });
+      entry.generation = Math.max(1, Number(entry.generation || 0) + 1);
+      post(port, { type: 'PMIA_DASHBOARD_SNAPSHOT', sessionId, snapshot, generation: entry.generation });
     });
 
     port.onMessage.addListener(raw => {
+      if (raw?.type === 'PMIA_DASHBOARD_RESYNC_REQUEST') {
+        entry.lastSnapshot = null;
+        entry.generation = 0;
+        mutationCoordinator.run(sessionId, () => broadcast(sessionId)).catch(() => {});
+        return;
+      }
       mutationCoordinator.run(sessionId, () => handleCommand(raw))
         .then(result => {
           post(port, {

@@ -1,4 +1,4 @@
-export class ReconnectPolicy {
+﻿export class ReconnectPolicy {
   #attempt = 0;
   #probeActive = false;
   #baseMs;
@@ -18,7 +18,7 @@ export class ReconnectPolicy {
     const raw = Math.min(this.#capMs, this.#baseMs * (2 ** Math.min(8, attempt)));
     const sample = Math.max(0, Math.min(1, Number(this.#random()) || 0));
     const factor = 1 - this.#jitter + sample * this.#jitter * 2;
-    const delayMs = Math.round(raw * factor);
+    const delayMs = Math.min(this.#capMs, Math.max(0, Math.round(raw * factor)));
     this.#attempt += 1;
     return { attempt, delayMs, capped: raw >= this.#capMs };
   }

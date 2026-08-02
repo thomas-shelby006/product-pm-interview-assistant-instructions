@@ -35,7 +35,7 @@ test('isolated smoke uses fixed synthetic questions and exact proof checks', () 
 });
 
 test('isolated smoke writes structured evidence and distinguishes answer limitations', () => {
-  for (const key of ['isolatedProfile', 'extensions', 'selfTest', 'finals', 'batches', 'ledger', 'outbox', 'gap', 'answerCapability', 'cleanup', 'limitations']) {
+  for (const key of ['isolatedProfile', 'extensions', 'selfTest', 'finals', 'batches', 'ledger', 'outbox', 'gap', 'answerCapability', 'cleanup', 'limitations', 'operationsUi']) {
     assert.match(runner, new RegExp(`${key}:`));
   }
   assert.match(runner, /anonymous_answer_unavailable/);
@@ -59,7 +59,7 @@ test('isolated smoke validates Pilot mechanics at desktop and 320 CSS pixels', (
 });
 
 test('cleanup preserves every release gate in final evidence', () => {
-  assert.match(powershell, /deliveryProofOk[\s\S]*transportDrillOk[\s\S]*pilotUiOk[\s\S]*processClosed[\s\S]*profileRemoved/);
+  assert.match(powershell, /deliveryProofOk[\s\S]*transportDrillOk[\s\S]*pilotUiOk[\s\S]*operationsUiOk[\s\S]*processClosed[\s\S]*profileRemoved/);
 });
 
 test('smoke failure evidence preserves the final readiness sample', () => {
@@ -152,7 +152,7 @@ test('isolated smoke proves Q1 in Window 1 and allows one bounded swallowed-subm
 test('isolated smoke wrapper binds evidence to HEAD and preserves every final UI gate after cleanup', () => {
   assert.match(powershell, /git -C \$repositoryRoot rev-parse HEAD/);
   assert.match(powershell, /--source-commit \$sourceCommit/);
-  for (const gate of ['productionUiOk','assistUiOk','reliabilityUiOk']) assert.match(powershell, new RegExp(`-and \\$evidence\\.${gate}`));
+  for (const gate of ['productionUiOk','assistUiOk','reliabilityUiOk','operationsUiOk']) assert.match(powershell, new RegExp(`-and \\$evidence\\.${gate}`));
 });
 
 
@@ -166,4 +166,15 @@ test('isolated smoke waits for a late first render before using its one source-s
 test('isolated smoke waits for all twenty Reliability Center rows before capture', () => {
   assert.match(runner, /reliabilityRows===20/);
   assert.match(runner, /reliabilityState!==['"]Waiting['"]/);
+});
+
+
+test('isolated smoke proves Operations Lab views scenarios keyboard privacy and four layouts', () => {
+  assert.match(runner, /operationsUiState/);
+  assert.match(runner, /viewCount===10/);
+  assert.match(runner, /scenarioCount===5/);
+  assert.match(runner, /itemCount===4/);
+  assert.match(runner, /commandJournalDelta===0/);
+  assert.match(runner, /keyboardMoved===true/);
+  assert.match(runner, /operationsUiOk/);
 });

@@ -527,6 +527,12 @@
           <article class="assist-card policy-impact-card"><span class="eyebrow">Policy impact preview</span><h3 id="assistPolicyTitle">No policy preview</h3><p id="assistPolicySummary">Choose a profile or containment change to inspect its live effect.</p><ul id="assistPolicyChanges" class="assist-list"></ul><div class="assist-actions"><button id="assistPreviewSafe">Preview Safe</button><button id="assistPreviewBalanced">Preview Balanced</button><button id="assistPreviewFast">Preview Fast</button><button id="assistPolicyConfirm" hidden>Confirm change</button></div></article>
           <article class="assist-card wizard-card"><div class="section-heading"><div><span class="eyebrow">Session wizard</span><h3 id="assistWizardTitle">Start mock interview</h3></div><b id="assistWizardProgress">0/0</b></div><div class="assist-filters"><button id="assistWizardStart">Start guide</button><button id="assistWizardEnd">End guide</button></div><ol id="assistWizardSteps" class="assist-list"></ol></article>
           <article class="assist-card reliability-card"><div class="section-heading"><div><span class="eyebrow">Reliability Center</span><h3 id="assistReliabilityState">Waiting</h3><p>Command, lifecycle, transport, proof, accessibility, pacing, and release evidence in one operator view.</p></div></div><div id="assistReliabilityGroups" class="reliability-groups"></div></article>
+          <article class="assist-card operations-lab" id="operationsLab" data-view="flow" data-scenario="current" data-privacy="safe">
+            <div class="section-heading"><div><span class="eyebrow">Operations Lab</span><h3>Inspect runtime behavior without changing it</h3><p id="operationsLabSummary">Flow view | 4 content-free capabilities | Current runtime</p></div><span id="operationsLabPrivacy" class="operations-lab-privacy" data-tone="good">Metadata-only</span></div>
+            <div class="operations-lab-toolbar"><div id="operationsLabTabs" class="operations-lab-tabs" role="tablist" aria-label="Operations Lab views"></div><label>Scenario<select id="operationsLabScenario" aria-label="Read-only Operations Lab scenario"></select></label></div>
+            <p id="operationsLabScenarioDetail" class="muted">Live metadata only. No simulation is applied.</p>
+            <section id="operationsLabPanel" class="operations-lab-panel" role="tabpanel" aria-live="polite"></section>
+          </article>
         </div>
       </section>
 

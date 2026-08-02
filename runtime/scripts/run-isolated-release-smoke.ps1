@@ -119,6 +119,7 @@ finally {
                 -and $evidence.productionUiOk `
                 -and $evidence.assistUiOk `
                 -and $evidence.reliabilityUiOk `
+      -and $evidence.operationsUiOk `
                 -and $processClosed `
                 -and $profileRemoved
             )

@@ -20,7 +20,9 @@ test('Cycle 182: partial proof reports exact proven missing and mismatched membe
 });
 
 test('Cycle 183: proof retry is bounded exponential and stops on missing render', () => {
-  assert.equal(deriveProofRetryPolicy({ attempt: 0, now: 100 }).dueAt, 250);
+  const retry = deriveProofRetryPolicy({ batchId:'b', attempt:0, now:100, randomSeed:'cycle-183' });
+  assert.equal(retry.dueAt, 100 + retry.delayMs);
+  assert.ok(retry.delayMs >= 25 && retry.delayMs <= 5000);
   assert.equal(deriveProofRetryPolicy({ attempt: 4 }).terminal, true);
   assert.equal(deriveProofRetryPolicy({ batchStillRendered: false }).reason, 'rendered_batch_missing');
   assert.equal(resetProofRetry().attempt, 0);

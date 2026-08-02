@@ -355,7 +355,7 @@ test('controller sends one full snapshot then semantic deltas per dashboard port
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const source = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
   assert.match(source, /PMIA_DASHBOARD_DELTA/);
-  assert.match(source, /buildSnapshotDelta\(entry\.lastSnapshot, snapshot\)/);
+  assert.match(source, /buildSnapshotDelta\(entry\.lastSnapshot, snapshot, \{ baseGeneration: entry\.generation, nextGeneration \}\)/);
   assert.match(source, /lastSnapshot:\s*null/);
 });
 

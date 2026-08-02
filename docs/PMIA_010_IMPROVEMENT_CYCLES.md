@@ -108,3 +108,37 @@ These are view-only projections over authoritative state. They do not create a s
 - Complete validator process exited 0.
 
 Fresh exact-commit validation, isolated Edge evidence, deterministic release/handoff manifests, cleanup verification, and the final PMIA 0.10 technical HTML remain the closing gates.
+## Operations Lab Cycles 71–150 — source complete
+
+### Bug cycles 71–90: transport, proof, persistence, and operator safety
+
+- Epoch-safe request correlation, bounded pending capacity, and atomic response claims.
+- Fingerprinted generation-ordered dashboard deltas with full-resync requirements.
+- Lossless in-flight commit follow-up and deterministic all-session flushing.
+- ABA-safe delivery leases and stronger rendered-turn identity.
+- Consumable proof records, corrected partial-proof recovery, and deterministic bounded proof retry.
+- Required-capability drift, future-evidence rejection, single-owner circuit probes, bounded reconnect guidance, broader end counts, state-fingerprinted undo, and race-safe live announcements.
+
+### Improvement cycles 91–110: Operations Lab foundation
+
+- Flow: Question Flow Map, Queue Aging Bands, Decision SLA, Bottleneck Attribution.
+- Transport: Hop Trace, Circuit Countdown, Profile Explanation, Degraded-Mode Explainer.
+- Proof: Provenance Explorer, Partial Repair Preview, Duplicate Capture Detector, Export Readiness.
+- Recovery: Checkpoint Timeline, read-only Recovery Simulation, Safe Action Checklist, Attention Budget.
+- Closure: Pacing Signal, Silence Window, Alert Suppression Summary, Closure Preview.
+### Bug cycles 111–130: production integration and Lab hardening
+
+- Checked snapshot synchronization is active in the dashboard, with controller generations, heartbeat-compatible bases, stale-full rejection, explicit resync, and bounded resync evidence.
+- Dashboard pending commands are capped while identical pending operations retain promise reuse.
+- Operations Lab local state resets by session, validates views and scenarios, follows keyboard tab semantics, and never dispatches a runtime command.
+- Ages and countdowns clamp safely, timestamp zero remains valid, output is privacy-audited, selected-view rendering remains bounded, and release evidence requires all Operations Lab layouts.
+
+### Improvement cycles 131–150: operator insight expansion
+
+- Signals: Change Radar, Confidence Ledger, Attention Saturation, Decision Queue.
+- Forecast: Queue Projection, Proof ETA, Recovery ETA, Interview Pace.
+- Plans: Route Switch Plan, Containment Exit Plan, Resume Plan, End Session Plan.
+- Evidence: Evidence Coverage, Missing Proof Matrix, Support Bundle Preview, Release Delta.
+- Review: Milestone Trail, Incident Outcome Review, Decision Effectiveness, Next Mock Checklist.
+
+Operations Lab is a read-only, metadata-only projection inside Assist. It exposes ten local views, five recovery scenarios, forty bounded capabilities, four cards per selected view, and no second state, transport, command, provider-write, proof, or recovery owner. Executable verification remains deferred until all source work is complete.

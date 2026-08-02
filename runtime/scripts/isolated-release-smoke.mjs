@@ -150,6 +150,8 @@ const evidence = {
   assistUi: {},
   assistUiOk: false,
   reliabilityUiOk: false,
+  operationsUi: {},
+  operationsUiOk: false,
   failureDetails: null,
   cleanup: { processTreeClosed: false, profileRemoved: false },
   limitations: [],
@@ -423,6 +425,34 @@ try {
     const value=JSON.parse(raw);const screenshot=await dashboard.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});const screenshotPath=path.join(path.dirname(evidencePath),`assist-${label}.png`);await fs.writeFile(screenshotPath,Buffer.from(screenshot.data,'base64'));return {...value,screenshotPath};
   }
 
+  async function operationsUiState(width, height, label) {
+    await dashboard.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await dashboard.evaluate(`document.querySelector('[data-view="assist"]')?.click(); true`, { userGesture: true });
+    await waitFor(`Operations Lab ready (${label})`, async () => {
+      const raw = await dashboard.evaluate(`(()=>{const panel=document.getElementById('panelAssist');const lab=document.getElementById('operationsLab');return JSON.stringify({assistActive:Boolean(panel?.classList.contains('active')),viewCount:document.querySelectorAll('#operationsLabTabs [role="tab"]').length,itemCount:document.querySelectorAll('#operationsLabPanel [data-operations-lab-item]').length,privacy:String(lab?.dataset?.privacy||''),summary:(document.getElementById('operationsLabSummary')?.textContent||'').trim()})})()`);
+      const value=JSON.parse(raw);
+      return { ok:value.assistActive&&value.viewCount===10&&value.itemCount===4&&value.privacy==='safe'&&Boolean(value.summary), value };
+    },10000,100);
+    const before=await pilotState();
+    const interactionRaw=await dashboard.evaluate(`(()=>{const first=document.querySelector('[data-operations-lab-view="flow"]');first?.focus();first?.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));const keyboardMoved=document.querySelector('[data-operations-lab-view="transport"]')?.getAttribute('aria-selected')==='true';const scenario=document.getElementById('operationsLabScenario');if(scenario){scenario.value='network_loss';scenario.dispatchEvent(new Event('change',{bubbles:true}));}return JSON.stringify({keyboardMoved,scenario:String(document.getElementById('operationsLab')?.dataset?.scenario||''),itemCount:document.querySelectorAll('#operationsLabPanel [data-operations-lab-item]').length})})()`,{userGesture:true});
+    const interaction=JSON.parse(interactionRaw);
+    await waitFor(`Operations Lab scenario rendered (${label})`,async()=>{
+      const raw=await dashboard.evaluate(`(()=>JSON.stringify({scenario:String(document.getElementById('operationsLab')?.dataset?.scenario||''),items:document.querySelectorAll('#operationsLabPanel [data-operations-lab-item]').length}))()`);
+      const value=JSON.parse(raw);
+      return { ok:value.scenario==='network_loss'&&value.items===4, value };
+    },5000,50);
+    const raw=await dashboard.evaluate(`(()=>{const required=['operationsLab','operationsLabSummary','operationsLabPrivacy','operationsLabTabs','operationsLabScenario','operationsLabScenarioDetail','operationsLabPanel'];const lab=document.getElementById('operationsLab');return JSON.stringify({viewport:{width:innerWidth,height:innerHeight},scrollWidth:document.documentElement.scrollWidth,horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1,required:Object.fromEntries(required.map(id=>[id,Boolean(document.getElementById(id))])),viewCount:document.querySelectorAll('#operationsLabTabs [role="tab"]').length,scenarioCount:document.querySelectorAll('#operationsLabScenario option').length,itemCount:document.querySelectorAll('#operationsLabPanel [data-operations-lab-item]').length,privacy:String(lab?.dataset?.privacy||''),view:String(lab?.dataset?.view||''),scenario:String(lab?.dataset?.scenario||''),aria:{tablist:document.getElementById('operationsLabTabs')?.getAttribute('role')||'',tabpanel:document.getElementById('operationsLabPanel')?.getAttribute('role')||'',selected:document.querySelectorAll('#operationsLabTabs [aria-selected="true"]').length}})})()`);
+    const value=JSON.parse(raw);
+    const after=await pilotState();
+    value.commandJournalDelta=Math.max(0,(after?.commandJournal?.length||0)-(before?.commandJournal?.length||0));
+    value.keyboardMoved=interaction.keyboardMoved;
+    const screenshot=await dashboard.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+    const screenshotPath=path.join(path.dirname(evidencePath),`operations-${label}.png`);
+    await fs.writeFile(screenshotPath,Buffer.from(screenshot.data,'base64'));
+    await dashboard.evaluate(`(()=>{document.querySelector('[data-operations-lab-view="flow"]')?.click();const scenario=document.getElementById('operationsLabScenario');if(scenario){scenario.value='current';scenario.dispatchEvent(new Event('change',{bubbles:true}));}return true})()`,{userGesture:true});
+    return { ...value, screenshotPath };
+  }
+
   const desktopUi = await dashboardUiState(1200, 900, 'desktop');
   const mobileUi = await dashboardUiState(320, 900, '320px');
   const tinyUi = await dashboardUiState(280, 900, '280px');
@@ -432,10 +462,14 @@ try {
   const assistDesktop = await assistUiState(1200, 900, 'desktop');
   const assistMobile = await assistUiState(320, 900, '320px');
   const assistTiny = await assistUiState(280, 900, '280px');
+  const operationsDesktop = await operationsUiState(1200, 900, 'desktop');
+  const operationsMobile = await operationsUiState(320, 900, '320px');
+  const operationsTiny = await operationsUiState(280, 900, '280px');
   await dashboard.send('Emulation.setEmulatedMedia', { media: 'print' });
   const printUi = await dashboardUiState(1200, 900, 'print');
   const productionPrint = await productionUiState(1200, 900, 'print');
   const assistPrint = await assistUiState(1200, 900, 'print');
+  const operationsPrint = await operationsUiState(1200, 900, 'print');
   await dashboard.send('Emulation.setEmulatedMedia', { media: 'screen' });
   await dashboard.send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 900, deviceScaleFactor: 1, mobile: false });
   evidence.pilotUi = { desktop: desktopUi, mobile: mobileUi, tiny: tinyUi, print: printUi };
@@ -452,6 +486,14 @@ try {
   evidence.assistUi = { desktop: assistDesktop, mobile: assistMobile, tiny: assistTiny, print: assistPrint };
   evidence.reliabilityUiOk = [assistDesktop, assistMobile, assistTiny, assistPrint].every(value => Boolean(value.reliabilityState) && value.reliabilityState !== 'Waiting' && value.reliabilityRows === 20);
   evidence.assistUiOk = evidence.reliabilityUiOk && [assistDesktop, assistMobile, assistTiny, assistPrint].every(value => (!value.horizontalOverflow && value.assistActive && value.actionDock && value.controlCount > 0 && Object.values(value.required).every(Boolean) && value.accessibility.polite && value.accessibility.assertive));
+  evidence.operationsUi = { desktop:operationsDesktop, mobile:operationsMobile, tiny:operationsTiny, print:operationsPrint };
+  evidence.operationsUiOk = [operationsDesktop,operationsMobile,operationsTiny,operationsPrint].every(value => (
+    !value.horizontalOverflow
+    && Object.values(value.required).every(Boolean)
+    && value.viewCount===10 && value.scenarioCount===5 && value.itemCount===4
+    && value.privacy==='safe' && value.keyboardMoved===true && value.commandJournalDelta===0
+    && value.aria.tablist==='tablist' && value.aria.tabpanel==='tabpanel' && value.aria.selected===1
+  ));
   evidence.productionUi = { desktop: productionDesktop, mobile: productionMobile, tiny: productionTiny, print: productionPrint };
   evidence.productionUiOk = [productionDesktop, productionMobile, productionTiny, productionPrint].every(value => (
     !value.horizontalOverflow
@@ -467,7 +509,7 @@ try {
   ));
 
   evidence.deliveryProofOk = proof.value.deliveryProofOk && evidence.outbox.count === 0 && evidence.gap.clear;
-  evidence.ok = evidence.deliveryProofOk && evidence.transportDrillOk && evidence.pilotUiOk && evidence.productionUiOk && evidence.assistUiOk && evidence.reliabilityUiOk;
+  evidence.ok = evidence.deliveryProofOk && evidence.transportDrillOk && evidence.pilotUiOk && evidence.productionUiOk && evidence.assistUiOk && evidence.reliabilityUiOk && evidence.operationsUiOk;
 } catch (error) {
   failure = error;
   evidence.error = String(error?.stack || error);

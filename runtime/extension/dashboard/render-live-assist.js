@@ -9,6 +9,7 @@ import { deriveCommandHistory } from './command-history-model.js';
 import { deriveLivePerformanceForecast } from '../shared/live-performance-forecast.js';
 import { deriveSessionWizard } from './session-wizard-model.js';
 import { deriveReliabilityCenter } from './reliability-center-model.js';
+import { renderOperationsLab } from './render-operations-lab.js';
 
 function node(document,id){ return document.getElementById(id); }
 function set(document,id,value){ const target=node(document,id); if(target) target.textContent=String(value ?? ''); }
@@ -47,4 +48,5 @@ export function renderLiveAssist({ document, snapshot, state, now = Date.now(), 
 
   const reliability=deriveReliabilityCenter(snapshot || {},now); set(document,'assistReliabilityState',`${reliability.total-reliability.attention}/${reliability.total} healthy`);
   replaceList(document,'assistReliabilityGroups',reliability.groups,group=>{ const section=document.createElement('section'); section.className='reliability-group'; const title=document.createElement('h4'); title.textContent=group.label; section.append(title); const list=document.createElement('ul'); list.className='reliability-list'; for(const entry of group.items){ const row=document.createElement('li'); row.dataset.tone=entry.tone; const strong=document.createElement('strong'); strong.textContent=`${entry.label} · ${entry.state.replaceAll('_',' ')}`; const detail=document.createElement('span'); detail.textContent=entry.detail; row.append(strong,detail); list.append(row); } section.append(list); return section; });
+  renderOperationsLab({ document, snapshot:snapshot || {}, state:state.operationsLab || {}, now });
 }

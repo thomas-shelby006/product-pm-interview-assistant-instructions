@@ -19,7 +19,7 @@ test('actionable session blocks end without archive-and-end confirmation', () =>
     senderOutboxState: { count: 1 }
   }), { now: 1000, token: 'token-2' });
   assert.equal(prepared.canEnd, false);
-  assert.deepEqual(prepared.counts, { actionable: 2, inFlight: 1, unpersisted: 1, liveActive: 0, unresolvedChoice: 0, phase: 'setup' });
+  assert.deepEqual(prepared.counts, { actionable: 2, inFlight: 1, unpersisted: 1, pendingCommands: 0, liveActive: 0, unresolvedChoice: 0, phase: 'setup' });
   assert.equal(validateSessionEnd(prepared, { token: 'token-2', mode: 'clean', now: 2000 }).ok, false);
   const blockedArchive = validateSessionEnd(prepared, { token: 'token-2', mode: 'archive_and_end', now: 2000 });
   assert.equal(blockedArchive.ok, false);
