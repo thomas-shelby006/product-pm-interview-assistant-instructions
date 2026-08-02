@@ -18,9 +18,9 @@ test('non-boot forwarding acknowledges durable ownership before receiver deliver
   assert.match(block, /queued:\s*true/);
 });
 
-test('persisted delivery continues in the existing session mutation lane', () => {
+test('persisted delivery uses a separate ordered lane from durable acceptance', () => {
   const block = sliceBetween('function schedulePersistedDelivery', 'async function handleForward');
-  assert.match(block, /void serialize\(/);
+  assert.match(block, /void deliveryCoordinator\.run\(/);
   assert.match(block, /completePersistedDelivery\(envelope\)/);
   assert.match(block, /envelope\.sessionId/);
 });

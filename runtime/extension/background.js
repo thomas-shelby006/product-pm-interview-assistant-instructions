@@ -25,6 +25,7 @@ const logStore = createSessionLogStore({
 });
 void logStore.purgeLegacyLocalLogs().catch(() => {});
 const operationCoordinator = createSessionMutationCoordinator();
+const deliveryCoordinator = createSessionMutationCoordinator();
 const registryWriteCoordinator = createSessionMutationCoordinator();
 let registryPromise = null;
 let pilotController = null;
@@ -309,9 +310,9 @@ async function completePersistedDelivery(envelope) {
 }
 
 function schedulePersistedDelivery(envelope) {
-  void serialize(
-    () => completePersistedDelivery(envelope),
-    envelope.sessionId
+  void deliveryCoordinator.run(
+    envelope.sessionId,
+    () => completePersistedDelivery(envelope)
   ).catch(() => {});
 }
 
