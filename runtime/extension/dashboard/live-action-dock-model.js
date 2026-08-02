@@ -1,9 +1,10 @@
+import { deriveOperatorChoice } from '../shared/operator-choice-model.js';
 function protectedCount(counts = {}) {
   if (Number.isFinite(Number(counts.unresolved))) return Math.max(0, Number(counts.unresolved));
   return Math.max(0, Number(counts.pending || 0)) + Math.max(0, Number(counts.inFlight || 0));
 }
 export function deriveLiveActionDock(snapshot = {}) {
-  const choice = snapshot.operatorChoice || null;
+  const choice = snapshot.operatorChoice || deriveOperatorChoice(snapshot);
   const decision = snapshot.production?.decisionCenter?.primary || null;
   const waiting = protectedCount(snapshot.ledgerCounts || {});
   const answer = String(snapshot.answerState?.state || snapshot.receiver?.answerState?.state || 'idle');
