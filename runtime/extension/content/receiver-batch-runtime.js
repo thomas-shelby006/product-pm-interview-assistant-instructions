@@ -383,8 +383,8 @@ export function createReceiverBatchRuntime({
       if (!interruptPlan || !token || token !== interruptPlan.token) {
         return { ok: false, error: 'interrupt_confirmation_required', plan: this.previewInterrupt() };
       }
-      const latestId = planner.next().entries.at(-1)?.id || '';
-      if (latestId !== interruptPlan.latestId) return { ok: false, error: 'interrupt_plan_stale', plan: this.previewInterrupt() };
+      const currentPlan = buildInterruptPlan(planner.snapshot(), interruptPlan.createdAt);
+      if (currentPlan.token !== interruptPlan.token) return { ok: false, error: 'interrupt_plan_stale', plan: this.previewInterrupt() };
       if (adapter.isGenerating?.()) {
         if (!adapter.stopGenerating?.()) return { ok: false, error: 'stop_failed' };
         emit('answer_interrupt_requested', { nextCount: planner.nextSize, token });

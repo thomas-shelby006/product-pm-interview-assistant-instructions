@@ -10,6 +10,23 @@ function cleanText(value, max = 160) {
   return text && text.length <= max ? text : '';
 }
 
+function normalizePolicyPreview(value) {
+  if (!value || typeof value !== 'object') return null;
+  const kind = ['operating_profile','containment_override'].includes(String(value.kind || '')) ? String(value.kind) : '';
+  const id = cleanText(value.id, 500);
+  const fingerprint = cleanText(value.fingerprint, 500);
+  const target = cleanText(value.target, 40);
+  if (!kind || !id || !fingerprint || !target) return null;
+  return { id, kind, target, fingerprint, createdAt:Math.max(0,Number(value.createdAt || 0)), expiresAt:Math.max(0,Number(value.expiresAt || 0)), protectedCount:Math.max(0,Number(value.protectedCount || 0)) };
+}
+
+const STRICT_PAYLOAD_KEYS = Object.freeze({
+  end_session:['confirmToken','mode'], apply_operating_profile:['profile','preview'], set_containment_override:['enabled','durationMs','reason','preview'],
+  resolve_operator_choice:['choiceId','fingerprint','option'], resolve_no_response:['action'], interrupt_latest:['token'],
+  export_support_bundle:[], set_session_phase:['phase','reason'], start_mock:['plannedDurationMs']
+});
+function pruneStrictPayload(command,payload){ const keys=STRICT_PAYLOAD_KEYS[command]; if(!keys) return payload; return Object.fromEntries(keys.filter(key=>key in payload).map(key=>[key,payload[key]])); }
+
 export function dashboardPortName(sessionId) {
   const normalized = cleanText(sessionId, 128);
   if (!normalized) throw new TypeError('Invalid PMIA dashboard session');
@@ -106,19 +123,29 @@ export function normalizeDashboardCommand(value) {
   }
   if (command === 'interrupt_latest') payload.token = cleanText(payload.token, 160);
   if (command === 'resolve_operator_choice') {
-    payload.choiceId = cleanText(payload.choiceId, 200);
-    payload.fingerprint = cleanText(payload.fingerprint, 500);
-    payload.option = cleanText(payload.option, 80);
-    if (!payload.choiceId || !payload.fingerprint || !payload.option) return null;
+    const choiceId = cleanText(payload.choiceId, 200);
+    const fingerprint = cleanText(payload.fingerprint, 500);
+    const option = cleanText(payload.option, 80);
+    if (!choiceId || !fingerprint || !option) return null;
+    for (const key of Object.keys(payload)) delete payload[key];
+    Object.assign(payload, { choiceId, fingerprint, option });
   }
   if (command === 'resolve_no_response') payload.action = ['wait', 'retry', 'continue'].includes(payload.action) ? payload.action : 'wait';
   if (command === 'apply_operating_profile') {
-    payload.profile = ['safe','balanced','fast'].includes(String(payload.profile || '')) ? String(payload.profile) : 'balanced';
+    const profile = ['safe','balanced','fast'].includes(String(payload.profile || '')) ? String(payload.profile) : '';
+    const preview = normalizePolicyPreview(payload.preview);
+    if (!profile || !preview) return null;
+    for (const key of Object.keys(payload)) delete payload[key];
+    Object.assign(payload, { profile, preview });
   }
   if (command === 'set_containment_override') {
-    payload.enabled = Boolean(payload.enabled);
-    payload.durationMs = Math.max(0, Math.min(15 * 60_000, Number(payload.durationMs) || 120_000));
-    payload.reason = cleanText(payload.reason, 80) || 'operator';
+    const enabled = Boolean(payload.enabled);
+    const durationMs = Math.max(0, Math.min(15 * 60_000, Number(payload.durationMs) || 120_000));
+    const reason = cleanText(payload.reason, 80) || 'operator';
+    const preview = normalizePolicyPreview(payload.preview);
+    if (!preview) return null;
+    for (const key of Object.keys(payload)) delete payload[key];
+    Object.assign(payload, { enabled, durationMs, reason, preview });
   }
   if (command === 'record_production_navigation') {
     const route = payload.route && typeof payload.route === 'object' ? payload.route : {};
@@ -136,8 +163,10 @@ export function normalizeDashboardCommand(value) {
     for (const key of Object.keys(payload)) delete payload[key];
   }
   if (command === 'end_session') {
-    payload.confirmToken = cleanText(payload.confirmToken, 160);
-    payload.mode = ['clean', 'archive_and_end'].includes(payload.mode) ? payload.mode : 'clean';
+    const confirmToken = cleanText(payload.confirmToken, 160);
+    const mode = ['clean', 'archive_and_end'].includes(payload.mode) ? payload.mode : 'clean';
+    for (const key of Object.keys(payload)) delete payload[key];
+    Object.assign(payload, { confirmToken, mode });
   }
-  return { sessionId, requestId, command, payload };
+  return { sessionId, requestId, command, payload:pruneStrictPayload(command,payload) };
 }

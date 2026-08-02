@@ -147,9 +147,28 @@ export class DeliveryLedgerIndex {
     return counts;
   }
 
+  repair(entries = []) {
+    const kept=[]; const rejected=[]; const ids=new Set(); const sequences=new Set();
+    for (const entry of sortEntries(Array.isArray(entries) ? entries : [])) {
+      const id=String(entry?.id || ''); const key=sequenceKey(entry?.envelope?.sourceProvider,entry?.envelope?.seq);
+      const reason=!id?'invalid_id':ids.has(id)?'duplicate_id':key&&sequences.has(key)?'duplicate_sequence':'';
+      if (reason) { rejected.push({ id, reason }); continue; }
+      ids.add(id); if(key) sequences.add(key); kept.push(entry);
+    }
+    this.rebuild(kept);
+    const audit=this.audit(kept);
+    return { ok:true, kept:[...kept], entries:[...kept], rejected, stats:this.stats(), audit };
+  }
+
   audit(entries = []) {
     const list = Array.isArray(entries) ? entries : [];
     const findings = [];
+    const seenIds=new Set(); const seenSequences=new Set();
+    for (const entry of list) {
+      const id=String(entry?.id || ''); const key=sequenceKey(entry?.envelope?.sourceProvider,entry?.envelope?.seq);
+      if (seenIds.has(id)) findings.push({ code:'duplicate_source_id', id }); else seenIds.add(id);
+      if (key && seenSequences.has(key)) findings.push({ code:'duplicate_source_sequence', id, sequence:key }); else if(key) seenSequences.add(key);
+    }
     if (this.#byId.size !== list.length || list.some(entry => this.byId(entry.id) !== entry)) findings.push({ code: 'identity_membership_mismatch' });
     for (const entry of list) {
       const key = sequenceKey(entry?.envelope?.sourceProvider, entry?.envelope?.seq);

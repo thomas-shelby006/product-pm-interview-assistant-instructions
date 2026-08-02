@@ -56,7 +56,7 @@ import { auditShortcutConflicts } from '../shared/shortcut-conflict-model.js';
 import { auditDashboardAccessibility } from './accessibility-audit.js';
 import { buildVisualPreferenceProof } from './visual-preference-proof.js';
 import { deriveOperatingProfile } from '../shared/operating-profile.js';
-import { buildPolicyImpactPreview, validatePolicyImpactConfirmation } from '../shared/policy-impact-preview.js';
+import { buildPolicyImpactPreview, policySnapshotFingerprint, validatePolicyImpactConfirmation } from '../shared/policy-impact-preview.js';
 import { renderLiveAssist } from './render-live-assist.js';
 
 const params = new URLSearchParams(location.search);
@@ -132,12 +132,15 @@ function sendCommand(command, payload = {}) {
     showToast('Dashboard is not connected.', 'error');
     return Promise.resolve({ ok: false, error: 'dashboard_disconnected' });
   }
+  const operationKey = `${String(command)}:${JSON.stringify(payload || {})}`;
+  const duplicate = [...state.pending.values()].find(item => item.operationKey === operationKey);
+  if (duplicate?.promise) return duplicate.promise;
   const id = requestId();
-  const promise = new Promise(resolve => {
-    state.pending.set(id, { resolve, command, startedAt: Date.now() });
-    renderOperationActivity();
-    updateControlAvailability();
-    setTimeout(() => {
+  let resolvePending;
+  const promise = new Promise(resolve => { resolvePending = resolve; });
+  {
+    const resolve = resolvePending;
+    const timeoutId = setTimeout(() => {
       const pending = state.pending.get(id);
       if (!pending) return;
       state.pending.delete(id);
@@ -145,18 +148,28 @@ function sendCommand(command, payload = {}) {
       renderOperationActivity();
       updateControlAvailability();
     }, 12000);
-  });
-  state.port.postMessage({
-    sessionId,
-    requestId: id,
-    command,
-    payload
-  });
+    state.pending.set(id, { resolve, command, startedAt: Date.now(), timeoutId, promise, operationKey });
+    renderOperationActivity();
+    updateControlAvailability();
+  }
+  try {
+    state.port.postMessage({ sessionId, requestId: id, command, payload });
+  } catch {
+    const pending = state.pending.get(id);
+    if (pending) {
+      clearTimeout(pending.timeoutId);
+      state.pending.delete(id);
+      pending.resolve({ ok: false, error: 'dashboard_send_failed' });
+      renderOperationActivity();
+      updateControlAvailability();
+    }
+  }
   return promise;
 }
 
 function connect() {
   clearTimeout(state.reconnectTimer);
+  if (state.port) return;
   if (!sessionId) {
     setConnection('Missing session', 'error');
     document.body.dataset.fatal = 'true';
@@ -169,7 +182,9 @@ function connect() {
     state.port = port;
     port.onMessage.addListener(handlePortMessage);
     port.onDisconnect.addListener(() => {
+      if (state.port !== port) return;
       state.port = null;
+      state.policyPreview = null;
       failPendingCommands(state.sessionEnded ? 'session_ended' : 'dashboard_disconnected');
       if (state.sessionEnded) {
         setConnection('Session ended', 'error');
@@ -186,11 +201,19 @@ function connect() {
 
 function failPendingCommands(reason = 'dashboard_disconnected') {
   for (const pending of state.pending.values()) {
+    clearTimeout(pending.timeoutId);
     pending.resolve({ ok: false, error: reason });
   }
   state.pending.clear();
   renderOperationActivity();
   updateControlAvailability();
+}
+
+function reconcilePolicyPreview(snapshot) {
+  if (!state.policyPreview) return;
+  if (!snapshot || policySnapshotFingerprint(snapshot) !== state.policyPreview.fingerprint || Date.now() > Number(state.policyPreview.expiresAt || 0)) {
+    state.policyPreview = null;
+  }
 }
 
 function scheduleReconnect() {
@@ -206,6 +229,7 @@ function handlePortMessage(message) {
     reconnectPolicy.succeed();
     state.sessionEnded = false;
     state.snapshot = message.snapshot;
+    reconcilePolicyPreview(state.snapshot);
     state.efficiency.full += 1;
     state.efficiency.lastMode = 'Full';
     state.efficiency.changedSections = Object.keys(message.snapshot || {}).length;
@@ -215,6 +239,7 @@ function handlePortMessage(message) {
   }
   if (message?.type === 'PMIA_DASHBOARD_DELTA' && state.snapshot) {
     state.snapshot = applySnapshotDelta(state.snapshot, message.delta);
+    reconcilePolicyPreview(state.snapshot);
     state.efficiency.delta += 1;
     state.efficiency.lastMode = 'Delta';
     state.efficiency.changedSections = message.delta?.keys?.length || 0;
@@ -225,6 +250,7 @@ function handlePortMessage(message) {
   if (message?.type === 'PMIA_DASHBOARD_SESSION_ENDED') {
     state.sessionEnded = true;
     state.snapshot = null;
+    reconcilePolicyPreview(null);
     failPendingCommands('session_ended');
     clearTimeout(state.reconnectTimer);
     setConnection('Session ended', 'error');
@@ -252,6 +278,7 @@ function handlePortMessage(message) {
   if (message?.type === 'PMIA_DASHBOARD_COMMAND_RESULT') {
     const pending = state.pending.get(message.requestId);
     if (!pending) return;
+    clearTimeout(pending.timeoutId);
     state.pending.delete(message.requestId);
     pending.resolve(message.result || { ok: false, error: 'empty_command_result' });
     renderOperationActivity();
@@ -1467,7 +1494,7 @@ function render(changedKeys = null) {
   renderAccessibility(state.snapshot);
   renderPreflightAndCrash(state.snapshot, now);
   renderProduction(state.snapshot);
-  renderLiveAssist({ document, snapshot: state.snapshot, state, now });
+  renderLiveAssist({ document, snapshot: state.snapshot, state, now, workspace: state.activeView === 'assist' });
   renderCommandPalette();
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
@@ -1624,7 +1651,7 @@ document.addEventListener('click', event => {
     const validation = validatePolicyImpactConfirmation(state.snapshot || {}, state.policyPreview, Date.now());
     if (!validation.ok) { showToast(validation.error, 'error'); state.policyPreview=null; scheduleRender(); return; }
     const preview=validation.preview; const command=preview.kind==='operating_profile'?'apply_operating_profile':'set_containment_override';
-    const payload=preview.kind==='operating_profile'?{ profile:preview.target }:{ enabled:preview.target==='enable', durationMs:120000, reason:'policy_preview' };
+    const payload=preview.kind==='operating_profile'?{ profile:preview.target, preview }:{ enabled:preview.target==='enable', durationMs:120000, reason:'policy_preview', preview };
     void runCommand(event.target.closest('#assistPolicyConfirm'),command,payload).then(result=>{ if(result?.ok) state.policyPreview=null; scheduleRender(); });
     return;
   }

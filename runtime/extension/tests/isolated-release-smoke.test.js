@@ -103,7 +103,7 @@ test('smoke mirrors the production ChatGPT composer and send selectors', () => {
 
 test('isolated smoke resolves explicit no-response hold through the visible Continue control', () => {
   assert.match(runner, /batchState\?\.pendingNoResponse/);
-  assert.match(runner, /getElementById\('resolveNoResponseContinue'\)/);
+  assert.match(runner, /data-choice-option=\"continue\"/);
   assert.match(runner, /noResponseResolution = \{ required: true, action: 'continue'/);
 });
 
@@ -133,10 +133,10 @@ test('isolated smoke reactivates Review and waits for rendered drill and trace e
 });
 
 
-test('isolated smoke opens Queue and waits for the visible enabled no-response Continue control', () => {
-  assert.match(runner, /no-response Continue control ready/);
-  assert.equal(runner.includes(`data-view=\"queue\"`), true);
-  assert.match(runner, /value\.exists && !value\.hidden && !value\.disabled && value\.visible && value\.queueActive/);
+test('isolated smoke opens Assist and waits for the explicit no-response Continue choice', () => {
+  assert.match(runner, /explicit no-response Continue choice ready/);
+  assert.equal(runner.includes(`data-view=\"assist\"`), true);
+  assert.match(runner, /value\.exists && !value\.hidden && !value\.disabled && value\.visible && value\.assistActive && value\.choiceId && value\.fingerprint/);
 });
 
 

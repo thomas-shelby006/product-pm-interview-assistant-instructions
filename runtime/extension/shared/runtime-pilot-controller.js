@@ -60,10 +60,12 @@ import { restoreManagedLayout } from './layout-restoration.js';
 import { deriveOperatorDecisionCenter } from './operator-decision-center.js';
 import { commandForChoice, deriveOperatorChoice, validateOperatorChoice } from './operator-choice-model.js';
 import { deriveOperatingProfile } from './operating-profile.js';
+import { validatePolicyImpactConfirmation } from './policy-impact-preview.js';
 import { deriveContextualNavigation } from './cockpit-navigation.js';
 import { applyContainmentOverride, deriveContainmentStatus } from './containment-status.js';
 import { deriveTransportAssurance } from './transport-assurance.js';
 import { deriveProviderRouteReadiness } from './provider-route-readiness.js';
+import { deriveProviderRouteTransition } from './provider-route-transition.js';
 import { deriveUpgradeReadiness } from './upgrade-readiness.js';
 import { deriveLiveScorecard } from './live-scorecard.js';
 import { deriveProductionDiagnostics } from './production-diagnostics.js';
@@ -308,11 +310,12 @@ export function createRuntimePilotController({
       const operatingProfile = deriveOperatingProfile(productionBase);
       const containment = deriveContainmentStatus(productionBase, Date.now());
       const transportAssurance = deriveTransportAssurance(productionBase, Date.now());
-      const routeReadiness = deriveProviderRouteReadiness(productionBase);
+      const routeTransition = deriveProviderRouteTransition(productionBase, productionBase.routeTransition?.target || {});
+      const routeReadiness = deriveProviderRouteReadiness({ ...productionBase, routeTransition });
       const upgradeReadiness = deriveUpgradeReadiness(productionBase);
       const scorecard = deriveLiveScorecard(productionBase);
       const navigation = deriveContextualNavigation({ ...productionBase, production: { decisionCenter } });
-      const partial = { decisionCenter, operatingProfile, containment, transportAssurance, routeReadiness, upgradeReadiness, scorecard, navigation };
+      const partial = { decisionCenter, operatingProfile, containment, transportAssurance, routeTransition, routeReadiness, upgradeReadiness, scorecard, navigation };
       const diagnostics = deriveProductionDiagnostics(productionBase, partial);
       const releaseHandoff = deriveReleaseHandoff(productionBase, { ...partial, diagnostics }, productionBase.releaseEvidence || {});
       production = { ...partial, diagnostics, releaseHandoff };
@@ -1437,7 +1440,8 @@ export function createRuntimePilotController({
       ...(snapshot?.senderOutboxState || {}),
       count: storedCount
     });
-    const prepared = prepareSessionEnd(pilot.snapshot(sessionId));
+    const endSnapshot = pilot.snapshot(sessionId);
+    const prepared = prepareSessionEnd({ ...endSnapshot, operatorChoice: deriveOperatorChoice(endSnapshot, Date.now()) });
     pilot.setEndGuard(sessionId, prepared);
     pilot.record(sessionId, 'session_end_prepared', { counts: prepared.counts, canEnd: prepared.canEnd, expiresAt: prepared.expiresAt });
     return { ok: true, ...prepared };
@@ -1445,10 +1449,23 @@ export function createRuntimePilotController({
 
   async function endSession(sessionId, registry, pilot, confirmation = {}) {
     const prepared = pilot.snapshot(sessionId)?.endGuard;
+    let stored;
+    try {
+      const key = senderOutboxStorageKey(sessionId);
+      const value = await storageArea.get(key);
+      stored = value?.[key];
+    } catch (error) {
+      return { ok:false, blocked:true, error:'outbox_state_unavailable', detail:safeError(error) };
+    }
+    const latestSnapshot = pilot.snapshot(sessionId);
+    pilot.setSenderOutboxState(sessionId, { ...(latestSnapshot?.senderOutboxState || {}), count:Array.isArray(stored) ? stored.length : 0 });
+    const currentSnapshot = pilot.snapshot(sessionId);
+    const currentCounts = prepareSessionEnd({ ...currentSnapshot, operatorChoice:deriveOperatorChoice(currentSnapshot,Date.now()) }).counts;
     const validation = validateSessionEnd(prepared, {
       token: confirmation.confirmToken,
       mode: confirmation.mode,
-      now: Date.now()
+      now: Date.now(),
+      currentCounts
     });
     if (!validation.ok) return { ok: false, blocked: true, ...validation };
     if (validation.mode === 'archive_and_end') pilot.archiveAllUnresolved(sessionId);
@@ -1726,6 +1743,8 @@ export function createRuntimePilotController({
         result = { ok: true, archived: pilot.archiveProven(sessionId).length };
         break;
       case 'apply_operating_profile': {
+        const confirmation = validatePolicyImpactConfirmation(pilot.snapshot(sessionId), payload.preview, Date.now());
+        if (!confirmation.ok || confirmation.preview.kind !== 'operating_profile' || confirmation.preview.target !== payload.profile) { result = { ok: false, error: confirmation.error || 'policy_preview_mismatch', blockers: confirmation.blockers || [] }; break; }
         const preview = deriveOperatingProfile(pilot.snapshot(sessionId), payload.profile);
         if (!preview.eligibility.allowed) { result = { ok: false, error: 'profile_blocked', blockers: preview.eligibility.blockers, profile: preview.id }; break; }
         const results = [];
@@ -1740,6 +1759,8 @@ export function createRuntimePilotController({
       }
       case 'set_containment_override': {
         const currentSnapshot = pilot.snapshot(sessionId);
+        const confirmation = validatePolicyImpactConfirmation(currentSnapshot, payload.preview, Date.now());
+        if (!confirmation.ok || confirmation.preview.kind !== 'containment_override' || (confirmation.preview.target === 'enable') !== Boolean(payload.enabled)) { result = { ok: false, error: confirmation.error || 'policy_preview_mismatch', blockers: confirmation.blockers || [] }; break; }
         const containment = deriveContainmentStatus(currentSnapshot, Date.now());
         if (payload.enabled && !containment.overrideEligible) { result = { ok: false, error: 'containment_override_blocked', containment }; break; }
         const controls = pilot.setContainmentOverride(sessionId, Boolean(payload.enabled), Number(payload.durationMs || 0), payload.reason || 'operator', Date.now());

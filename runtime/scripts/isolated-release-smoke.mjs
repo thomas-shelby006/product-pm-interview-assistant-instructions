@@ -14,6 +14,7 @@ const extensionPath = path.resolve(String(options['extension-path'] || ''));
 const profilePath = path.resolve(String(options['profile-path'] || ''));
 const evidencePath = path.resolve(String(options.evidence || 'pmia-isolated-release-evidence.json'));
 const skipLiveAnswer = String(options['skip-live-answer'] || 'false') === 'true';
+const sourceCommit = String(options.commit || options['source-commit'] || '').trim();
 if (!port || !extensionPath || !profilePath) throw new Error('Missing isolated smoke arguments');
 
 const endpoint = `http://127.0.0.1:${port}`;
@@ -123,6 +124,8 @@ const createdTargets = [];
 const session = `release-${Date.now()}`;
 const evidence = {
   version: '1.0',
+  sourceCommit,
+  commit: sourceCommit,
   generatedAt: new Date().toISOString(),
   isolatedProfile: { path: profilePath, temporary: true, normalProfileTouched: false },
   extensions: [],
@@ -144,6 +147,9 @@ const evidence = {
   pilotUiOk: false,
   productionUi: {},
   productionUiOk: false,
+  assistUi: {},
+  assistUiOk: false,
+  reliabilityUiOk: false,
   failureDetails: null,
   cleanup: { processTreeClosed: false, profileRemoved: false },
   limitations: [],
@@ -269,14 +275,14 @@ try {
     const selected = (current?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));
     if (selected.length === 3 && selected.every(item => item.state === 'proven')) break;
     if (current?.batchState?.pendingNoResponse) {
-      await dashboard.evaluate(`document.querySelector('[data-view="queue"]')?.click(); true`, { userGesture: true });
-      const control = await waitFor('no-response Continue control ready', async () => {
-        const raw = await dashboard.evaluate(`(()=>{const button=document.getElementById('resolveNoResponseContinue');const panel=document.querySelector('[data-view-panel="queue"]');const visible=Boolean(button&&(button.offsetWidth||button.offsetHeight||button.getClientRects().length));return JSON.stringify({exists:Boolean(button),hidden:Boolean(button?.hidden),disabled:Boolean(button?.disabled),visible,queueActive:Boolean(panel?.classList.contains('active'))})})()`);
+      await dashboard.evaluate(`document.querySelector('[data-view="assist"]')?.click(); true`, { userGesture: true });
+      const control = await waitFor('explicit no-response Continue choice ready', async () => {
+        const raw = await dashboard.evaluate(`(()=>{const button=document.querySelector('[data-choice-option="continue"]');const panel=document.getElementById('panelAssist');const visible=Boolean(button&&(button.offsetWidth||button.offsetHeight||button.getClientRects().length));return JSON.stringify({exists:Boolean(button),hidden:Boolean(button?.hidden),disabled:Boolean(button?.disabled),visible,assistActive:Boolean(panel?.classList.contains('active')),choiceId:String(button?.dataset?.choiceId||''),fingerprint:String(button?.dataset?.fingerprint||'')})})()`);
         const value = JSON.parse(raw);
-        return { ok: value.exists && !value.hidden && !value.disabled && value.visible && value.queueActive, value };
+        return { ok: value.exists && !value.hidden && !value.disabled && value.visible && value.assistActive && value.choiceId && value.fingerprint, value };
       }, 10000, 100);
-      const continued = await dashboard.evaluate(`(()=>{const button=document.getElementById('resolveNoResponseContinue');if(!button||button.hidden||button.disabled)return false;button.click();return true})()`, { userGesture: true });
-      if (!continued) throw new Error('No-response Continue control was ready but could not be clicked');
+      const continued = await dashboard.evaluate(`(()=>{const button=document.querySelector('[data-choice-option="continue"]');if(!button||button.hidden||button.disabled)return false;button.click();return true})()`, { userGesture: true });
+      if (!continued) throw new Error('Explicit no-response Continue choice was ready but could not be clicked');
       evidence.noResponseResolution = { required: true, action: 'continue', completedAt: Date.now(), control: control.value };
       break;
     }
@@ -378,6 +384,7 @@ try {
         horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1,
         required:Object.fromEntries(required.map(id=>[id,Boolean(document.getElementById(id))])),
         productionActive:Boolean(panel?.classList.contains('active')),
+        controlCount:panel?.querySelectorAll('button,input,select').length||0,
         gridColumns:grid?getComputedStyle(grid).gridTemplateColumns:'',
         health:(document.getElementById('productionHealthBadge')?.textContent||'').trim(),
         decision:(document.getElementById('productionDecisionTitle')?.textContent||'').trim(),
@@ -394,15 +401,30 @@ try {
     return { ...value, screenshotPath };
   }
 
+  async function assistUiState(width, height, label) {
+    await dashboard.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await dashboard.evaluate(`document.querySelector('[data-view="assist"]')?.click(); true`, { userGesture: true });
+    await waitFor(`Assist evidence ready (${label})`, async () => {
+      const raw = await dashboard.evaluate(`(()=>{const panel=document.getElementById('panelAssist');const title=(document.getElementById('assistChoiceTitle')?.textContent||'').trim();return JSON.stringify({assistActive:Boolean(panel?.classList.contains('active')),title})})()`);
+      const value=JSON.parse(raw);return { ok:value.assistActive&&Boolean(value.title),value };
+    },10000,100);
+    const raw=await dashboard.evaluate(`(()=>{const required=['panelAssist','choiceWorkspace','assistChoiceTitle','assistMilestones','assistTriageItems','assistRouteState','assistRecoveryState','assistCommandHistory','assistForecastState','assistPolicyTitle','assistWizardSteps','assistReliabilityState','assistReliabilityGroups','liveActionDock','dockPrimaryAction'];const panel=document.getElementById('panelAssist');return JSON.stringify({viewport:{width:innerWidth,height:innerHeight},scrollWidth:document.documentElement.scrollWidth,horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1,required:Object.fromEntries(required.map(id=>[id,Boolean(document.getElementById(id))])),assistActive:Boolean(panel?.classList.contains('active')),controlCount:panel?.querySelectorAll('button,input,select').length||0,actionDock:Boolean(document.getElementById('liveActionDock')),reliabilityState:(document.getElementById('assistReliabilityState')?.textContent||'').trim(),reliabilityRows:document.querySelectorAll('#assistReliabilityGroups .reliability-list li').length,accessibility:{polite:Boolean(document.querySelector('[aria-live="polite"]')),assertive:Boolean(document.querySelector('[aria-live="assertive"]'))}})})()`);
+    const value=JSON.parse(raw);const screenshot=await dashboard.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});const screenshotPath=path.join(path.dirname(evidencePath),`assist-${label}.png`);await fs.writeFile(screenshotPath,Buffer.from(screenshot.data,'base64'));return {...value,screenshotPath};
+  }
+
   const desktopUi = await dashboardUiState(1200, 900, 'desktop');
   const mobileUi = await dashboardUiState(320, 900, '320px');
   const tinyUi = await dashboardUiState(280, 900, '280px');
   const productionDesktop = await productionUiState(1200, 900, 'desktop');
   const productionMobile = await productionUiState(320, 900, '320px');
   const productionTiny = await productionUiState(280, 900, '280px');
+  const assistDesktop = await assistUiState(1200, 900, 'desktop');
+  const assistMobile = await assistUiState(320, 900, '320px');
+  const assistTiny = await assistUiState(280, 900, '280px');
   await dashboard.send('Emulation.setEmulatedMedia', { media: 'print' });
   const printUi = await dashboardUiState(1200, 900, 'print');
   const productionPrint = await productionUiState(1200, 900, 'print');
+  const assistPrint = await assistUiState(1200, 900, 'print');
   await dashboard.send('Emulation.setEmulatedMedia', { media: 'screen' });
   await dashboard.send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 900, deviceScaleFactor: 1, mobile: false });
   evidence.pilotUi = { desktop: desktopUi, mobile: mobileUi, tiny: tinyUi, print: printUi };
@@ -416,6 +438,9 @@ try {
     && value.accessibility.assertive
     && value.accessibility.shortcutDialog
   ));
+  evidence.assistUi = { desktop: assistDesktop, mobile: assistMobile, tiny: assistTiny, print: assistPrint };
+  evidence.reliabilityUiOk = [assistDesktop, assistMobile, assistTiny, assistPrint].every(value => Boolean(value.reliabilityState) && value.reliabilityState !== 'Waiting' && value.reliabilityRows === 20);
+  evidence.assistUiOk = evidence.reliabilityUiOk && [assistDesktop, assistMobile, assistTiny, assistPrint].every(value => (!value.horizontalOverflow && value.assistActive && value.actionDock && value.controlCount > 0 && Object.values(value.required).every(Boolean) && value.accessibility.polite && value.accessibility.assertive));
   evidence.productionUi = { desktop: productionDesktop, mobile: productionMobile, tiny: productionTiny, print: productionPrint };
   evidence.productionUiOk = [productionDesktop, productionMobile, productionTiny, productionPrint].every(value => (
     !value.horizontalOverflow
@@ -431,7 +456,7 @@ try {
   ));
 
   evidence.deliveryProofOk = proof.value.deliveryProofOk && evidence.outbox.count === 0 && evidence.gap.clear;
-  evidence.ok = evidence.deliveryProofOk && evidence.transportDrillOk && evidence.pilotUiOk && evidence.productionUiOk;
+  evidence.ok = evidence.deliveryProofOk && evidence.transportDrillOk && evidence.pilotUiOk && evidence.productionUiOk && evidence.assistUiOk && evidence.reliabilityUiOk;
 } catch (error) {
   failure = error;
   evidence.error = String(error?.stack || error);

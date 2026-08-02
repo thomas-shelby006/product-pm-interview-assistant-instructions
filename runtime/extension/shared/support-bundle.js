@@ -1,6 +1,27 @@
 function clean(value, max = 160) {
   return String(value || '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, max);
 }
+const FORBIDDEN_KEY = /(question|prompt|resume|job.?description|notes|clipboard|credential|authorization|cookie|secret|token|raw.?text|answer.?text|url|content)/i;
+const SAFE_KEY_EXCEPTIONS = new Set(['answerAvailabilityRate','contentAccessed','contentFree']);
+function safeMetadata(value, depth = 0) {
+  if (depth > 5 || value == null) return value == null ? null : '[bounded]';
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return /(?:https?:\/\/|bearer\s+|-----BEGIN|password|api[_-]?key|credential)/i.test(value) ? '[redacted]' : clean(value, 240);
+  if (Array.isArray(value)) return value.slice(0, 120).map(item => safeMetadata(item, depth + 1));
+  if (typeof value !== 'object') return clean(value, 120);
+  const output = {};
+  for (const key of Object.keys(value).sort()) {
+    if (FORBIDDEN_KEY.test(key) && !SAFE_KEY_EXCEPTIONS.has(key)) continue;
+    output[clean(key, 80)] = safeMetadata(value[key], depth + 1);
+  }
+  return output;
+}
+export function auditSafeSupportBundle(bundle = {}) {
+  const text = JSON.stringify(bundle);
+  const unsafe = /(?:https?:\/\/|bearer\s+|-----BEGIN|password|api[_-]?key|credential|clipboard|job description|question text|answer text)/i.test(text);
+  return { safe: !unsafe, error: unsafe ? 'support_bundle_privacy_violation' : '', bytes: new TextEncoder().encode(text).length };
+}
 function role(value = {}) {
   return {
     provider: clean(value.provider, 32),
@@ -33,7 +54,7 @@ function safeCodes(values = []) {
 }
 export function buildSafeSupportBundle(snapshot = {}, { manifest = {}, sourceHashes = {} } = {}) {
   const ledger = Array.isArray(snapshot.ledger) ? snapshot.ledger : [];
-  return {
+  const bundle = {
     format: 'pmia-safe-support-v1',
     generatedAt: Date.now(),
     runtime: { name: clean(manifest.name, 100), version: clean(manifest.version, 32), sessionId: clean(snapshot.sessionId, 128), mode: clean(snapshot.mode, 32) },
@@ -59,12 +80,12 @@ export function buildSafeSupportBundle(snapshot = {}, { manifest = {}, sourceHas
       state: { blocked: Math.max(0, Number(snapshot.stateAudit?.blocked) || 0), repaired: Math.max(0, Number(snapshot.stateAudit?.repaired) || 0), digest: clean(snapshot.stateAudit?.digest, 32) },
       consistency: snapshot.consistencyAudit ? { ok: snapshot.consistencyAudit.ok === true, reason: clean(snapshot.consistencyAudit.reason, 80), repairs: safeCodes(snapshot.consistencyAudit.repairs), blocked: safeCodes(snapshot.consistencyAudit.blocked) } : null
     },
-    performance: snapshot.performanceBudget ? JSON.parse(JSON.stringify(snapshot.performanceBudget)) : null,
+    performance: safeMetadata(snapshot.performanceBudget || null),
     liveUx: {
-      budget: snapshot.liveUxBudget ? JSON.parse(JSON.stringify(snapshot.liveUxBudget)) : null,
+      budget: safeMetadata(snapshot.liveUxBudget || null),
       integrity: snapshot.liveCommandIntegrity ? { ok: snapshot.liveCommandIntegrity.ok === true, state: clean(snapshot.liveCommandIntegrity.state, 40), issues: safeCodes(snapshot.liveCommandIntegrity.issues) } : null,
-      restart: snapshot.restartContinuity ? JSON.parse(JSON.stringify(snapshot.restartContinuity)) : null,
-      accessibility: snapshot.accessibilityProof ? JSON.parse(JSON.stringify(snapshot.accessibilityProof)) : null
+      restart: safeMetadata(snapshot.restartContinuity || null),
+      accessibility: safeMetadata(snapshot.accessibilityProof || null)
     },
     production: snapshot.production ? {
       decisionCount: Math.max(0, Number(snapshot.production.decisionCenter?.count) || 0),
@@ -79,6 +100,8 @@ export function buildSafeSupportBundle(snapshot = {}, { manifest = {}, sourceHas
       release: { state: clean(snapshot.production.releaseHandoff?.state, 40), failed: (snapshot.production.releaseHandoff?.failed || []).map(value => clean(value, 80)) }
     } : null,
     drill: snapshot.lastTransportDrill ? { ok: snapshot.lastTransportDrill.ok === true, elapsedMs: Math.max(0, Number(snapshot.lastTransportDrill.elapsedMs) || 0), contentAccessed: snapshot.lastTransportDrill.contentAccessed === true, checks: (snapshot.lastTransportDrill.checks || []).map(check => ({ name: clean(check.name, 80), ok: check.ok === true, error: clean(check.error, 120), durationMs: Math.max(0, Number(check.durationMs) || 0) })) } : null,
-    sourceHashes: Object.fromEntries(Object.entries(sourceHashes || {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [clean(key, 200), clean(value, 128)]))
+    sourceHashes: Object.fromEntries(Object.entries(sourceHashes || {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [safeMetadata(String(key)), safeMetadata(String(value))]))
   };
+  const privacy = auditSafeSupportBundle(bundle);
+  return privacy.safe ? { ...bundle, privacy } : { format:'pmia-safe-support-v1', generatedAt:bundle.generatedAt, privacy };
 }

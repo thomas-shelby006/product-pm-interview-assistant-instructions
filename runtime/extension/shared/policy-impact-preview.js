@@ -6,7 +6,8 @@ const TTL_MS = 30_000;
 
 function protectedCount(snapshot = {}) {
   const counts = snapshot.ledgerCounts || {};
-  return ['pending','persisted','failed','staged','submitting','inFlight'].reduce((sum,key)=>sum+Math.max(0,Number(counts[key] || 0)),0);
+  if (Number.isFinite(Number(counts.unresolved))) return Math.max(0, Number(counts.unresolved));
+  return Math.max(0, Number(counts.pending || 0)) + Math.max(0, Number(counts.inFlight || 0));
 }
 
 export function policySnapshotFingerprint(snapshot = {}) {
@@ -16,7 +17,10 @@ export function policySnapshotFingerprint(snapshot = {}) {
     deliveryPolicy:{ active:Boolean(snapshot.deliveryPolicy?.active), reason:snapshot.deliveryPolicy?.reason || '', allowProviderWrite:snapshot.deliveryPolicy?.allowProviderWrite !== false },
     storage:snapshot.storagePressure?.level || 'normal', selfTest:Boolean(snapshot.selfTest?.ok),
     writeSafe:snapshot.receiver?.adapterCapabilityProbation?.writeSafe !== false,
-    productionControls:snapshot.productionControls || {}
+    productionControls:{
+      operatingProfile:String(snapshot.productionControls?.operatingProfile || 'balanced'),
+      containmentOverrideUntil:Math.max(0,Number(snapshot.productionControls?.containmentOverrideUntil || 0))
+    }
   });
 }
 

@@ -23,11 +23,13 @@ export function sessionEndCounts(snapshot) {
   const activeMembers = Number(snapshot?.batchState?.active?.questionCount || snapshot?.batchState?.active?.memberIds?.length || 0);
   const phase = String(snapshot?.liveSession?.phase || 'setup');
   const liveActive = ['active','paused'].includes(phase) ? 1 : 0;
+  const unresolvedChoice = snapshot?.operatorChoice ? 1 : 0;
   return {
     actionable,
     inFlight: Math.max(inFlightLedger, activeMembers),
     unpersisted: latestOutboxCount(snapshot),
     liveActive,
+    unresolvedChoice,
     phase
   };
 }
@@ -43,15 +45,20 @@ export function prepareSessionEnd(snapshot, {
     preparedAt: Number(now),
     expiresAt: Number(now) + Math.max(5000, Number(ttlMs) || 30000),
     counts,
-    canEnd: counts.actionable === 0 && counts.inFlight === 0 && counts.unpersisted === 0 && counts.liveActive === 0
+    canEnd: counts.actionable === 0 && counts.inFlight === 0 && counts.unpersisted === 0 && counts.liveActive === 0 && counts.unresolvedChoice === 0
   };
 }
 
-export function validateSessionEnd(prepared, { token, mode, now = Date.now() } = {}) {
+export function validateSessionEnd(prepared, { token, mode, now = Date.now(), currentCounts = null } = {}) {
   if (!prepared?.token || String(token || '') !== String(prepared.token)) return { ok: false, error: 'confirmation_token_invalid' };
   if (Number(now) > Number(prepared.expiresAt || 0)) return { ok: false, error: 'confirmation_token_expired' };
   const normalizedMode = String(mode || 'clean');
-  if (!prepared.canEnd && normalizedMode !== 'archive_and_end') return { ok: false, error: 'actionable_finals_present', counts: prepared.counts };
   if (!['clean', 'archive_and_end'].includes(normalizedMode)) return { ok: false, error: 'invalid_end_mode' };
-  return { ok: true, mode: normalizedMode, counts: prepared.counts };
+  const counts = currentCounts || prepared.counts || {};
+  const changed = currentCounts && ['actionable','inFlight','unpersisted','liveActive','unresolvedChoice'].some(key => Number(currentCounts[key] || 0) !== Number(prepared.counts?.[key] || 0));
+  if (changed) return { ok:false, error:'session_end_state_changed', counts };
+  if (Number(counts.unpersisted || 0) > 0) return { ok:false, error:'unpersisted_outbox_present', counts };
+  if (Number(counts.liveActive || 0) > 0) return { ok:false, error:'live_session_active', counts };
+  if (!prepared.canEnd && normalizedMode !== 'archive_and_end') return { ok: false, error: 'actionable_finals_present', counts };
+  return { ok: true, mode: normalizedMode, counts };
 }

@@ -24,13 +24,14 @@ async function fixture({ cleanup = true, normalProfileTouched = false, smokeComm
   const smoke = path.join(repo, 'smoke.json');
   await writeFile(gate, '# tests 10\n# pass 10\n# fail 0\nExtension validation passed: 5 JavaScript files, 2 required runtime surfaces, and 3 reachable production modules checked.\n');
   await writeFile(smoke, JSON.stringify({
-    ok: true, deliveryProofOk: true, transportDrillOk: true, pilotUiOk: true, productionUiOk: true,
+    ok: true, deliveryProofOk: true, transportDrillOk: true, pilotUiOk: true, productionUiOk: true, assistUiOk: true, reliabilityUiOk: true,
     commandReachability: { ok: true, duplicateDomIds: [], visibleWithoutRegistry: [], visibleWithoutOwner: [] },
     commandRegistryDigest: 'registry-v1',
     commit: smokeCommit || commit,
     finals: [{ id: 'q1' }], gap: { clear: true }, outbox: { count: 0 },
     pilotUi: Object.fromEntries(['desktop','mobile','tiny','print'].map(key => [key, { viewport: { width: key === 'mobile' ? 320 : key === 'tiny' ? 280 : 1200 }, horizontalOverflow: false, accessibility: { polite: true, assertive: true, shortcutDialog: true } }])),
     productionUi: Object.fromEntries(['desktop','mobile','tiny','print'].map(key => [key, { viewport: { width: key === 'mobile' ? 320 : key === 'tiny' ? 280 : 1200 }, horizontalOverflow: false, controlCount: 8 }])),
+    assistUi: Object.fromEntries(['desktop','mobile','tiny','print'].map(key => [key, { viewport: { width: key === 'mobile' ? 320 : key === 'tiny' ? 280 : 1200 }, horizontalOverflow: false, controlCount: 8, actionDock: true }])),
     cleanup: { processTreeClosed: cleanup, profileRemoved: cleanup },
     isolatedProfile: { normalProfileTouched }
   }));
@@ -76,7 +77,7 @@ test('release evidence rejects missing Production UI or command reachability evi
   await writeFile(value.smoke, JSON.stringify(smoke));
   const production = run(value.repo, args(value, path.join(value.repo, 'production-fail.json')));
   assert.notEqual(production.status, 0);
-  assert.match(production.stderr, /Production UI evidence is incomplete|transport, Pilot UI, or Production UI/i);
+  assert.match(production.stderr, /Production UI evidence is incomplete|transport, Pilot UI, Production UI, or Assist or Reliability UI/i);
 
   smoke.productionUiOk = true;
   smoke.commandReachability = { ok: false };

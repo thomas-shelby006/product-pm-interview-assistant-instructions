@@ -510,3 +510,9 @@ html[data-compact-density="true"] .shell { gap: 8px; } html[data-compact-density
 @media(max-width:760px){.assist-grid{grid-template-columns:1fr}.triage-card,.command-history-card,.wizard-card{grid-column:auto}.live-action-dock{grid-template-columns:1fr 1fr}.dock-decision{grid-column:1/-1}.live-action-dock>button{grid-column:1/-1}.assist-card{padding:12px}}
 @media(max-width:340px){.live-action-dock{grid-template-columns:1fr;position:static}.dock-decision,.live-action-dock>button{grid-column:auto}.assist-actions button,.assist-filters button,.milestone-rail button{flex:1 1 100%}}
 @media print{.live-action-dock{position:static;box-shadow:none;backdrop-filter:none}.assist-grid{grid-template-columns:1fr 1fr}.assist-card{break-inside:avoid}.assist-actions button,.assist-filters button{display:none}}
+
+/* PMIA 0.10 reliability center */
+.reliability-card{grid-column:span 2}.reliability-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.reliability-group{border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}.reliability-group h4{margin:0 0 8px}.reliability-list{display:grid;gap:8px;margin:0;padding:0;list-style:none}.reliability-list li{display:grid;gap:3px;padding:8px;border-radius:10px;background:color-mix(in srgb,var(--panel) 84%,var(--surface,transparent))}.reliability-list li[data-tone="warn"]{border-left:3px solid var(--warning)}.reliability-list li[data-tone="good"]{border-left:3px solid var(--ok)}.reliability-list strong{font-size:.86rem;text-transform:capitalize}.reliability-list span{font-size:.8rem;line-height:1.35;color:var(--muted)}
+@media(max-width:760px){.reliability-card{grid-column:auto}.reliability-groups{grid-template-columns:1fr}}
+@media(max-width:340px){.reliability-group{padding:9px}.reliability-list li{padding:7px}}
+@media print{.reliability-groups{grid-template-columns:1fr 1fr}.reliability-group{break-inside:avoid}}

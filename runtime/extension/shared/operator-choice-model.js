@@ -11,7 +11,7 @@ export function deriveOperatorChoice(snapshot = {}, now = Date.now()) {
       title: 'Choose what happens after no response',
       detail: 'Wait preserves the completed batch. Retry resubmits it. Continue releases the protected next batch.',
       options: ['wait','retry','continue'],
-      view: 'queue', anchor: 'receiverPolicyState',
+      view: 'assist', anchor: 'choiceWorkspace',
       fingerprint: fingerprint(['no_response',batch.pendingNoResponse.batchId,batch.pendingNoResponse.createdAt,batch.next?.batchId,batch.next?.memberFingerprint]),
       createdAt: Math.max(0, Number(batch.pendingNoResponse.createdAt || now)),
       expiresAt: 0
@@ -25,7 +25,7 @@ export function deriveOperatorChoice(snapshot = {}, now = Date.now()) {
       title: 'Choose the Window 2 draft owner',
       detail: 'Keep manual text, restore the protected PMIA draft, or merge the manual prefix above the protected batch.',
       options: ['keep_manual','restore_pmia','merge'],
-      view: 'queue', anchor: 'draftConflictState',
+      view: 'assist', anchor: 'choiceWorkspace',
       fingerprint: fingerprint(['draft_conflict',conflict.batchId,conflict.state,conflict.manualFingerprint,conflict.pmiaFingerprint,batch.next?.memberFingerprint]),
       createdAt: Math.max(0, Number(conflict.createdAt || now)),
       expiresAt: 0

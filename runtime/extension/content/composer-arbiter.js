@@ -56,7 +56,10 @@ export function createComposerArbiter({ adapter, onConflict = () => {} } = {}) {
 
   function resolveConflict(action) {
     const state = observe();
-    if (!conflict && state.owner !== 'manual') return { ok: false, error: 'no_draft_conflict' };
+    if (!conflict && state.owner !== 'manual') {
+      if (action === 'merge' && owner === 'batch' && ownedText && normalize(state.text).endsWith(normalize(ownedText))) return { ok:true, action, owner, text:state.text, idempotent:true };
+      return { ok: false, error: 'no_draft_conflict' };
+    }
     const source = conflict || { owner: 'batch', expected: ownedText, current: state.text };
     const expected = String(source.expected || ownedText || '').trim();
     const current = String(source.current || state.text || '').trim();
@@ -79,7 +82,7 @@ export function createComposerArbiter({ adapter, onConflict = () => {} } = {}) {
       return { ok: true, action, owner, text: expected };
     }
     if (action === 'merge') {
-      const merged = current ? `${current}\n\n---\n\n${expected}` : expected;
+      const merged = current && normalize(current).endsWith(normalize(expected)) ? current : current ? `${current}\n\n---\n\n${expected}` : expected;
       if (!adapter.setComposerText(merged)) return { ok: false, error: 'composer_write_failed' };
       owner = 'batch';
       ownedText = merged;

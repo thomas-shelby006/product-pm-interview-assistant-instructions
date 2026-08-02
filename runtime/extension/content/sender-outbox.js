@@ -129,7 +129,13 @@ export function createSenderOutbox({
           current.attempts += 1;
           current.lastAttemptAt = Number(now());
           current.nextRetryAt = 0;
-          await persist();
+          if (!await persist()) {
+            current.lastError = 'outbox_attempt_persist_failed';
+            current.nextRetryAt = Number(now()) + nextRetryDelay(current.attempts - 1, random);
+            await persist();
+            results.push({ envelopeId: current.envelope.id, response: { ok:false, persisted:false, error:'outbox_attempt_persist_failed' } });
+            break;
+          }
           let response;
           try { response = await send(cloneEnvelope(current.envelope)); }
           catch (error) { response = { ok: false, persisted: false, error: String(error?.message || error) }; }

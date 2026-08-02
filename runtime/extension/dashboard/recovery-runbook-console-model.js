@@ -1,13 +1,16 @@
+import { deriveRecoveryProgress } from './recovery-progress-model.js';
+
 export function deriveRecoveryRunbookConsole(snapshot = {}, now = Date.now()) {
-  const progress=snapshot.recoveryProgress || {};
+  const progress=deriveRecoveryProgress(snapshot);
   const schedule=snapshot.recoverySchedules?.[0] || null;
   const budget=snapshot.recoveryBudget || {};
   const recovery=snapshot.lastRepair || {};
+  const byId=Object.fromEntries((progress.items || []).map(item=>[item.id,item.complete]));
   const steps=[
-    { id:'roles', label:'Managed roles', complete:Boolean(progress.checks?.sender && progress.checks?.receiver) },
-    { id:'adapters', label:'Provider adapters', complete:Boolean(progress.checks?.adapters) },
-    { id:'reconciliation', label:'Lossless reconciliation', complete:Boolean(progress.checks?.reconciliation) },
-    { id:'storage', label:'Session storage', complete:Boolean(progress.checks?.storage) }
+    { id:'roles', label:'Managed roles', complete:Boolean(byId.sender && byId.receiver) },
+    { id:'adapters', label:'Provider adapters', complete:Boolean(byId.adapters) },
+    { id:'reconciliation', label:'Lossless reconciliation', complete:Boolean(byId.reconciliation) },
+    { id:'storage', label:'Session storage', complete:Boolean(byId.storage) }
   ];
   const current=steps.find(item=>!item.complete) || null;
   const command=snapshot.mode==='blocked' ? 'repair_runtime' : current?.id==='reconciliation' ? 'resume_catch_up' : current ? 'check_live' : snapshot.selfTest?.ok ? '' : 'run_self_test';

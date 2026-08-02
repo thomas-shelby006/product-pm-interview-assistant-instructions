@@ -8,17 +8,19 @@ import { deriveRecoveryRunbookConsole } from './recovery-runbook-console-model.j
 import { deriveCommandHistory } from './command-history-model.js';
 import { deriveLivePerformanceForecast } from '../shared/live-performance-forecast.js';
 import { deriveSessionWizard } from './session-wizard-model.js';
+import { deriveReliabilityCenter } from './reliability-center-model.js';
 
 function node(document,id){ return document.getElementById(id); }
 function set(document,id,value){ const target=node(document,id); if(target) target.textContent=String(value ?? ''); }
 function replaceList(document,id,items,render){ const target=node(document,id); if(!target) return; target.replaceChildren(); for(const item of items) target.append(render(item)); }
 function button(document,label,dataset={}){ const value=document.createElement('button'); value.textContent=label; Object.assign(value.dataset,dataset); return value; }
 
-export function renderLiveAssist({ document, snapshot, state, now = Date.now() }) {
+export function renderLiveAssist({ document, snapshot, state, now = Date.now(), workspace = true }) {
   const dock=deriveLiveActionDock(snapshot || {}); const dockNode=node(document,'liveActionDock');
   if(dockNode){ dockNode.dataset.containment=dock.containment; dockNode.hidden=Boolean(dock.ended); }
   set(document,'dockAnswerState',dock.answer.replaceAll('_',' ')); set(document,'dockWaitingCount',dock.waiting); set(document,'dockDecisionTitle',dock.title); set(document,'dockDecisionDetail',dock.detail); set(document,'dockContainmentState',dock.containment.replaceAll('_',' '));
   const dockAction=node(document,'dockPrimaryAction'); if(dockAction){ dockAction.dataset.actionMode=dock.action.mode || 'inspect'; dockAction.dataset.command=dock.action.command || ''; dockAction.dataset.view=dock.action.view || 'assist'; dockAction.dataset.anchor=dock.action.anchor || 'choiceWorkspace'; dockAction.textContent=dock.action.mode==='choose'?'Choose now':dock.action.mode==='execute'?'Run safe action':'Inspect'; dockAction.disabled=!snapshot || snapshot.mode==='ended'; }
+  if(!workspace) return;
 
   const choice=deriveChoiceWorkspace(snapshot || {}); set(document,'assistChoiceTitle',choice.title); set(document,'assistChoiceDetail',choice.detail);
   replaceList(document,'assistChoiceOptions',choice.options,item=>button(document,item.label,{ choiceOption:item.id, choiceId:choice.id, fingerprint:choice.fingerprint }));
@@ -42,4 +44,7 @@ export function renderLiveAssist({ document, snapshot, state, now = Date.now() }
   const preview=derivePolicyImpactView(state.policyPreview || null); set(document,'assistPolicyTitle',preview.title); set(document,'assistPolicySummary',preview.summary); replaceList(document,'assistPolicyChanges',preview.changes,item=>{ const el=document.createElement('li'); el.textContent=item; return el; }); const confirm=node(document,'assistPolicyConfirm'); if(confirm){ confirm.hidden=!preview.visible; confirm.disabled=!preview.allowed; }
 
   const wizard=deriveSessionWizard(snapshot || {},state.assistWizardStage || 'start'); set(document,'assistWizardTitle',wizard.title); set(document,'assistWizardProgress',`${wizard.complete}/${wizard.total}`); replaceList(document,'assistWizardSteps',wizard.steps,item=>{ const el=document.createElement('li'); el.textContent=`${item.complete?'✓':'○'} ${item.label}`; if(!item.complete && item.command){ const act=button(document,'Run',{ command:item.command }); el.append(' ',act); } return el; });
+
+  const reliability=deriveReliabilityCenter(snapshot || {},now); set(document,'assistReliabilityState',`${reliability.total-reliability.attention}/${reliability.total} healthy`);
+  replaceList(document,'assistReliabilityGroups',reliability.groups,group=>{ const section=document.createElement('section'); section.className='reliability-group'; const title=document.createElement('h4'); title.textContent=group.label; section.append(title); const list=document.createElement('ul'); list.className='reliability-list'; for(const entry of group.items){ const row=document.createElement('li'); row.dataset.tone=entry.tone; const strong=document.createElement('strong'); strong.textContent=`${entry.label} · ${entry.state.replaceAll('_',' ')}`; const detail=document.createElement('span'); detail.textContent=entry.detail; row.append(strong,detail); list.append(row); } section.append(list); return section; });
 }

@@ -66,13 +66,33 @@ export class ContiguousSequenceBuffer {
     return cloneEnvelope(this.#buffer.get(this.expectedSeq)?.envelope || null);
   }
 
-  confirm(seq, now = Date.now()) {
+  confirm(seq, now = Date.now()) { return this.confirmDetailed(seq, now).ok; }
+
+  confirmDetailed(seq, now = Date.now()) {
     const normalized = normalizeSeq(seq);
-    if (normalized !== this.expectedSeq || !this.#buffer.has(normalized)) return false;
-    this.#buffer.delete(normalized);
-    this.#lastAcceptedSeq = normalized;
-    this.#refreshGap(now);
-    return true;
+    if (!normalized) return { ok:false, reason:'sequence_invalid', expectedSeq:this.expectedSeq };
+    if (normalized <= this.#lastAcceptedSeq) return { ok:true, duplicate:true, reason:'duplicate_ack', seq:normalized, expectedSeq:this.expectedSeq };
+    if (normalized !== this.expectedSeq) return { ok:false, reason:'sequence_gap', seq:normalized, expectedSeq:this.expectedSeq };
+    if (!this.#buffer.has(normalized)) return { ok:false, reason:'sequence_not_buffered', seq:normalized, expectedSeq:this.expectedSeq };
+    this.#buffer.delete(normalized); this.#lastAcceptedSeq=normalized; this.#refreshGap(now);
+    return { ok:true, duplicate:false, reason:'sequence_confirmed', seq:normalized, expectedSeq:this.expectedSeq };
+  }
+
+  reject(seq, now = Date.now()) {
+    const normalized=normalizeSeq(seq);
+    if (!normalized || normalized <= this.#lastAcceptedSeq) return { ok:false, reason:'sequence_not_rejectable', seq:normalized, expectedSeq:this.expectedSeq };
+    const removed=this.#buffer.delete(normalized); this.#refreshGap(now);
+    return { ok:removed, reason:removed?'sequence_rejected':'sequence_not_buffered', seq:normalized, expectedSeq:this.expectedSeq, bufferedCount:this.#buffer.size };
+  }
+
+  nack(reason = 'sequence_gap', now = Date.now()) {
+    const status=this.status(now);
+    return { ok:false, reason:String(reason || 'sequence_gap'), expectedSeq:status.expectedSeq, bufferedCount:status.bufferedCount, highestBufferedSeq:status.highestBufferedSeq, gapAgeMs:status.gapAgeMs, timedOut:status.timedOut };
+  }
+
+  nack(reason = 'sequence_gap') {
+    const status=this.status(Date.now());
+    return { ok:false, reason:String(reason || 'sequence_gap'), expectedSeq:this.expectedSeq, bufferedCount:this.#buffer.size, highestBufferedSeq:status.highestBufferedSeq, hasGap:status.hasGap };
   }
 
   status(now = Date.now()) {

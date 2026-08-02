@@ -19,9 +19,13 @@ test('actionable session blocks end without archive-and-end confirmation', () =>
     senderOutboxState: { count: 1 }
   }), { now: 1000, token: 'token-2' });
   assert.equal(prepared.canEnd, false);
-  assert.deepEqual(prepared.counts, { actionable: 2, inFlight: 1, unpersisted: 1, liveActive: 0, phase: 'setup' });
+  assert.deepEqual(prepared.counts, { actionable: 2, inFlight: 1, unpersisted: 1, liveActive: 0, unresolvedChoice: 0, phase: 'setup' });
   assert.equal(validateSessionEnd(prepared, { token: 'token-2', mode: 'clean', now: 2000 }).ok, false);
-  assert.equal(validateSessionEnd(prepared, { token: 'token-2', mode: 'archive_and_end', now: 2000 }).ok, true);
+  const blockedArchive = validateSessionEnd(prepared, { token: 'token-2', mode: 'archive_and_end', now: 2000 });
+  assert.equal(blockedArchive.ok, false);
+  assert.equal(blockedArchive.error, 'unpersisted_outbox_present');
+  const archiveable = prepareSessionEnd(snapshot({ ledger: [{ id: 'q1', state: 'persisted' }] }), { now: 1000, token: 'token-3' });
+  assert.equal(validateSessionEnd(archiveable, { token: 'token-3', mode: 'archive_and_end', now: 2000 }).ok, true);
 });
 
 test('expired or mismatched end token is rejected', () => {
