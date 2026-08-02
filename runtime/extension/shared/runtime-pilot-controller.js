@@ -58,7 +58,7 @@ import { buildRestartContinuity } from './restart-continuity.js';
 import { monotonicElapsed, normalizeMonotonicClock } from './monotonic-session-clock.js';
 import { restoreManagedLayout } from './layout-restoration.js';
 import { deriveOperatorDecisionCenter } from './operator-decision-center.js';
-import { deriveOperatorChoice } from './operator-choice-model.js';
+import { commandForChoice, deriveOperatorChoice, validateOperatorChoice } from './operator-choice-model.js';
 import { deriveOperatingProfile } from './operating-profile.js';
 import { deriveContextualNavigation } from './cockpit-navigation.js';
 import { applyContainmentOverride, deriveContainmentStatus } from './containment-status.js';
@@ -1674,6 +1674,14 @@ export function createRuntimePilotController({
       case 'acknowledge_answer':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'acknowledge_answer', { source: 'dashboard' });
         break;
+      case 'resolve_operator_choice': {
+        const validation = validateOperatorChoice(pilot.snapshot(sessionId), payload, Date.now());
+        if (!validation.ok) { result = validation; break; }
+        const mapped = commandForChoice(validation.choice.type, validation.option);
+        if (!mapped) { result = { ok: false, error: 'choice_command_missing' }; break; }
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', mapped.command, { source: 'dashboard_choice', ...mapped.payload });
+        break;
+      }
       case 'resolve_no_response':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'resolve_no_response', { action: payload.action });
         break;

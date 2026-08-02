@@ -105,6 +105,12 @@ export function normalizeDashboardCommand(value) {
     if ('drainMode' in payload.policy) payload.policy.drainMode = ['off', 'one', 'all'].includes(payload.policy.drainMode) ? payload.policy.drainMode : 'off';
   }
   if (command === 'interrupt_latest') payload.token = cleanText(payload.token, 160);
+  if (command === 'resolve_operator_choice') {
+    payload.choiceId = cleanText(payload.choiceId, 200);
+    payload.fingerprint = cleanText(payload.fingerprint, 500);
+    payload.option = cleanText(payload.option, 80);
+    if (!payload.choiceId || !payload.fingerprint || !payload.option) return null;
+  }
   if (command === 'resolve_no_response') payload.action = ['wait', 'retry', 'continue'].includes(payload.action) ? payload.action : 'wait';
   if (command === 'apply_operating_profile') {
     payload.profile = ['safe','balanced','fast'].includes(String(payload.profile || '')) ? String(payload.profile) : 'balanced';

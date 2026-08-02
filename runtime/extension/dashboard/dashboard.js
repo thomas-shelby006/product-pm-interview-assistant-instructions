@@ -56,6 +56,8 @@ import { auditShortcutConflicts } from '../shared/shortcut-conflict-model.js';
 import { auditDashboardAccessibility } from './accessibility-audit.js';
 import { buildVisualPreferenceProof } from './visual-preference-proof.js';
 import { deriveOperatingProfile } from '../shared/operating-profile.js';
+import { buildPolicyImpactPreview, validatePolicyImpactConfirmation } from '../shared/policy-impact-preview.js';
+import { renderLiveAssist } from './render-live-assist.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -82,7 +84,11 @@ const state = {
   lastAnnouncement: '',
   interruptPlanDraft: null,
   productionProfileDraft: 'balanced',
-  productionDecision: null
+  productionDecision: null,
+  policyPreview: null,
+  assistTriageView: 'urgent',
+  assistCommandQuery: '',
+  assistWizardStage: 'start'
 };
 
 const byId = id => document.getElementById(id);
@@ -1461,6 +1467,7 @@ function render(changedKeys = null) {
   renderAccessibility(state.snapshot);
   renderPreflightAndCrash(state.snapshot, now);
   renderProduction(state.snapshot);
+  renderLiveAssist({ document, snapshot: state.snapshot, state, now });
   renderCommandPalette();
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
@@ -1588,6 +1595,41 @@ document.addEventListener('click', event => {
     void runCommand(incidentButton, command, payload);
     return;
   }
+  const dockAction = event.target.closest('#dockPrimaryAction');
+  if (dockAction) {
+    const mode = dockAction.dataset.actionMode || 'inspect';
+    if (mode === 'execute' && dockAction.dataset.command) void runCommand(dockAction, dockAction.dataset.command);
+    else activateDashboardView(dockAction.dataset.view || 'assist', dockAction.dataset.anchor || 'choiceWorkspace', 'action_dock');
+    return;
+  }
+  const choiceOption = event.target.closest('[data-choice-option]');
+  if (choiceOption) {
+    void runCommand(choiceOption, 'resolve_operator_choice', { choiceId:choiceOption.dataset.choiceId || '', fingerprint:choiceOption.dataset.fingerprint || '', option:choiceOption.dataset.choiceOption || '' });
+    return;
+  }
+  const milestone = event.target.closest('[data-milestone]');
+  if (milestone) { activateDashboardView('timeline', '', `milestone:${milestone.dataset.milestone}`); return; }
+  const triage = event.target.closest('[data-triage-view]');
+  if (triage) { state.assistTriageView = triage.dataset.triageView || 'urgent'; renderLiveAssist({ document, snapshot:state.snapshot, state, now:Date.now() }); return; }
+  const undo = event.target.closest('[data-undo-id]');
+  if (undo) { void runCommand(undo, 'undo_question_action', { undoId:undo.dataset.undoId || '' }); return; }
+  const previewProfile = event.target.closest('#assistPreviewSafe, #assistPreviewBalanced, #assistPreviewFast, #assistForecastAction');
+  if (previewProfile) {
+    const profile = previewProfile.dataset.profile || previewProfile.id.replace('assistPreview','').toLowerCase();
+    state.policyPreview = buildPolicyImpactPreview(state.snapshot || {}, { kind:'operating_profile', profile }, Date.now());
+    renderLiveAssist({ document, snapshot:state.snapshot, state, now:Date.now() });
+    return;
+  }
+  if (event.target.closest('#assistPolicyConfirm')) {
+    const validation = validatePolicyImpactConfirmation(state.snapshot || {}, state.policyPreview, Date.now());
+    if (!validation.ok) { showToast(validation.error, 'error'); state.policyPreview=null; scheduleRender(); return; }
+    const preview=validation.preview; const command=preview.kind==='operating_profile'?'apply_operating_profile':'set_containment_override';
+    const payload=preview.kind==='operating_profile'?{ profile:preview.target }:{ enabled:preview.target==='enable', durationMs:120000, reason:'policy_preview' };
+    void runCommand(event.target.closest('#assistPolicyConfirm'),command,payload).then(result=>{ if(result?.ok) state.policyPreview=null; scheduleRender(); });
+    return;
+  }
+  if (event.target.closest('#assistWizardStart')) { state.assistWizardStage='start'; scheduleRender(); return; }
+  if (event.target.closest('#assistWizardEnd')) { state.assistWizardStage='end'; scheduleRender(); return; }
   const button = event.target.closest('[data-command]');
   if (button) {
     const command = button.dataset.command;
@@ -1608,12 +1650,17 @@ byId('operatingProfileSelect').addEventListener('change', event => {
   state.productionProfileDraft = event.currentTarget.value;
   renderProduction(state.snapshot);
 });
-byId('applyOperatingProfile').addEventListener('click', event => {
-  void runCommand(event.currentTarget, 'apply_operating_profile', { profile: byId('operatingProfileSelect').value });
+byId('applyOperatingProfile').addEventListener('click', () => {
+  const profile = byId('operatingProfileSelect').value;
+  state.policyPreview = buildPolicyImpactPreview(state.snapshot || {}, { kind:'operating_profile', profile }, Date.now());
+  activateDashboardView('assist', 'assistPolicyTitle', 'profile_impact_preview');
+  scheduleRender();
 });
-byId('containmentOverride').addEventListener('click', event => {
+byId('containmentOverride').addEventListener('click', () => {
   const current = state.snapshot?.production?.containment || {};
-  void runCommand(event.currentTarget, 'set_containment_override', { enabled: !Boolean(current.overrideActive), durationMs: 120000, reason: 'production_view' });
+  state.policyPreview = buildPolicyImpactPreview(state.snapshot || {}, { kind:'containment_override', enabled:!Boolean(current.overrideActive) }, Date.now());
+  activateDashboardView('assist', 'assistPolicyTitle', 'containment_impact_preview');
+  scheduleRender();
 });
 byId('productionDecisionAction').addEventListener('click', event => {
   const decision = state.productionDecision;
@@ -1703,6 +1750,11 @@ byId('traceSearch').addEventListener('input', event => {
   state.traceQuery = String(event.currentTarget.value || '');
   state.selectedTraceId = '';
   idleWork.schedule(() => renderReview(state.snapshot));
+});
+
+byId('assistCommandSearch').addEventListener('input', event => {
+  state.assistCommandQuery = String(event.currentTarget.value || '');
+  idleWork.schedule(() => renderLiveAssist({ document, snapshot:state.snapshot, state, now:Date.now() }));
 });
 
 function currentReceiverPolicy() {

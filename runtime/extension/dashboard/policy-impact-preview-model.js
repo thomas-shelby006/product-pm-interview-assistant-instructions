@@ -1,0 +1,6 @@
+export function derivePolicyImpactView(preview = null) {
+  if (!preview?.id) return { visible:false, title:'No policy preview', summary:'Choose a profile or containment change to inspect its live effect.', changes:[] };
+  const action = preview.providerWrites === 'may_start' ? 'Provider writes may start' : preview.providerWrites === 'will_stop' ? 'Provider writes will stop' : 'Provider writes are unchanged';
+  const answer = preview.postAnswer === 'drain_all' ? 'All protected batches drain after answer boundaries' : preview.postAnswer === 'pause' ? 'Delivery pauses after each answer' : preview.postAnswer === 'submit_on_idle' ? 'The next protected batch submits when idle' : 'Post-answer behavior is unchanged';
+  return { visible:true, title:`${preview.kind === 'operating_profile' ? 'Operating profile' : 'Containment'}: ${preview.target}`, summary:`${action}. ${answer}. ${preview.protectedCount} protected question${preview.protectedCount===1?'':'s'} affected.`, risk:preview.risk, allowed:preview.allowed, blockers:[...(preview.blockers || [])], changes:(preview.changes || []).map(item=>`${item.field}: ${String(item.from)} → ${String(item.to)}`), expiresAt:preview.expiresAt };
+}

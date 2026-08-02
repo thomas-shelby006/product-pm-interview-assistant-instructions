@@ -61,6 +61,7 @@
       <button class="tab" data-view="queue" role="tab" aria-selected="false" aria-controls="panelQueue">Inbox <span id="queueBadge">0</span></button>
       <button class="tab" data-view="timeline" role="tab" aria-selected="false" aria-controls="panelTimeline">Timeline</button>
       <button class="tab" data-view="review" role="tab" aria-selected="false" aria-controls="panelReview">Review</button>
+      <button class="tab" data-view="assist" role="tab" aria-selected="false" aria-controls="panelAssist">Assist</button>
       <button class="tab" data-view="production" role="tab" aria-selected="false" aria-controls="panelProduction">Production</button>
     </nav>
 
@@ -513,6 +514,21 @@
         </article>
       </section>
 
+      <section class="view" id="panelAssist" data-view-panel="assist" role="tabpanel" hidden>
+        <div class="section-heading"><div><h2>Live interview assistant</h2><p>Choices, navigation, triage, route health, recovery, history, forecasting, and guided session boundaries.</p></div><span class="production-badge" id="assistHealthBadge">Waiting</span></div>
+        <div class="assist-grid">
+          <article class="assist-card choice-workspace" id="choiceWorkspace" data-state="clear"><span class="eyebrow">Choice workspace</span><h3 id="assistChoiceTitle">No unresolved choice</h3><p id="assistChoiceDetail">The runtime does not need an operator decision.</p><div id="assistChoiceOptions" class="assist-actions"></div></article>
+          <article class="assist-card"><span class="eyebrow">Interview milestones</span><h3 id="assistMilestoneState">Setup</h3><div id="assistMilestones" class="milestone-rail" role="toolbar" aria-label="Interview milestones"></div></article>
+          <article class="assist-card triage-card"><div class="section-heading"><div><span class="eyebrow">Inbox triage</span><h3><span id="assistTriageCount">0</span> matching questions</h3></div></div><div id="assistTriageViews" class="assist-filters"></div><ol id="assistTriageItems" class="assist-list"></ol></article>
+          <article class="assist-card"><span class="eyebrow">Provider Route Doctor</span><h3 id="assistRouteState">Waiting</h3><p id="assistRouteDetail">No route evidence.</p><p id="assistRouteIssues" class="muted">No route issues.</p><button id="assistRouteAction" hidden>Run route check</button></article>
+          <article class="assist-card"><span class="eyebrow">Recovery Runbook Console</span><h3 id="assistRecoveryState">Waiting</h3><p id="assistRecoveryDetail">No recovery evidence.</p><ol id="assistRecoverySteps" class="assist-list"></ol><button id="assistRecoveryAction" hidden>Run current step</button></article>
+          <article class="assist-card command-history-card"><div class="section-heading"><div><span class="eyebrow">Command history</span><h3 id="assistCommandSummary">No completed commands</h3></div><label>Search<input id="assistCommandSearch" type="search" placeholder="Command, result, surface"></label></div><ol id="assistCommandHistory" class="assist-list"></ol></article>
+          <article class="assist-card"><span class="eyebrow">Backlog forecast</span><h3 id="assistForecastState">Waiting</h3><p id="assistForecastDetail">No forecast evidence.</p><button id="assistForecastAction" hidden>Preview profile</button></article>
+          <article class="assist-card policy-impact-card"><span class="eyebrow">Policy impact preview</span><h3 id="assistPolicyTitle">No policy preview</h3><p id="assistPolicySummary">Choose a profile or containment change to inspect its live effect.</p><ul id="assistPolicyChanges" class="assist-list"></ul><div class="assist-actions"><button id="assistPreviewSafe">Preview Safe</button><button id="assistPreviewBalanced">Preview Balanced</button><button id="assistPreviewFast">Preview Fast</button><button id="assistPolicyConfirm" hidden>Confirm change</button></div></article>
+          <article class="assist-card wizard-card"><div class="section-heading"><div><span class="eyebrow">Session wizard</span><h3 id="assistWizardTitle">Start mock interview</h3></div><b id="assistWizardProgress">0/0</b></div><div class="assist-filters"><button id="assistWizardStart">Start guide</button><button id="assistWizardEnd">End guide</button></div><ol id="assistWizardSteps" class="assist-list"></ol></article>
+        </div>
+      </section>
+
       <section class="view" id="panelProduction" data-view-panel="production" role="tabpanel" hidden>
         <div class="section-heading"><div><h2>Production control</h2><p>Decisions, operating policy, transport assurance, upgrade safety, diagnostics, and handoff evidence.</p></div><span id="productionHealthBadge" class="production-badge">Waiting</span></div>
         <section class="production-hero" aria-live="polite">
@@ -532,6 +548,14 @@
         </div>
       </section>
     </main>
+
+    <aside id="liveActionDock" class="live-action-dock" aria-label="Live action dock" aria-live="polite">
+      <div><span class="eyebrow">Answer</span><strong id="dockAnswerState">Idle</strong></div>
+      <div><span class="eyebrow">Protected</span><strong id="dockWaitingCount">0</strong></div>
+      <div class="dock-decision"><span class="eyebrow">Next safe action</span><strong id="dockDecisionTitle">Caught up</strong><p id="dockDecisionDetail">No operator action is required.</p></div>
+      <div><span class="eyebrow">Containment</span><strong id="dockContainmentState">Normal</strong></div>
+      <button id="dockPrimaryAction">Inspect</button>
+    </aside>
 
     <footer class="footer">
       <div class="layout-actions">

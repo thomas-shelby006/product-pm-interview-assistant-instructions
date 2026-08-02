@@ -1,0 +1,2 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { deriveInterviewMilestones } from '../shared/interview-milestone-model.js';
+test('Cycle 4 milestone navigator marks current recovery and preserves live return',()=>{ const value=deriveInterviewMilestones({mode:'degraded',liveSession:{phase:'active',history:[{phase:'setup'},{phase:'ready'}]},recoveryCard:{visible:true}},100); assert.equal(value.phase,'recovery'); assert.equal(value.items.find(item=>item.id==='recovery').current,true); assert.equal(value.backToLive.anchor,'liveSessionPhase'); });

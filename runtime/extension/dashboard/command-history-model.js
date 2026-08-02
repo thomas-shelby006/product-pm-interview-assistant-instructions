@@ -1,0 +1,6 @@
+export function deriveCommandHistory(snapshot = {}, query = '') {
+  const words=String(query || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const undo=new Map((snapshot.questionOperations?.undoJournal || []).map(item=>[String(item.id || ''),item]));
+  const items=(snapshot.commandJournal || []).map(item=>({ id:String(item.requestId || item.id || ''), command:String(item.command || ''), ok:item.result?.ok !== false, error:String(item.result?.error || ''), durationMs:Math.max(0,Number(item.durationMs || 0)), replayCount:Math.max(0,Number(item.replayCount || 0)), completedAt:Math.max(0,Number(item.completedAt || item.at || 0)), view:String(item.view || ''), anchor:String(item.anchor || ''), reversible:Boolean(item.undoId && undo.has(String(item.undoId))), undoId:String(item.undoId || '') })).filter(item=>!words.length || words.every(word=>`${item.command} ${item.error} ${item.view}`.toLowerCase().includes(word))).sort((a,b)=>b.completedAt-a.completedAt).slice(0,80);
+  return { query:String(query || ''), count:items.length, items, successes:items.filter(item=>item.ok).length, failures:items.filter(item=>!item.ok).length, replays:items.reduce((sum,item)=>sum+item.replayCount,0) };
+}

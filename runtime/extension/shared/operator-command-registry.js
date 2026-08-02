@@ -4,7 +4,7 @@ const COMMAND_IDS = Object.freeze([
   'snooze_incident','clear_incident','set_quiet_mode','add_marker','remove_marker','resume_checkpoint',
   'resume_live_session','dismiss_crash_resume','resume_catch_up','set_question_pin','defer_question',
   'set_question_priority','link_question_follow_up','undo_question_action','submit_selected','resume_without_send',
-  'set_auto_submit','set_hold','set_receiver_policy','submit_now','interrupt_latest','acknowledge_answer',
+  'set_auto_submit','set_hold','set_receiver_policy','submit_now','interrupt_latest','acknowledge_answer','resolve_operator_choice',
   'resolve_no_response','preview_interrupt_latest','resolve_draft_keep_manual','resolve_draft_restore_pmia',
   'resolve_draft_merge','archive_selected','archive_all','archive_proven','compact_proven','retry_outbox',
   'check_live','run_self_test','repair_runtime','repair_live_metadata','apply_operating_profile',
