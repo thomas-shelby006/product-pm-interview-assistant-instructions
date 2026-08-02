@@ -38,6 +38,12 @@ export function createReceiverAnswerOrchestrator({
     return result;
   }
 
+  function recordLog(type, data) {
+    void Promise.resolve()
+      .then(() => log(type, data))
+      .catch(() => {});
+  }
+
   function observeGeneration() {
     const text = String(adapter?.getLatestAssistantText?.() || '');
     const hintVersion = Number(getHintVersion() || 0);
@@ -102,7 +108,7 @@ export function createReceiverAnswerOrchestrator({
       if (result) {
         const words = result.text.split(/\s+/).filter(Boolean).length;
         emitState(lifecycle.transition({ type: 'complete', at: current, wordCount: words }));
-        await log('answer', { envelopeId: envelope?.id || '', text: result.text, wordCount: words, elapsedMs: result.elapsedMs });
+        recordLog('answer', { envelopeId: envelope?.id || '', text: result.text, wordCount: words, elapsedMs: result.elapsedMs });
         onAnswer({ envelopeId: envelope?.id || '', text: result.text, wordCount: words, elapsedMs: result.elapsedMs });
         setStatus(`ANSWER ${words}w`, 'ok', 1800);
         scroll();
@@ -112,7 +118,7 @@ export function createReceiverAnswerOrchestrator({
       if (deadline.terminal) {
         const eventType = deadline.state === 'no_response' ? 'no_response' : 'timeout';
         emitState(lifecycle.transition({ type: eventType, at: current, reason: deadline.reason }));
-        await log(deadline.state === 'no_response' ? 'answer_no_response' : 'answer_timeout', { envelopeId: envelope?.id || '', reason: deadline.reason });
+        recordLog(deadline.state === 'no_response' ? 'answer_no_response' : 'answer_timeout', { envelopeId: envelope?.id || '', reason: deadline.reason });
         setStatus(deadline.state === 'no_response' ? 'NO ANSWER OBSERVED' : 'ANSWER TIMEOUT', 'warn', 2500);
         return emitTerminal({
           ok: false,

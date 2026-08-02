@@ -74,3 +74,22 @@ test('orchestrator snapshot is text-free', () => {
   runtime.observeGeneration();
   assert.doesNotMatch(JSON.stringify(runtime.snapshot()), /secret answer/);
 });
+
+test('no-response settlement never waits for observational logging', async () => {
+  let clock = 1000;
+  let logStarted = false;
+  const runtime = createReceiverAnswerOrchestrator({
+    adapter: adapter(),
+    now: () => clock,
+    getHintVersion: () => 0,
+    wake: { async wait() { clock = 9000; } },
+    log() { logStarted = true; return new Promise(() => {}); },
+    limits: { startGraceMs: 8000, streamStallMs: 20000, hardCapMs: 120000 }
+  });
+  const result = await Promise.race([
+    runtime.start({ envelope: { id: 'b-log' }, beforeText: '', hintVersionAtStart: 0 }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('terminal settlement blocked by logging')), 100))
+  ]);
+  assert.equal(result.answerState.state, 'no_response');
+  assert.equal(logStarted, true);
+});
