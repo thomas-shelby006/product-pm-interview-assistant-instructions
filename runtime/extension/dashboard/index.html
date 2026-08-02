@@ -61,6 +61,7 @@
       <button class="tab" data-view="queue" role="tab" aria-selected="false" aria-controls="panelQueue">Inbox <span id="queueBadge">0</span></button>
       <button class="tab" data-view="timeline" role="tab" aria-selected="false" aria-controls="panelTimeline">Timeline</button>
       <button class="tab" data-view="review" role="tab" aria-selected="false" aria-controls="panelReview">Review</button>
+      <button class="tab" data-view="production" role="tab" aria-selected="false" aria-controls="panelProduction">Production</button>
     </nav>
 
     <main>
@@ -510,6 +511,25 @@
           <h3>Last repair report</h3>
           <pre id="repairReport">No repair has been run.</pre>
         </article>
+      </section>
+
+      <section class="view" id="panelProduction" data-view-panel="production" role="tabpanel" hidden>
+        <div class="section-heading"><div><h2>Production control</h2><p>Decisions, operating policy, transport assurance, upgrade safety, diagnostics, and handoff evidence.</p></div><span id="productionHealthBadge" class="production-badge">Waiting</span></div>
+        <section class="production-hero" aria-live="polite">
+          <div><span class="eyebrow">Primary decision</span><strong id="productionDecisionTitle">No action required</strong><p id="productionDecisionDetail">Waiting for runtime evidence.</p></div>
+          <div class="inline-actions"><button id="productionDecisionAction" hidden>Run safe action</button><button id="productionNavigate">Open source panel</button></div>
+        </section>
+        <div class="production-grid">
+          <article class="production-card decision-card"><div class="section-heading"><div><h3>Decision Center</h3><p>One ranked queue across delivery, provider, storage, session, and recovery decisions.</p></div><b id="productionDecisionCount">0</b></div><ol id="productionDecisionList" class="production-list"></ol></article>
+          <article class="production-card profile-card"><div class="section-heading"><div><h3>Operating profile</h3><p>Apply a coherent receiver policy instead of toggling controls individually.</p></div></div><label>Profile<select id="operatingProfileSelect"><option value="safe">Safe</option><option value="balanced">Balanced</option><option value="fast">Fast</option></select></label><p id="operatingProfileDescription">Balanced runtime behavior.</p><ul id="operatingProfileChanges" class="production-list"></ul><button id="applyOperatingProfile">Apply profile</button></article>
+          <article class="production-card containment-card"><div class="section-heading"><div><h3>Containment</h3><p>Shows when provider writes are protected and whether a bounded override is safe.</p></div></div><strong id="containmentState">Waiting</strong><p id="containmentDetail">No containment evidence.</p><div class="inline-actions"><button id="containmentOverride">Start 2-minute override</button><button data-command="check_live">Recheck</button></div></article>
+          <article class="production-card transport-card"><div class="section-heading"><div><h3>Transport assurance</h3><p>Direct/fallback continuity, RTT, circuit state, correlation, and probe readiness.</p></div></div><strong id="transportAssuranceState">Waiting</strong><p id="transportAssuranceDetail">No transport evidence.</p><dl class="production-stats"><div><dt>Window 1</dt><dd id="transportSenderState">--</dd></div><div><dt>Window 2</dt><dd id="transportReceiverState">--</dd></div><div><dt>Correlation gaps</dt><dd id="transportCorrelationGaps">0</dd></div></dl><button data-command="probe_transport">Probe transport</button></article>
+          <article class="production-card route-card"><div class="section-heading"><div><h3>Provider route readiness</h3><p>Capability, context, write-safety, and delivery checks for the active route.</p></div></div><strong id="routeReadinessState">Waiting</strong><p id="routeReadinessDetail">No route evidence.</p><ul id="routeChecklist" class="production-list"></ul><div class="inline-actions"><button data-command="check_live">Check live</button><button data-command="resend_context">Resend context</button></div></article>
+          <article class="production-card upgrade-card"><div class="section-heading"><div><h3>Upgrade safety</h3><p>State compatibility, storage headroom, unresolved ownership, and rollback evidence.</p></div></div><strong id="upgradeReadinessState">Waiting</strong><p id="upgradeReadinessDetail">No upgrade evidence.</p><ul id="upgradeBlockers" class="production-list"></ul></article>
+          <article class="production-card scorecard-card"><div class="section-heading"><div><h3>Live scorecard</h3><p>Delivery, answer availability, phases, markers, and follow-up coverage.</p></div><b id="liveScoreValue">--</b></div><dl class="production-stats"><div><dt>Delivery</dt><dd id="scoreDelivery">--</dd></div><div><dt>Answers</dt><dd id="scoreAnswers">--</dd></div><div><dt>Markers</dt><dd id="scoreMarkers">0</dd></div><div><dt>Follow-ups</dt><dd id="scoreFollowUps">0</dd></div></dl><p id="scorecardDetail">No scorecard evidence.</p></article>
+          <article class="production-card diagnostics-card"><div class="section-heading"><div><h3>Production diagnostics</h3><p>Content-free health, privacy, environment fingerprint, and support completeness.</p></div></div><strong id="productionDiagnosticsState">Waiting</strong><p id="productionDiagnosticsDetail">No diagnostic evidence.</p><pre id="productionFingerprint">No fingerprint.</pre><button id="copyEscalationSummary">Copy escalation summary</button></article>
+          <article class="production-card release-card"><div class="section-heading"><div><h3>Release handoff</h3><p>Exact source, automated, browser, privacy, cleanup, runtime, and delivery gates.</p></div></div><strong id="releaseHandoffState">Not ready</strong><ul id="releaseGateList" class="production-list"></ul><button id="downloadHandoffManifest">Download handoff manifest</button></article>
+        </div>
       </section>
     </main>
 

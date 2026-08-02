@@ -1101,3 +1101,125 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 **Implementation:** one Mechanics Hardening report imports every Cycle 171–195 owner and exposes metadata only.
 
 **Source-complete status:** Cycles 96–195 are implemented. The final consolidated repository and isolated-browser gates are now required before the technical HTML is updated.
+
+## Production readiness cycles 196–200
+
+- **196:** one Decision Center combines no-response, conflict, containment, incident, warning, and end-guard decisions.
+- **197:** deterministic severity, urgency, age, and stable-ID ranking selects one primary decision.
+- **198:** every actionable decision maps to an existing allow-listed command or internal Pilot route.
+- **199:** decision evidence contains reason codes, counts, roles, and timestamps without interview content.
+- **200:** the Production view exposes the primary decision and a bounded decision queue.
+
+**Bug fixes:** live operators no longer have to reconcile contradictory warnings across multiple panels.
+**New features:** Decision Center with one safe action and exact source navigation.
+**Implementation:** pure metadata model; existing incidents, warnings, and command owners remain authoritative.
+
+## Production readiness cycles 201–205
+
+- **201:** Safe, Balanced, and Fast operating profiles configure coherent receiver policies.
+- **202:** profile preview lists exact hold, auto-submit, drain, idle-submit, and answer-boundary changes.
+- **203:** profile application is atomic across the existing receiver command owners.
+- **204:** Fast mode is blocked by storage, compatibility, self-test, queue-only, or provider-write hazards.
+- **205:** selected profile and bounded change metadata persist in session-only state.
+
+**Bug fixes:** incompatible individual control combinations no longer masquerade as a coherent operating mode.
+**New features:** user-selectable operating profiles with exact previews and guardrails.
+**Implementation:** one normalized `productionControls` owner and no second receiver policy engine.
+
+## Production readiness cycles 206–210
+
+- **206:** active decisions map to the correct Pilot view and anchor.
+- **207:** one contextual next-safe-action includes the exact command payload.
+- **208:** production decisions can inform command relevance without changing command authority.
+- **209:** navigation remains internal to the Pilot and never focuses provider windows.
+- **210:** the last internal route and reason persist as bounded metadata.
+
+**Bug fixes:** operators no longer need to hunt for the panel that owns a decision.
+**New features:** one-click internal source navigation.
+**Implementation:** pure route model plus the existing tab/render scheduler.
+
+## Production readiness cycles 211–215
+
+- **211:** containment reports Normal, Watch, Queue-only, or Blocked from authoritative safety evidence.
+- **212:** automatic queue-only behavior remains tied to root cause and consistency state.
+- **213:** non-critical containment can receive a bounded operator override.
+- **214:** override expiry deterministically restores derived policy.
+- **215:** the Production view explains protected data, cause, eligibility, and next action.
+
+**Bug fixes:** protected delivery state can no longer be confused with a generic runtime failure.
+**New features:** transparent bounded containment override.
+**Implementation:** override modifies only derived provider-write policy; ledger persistence remains enabled.
+
+## Production readiness cycles 216–220
+
+- **216:** Transport Assurance combines both role lanes, RTT, score, circuit, and fallback evidence.
+- **217:** command and trace correlation gaps are counted without inspecting content.
+- **218:** next-probe timing and direct/fallback continuity are visible.
+- **219:** the existing no-content self-test becomes an explicit active transport probe.
+- **220:** the Production view exposes per-role transport state and one probe action.
+
+**Bug fixes:** a healthy fallback lane no longer appears identical to a failed direct lane.
+**New features:** aggregate Transport Assurance.
+**Implementation:** derives from the current port hub, circuit, traces, and self-test owners.
+
+## Production readiness cycles 221–225
+
+- **221:** provider route readiness summarizes required and optional adapter surfaces for both roles.
+- **222:** route safety combines registration, capability, write-safety, and delivery policy.
+- **223:** context arming and resend eligibility are explicit route gates.
+- **224:** manual failover guidance is ordered but never changes providers automatically.
+- **225:** the Production view exposes exact blockers, Check Live, and Resend Context.
+
+**Bug fixes:** provider presence alone no longer counts as a safe route.
+**New features:** provider route readiness checklist.
+**Implementation:** metadata-only capability matrix over existing adapter telemetry.
+
+## Production readiness cycles 226–230
+
+- **226:** runtime state advances to schema 3 with an ordered schema-2 migration.
+- **227:** upgrade readiness requires safe session-storage headroom.
+- **228:** unresolved, in-flight, and outbox ownership block upgrade readiness.
+- **229:** rollback readiness requires last-known-good or checkpoint evidence.
+- **230:** the Production view exposes Ready, Wait, or Blocked with exact reasons.
+
+**Bug fixes:** additive production controls can no longer appear without explicit compatibility handling.
+**New features:** live Upgrade Safety gate.
+**Implementation:** one-way migration injects normalized controls without changing delivery state.
+
+## Production readiness cycles 231–235
+
+- **231:** marker categories aggregate into a metadata-only scorecard.
+- **232:** phase history reports interview-phase coverage.
+- **233:** rendered delivery success and answer availability remain separate scorecard measures.
+- **234:** linked, deferred, pinned, and unresolved follow-ups remain visible.
+- **235:** the Production view exposes a live review-readiness score.
+
+**Bug fixes:** review quality no longer collapses delivery and answer evidence into one percentage.
+**New features:** Live Scorecard.
+**Implementation:** derived from markers, phases, metrics, and question metadata only.
+
+## Production readiness cycles 236–240
+
+- **236:** one production health score combines self-test, transport, route, upgrade, consistency, and storage.
+- **237:** diagnostics explicitly prove content, raw URL, clipboard, and credential exclusion.
+- **238:** bounded environment fingerprint captures version, route, schema, protocols, and capability counts.
+- **239:** support-bundle completeness verifies every required production section.
+- **240:** a copyable metadata-only escalation summary is available during live incidents.
+
+**Bug fixes:** support exports no longer omit the current production-control context.
+**New features:** Production Diagnostics and escalation summary.
+**Implementation:** the support bundle now consumes the enriched snapshot through one derivation owner.
+
+## Production readiness cycles 241–245
+
+- **241:** release checklist separates source, automated, browser, privacy, cleanup, runtime, delivery, and no-push gates.
+- **242:** a deterministic main-worktree handoff manifest binds release evidence to the exact commit and branch.
+- **243:** assistant-created cleanup artifacts are listed separately from repository evidence.
+- **244:** release seal requires a clean tracked tree, clean original checkout, evidence hash, no tag, and explicit no-push confirmation.
+- **245:** the Production view exposes release readiness and a downloadable runtime handoff draft.
+
+**Bug fixes:** release readiness can no longer be inferred from tests alone.
+**New features:** release handoff gate and deterministic manifest.
+**Implementation:** release evidence and merge handoff remain separate, hash-bound artifacts.
+
+**Source-complete status:** Cycles 196–245 are implemented. The deferred consolidated automated and isolated-browser gates are now required before cleanup, handoff, and the final HTML update.

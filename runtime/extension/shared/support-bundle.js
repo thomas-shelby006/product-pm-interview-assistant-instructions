@@ -66,6 +66,18 @@ export function buildSafeSupportBundle(snapshot = {}, { manifest = {}, sourceHas
       restart: snapshot.restartContinuity ? JSON.parse(JSON.stringify(snapshot.restartContinuity)) : null,
       accessibility: snapshot.accessibilityProof ? JSON.parse(JSON.stringify(snapshot.accessibilityProof)) : null
     },
+    production: snapshot.production ? {
+      decisionCount: Math.max(0, Number(snapshot.production.decisionCenter?.count) || 0),
+      primaryDecision: clean(snapshot.production.decisionCenter?.primary?.code, 80),
+      operatingProfile: clean(snapshot.production.operatingProfile?.id || snapshot.productionControls?.operatingProfile, 24),
+      containment: { state: clean(snapshot.production.containment?.state, 40), reason: clean(snapshot.production.containment?.reason, 80), overrideActive: snapshot.production.containment?.overrideActive === true },
+      transport: { state: clean(snapshot.production.transportAssurance?.state, 40), score: Math.max(0, Number(snapshot.production.transportAssurance?.score) || 0), correlationGaps: Math.max(0, Number(snapshot.production.transportAssurance?.correlationGaps) || 0) },
+      route: { state: clean(snapshot.production.routeReadiness?.state, 40), route: clean(snapshot.production.routeReadiness?.route, 80), blockers: (snapshot.production.routeReadiness?.blockers || []).map(value => clean(value, 80)) },
+      upgrade: { state: clean(snapshot.production.upgradeReadiness?.state, 40), blockers: (snapshot.production.upgradeReadiness?.blockers || []).map(value => clean(value, 80)) },
+      scorecard: { score: Math.max(0, Number(snapshot.production.scorecard?.score) || 0), deliverySuccessRate: Math.max(0, Number(snapshot.production.scorecard?.deliverySuccessRate) || 0), answerAvailabilityRate: Math.max(0, Number(snapshot.production.scorecard?.answerAvailabilityRate) || 0), markerTotal: Math.max(0, Number(snapshot.production.scorecard?.markerTotal) || 0) },
+      diagnostics: { state: clean(snapshot.production.diagnostics?.state, 40), score: Math.max(0, Number(snapshot.production.diagnostics?.score) || 0), supportComplete: snapshot.production.diagnostics?.supportComplete === true, privacySafe: snapshot.production.diagnostics?.privacy?.safe === true },
+      release: { state: clean(snapshot.production.releaseHandoff?.state, 40), failed: (snapshot.production.releaseHandoff?.failed || []).map(value => clean(value, 80)) }
+    } : null,
     drill: snapshot.lastTransportDrill ? { ok: snapshot.lastTransportDrill.ok === true, elapsedMs: Math.max(0, Number(snapshot.lastTransportDrill.elapsedMs) || 0), contentAccessed: snapshot.lastTransportDrill.contentAccessed === true, checks: (snapshot.lastTransportDrill.checks || []).map(check => ({ name: clean(check.name, 80), ok: check.ok === true, error: clean(check.error, 120), durationMs: Math.max(0, Number(check.durationMs) || 0) })) } : null,
     sourceHashes: Object.fromEntries(Object.entries(sourceHashes || {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [clean(key, 200), clean(value, 128)]))
   };

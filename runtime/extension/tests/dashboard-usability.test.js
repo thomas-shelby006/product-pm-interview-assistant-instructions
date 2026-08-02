@@ -315,3 +315,18 @@ test('Runtime Pilot exposes queue-only protection and one primary root cause', (
   assert.match(dashboard, /Queue-only protection/);
   assert.match(styles, /\.policy-banner/);
 });
+
+
+test('Receiver Flow controls are wired through the existing command protocol', () => {
+  for (const id of ['pauseAfterAnswer','drainOne','drainAll','stopDrain','submitOnIdle','acknowledgeAnswer','previewInterrupt','confirmInterrupt']) {
+    assert.equal(dashboard.includes(`byId('${id}').addEventListener('click'`), true);
+  }
+  assert.match(dashboard, /\['resolveNoResponseWait', 'wait'\]/);
+  assert.match(dashboard, /\['resolveNoResponseRetry', 'retry'\]/);
+  assert.match(dashboard, /\['resolveNoResponseContinue', 'continue'\]/);
+  assert.match(dashboard, /byId\(id\)\.addEventListener\('click'/);
+  assert.match(dashboard, /'resolve_no_response', \{ action \}/);
+  assert.match(dashboard, /'set_receiver_policy'/);
+  assert.match(dashboard, /'preview_interrupt_latest'/);
+  assert.match(dashboard, /'interrupt_latest', \{ token: plan\.token \}/);
+});

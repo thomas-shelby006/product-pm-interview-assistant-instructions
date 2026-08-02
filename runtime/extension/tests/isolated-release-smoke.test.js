@@ -99,3 +99,10 @@ test('smoke mirrors the production ChatGPT composer and send selectors', () => {
   assert.match(runner, /button\[aria-label\^="Send"\]/);
   assert.match(runner, /'value' in composer/);
 });
+
+
+test('isolated smoke resolves explicit no-response hold through the visible Continue control', () => {
+  assert.match(runner, /batchState\?\.pendingNoResponse/);
+  assert.match(runner, /getElementById\('resolveNoResponseContinue'\)/);
+  assert.match(runner, /noResponseResolution = \{ required: true, action: 'continue'/);
+});

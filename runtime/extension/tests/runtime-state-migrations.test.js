@@ -12,21 +12,21 @@ test('runtime migration upgrades schema one to schema two exactly once', () => {
 });
 
 test('runtime migration is idempotent at the target schema', () => {
-  const envelope = { schemaVersion: 2, writerVersion: '0.7.0', committedAt: 10, sessions: [] };
-  const result = migrateRuntimeEnvelope(envelope, 2);
+  const envelope = { schemaVersion: 3, writerVersion: '0.9.0', committedAt: 10, sessions: [] };
+  const result = migrateRuntimeEnvelope(envelope, 3);
   assert.equal(result.ok, true);
   assert.deepEqual(result.applied, []);
   assert.deepEqual(result.envelope, envelope);
 });
 
 test('future runtime schema fails closed', () => {
-  const result = migrateRuntimeEnvelope({ schemaVersion: 3, sessions: [] }, 2);
+  const result = migrateRuntimeEnvelope({ schemaVersion: 4, sessions: [] }, 3);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'future_schema');
 });
 
 test('missing migration step is explicit', () => {
-  const result = migrateRuntimeEnvelope({ schemaVersion: 1, sessions: [] }, 4);
+  const result = migrateRuntimeEnvelope({ schemaVersion: 1, sessions: [] }, 5);
   assert.equal(result.ok, false);
-  assert.equal(result.reason, 'missing_migration_2_to_3');
+  assert.equal(result.reason, 'missing_migration_3_to_4');
 });

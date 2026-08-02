@@ -9,10 +9,22 @@ const MIGRATIONS = new Map([
     writerVersion: String(metadata.writerVersion || envelope.writerVersion || ''),
     committedAt: Math.max(0, Number(metadata.now) || Number(envelope.committedAt) || Date.now()),
     sessions: clone(envelope.sessions || [])
+  })],
+  [2, (envelope, metadata = {}) => ({
+    ...clone(envelope),
+    schemaVersion: 3,
+    writerVersion: String(metadata.writerVersion || envelope.writerVersion || ''),
+    committedAt: Math.max(0, Number(metadata.now) || Number(envelope.committedAt) || Date.now()),
+    sessions: (clone(envelope.sessions || [])).map(session => ({
+      ...session,
+      productionControls: session?.productionControls && typeof session.productionControls === 'object'
+        ? session.productionControls
+        : { operatingProfile: 'balanced', containmentOverrideUntil: 0, containmentOverrideReason: '', lastProfileChangeAt: 0, lastProfileChangeSource: '', lastNavigation: null }
+    }))
   })]
 ]);
 
-export function migrateRuntimeEnvelope(value, targetVersion = 2, metadata = {}) {
+export function migrateRuntimeEnvelope(value, targetVersion = 3, metadata = {}) {
   let envelope = clone(value);
   const target = Math.max(1, Number(targetVersion) || 1);
   let current = Math.max(0, Number(envelope?.schemaVersion) || 0);

@@ -43,6 +43,10 @@ const COMMANDS = new Set([
   'run_self_test',
   'repair_runtime',
   'repair_live_metadata',
+  'apply_operating_profile',
+  'set_containment_override',
+  'probe_transport',
+  'record_production_navigation',
   'start_stabilization',
   'run_stabilization_step',
   'cancel_stabilization',
@@ -175,6 +179,18 @@ export function normalizeDashboardCommand(value) {
   }
   if (command === 'interrupt_latest') payload.token = cleanText(payload.token, 160);
   if (command === 'resolve_no_response') payload.action = ['wait', 'retry', 'continue'].includes(payload.action) ? payload.action : 'wait';
+  if (command === 'apply_operating_profile') {
+    payload.profile = ['safe','balanced','fast'].includes(String(payload.profile || '')) ? String(payload.profile) : 'balanced';
+  }
+  if (command === 'set_containment_override') {
+    payload.enabled = Boolean(payload.enabled);
+    payload.durationMs = Math.max(0, Math.min(15 * 60_000, Number(payload.durationMs) || 120_000));
+    payload.reason = cleanText(payload.reason, 80) || 'operator';
+  }
+  if (command === 'record_production_navigation') {
+    const route = payload.route && typeof payload.route === 'object' ? payload.route : {};
+    payload.route = { view: cleanText(route.view, 40) || 'overview', anchor: cleanText(route.anchor, 100), reason: cleanText(route.reason, 120) || 'operator_navigation' };
+  }
   if (command === 'set_session_phase') {
     payload.phase = cleanText(payload.phase, 24).toLowerCase();
     if (!['setup','ready','active','paused','debrief','ended'].includes(payload.phase)) return null;

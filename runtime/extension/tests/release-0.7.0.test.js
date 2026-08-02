@@ -9,13 +9,13 @@ const runtimeRoot = resolve(extensionRoot, '..');
 const repoRoot = resolve(runtimeRoot, '..');
 const read = (path) => readFile(resolve(repoRoot, path), 'utf8');
 
-test('release surfaces identify PMIA runtime 0.8.0', async () => {
+test('release surfaces identify PMIA runtime 0.9.0', async () => {
   const manifest = JSON.parse(await readFile(resolve(extensionRoot, 'manifest.json'), 'utf8'));
   const rootReadme = await read('README.md');
   const extensionReadme = await read('runtime/extension/README.md');
-  assert.equal(manifest.version, '0.8.0');
-  assert.match(rootReadme, /0\.8\.0/);
-  assert.match(extensionReadme, /Runtime 0\.8\.0/);
+  assert.equal(manifest.version, '0.9.0');
+  assert.match(rootReadme, /0\.9\.0/);
+  assert.match(extensionReadme, /Runtime 0\.9\.0/);
   assert.match(rootReadme, /Runtime Pilot Dashboard/);
   assert.match(extensionReadme, /Runtime Pilot Dashboard/);
 });

@@ -55,6 +55,7 @@ import { explainTrace } from '../shared/trace-explanation.js';
 import { auditShortcutConflicts } from '../shared/shortcut-conflict-model.js';
 import { auditDashboardAccessibility } from './accessibility-audit.js';
 import { buildVisualPreferenceProof } from './visual-preference-proof.js';
+import { deriveOperatingProfile } from '../shared/operating-profile.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -79,7 +80,9 @@ const state = {
   commandPaletteReturnFocus: null,
   toolbarIndex: 0,
   lastAnnouncement: '',
-  interruptPlanDraft: null
+  interruptPlanDraft: null,
+  productionProfileDraft: 'balanced',
+  productionDecision: null
 };
 
 const byId = id => document.getElementById(id);
@@ -1320,6 +1323,107 @@ function renderReview(snapshot) {
     : 'No repair has been run.';
 }
 
+function replaceTextList(id, items = [], formatter = value => String(value)) {
+  const root = byId(id);
+  if (!root) return;
+  root.replaceChildren();
+  for (const item of items.slice(0, 20)) {
+    const node = document.createElement('li');
+    node.textContent = formatter(item);
+    root.append(node);
+  }
+}
+
+function activateDashboardView(view, anchor = '', reason = 'operator_navigation') {
+  const tab = document.querySelector(`[data-view="${CSS.escape(String(view || 'overview'))}"]`);
+  if (!tab) return false;
+  state.activeView = tab.dataset.view;
+  document.querySelectorAll('[data-view]').forEach(node => {
+    const active = node === tab;
+    node.classList.toggle('active', active);
+    node.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('[data-view-panel]').forEach(node => {
+    const active = node.dataset.viewPanel === state.activeView;
+    node.classList.toggle('active', active);
+    node.hidden = !active;
+  });
+  scheduleRender();
+  requestAnimationFrame(() => {
+    const target = anchor ? byId(anchor) : null;
+    target?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    target?.focus?.({ preventScroll: true });
+  });
+  void sendCommand('record_production_navigation', { route: { view: state.activeView, anchor, reason } });
+  return true;
+}
+
+function renderProduction(snapshot) {
+  const production = snapshot?.production || {};
+  const diagnostics = production.diagnostics || {};
+  const badge = byId('productionHealthBadge');
+  if (badge) { badge.dataset.state = diagnostics.state || 'unknown'; badge.textContent = diagnostics.score == null ? 'Waiting' : `${diagnostics.score}/100`; }
+  const center = production.decisionCenter || { items: [], count: 0, primary: null };
+  state.productionDecision = center.primary || null;
+  text('productionDecisionTitle', center.primary?.title || 'No action required');
+  text('productionDecisionDetail', center.primary?.detail || 'The live system is caught up.');
+  text('productionDecisionCount', String(center.count || 0));
+  const action = byId('productionDecisionAction');
+  if (action) { action.hidden = !center.primary?.command; action.textContent = center.primary?.command ? `Run ${humanizeCode(center.primary.command)}` : 'Run safe action'; }
+  replaceTextList('productionDecisionList', center.items || [], item => `${String(item.severity || 'info').toUpperCase()} · ${item.title}`);
+
+  const selected = document.activeElement === byId('operatingProfileSelect')
+    ? byId('operatingProfileSelect').value
+    : (state.productionProfileDraft || snapshot?.productionControls?.operatingProfile || production.operatingProfile?.id || 'balanced');
+  state.productionProfileDraft = selected;
+  if (byId('operatingProfileSelect') && document.activeElement !== byId('operatingProfileSelect')) byId('operatingProfileSelect').value = selected;
+  const profile = deriveOperatingProfile(snapshot || {}, selected);
+  text('operatingProfileDescription', `${profile.description} ${profile.eligibility.allowed ? '' : `Blocked: ${profile.eligibility.blockers.map(humanizeCode).join(', ')}.`}`.trim());
+  replaceTextList('operatingProfileChanges', profile.changes || [], item => `${humanizeCode(item.field)}: ${String(item.from)} -> ${String(item.to)}`);
+  byId('applyOperatingProfile').disabled = !profile.eligibility.allowed || profile.changes.length === 0;
+
+  const containment = production.containment || {};
+  text('containmentState', humanizeCode(containment.state || 'waiting'));
+  text('containmentDetail', `${humanizeCode(containment.reason || 'no evidence')}${containment.overrideActive ? ` · override until ${new Date(containment.overrideUntil).toLocaleTimeString()}` : ''}`);
+  const override = byId('containmentOverride');
+  if (override) { override.disabled = !containment.overrideActive && !containment.overrideEligible; override.textContent = containment.overrideActive ? 'End override' : 'Start 2-minute override'; }
+  byId('containmentState')?.closest('.production-card')?.setAttribute('data-state', containment.state || 'unknown');
+
+  const transport = production.transportAssurance || {};
+  text('transportAssuranceState', `${humanizeCode(transport.state || 'waiting')} · ${Number(transport.score || 0)}/100`);
+  text('transportAssuranceDetail', transport.nextProbeAt > Date.now() ? `Next safe probe in ${formatDuration(transport.nextProbeAt - Date.now())}.` : 'Active no-content probe is available.');
+  text('transportSenderState', `${humanizeCode(transport.sender?.mode || 'unknown')} · ${transport.sender?.rttMs || 0} ms`);
+  text('transportReceiverState', `${humanizeCode(transport.receiver?.mode || 'unknown')} · ${transport.receiver?.rttMs || 0} ms`);
+  text('transportCorrelationGaps', String(transport.correlationGaps || 0));
+
+  const route = production.routeReadiness || {};
+  text('routeReadinessState', `${humanizeCode(route.state || 'waiting')} · ${route.route || '--'}`);
+  text('routeReadinessDetail', route.blockers?.length ? route.blockers.map(humanizeCode).join(' · ') : 'All route checks passed.');
+  replaceTextList('routeChecklist', route.checklist || [], item => `${item.ok ? 'PASS' : 'WAIT'} · ${item.label}`);
+
+  const upgrade = production.upgradeReadiness || {};
+  text('upgradeReadinessState', humanizeCode(upgrade.state || 'waiting'));
+  text('upgradeReadinessDetail', `${upgrade.unresolved || 0} unresolved · ${upgrade.inFlight || 0} in flight · storage ${humanizeCode(upgrade.storageLevel || 'unknown')} · rollback ${upgrade.rollbackReady ? 'ready' : 'missing'}`);
+  replaceTextList('upgradeBlockers', upgrade.blockers || [], humanizeCode);
+
+  const score = production.scorecard || {};
+  text('liveScoreValue', score.score == null ? '--' : String(score.score));
+  text('scoreDelivery', `${score.deliverySuccessRate ?? '--'}%`);
+  text('scoreAnswers', `${score.answerAvailabilityRate ?? '--'}%`);
+  text('scoreMarkers', String(score.markerTotal || 0));
+  text('scoreFollowUps', String(score.followUps || 0));
+  text('scorecardDetail', `${score.phaseCount || 0} phase${score.phaseCount === 1 ? '' : 's'} · ${score.questionsObserved || 0} questions · ${score.unresolved || 0} unresolved · review ${score.reviewReady ? 'ready' : 'not ready'}`);
+
+  text('productionDiagnosticsState', `${humanizeCode(diagnostics.state || 'waiting')} · ${diagnostics.score ?? 0}/100`);
+  text('productionDiagnosticsDetail', diagnostics.supportComplete ? 'Support metadata is complete and privacy bounded.' : `Missing: ${(diagnostics.missingSections || []).map(humanizeCode).join(', ')}`);
+  text('productionFingerprint', JSON.stringify(diagnostics.fingerprint || {}, null, 2));
+
+  const release = production.releaseHandoff || {};
+  text('releaseHandoffState', humanizeCode(release.state || 'not_ready'));
+  replaceTextList('releaseGateList', release.gates || [], item => `${item.ok ? 'PASS' : 'WAIT'} · ${humanizeCode(item.id)}${item.detail ? ` · ${item.detail}` : ''}`);
+  byId('downloadHandoffManifest').disabled = !snapshot;
+}
+
 function updateControlAvailability() {
   const unavailable = !state.snapshot || state.sessionEnded;
   document.querySelectorAll('[data-command], #submitSelected, #archiveSelected, #archiveProven, #archiveAll, #copyLatest, #endSessionAction, #exportBeforeEnd, #archiveAndEnd, #cancelEndSession, #pinQuestion, #setQuestionPriority, #deferQuestion, #questionParentId, #linkQuestion, #undoQuestionAction').forEach(node => {
@@ -1351,6 +1455,7 @@ function render(changedKeys = null) {
   renderLiveOperations(state.snapshot, now);
   renderAccessibility(state.snapshot);
   renderPreflightAndCrash(state.snapshot, now);
+  renderProduction(state.snapshot);
   renderCommandPalette();
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
@@ -1439,18 +1544,7 @@ document.addEventListener('click', event => {
   if (event.target.closest('#closeCommandPalette')) { closeCommandPalette(); return; }
   const tab = event.target.closest('[data-view]');
   if (tab) {
-    state.activeView = tab.dataset.view;
-    document.querySelectorAll('[data-view]').forEach(node => {
-      const active = node === tab;
-      node.classList.toggle('active', active);
-      node.setAttribute('aria-selected', String(active));
-    });
-    document.querySelectorAll('[data-view-panel]').forEach(node => {
-      const active = node.dataset.viewPanel === state.activeView;
-      node.classList.toggle('active', active);
-      node.hidden = !active;
-    });
-    scheduleRender();
+    activateDashboardView(tab.dataset.view, '', 'tab_click');
     return;
   }
   const traceButton = event.target.closest('[data-trace-id]');
@@ -1502,6 +1596,48 @@ document.addEventListener('click', event => {
             : {};
     void runCommand(button, command, payload);
   }
+});
+
+byId('operatingProfileSelect').addEventListener('change', event => {
+  state.productionProfileDraft = event.currentTarget.value;
+  renderProduction(state.snapshot);
+});
+byId('applyOperatingProfile').addEventListener('click', event => {
+  void runCommand(event.currentTarget, 'apply_operating_profile', { profile: byId('operatingProfileSelect').value });
+});
+byId('containmentOverride').addEventListener('click', event => {
+  const current = state.snapshot?.production?.containment || {};
+  void runCommand(event.currentTarget, 'set_containment_override', { enabled: !Boolean(current.overrideActive), durationMs: 120000, reason: 'production_view' });
+});
+byId('productionDecisionAction').addEventListener('click', event => {
+  const decision = state.productionDecision;
+  if (!decision?.command) return;
+  void runCommand(event.currentTarget, decision.command, decision.payload || {});
+});
+byId('productionNavigate').addEventListener('click', () => {
+  const route = state.snapshot?.production?.navigation?.route || { view: 'overview', anchor: 'readinessGate', reason: 'production_navigation' };
+  activateDashboardView(route.view, route.anchor, route.reason);
+});
+byId('copyEscalationSummary').addEventListener('click', async () => {
+  const summary = String(state.snapshot?.production?.diagnostics?.escalationSummary || '');
+  if (!summary) return showToast('No escalation summary is available.', 'warn');
+  try { await navigator.clipboard.writeText(summary); showToast('Escalation summary copied.', 'ok'); }
+  catch { showToast('Clipboard write failed.', 'error'); }
+});
+byId('downloadHandoffManifest').addEventListener('click', () => {
+  const snapshot = state.snapshot || {};
+  const production = snapshot.production || {};
+  const manifest = {
+    schema: 'pmia-handoff-draft/v1', version: production.diagnostics?.fingerprint?.version || '0.9.0',
+    sessionId: snapshot.sessionId || '', route: production.routeReadiness?.route || '',
+    operatingProfile: snapshot.productionControls?.operatingProfile || 'balanced',
+    release: production.releaseHandoff || null, diagnostics: production.diagnostics || null,
+    generatedAt: Date.now()
+  };
+  const blob = new Blob([`${JSON.stringify(manifest, null, 2)}\n`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob); const link = document.createElement('a');
+  link.href = url; link.download = `pmia-handoff-draft-${sessionId.replace(/[^A-Za-z0-9_-]+/g, '_')}.json`; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 });
 
 byId('exportSupportBundle').addEventListener('click', async event => {
@@ -1556,6 +1692,57 @@ byId('traceSearch').addEventListener('input', event => {
   state.traceQuery = String(event.currentTarget.value || '');
   state.selectedTraceId = '';
   idleWork.schedule(() => renderReview(state.snapshot));
+});
+
+function currentReceiverPolicy() {
+  return state.snapshot?.batchState?.receiverPolicy || {};
+}
+
+byId('pauseAfterAnswer').addEventListener('click', event => {
+  const policy = currentReceiverPolicy();
+  void runCommand(event.currentTarget, 'set_receiver_policy', {
+    policy: { pauseAfterAnswer: !Boolean(policy.pauseAfterAnswer) }
+  });
+});
+byId('drainOne').addEventListener('click', event => {
+  void runCommand(event.currentTarget, 'set_receiver_policy', { policy: { drainMode: 'one' } });
+});
+byId('drainAll').addEventListener('click', event => {
+  void runCommand(event.currentTarget, 'set_receiver_policy', { policy: { drainMode: 'all' } });
+});
+byId('stopDrain').addEventListener('click', event => {
+  void runCommand(event.currentTarget, 'set_receiver_policy', { policy: { drainMode: 'off' } });
+});
+byId('submitOnIdle').addEventListener('click', event => {
+  const policy = currentReceiverPolicy();
+  void runCommand(event.currentTarget, 'set_receiver_policy', {
+    policy: { submitOnIdle: !Boolean(policy.submitOnIdle) }
+  });
+});
+byId('acknowledgeAnswer').addEventListener('click', event => {
+  void runCommand(event.currentTarget, 'acknowledge_answer');
+});
+for (const [id, action] of [
+  ['resolveNoResponseWait', 'wait'],
+  ['resolveNoResponseRetry', 'retry'],
+  ['resolveNoResponseContinue', 'continue']
+]) {
+  byId(id).addEventListener('click', event => {
+    void runCommand(event.currentTarget, 'resolve_no_response', { action });
+  });
+}
+byId('previewInterrupt').addEventListener('click', event => {
+  void runCommand(event.currentTarget, 'preview_interrupt_latest').then(result => {
+    state.interruptPlanDraft = result?.ok ? result : result?.plan || null;
+    renderReceiverFlow(state.snapshot);
+  });
+});
+byId('confirmInterrupt').addEventListener('click', event => {
+  const plan = state.interruptPlanDraft || state.snapshot?.batchState?.interruptPlan;
+  if (!plan?.token) return showToast('Prepare the interrupt again before confirming.', 'warn');
+  void runCommand(event.currentTarget, 'interrupt_latest', { token: plan.token }).then(result => {
+    if (result?.ok) state.interruptPlanDraft = null;
+  });
 });
 byId('submitSelected').addEventListener('click', event => {
   if (!state.selectedQueueId) return showToast('Select an unresolved final.', 'warn');

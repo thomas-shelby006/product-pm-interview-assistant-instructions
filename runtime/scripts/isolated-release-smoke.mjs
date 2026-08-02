@@ -215,6 +215,21 @@ try {
   await sleep(350);
   await manualCopy(questions.q3);
 
+  evidence.noResponseResolution = { required: false, action: '', completedAt: 0 };
+  const resolutionDeadline = Date.now() + 30000;
+  while (Date.now() < resolutionDeadline) {
+    const current = await pilotState();
+    const selected = (current?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));
+    if (selected.length === 3 && selected.every(item => item.state === 'proven')) break;
+    if (current?.batchState?.pendingNoResponse) {
+      const continued = await dashboard.evaluate(`(()=>{const button=document.getElementById('resolveNoResponseContinue');if(!button||button.hidden||button.disabled)return false;button.click();return true})()`, { userGesture: true });
+      if (!continued) throw new Error('Pending no-response state was visible but Continue was unavailable');
+      evidence.noResponseResolution = { required: true, action: 'continue', completedAt: Date.now() };
+      break;
+    }
+    await sleep(250);
+  }
+
   const proof = await waitFor('three exact rendered proofs', async () => {
     const pilot = await pilotState();
     const selected = (pilot?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));

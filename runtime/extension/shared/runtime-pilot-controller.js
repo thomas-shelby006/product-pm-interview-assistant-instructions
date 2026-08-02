@@ -57,6 +57,16 @@ import { auditLiveCommandIntegrity, repairLiveCommandMetadata } from './live-com
 import { buildRestartContinuity } from './restart-continuity.js';
 import { monotonicElapsed, normalizeMonotonicClock } from './monotonic-session-clock.js';
 import { restoreManagedLayout } from './layout-restoration.js';
+import { deriveOperatorDecisionCenter } from './operator-decision-center.js';
+import { deriveOperatingProfile } from './operating-profile.js';
+import { deriveContextualNavigation } from './cockpit-navigation.js';
+import { applyContainmentOverride, deriveContainmentStatus } from './containment-status.js';
+import { deriveTransportAssurance } from './transport-assurance.js';
+import { deriveProviderRouteReadiness } from './provider-route-readiness.js';
+import { deriveUpgradeReadiness } from './upgrade-readiness.js';
+import { deriveLiveScorecard } from './live-scorecard.js';
+import { deriveProductionDiagnostics } from './production-diagnostics.js';
+import { deriveReleaseHandoff } from './release-handoff.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -128,7 +138,8 @@ export function createRuntimePilotController({
     const snapshot = pilot.snapshot(sessionId);
     if (!snapshot) return { active: false, reason: 'session_missing', allowPersist: true, allowProviderWrite: false };
     const rootCause = classifyRuntimeRootCause({ ...snapshot, stateAudit: store.audit() }, Date.now());
-    const policy = deriveQueueOnlyPolicy(snapshot, rootCause);
+    const basePolicy = deriveQueueOnlyPolicy(snapshot, rootCause);
+    const policy = applyContainmentOverride(basePolicy, snapshot, Date.now());
     const changed = !sameDeliveryPolicy(snapshot.deliveryPolicy, policy);
     const bothObserved = ['sender', 'receiver'].every(role => {
       const value = snapshot?.[role] || {};
@@ -254,7 +265,7 @@ export function createRuntimePilotController({
     const stateAudit = store.audit();
     const snapshotBase = baseSnapshot ? { ...baseSnapshot, stateAudit } : null;
     const rootCause = snapshotBase ? classifyRuntimeRootCause(snapshotBase, Date.now()) : null;
-    const deliveryPolicy = snapshotBase ? deriveQueueOnlyPolicy(snapshotBase, rootCause) : null;
+    const deliveryPolicy = snapshotBase ? applyContainmentOverride(deriveQueueOnlyPolicy(snapshotBase, rootCause), snapshotBase, Date.now()) : null;
     const enrichedBase = snapshotBase ? { ...snapshotBase, rootCause, deliveryPolicy } : null;
     const derivedIncidents = enrichedBase ? deriveIncidents(enrichedBase, Date.now()) : [];
     const incidents = enrichedBase ? mergeIncidentState(
@@ -289,10 +300,27 @@ export function createRuntimePilotController({
       commands: commandCatalog(enrichedBase),
       quietAttention
     } : null;
+    let production = null;
+    if (enrichedBase) {
+      const productionBase = { ...enrichedBase, deliveryPolicy, incidents: { items: incidents }, liveOperations };
+      const decisionCenter = deriveOperatorDecisionCenter(productionBase, Date.now());
+      const operatingProfile = deriveOperatingProfile(productionBase);
+      const containment = deriveContainmentStatus(productionBase, Date.now());
+      const transportAssurance = deriveTransportAssurance(productionBase, Date.now());
+      const routeReadiness = deriveProviderRouteReadiness(productionBase);
+      const upgradeReadiness = deriveUpgradeReadiness(productionBase);
+      const scorecard = deriveLiveScorecard(productionBase);
+      const navigation = deriveContextualNavigation({ ...productionBase, production: { decisionCenter } });
+      const partial = { decisionCenter, operatingProfile, containment, transportAssurance, routeReadiness, upgradeReadiness, scorecard, navigation };
+      const diagnostics = deriveProductionDiagnostics(productionBase, partial);
+      const releaseHandoff = deriveReleaseHandoff(productionBase, { ...partial, diagnostics }, productionBase.releaseEvidence || {});
+      production = { ...partial, diagnostics, releaseHandoff };
+    }
     const rawSnapshot = snapshotBase ? {
       ...snapshotBase,
       rootCause,
       deliveryPolicy,
+      production,
       liveOperations,
       incidents: {
         items: incidents,
@@ -1687,6 +1715,34 @@ export function createRuntimePilotController({
       case 'archive_proven':
         result = { ok: true, archived: pilot.archiveProven(sessionId).length };
         break;
+      case 'apply_operating_profile': {
+        const preview = deriveOperatingProfile(pilot.snapshot(sessionId), payload.profile);
+        if (!preview.eligibility.allowed) { result = { ok: false, error: 'profile_blocked', blockers: preview.eligibility.blockers, profile: preview.id }; break; }
+        const results = [];
+        results.push(await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_auto_submit', { value: preview.autoSubmit }));
+        results.push(await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_hold', { value: preview.hold }));
+        results.push(await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_receiver_policy', { policy: preview.receiverPolicy }));
+        const failed = results.find(value => !value?.ok);
+        if (failed) { result = { ok: false, error: failed.error || 'profile_apply_failed', profile: preview.id, results }; break; }
+        const controls = pilot.setOperatingProfile(sessionId, preview.id, Date.now(), 'dashboard');
+        result = { ok: true, profile: preview.id, controls, results };
+        break;
+      }
+      case 'set_containment_override': {
+        const currentSnapshot = pilot.snapshot(sessionId);
+        const containment = deriveContainmentStatus(currentSnapshot, Date.now());
+        if (payload.enabled && !containment.overrideEligible) { result = { ok: false, error: 'containment_override_blocked', containment }; break; }
+        const controls = pilot.setContainmentOverride(sessionId, Boolean(payload.enabled), Number(payload.durationMs || 0), payload.reason || 'operator', Date.now());
+        const synchronized = await syncDeliveryPolicy(sessionId, registry, pilot, { force: true });
+        result = { ok: true, controls, containment: deriveContainmentStatus(pilot.snapshot(sessionId), Date.now()), synchronized };
+        break;
+      }
+      case 'probe_transport':
+        result = await activeSelfTest(sessionId, registry, pilot);
+        break;
+      case 'record_production_navigation':
+        result = { ok: true, controls: pilot.setProductionNavigation(sessionId, payload.route || {}, Date.now()) };
+        break;
       case 'check_live':
         result = await liveCheck(sessionId, registry, pilot);
         break;
@@ -1760,7 +1816,7 @@ export function createRuntimePilotController({
         result = { ok: true, scheduled: true };
         break;
       case 'export_support_bundle': {
-        const currentSnapshot = pilot.snapshot(sessionId);
+        const currentSnapshot = await broadcast(sessionId, pilot) || pilot.snapshot(sessionId);
         result = {
           ok: true,
           bundle: buildSafeSupportBundle({

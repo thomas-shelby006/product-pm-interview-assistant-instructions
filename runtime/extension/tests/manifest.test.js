@@ -64,7 +64,7 @@ test('Claude main-world observer ignores non-string WebSocket frames', async () 
 test('manifest identifies the low-latency preview/commit runtime', async () => {
   const manifest = await readManifest();
   assert.equal(manifest.name, 'PM Interview Dual-Provider Runtime');
-  assert.equal(manifest.version, '0.8.0');
+  assert.equal(manifest.version, '0.9.0');
   assert.match(manifest.description, /low-latency/i);
   assert.match(manifest.description, /preview/i);
   assert.match(manifest.description, /delivery proof/i);
@@ -91,7 +91,7 @@ test('manifest exposes all dynamically imported sender and answer modules', asyn
 
 test('manifest versions the low-latency evidence-driven runtime', async () => {
   const manifest = await readManifest();
-  assert.equal(manifest.version, '0.8.0');
+  assert.equal(manifest.version, '0.9.0');
   assert.match(manifest.description, /provisional previews/i);
   assert.match(manifest.description, /provider-rendered delivery proof/i);
   assert.match(manifest.description, /Runtime Pilot Dashboard/i);
@@ -99,9 +99,9 @@ test('manifest versions the low-latency evidence-driven runtime', async () => {
   assert.match(manifest.description, /ephemeral session state/i);
   assert.match(manifest.description, /background-safe recovery/i);
 });
-test('README documents the 0.8 operational release boundaries', async () => {
+test('README documents the 0.9 operational release boundaries', async () => {
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /Runtime 0\.8\.0/);
+  assert.match(readme, /Runtime 0\.9\.0/);
   assert.match(readme, /profile doctor/i);
   assert.match(readme, /lifecycle readiness/i);
   assert.match(readme, /Launch Anyway/);

@@ -149,6 +149,24 @@ function normalizeAccessibilityPreferences(value = {}) {
   };
 }
 
+
+function normalizeProductionControls(value = {}) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    operatingProfile: ['safe','balanced','fast'].includes(String(source.operatingProfile)) ? String(source.operatingProfile) : 'balanced',
+    containmentOverrideUntil: Math.max(0, Number(source.containmentOverrideUntil || 0)),
+    containmentOverrideReason: String(source.containmentOverrideReason || '').slice(0, 120),
+    lastProfileChangeAt: Math.max(0, Number(source.lastProfileChangeAt || 0)),
+    lastProfileChangeSource: String(source.lastProfileChangeSource || '').slice(0, 80),
+    lastNavigation: source.lastNavigation && typeof source.lastNavigation === 'object' ? {
+      view: String(source.lastNavigation.view || 'overview').slice(0, 40),
+      anchor: String(source.lastNavigation.anchor || '').slice(0, 100),
+      reason: String(source.lastNavigation.reason || '').slice(0, 120),
+      at: Math.max(0, Number(source.lastNavigation.at || 0))
+    } : null
+  };
+}
+
 function normalizeSession(item) {
   const sessionId = String(item?.sessionId || '').trim();
   if (!sessionId) return null;
@@ -233,7 +251,8 @@ function normalizeSession(item) {
     uiPreferences: {
       shortcutBindings: normalizeShortcutBindings(item.uiPreferences?.shortcutBindings || {}),
       accessibility: normalizeAccessibilityPreferences(item.uiPreferences?.accessibility || {})
-    }
+    },
+    productionControls: normalizeProductionControls(item.productionControls || {})
   };
 }
 
@@ -300,6 +319,41 @@ export class RuntimePilotState {
     session.updatedAt = now;
     this.record(sessionId, 'focus_mode_changed', { enabled: Boolean(enabled) }, now);
     return JSON.parse(JSON.stringify(session.liveSession));
+  }
+
+
+  setOperatingProfile(sessionId, profile, now = Date.now(), source = 'operator') {
+    const session = this.ensure(sessionId, now);
+    const value = ['safe','balanced','fast'].includes(String(profile)) ? String(profile) : 'balanced';
+    session.productionControls = normalizeProductionControls({
+      ...session.productionControls,
+      operatingProfile: value,
+      lastProfileChangeAt: now,
+      lastProfileChangeSource: String(source || 'operator')
+    });
+    session.updatedAt = now;
+    this.record(sessionId, 'operating_profile_changed', { profile: value, source: String(source || 'operator') }, now);
+    return { ...session.productionControls };
+  }
+
+  setContainmentOverride(sessionId, enabled, durationMs = 0, reason = 'operator', now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const until = enabled ? now + Math.max(30_000, Math.min(15 * 60_000, Number(durationMs) || 120_000)) : 0;
+    session.productionControls = normalizeProductionControls({
+      ...session.productionControls,
+      containmentOverrideUntil: until,
+      containmentOverrideReason: enabled ? String(reason || 'operator') : ''
+    });
+    session.updatedAt = now;
+    this.record(sessionId, enabled ? 'containment_override_started' : 'containment_override_cleared', { until, reason: String(reason || 'operator') }, now);
+    return { ...session.productionControls };
+  }
+
+  setProductionNavigation(sessionId, route = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.productionControls = normalizeProductionControls({ ...session.productionControls, lastNavigation: { ...route, at: now } });
+    session.updatedAt = now;
+    return { ...session.productionControls };
   }
 
   updateQuestionMetadata(sessionId, itemId, patch = {}, action = 'metadata_change', now = Date.now()) {
@@ -1270,7 +1324,8 @@ export class RuntimePilotState {
       sloHistory: session.sloHistory.map(value => ({ ...value })),
       stabilizationRunbook: session.stabilizationRunbook ? JSON.parse(JSON.stringify(session.stabilizationRunbook)) : null,
       crashResumeDismissedAt: Math.max(0, Number(session.crashResumeDismissedAt || 0)),
-      uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() }))
+      uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() })),
+      productionControls: JSON.parse(JSON.stringify(session.productionControls || normalizeProductionControls()))
     };
   }
 
@@ -1319,7 +1374,8 @@ export class RuntimePilotState {
       sloHistory: session.sloHistory.map(value => ({ ...value })),
       stabilizationRunbook: session.stabilizationRunbook ? JSON.parse(JSON.stringify(session.stabilizationRunbook)) : null,
       crashResumeDismissedAt: Math.max(0, Number(session.crashResumeDismissedAt || 0)),
-      uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() }))
+      uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() })),
+      productionControls: JSON.parse(JSON.stringify(session.productionControls || normalizeProductionControls()))
     }));
   }
 }
