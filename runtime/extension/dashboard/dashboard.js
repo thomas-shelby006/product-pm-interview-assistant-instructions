@@ -1401,6 +1401,7 @@ function activateDashboardView(view, anchor = '', reason = 'operator_navigation'
     node.hidden = !active;
   });
   scheduleRender();
+  renderScheduler.flush();
   requestAnimationFrame(() => {
     const target = anchor ? byId(anchor) : null;
     target?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
