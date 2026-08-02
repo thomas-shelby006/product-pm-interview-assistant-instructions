@@ -17,6 +17,9 @@ if (-not (Test-Path $BrowserPath)) {
 $runner = Join-Path $PSScriptRoot 'isolated-release-smoke.mjs'
 if (-not (Test-Path $runner)) { throw "Isolated smoke runner missing: $runner" }
 $node = (Get-Command node -ErrorAction Stop).Source
+$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$sourceCommit = (& git -C $repositoryRoot rev-parse HEAD).Trim()
+if (-not $sourceCommit) { throw 'Unable to resolve isolated-smoke source commit' }
 New-Item -ItemType Directory -Force -Path $EvidenceDirectory | Out-Null
 $EvidenceDirectory = (Resolve-Path $EvidenceDirectory).Path
 $profile = Join-Path $EvidenceDirectory 'temporary-edge-profile'
@@ -78,6 +81,7 @@ try {
         --extension-path $ExtensionPath `
         --profile-path $profile `
         --evidence $evidencePath `
+        --source-commit $sourceCommit `
         --skip-live-answer $skipValue
     $nodeExit = $LASTEXITCODE
 }
@@ -112,6 +116,9 @@ finally {
                 $evidence.deliveryProofOk `
                 -and $evidence.transportDrillOk `
                 -and $evidence.pilotUiOk `
+                -and $evidence.productionUiOk `
+                -and $evidence.assistUiOk `
+                -and $evidence.reliabilityUiOk `
                 -and $processClosed `
                 -and $profileRemoved
             )

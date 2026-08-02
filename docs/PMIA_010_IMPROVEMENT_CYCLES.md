@@ -63,3 +63,48 @@ Ten user-facing live-interview cycles are authorized. Their source work begins o
 ## Next phase
 
 The thirty-cycle bug campaign now hardens the complete PMIA 0.10 control plane and live-assist system. The technical HTML remains deferred until the campaign and final isolated-browser evidence are complete.
+## Seventy-cycle hardening and reliability extension — source complete
+
+The completed campaign contains the approved thirty bug cycles, twenty additional bug cycles, and twenty user-facing Reliability Center improvements.
+
+### Control, lifecycle, and lossless mechanics
+
+- Command payloads use strict allow-lists for consequential actions.
+- Dashboard operations clear timers, coalesce duplicate requests, fail pending work once, and invalidate stale policy previews.
+- Runtime injection uses generation-safe stale-lease takeover and blocks healthy duplicates.
+- Frozen, discarded, prerendered, and terminated pages cannot own provider writes.
+- Alarm schedules deduplicate deterministically and expose overdue catch-up.
+- Cleanup transactions enforce ordered, retryable continuation.
+- Sender replay fails closed when attempt-state persistence fails.
+- Ledger indexes expose deterministic duplicate repair and audit results.
+- Sequence gaps provide metadata-only NACK evidence without mutating buffered finals.
+- Receiver credits clamp to capacity and recover through hysteresis.
+- Fair scheduling promotes starved partitions without changing sequence order.
+- Interrupt confirmation fingerprints every active, preserved, and latest member.
+- Manual merge remains idempotent and retains one protected PMIA prompt.
+### Storage, rendering, privacy, and release
+
+- Storage accounting protects actionable ownership and handles malformed Unicode deterministically.
+- Render scheduling cancels stale work, coalesces sections, and contains renderer exceptions.
+- Virtual lists remain bounded under invalid or extreme dimensions.
+- Route readiness requires live roles, composer evidence, context, write safety, and successful self-test evidence.
+- Route transitions freeze writes while active or waiting protected batches exist.
+- Backlog forecasts distinguish insufficient evidence from real delivery breach.
+- Accessibility audits cover duplicate IDs, controlled targets, labels, dialogs, live regions, focus return, and narrow layouts.
+- Support bundles recursively remove content-bearing keys and credential-like values.
+- Release handoff fails closed without clean source, exact commit binding, automated/browser/Assist evidence, privacy, cleanup, and no unresolved ownership.
+
+### Reliability Center improvements
+
+The Assist workspace now includes twenty grouped operator projections: Command Health, Replay Guard, Route Transition Preview, Session Safety, Backlog Confidence, Triage Summary, Recovery ETA, Choice Freshness, Action Dock Density, Disabled-action Explanations, Incident Trend, Milestone Quality, Batch Fairness, Storage Reclaim, Lifecycle Wake History, Proof Coverage, Keyboard Readiness, Release Readiness, Interview Pacing, and Evidence Export Summary.
+
+These are view-only projections over authoritative state. They do not create a second command bus, state store, transport owner, proof owner, or recovery owner.
+
+### Consolidated automated verification
+
+- New 70-cycle regression gate: 71/71 tests passed.
+- Complete repository Node gate: 1,075/1,075 tests passed.
+- Extension validation: 451 JavaScript files, 18 required runtime surfaces, and 255 reachable production modules.
+- Complete validator process exited 0.
+
+Fresh exact-commit validation, isolated Edge evidence, deterministic release/handoff manifests, cleanup verification, and the final PMIA 0.10 technical HTML remain the closing gates.

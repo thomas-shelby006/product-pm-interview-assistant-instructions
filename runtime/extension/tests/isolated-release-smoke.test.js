@@ -147,3 +147,10 @@ test('isolated smoke proves Q1 in Window 1 and allows one bounded swallowed-subm
   assert.match(runner, /sourceSubmission = \{ attempts: attempt, rendered: sourceSubmission\.ok/);
   assert.match(runner, /Synthetic Q1 did not render in sender/);
 });
+
+
+test('isolated smoke wrapper binds evidence to HEAD and preserves every final UI gate after cleanup', () => {
+  assert.match(powershell, /git -C \$repositoryRoot rev-parse HEAD/);
+  assert.match(powershell, /--source-commit \$sourceCommit/);
+  for (const gate of ['productionUiOk','assistUiOk','reliabilityUiOk']) assert.match(powershell, new RegExp(`-and \\$evidence\\.${gate}`));
+});
