@@ -124,9 +124,12 @@ const evidence = {
   gap: {},
   answerCapability: { state: 'unknown' },
   transportDrill: {},
+  transportDrillControl: {},
   transportDrillOk: false,
   pilotUi: {},
   pilotUiOk: false,
+  productionUi: {},
+  productionUiOk: false,
   failureDetails: null,
   cleanup: { processTreeClosed: false, profileRemoved: false },
   limitations: [],
@@ -252,7 +255,14 @@ try {
     evidence.limitations.push('The isolated anonymous provider session did not expose answer text; rendered delivery proof remained fully verifiable.');
   }
   await dashboard.evaluate(`document.querySelector('[data-view="review"]')?.click(); true`, { userGesture: true });
-  await dashboard.evaluate(`document.querySelector('[data-command="run_transport_drill"]')?.click(); true`, { userGesture: true });
+  const drillControl = await waitFor('transport drill control ready', async () => {
+    const raw = await dashboard.evaluate(`(()=>{const button=document.getElementById('runTransportDrill');const panel=document.querySelector('[data-view-panel="review"]');const visible=Boolean(button&&(button.offsetWidth||button.offsetHeight||button.getClientRects().length));return JSON.stringify({exists:Boolean(button),disabled:Boolean(button?.disabled),hidden:Boolean(button?.hidden),visible,reviewActive:Boolean(panel?.classList.contains('active')),busy:String(button?.dataset?.busy||'false')})})()`);
+    const value = JSON.parse(raw);
+    return { ok: value.exists && value.visible && value.reviewActive && !value.hidden && !value.disabled, value };
+  }, 30000, 100);
+  evidence.transportDrillControl = drillControl.value;
+  const drillClicked = await dashboard.evaluate(`(()=>{const button=document.getElementById('runTransportDrill');if(!button||button.disabled||button.hidden)return false;button.click();return true})()`, { userGesture: true });
+  if (!drillClicked) throw new Error('Transport drill control was ready but could not be clicked');
   const drill = await waitFor('no-content transport drill', async () => {
     const current = await pilotState();
     const report = current?.lastTransportDrill || null;
@@ -295,11 +305,45 @@ try {
     return { ...value, screenshotPath };
   }
 
+  async function productionUiState(width, height, label) {
+    await dashboard.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await dashboard.evaluate(`document.querySelector('[data-view="production"]')?.click(); true`, { userGesture: true });
+    await sleep(180);
+    const raw = await dashboard.evaluate(`(()=>{
+      const required=['panelProduction','productionDecisionTitle','operatingProfileSelect','containmentState','transportAssuranceState','routeReadinessState','upgradeReadinessState','liveScoreValue','productionDiagnosticsState','releaseHandoffState','downloadHandoffManifest'];
+      const panel=document.getElementById('panelProduction');
+      const grid=document.querySelector('.production-grid');
+      return JSON.stringify({
+        viewport:{width:innerWidth,height:innerHeight},
+        scrollWidth:document.documentElement.scrollWidth,
+        horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1,
+        required:Object.fromEntries(required.map(id=>[id,Boolean(document.getElementById(id))])),
+        productionActive:Boolean(panel?.classList.contains('active')),
+        gridColumns:grid?getComputedStyle(grid).gridTemplateColumns:'',
+        health:(document.getElementById('productionHealthBadge')?.textContent||'').trim(),
+        decision:(document.getElementById('productionDecisionTitle')?.textContent||'').trim(),
+        transport:(document.getElementById('transportAssuranceState')?.textContent||'').trim(),
+        route:(document.getElementById('routeReadinessState')?.textContent||'').trim(),
+        release:(document.getElementById('releaseHandoffState')?.textContent||'').trim(),
+        accessibility:{polite:Boolean(document.querySelector('[aria-live="polite"]')),assertive:Boolean(document.querySelector('[aria-live="assertive"]'))}
+      });
+    })()`);
+    const value = JSON.parse(raw);
+    const screenshot = await dashboard.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    const screenshotPath = path.join(path.dirname(evidencePath), `production-${label}.png`);
+    await fs.writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+    return { ...value, screenshotPath };
+  }
+
   const desktopUi = await dashboardUiState(1200, 900, 'desktop');
   const mobileUi = await dashboardUiState(320, 900, '320px');
   const tinyUi = await dashboardUiState(280, 900, '280px');
+  const productionDesktop = await productionUiState(1200, 900, 'desktop');
+  const productionMobile = await productionUiState(320, 900, '320px');
+  const productionTiny = await productionUiState(280, 900, '280px');
   await dashboard.send('Emulation.setEmulatedMedia', { media: 'print' });
   const printUi = await dashboardUiState(1200, 900, 'print');
+  const productionPrint = await productionUiState(1200, 900, 'print');
   await dashboard.send('Emulation.setEmulatedMedia', { media: 'screen' });
   await dashboard.send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 900, deviceScaleFactor: 1, mobile: false });
   evidence.pilotUi = { desktop: desktopUi, mobile: mobileUi, tiny: tinyUi, print: printUi };
@@ -313,9 +357,22 @@ try {
     && value.accessibility.assertive
     && value.accessibility.shortcutDialog
   ));
+  evidence.productionUi = { desktop: productionDesktop, mobile: productionMobile, tiny: productionTiny, print: productionPrint };
+  evidence.productionUiOk = [productionDesktop, productionMobile, productionTiny, productionPrint].every(value => (
+    !value.horizontalOverflow
+    && value.productionActive
+    && Object.values(value.required).every(Boolean)
+    && value.health
+    && value.decision
+    && value.transport
+    && value.route
+    && value.release
+    && value.accessibility.polite
+    && value.accessibility.assertive
+  ));
 
   evidence.deliveryProofOk = proof.value.deliveryProofOk && evidence.outbox.count === 0 && evidence.gap.clear;
-  evidence.ok = evidence.deliveryProofOk && evidence.transportDrillOk && evidence.pilotUiOk;
+  evidence.ok = evidence.deliveryProofOk && evidence.transportDrillOk && evidence.pilotUiOk && evidence.productionUiOk;
 } catch (error) {
   failure = error;
   evidence.error = String(error?.stack || error);
@@ -355,5 +412,5 @@ try {
   await fs.writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
 }
 
-console.log(JSON.stringify({ ok: evidence.ok, evidencePath, deliveryProofOk: evidence.deliveryProofOk, transportDrillOk: evidence.transportDrillOk, pilotUiOk: evidence.pilotUiOk, selfTest: evidence.selfTest?.ok === true, outbox: evidence.outbox, gap: evidence.gap, answerCapability: evidence.answerCapability, limitations: evidence.limitations }, null, 2));
+console.log(JSON.stringify({ ok: evidence.ok, evidencePath, deliveryProofOk: evidence.deliveryProofOk, transportDrillOk: evidence.transportDrillOk, pilotUiOk: evidence.pilotUiOk, productionUiOk: evidence.productionUiOk, selfTest: evidence.selfTest?.ok === true, outbox: evidence.outbox, gap: evidence.gap, answerCapability: evidence.answerCapability, limitations: evidence.limitations }, null, 2));
 if (failure || !evidence.ok) process.exit(1);

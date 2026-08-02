@@ -43,7 +43,7 @@ test('isolated smoke writes structured evidence and distinguishes answer limitat
 });
 
 test('isolated smoke runs the complete no-content transport drill', () => {
-  assert.match(runner, /run_transport_drill/);
+  assert.match(runner, /runTransportDrill/);
   assert.match(runner, /checks\.length === 12/);
   assert.match(runner, /contentAccessed === false/);
   assert.match(runner, /transportDrillOk/);
@@ -105,4 +105,20 @@ test('isolated smoke resolves explicit no-response hold through the visible Cont
   assert.match(runner, /batchState\?\.pendingNoResponse/);
   assert.match(runner, /getElementById\('resolveNoResponseContinue'\)/);
   assert.match(runner, /noResponseResolution = \{ required: true, action: 'continue'/);
+});
+
+
+test('isolated smoke waits for an enabled visible transport drill control', () => {
+  assert.match(runner, /transport drill control ready/);
+  assert.match(runner, /runTransportDrill/);
+  assert.match(runner, /!value\.disabled/);
+  assert.match(runner, /reviewActive/);
+});
+
+test('isolated smoke validates the Production view at responsive and print widths', () => {
+  assert.match(runner, /productionUiOk/);
+  assert.match(runner, /panelProduction/);
+  for (const id of ['productionDecisionTitle','operatingProfileSelect','containmentState','transportAssuranceState','routeReadinessState','upgradeReadinessState','liveScoreValue','productionDiagnosticsState','releaseHandoffState']) {
+    assert.match(runner, new RegExp(id));
+  }
 });
