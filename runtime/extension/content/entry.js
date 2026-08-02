@@ -326,6 +326,7 @@ async function startRuntime(runtimeConfig) {
         overlay.setStatus(status.text, status.tone);
       }
       rolePort?.connect();
+      if (runtimeConfig.role === 'receiver') answerWake.pulse();
       void telemetry.publish(firstRegistration
         ? { force: true, event: { type: 'registration_transition' } }
         : { force: true });
@@ -999,6 +1000,7 @@ async function startRuntime(runtimeConfig) {
       incoming?.type === 'PMIA_LINK_STATUS' &&
       incoming.sessionId === runtimeConfig.sessionId
     ) {
+      if (runtimeConfig.role === 'receiver') answerWake.pulse();
       if (!paused) {
         const status = describeRuntimeStatus(incoming.status);
         overlay.setStatus(status.text, status.tone);

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createReceiverAnswerOrchestrator } from '../content/receiver-answer-orchestrator.js';
+import { createWakeSignal } from '../content/answer-tracker.js';
 
 function adapter() {
   return {
@@ -92,4 +93,28 @@ test('no-response settlement never waits for observational logging', async () =>
   ]);
   assert.equal(result.answerState.state, 'no_response');
   assert.equal(logStarted, true);
+});
+
+
+test('external lifecycle heartbeat advances a hidden no-response deadline without its timer', async () => {
+  let clock = 1000;
+  let scheduledTimer = null;
+  const wake = createWakeSignal({
+    setTimeoutFn(callback) { scheduledTimer = callback; return 1; },
+    clearTimeoutFn() { scheduledTimer = null; }
+  });
+  const runtime = createReceiverAnswerOrchestrator({
+    adapter: adapter(),
+    now: () => clock,
+    getHintVersion: () => 0,
+    wake,
+    limits: { startGraceMs: 8000, streamStallMs: 20000, hardCapMs: 120000 }
+  });
+  const resultPromise = runtime.start({ envelope: { id: 'b-heartbeat' }, beforeText: '', hintVersionAtStart: 0 });
+  assert.equal(typeof scheduledTimer, 'function');
+  clock = 9000;
+  wake.pulse();
+  const result = await resultPromise;
+  assert.equal(result.answerState.state, 'no_response');
+  wake.disconnect();
 });
