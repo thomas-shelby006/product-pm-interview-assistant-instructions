@@ -59,9 +59,15 @@ import { deriveOperatingProfile } from '../shared/operating-profile.js';
 import { buildPolicyImpactPreview, policySnapshotFingerprint, validatePolicyImpactConfirmation } from '../shared/policy-impact-preview.js';
 import { renderLiveAssist } from './render-live-assist.js';
 import { createOperationsLabLocalState, moveOperationsLabTab, reconcileOperationsLabLocalState, selectOperationsLabScenario, selectOperationsLabView } from './operations-lab-controller.js';
-import { deriveSessionNavigatorNow } from './session-navigator-now-model.js';
+import { deriveSessionNavigator } from './session-navigator-model.js';
 import { createSessionNavigatorLocalState, openSessionNavigator, selectSessionNavigatorTab, navigatorQuickOpenFromKeyboard, navigatorTabFromKey } from './session-navigator-controller.js';
 import { renderSessionNavigator } from './render-session-navigator.js';
+import { validateNavigatorJumpIntent } from './session-navigator-search-model.js';
+import { validateQuestionRelationship } from './session-navigator-thread-model.js';
+import { previewWorkspaceImpact, validateWorkspaceApply, exportWorkspaceMetadata } from './session-navigator-workspace-model.js';
+import { validateBookmarkTarget } from './session-navigator-bookmark-model.js';
+import { validateCompetencyTarget } from './session-navigator-goal-model.js';
+import { buildMetadataDebriefExport } from './session-navigator-debrief-model.js';
 
 const params = new URLSearchParams(location.search);
 const sessionId = String(params.get('session') || '').trim();
@@ -129,6 +135,10 @@ function showToast(message, tone = 'info') {
 function requestId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
+
+function currentSessionNavigator(now = Date.now()) { return deriveSessionNavigator(state.snapshot || {}, state.sessionNavigator, now); }
+function downloadNavigatorJson(name, value) { const blob = new Blob([`${JSON.stringify(value, null, 2)}
+`], { type:'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0); }
 
 function humanizeCode(value) {
   const text = String(value || '').trim().replaceAll('_', ' ');
@@ -1408,6 +1418,7 @@ function activateDashboardView(view, anchor = '', reason = 'operator_navigation'
     target?.focus?.({ preventScroll: true });
   });
   void sendCommand('record_production_navigation', { route: { view: state.activeView, anchor, reason } });
+  if (state.activeView === 'navigator') void sendCommand('record_session_navigator_visit', { visit:{ tab:state.sessionNavigator.activeTab, reason } });
   return true;
 }
 
@@ -1515,7 +1526,7 @@ function render(changedKeys = null) {
   renderPreflightAndCrash(state.snapshot, now);
   renderProduction(state.snapshot);
   renderLiveAssist({ document, snapshot: state.snapshot, state, now, workspace: state.activeView === 'assist' });
-  renderSessionNavigator({ document, model: deriveSessionNavigatorNow(state.snapshot || {}, state.sessionNavigator, now), localState: state.sessionNavigator });
+  renderSessionNavigator({ document, model: deriveSessionNavigator(state.snapshot || {}, state.sessionNavigator, now), localState: state.sessionNavigator });
   renderCommandPalette();
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
@@ -1569,6 +1580,8 @@ async function runCommand(button, command, payload = {}) {
 }
 
 document.addEventListener('click', event => {
+  const navigatorPhaseButton = event.target.closest('[data-navigator-phase]');
+  if (navigatorPhaseButton) { const tab = ['export','review','shutdown'].includes(navigatorPhaseButton.dataset.navigatorPhase) ? 'debrief' : 'now'; state.sessionNavigator = selectSessionNavigatorTab(openSessionNavigator(state.sessionNavigator), tab); scheduleRender(); void sendCommand('record_session_navigator_visit',{visit:{tab,reason:`workflow_${navigatorPhaseButton.dataset.navigatorPhase}`}}); return; }
   const navigatorTab = event.target.closest('[data-navigator-tab]');
   if (navigatorTab) { state.sessionNavigator = selectSessionNavigatorTab(state.sessionNavigator, navigatorTab.dataset.navigatorTab); scheduleRender(); return; }
   const navigatorTarget = event.target.closest('[data-navigator-tab-target]');
@@ -1583,6 +1596,40 @@ document.addEventListener('click', event => {
     else if (view) activateDashboardView(view, navigatorAction.dataset.anchor || '', navigatorAction.dataset.actionId || 'navigator_action');
     return;
   }
+  const navigatorResult = event.target.closest('[data-navigator-result-index]');
+  if (navigatorResult) {
+    const index = Math.max(0, Number(navigatorResult.dataset.navigatorResultIndex || 0)); const model = currentSessionNavigator(); state.sessionNavigator = { ...state.sessionNavigator, selectedIndex:index };
+    if (state.sessionNavigator.activeTab === 'search') state.sessionNavigator.selectedEntityId = model.search.results[index]?.id || '';
+    else if (state.sessionNavigator.activeTab === 'threads') state.sessionNavigator.selectedEntityId = model.threads.graph.roots[index] || '';
+    scheduleRender(); return;
+  }
+  if (event.target.closest('#sessionNavigatorJump')) {
+    let intent = null; try { intent = JSON.parse(byId('sessionNavigatorJump').dataset.jump || 'null'); } catch {}
+    const validation = validateNavigatorJumpIntent(intent || {}, state.snapshot || {}); if (!validation.ok) { showToast(validation.error, 'error'); return; }
+    activateDashboardView(validation.route.view, validation.route.anchor, validation.route.reason); void sendCommand('record_session_navigator_visit',{visit:{tab:'search',entityType:validation.route.entityType,entityId:validation.route.entityId,reason:'search_jump'}}); return;
+  }
+  if (event.target.closest('#sessionNavigatorLinkThread')) {
+    const itemId = state.sessionNavigator.selectedEntityId; const parentId = byId('sessionNavigatorThreadParent')?.value || ''; const validation = validateQuestionRelationship(state.snapshot || {}, itemId, parentId);
+    if (!validation.ok) { showToast(validation.error,'error'); return; } void runCommand(event.target.closest('#sessionNavigatorLinkThread'),'link_question_follow_up',validation); return;
+  }
+  const workspaceAction = event.target.closest('[data-apply-workspace]');
+  if (workspaceAction) { const model=currentSessionNavigator(); const workspace=model.workspaces.items.find(item=>item.id===workspaceAction.dataset.applyWorkspace); const preview=previewWorkspaceImpact(state.snapshot||{},workspace||{}); const validation=validateWorkspaceApply(preview,workspace||{}); if(!validation.ok){showToast(validation.error,'error');return;} if(!globalThis.confirm(`Apply ${validation.workspace.label}? ${preview.changes.visiblePanels} panels, ${preview.changes.filters} filters, ${preview.changes.focus} focus. Delivery and provider writes are unchanged.`))return; void runCommand(workspaceAction,'save_navigator_workspace',{workspace:validation.workspace}); return; }
+  const scenarioAction = event.target.closest('[data-complete-scenario]');
+  if (scenarioAction) { void runCommand(scenarioAction,'mark_navigator_scenario_complete',{scenarioId:scenarioAction.dataset.completeScenario}); return; }
+  const removeBookmark = event.target.closest('[data-remove-bookmark]');
+  if (removeBookmark) { void runCommand(removeBookmark,'remove_navigator_bookmark',{bookmarkId:removeBookmark.dataset.removeBookmark}); return; }
+  if (event.target.closest('#navigatorAddBookmark')) {
+    const bookmark={targetType:byId('navigatorBookmarkTargetType')?.value||'',targetId:byId('navigatorBookmarkTargetId')?.value||'',category:byId('navigatorBookmarkCategory')?.value||'evidence',label:byId('navigatorBookmarkLabel')?.value||''}; const validation=validateBookmarkTarget(state.snapshot||{},bookmark);
+    if(!validation.ok){showToast(validation.error,'error');return;} void runCommand(event.target.closest('#navigatorAddBookmark'),'add_navigator_bookmark',{bookmark:validation.bookmark}); return;
+  }
+  if (event.target.closest('#navigatorTagCoverage')) { const questionId=byId('navigatorCoverageQuestion')?.value||''; const goalId=byId('navigatorCoverageGoal')?.value||''; if(!questionId||!goalId){showToast('Select a question and goal.','warn');return;} void runCommand(event.target.closest('#navigatorTagCoverage'),'tag_navigator_coverage',{questionId,goalIds:[goalId]}); return; }
+  if (event.target.closest('#navigatorSaveGoal')) {
+    const goal={id:byId('navigatorGoalId')?.value||'',label:byId('navigatorGoalLabel')?.value||'',targetCount:Number(byId('navigatorGoalTarget')?.value||1),priority:byId('navigatorGoalPriority')?.value||'normal'}; const validation=validateCompetencyTarget(goal);
+    if(!validation.ok){showToast(validation.error,'error');return;} void runCommand(event.target.closest('#navigatorSaveGoal'),'set_navigator_goal',{goal:validation.goal}); return;
+  }
+  if (event.target.closest('#navigatorExportWorkspaces')) { downloadNavigatorJson(`pmia-workspaces-${sessionId}.json`,exportWorkspaceMetadata(currentSessionNavigator().workspaces.items)); return; }
+  if (event.target.closest('#navigatorExportDebrief')) { const value=buildMetadataDebriefExport(state.snapshot||{},Date.now()); downloadNavigatorJson(`pmia-debrief-${sessionId}.json`,value); void runCommand(event.target.closest('#navigatorExportDebrief'),'record_navigator_debrief_export'); return; }
+  if (event.target.closest('#navigatorHandoffAction')) { const action=currentSessionNavigator().handoff.action||{}; if(action.command)void runCommand(event.target.closest('#navigatorHandoffAction'),action.command); else if(action.view)activateDashboardView(action.view); return; }
   const phaseButton = event.target.closest('[data-session-phase]');
   if (phaseButton) {
     void runCommand(phaseButton, 'set_session_phase', { phase: phaseButton.dataset.sessionPhase, reason: 'phase_navigator' });
@@ -1953,6 +2000,8 @@ byId('cancelEndSession').addEventListener('click', closeEndSheet);
 function selectedQuestion() {
   return state.snapshot?.questionOperationsDerived?.questions?.find(item => item.id === state.selectedQueueId) || null;
 }
+
+byId('sessionNavigatorSearchInput').addEventListener('input', event => { state.sessionNavigator = { ...state.sessionNavigator, query:String(event.target.value || ''), selectedIndex:0, selectedEntityId:'' }; scheduleRender(); });
 
 byId('questionSearch').addEventListener('input', event => {
   state.questionNavigator.query = String(event.target.value || '');

@@ -1779,6 +1779,27 @@ export function createRuntimePilotController({
       case 'record_session_navigator_visit':
         result = { ok: true, navigator: pilot.recordSessionNavigatorVisit(sessionId, payload.visit || {}, Date.now()) };
         break;
+      case 'save_navigator_workspace':
+        result = pilot.upsertSessionNavigatorWorkspace(sessionId, payload.workspace || {}, Date.now());
+        break;
+      case 'add_navigator_bookmark':
+        result = pilot.upsertSessionNavigatorBookmark(sessionId, payload.bookmark || {}, Date.now());
+        break;
+      case 'remove_navigator_bookmark':
+        result = pilot.removeSessionNavigatorBookmark(sessionId, payload.bookmarkId, Date.now());
+        break;
+      case 'set_navigator_goal':
+        result = pilot.upsertSessionNavigatorGoal(sessionId, payload.goal || {}, Date.now());
+        break;
+      case 'tag_navigator_coverage':
+        result = pilot.tagSessionNavigatorCoverage(sessionId, payload.questionId, payload.goalIds || [], Date.now());
+        break;
+      case 'mark_navigator_scenario_complete':
+        result = pilot.markSessionNavigatorScenarioComplete(sessionId, payload.scenarioId, Date.now());
+        break;
+      case 'record_navigator_debrief_export':
+        result = { ok: true, navigator: pilot.recordSessionNavigatorDebriefExport(sessionId, Date.now()) };
+        break;
       case 'record_production_navigation':
         result = { ok: true, controls: pilot.setProductionNavigation(sessionId, payload.route || {}, Date.now()) };
         break;

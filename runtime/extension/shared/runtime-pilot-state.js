@@ -346,6 +346,41 @@ export class RuntimePilotState {
     return JSON.parse(JSON.stringify(session.sessionNavigator));
   }
 
+  upsertSessionNavigatorBookmark(sessionId, bookmark = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now); const result = upsertNavigatorBookmark(session.sessionNavigator, bookmark, now);
+    session.sessionNavigator = result.value; session.updatedAt = now; this.record(sessionId, 'navigator_bookmark_saved', { bookmarkId: result.id, targetType: bookmark.targetType || '' }, now); return result;
+  }
+
+  removeSessionNavigatorBookmark(sessionId, bookmarkId, now = Date.now()) {
+    const session = this.ensure(sessionId, now); const result = removeNavigatorBookmark(session.sessionNavigator, bookmarkId);
+    session.sessionNavigator = result.value; session.updatedAt = now; this.record(sessionId, 'navigator_bookmark_removed', { bookmarkId: String(bookmarkId || '') }, now); return result;
+  }
+
+  upsertSessionNavigatorGoal(sessionId, goal = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now); const result = upsertNavigatorGoal(session.sessionNavigator, goal, now);
+    session.sessionNavigator = result.value; session.updatedAt = now; this.record(sessionId, 'navigator_goal_saved', { goalId: result.id }, now); return result;
+  }
+
+  tagSessionNavigatorCoverage(sessionId, questionId, goalIds = [], now = Date.now()) {
+    const session = this.ensure(sessionId, now); const result = tagNavigatorCoverage(session.sessionNavigator, questionId, goalIds);
+    session.sessionNavigator = result.value; session.updatedAt = now; this.record(sessionId, 'navigator_coverage_tagged', { questionId: String(questionId || ''), goalCount: goalIds.length }, now); return result;
+  }
+
+  upsertSessionNavigatorWorkspace(sessionId, workspace = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now); const result = upsertNavigatorWorkspace(session.sessionNavigator, workspace, now);
+    session.sessionNavigator = result.value; session.updatedAt = now; this.record(sessionId, 'navigator_workspace_saved', { workspaceId: result.id }, now); return result;
+  }
+
+  markSessionNavigatorScenarioComplete(sessionId, scenarioId, now = Date.now()) {
+    const session = this.ensure(sessionId, now); const result = markNavigatorScenarioComplete(session.sessionNavigator, scenarioId);
+    session.sessionNavigator = result.value; session.updatedAt = now; this.record(sessionId, 'navigator_scenario_completed', { scenarioId: String(scenarioId || '') }, now); return result;
+  }
+
+  recordSessionNavigatorDebriefExport(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now); session.sessionNavigator = recordNavigatorDebriefExport(session.sessionNavigator); session.updatedAt = now;
+    this.record(sessionId, 'navigator_debrief_exported', { count: session.sessionNavigator.debriefExports }, now); return JSON.parse(JSON.stringify(session.sessionNavigator));
+  }
+
   setOperatingProfile(sessionId, profile, now = Date.now(), source = 'operator') {
     const session = this.ensure(sessionId, now);
     const value = ['safe','balanced','fast'].includes(String(profile)) ? String(profile) : 'balanced';

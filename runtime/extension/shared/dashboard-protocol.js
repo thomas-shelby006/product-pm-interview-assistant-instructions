@@ -147,6 +147,24 @@ export function normalizeDashboardCommand(value) {
     for (const key of Object.keys(payload)) delete payload[key];
     Object.assign(payload, { enabled, durationMs, reason, preview });
   }
+  if (command === 'save_navigator_workspace') {
+    const workspace = payload.workspace && typeof payload.workspace === 'object' ? payload.workspace : {};
+    payload.workspace = { id: cleanText(workspace.id, 120), label: cleanText(workspace.label, 160), visiblePanels: Array.isArray(workspace.visiblePanels) ? workspace.visiblePanels.map(value => cleanText(value, 60)).filter(Boolean).slice(0, 20) : [], filters: workspace.filters && typeof workspace.filters === 'object' ? { ...workspace.filters } : {}, focus: cleanText(workspace.focus, 60) || 'now' };
+    if (!payload.workspace.id || !payload.workspace.label) return null;
+  }
+  if (command === 'add_navigator_bookmark') {
+    const bookmark = payload.bookmark && typeof payload.bookmark === 'object' ? payload.bookmark : {};
+    payload.bookmark = { id: cleanText(bookmark.id, 160), targetType: cleanText(bookmark.targetType, 40), targetId: cleanText(bookmark.targetId, 160), category: cleanText(bookmark.category, 40) || 'evidence', label: cleanText(bookmark.label, 160) };
+    if (!payload.bookmark.targetType || !payload.bookmark.targetId) return null;
+  }
+  if (command === 'remove_navigator_bookmark') { payload.bookmarkId = cleanText(payload.bookmarkId, 160); if (!payload.bookmarkId) return null; }
+  if (command === 'set_navigator_goal') {
+    const goal = payload.goal && typeof payload.goal === 'object' ? payload.goal : {};
+    payload.goal = { id: cleanText(goal.id, 120), label: cleanText(goal.label, 160), targetCount: Math.max(1, Math.min(50, Number(goal.targetCount || 1))), priority: ['low','normal','high','critical'].includes(String(goal.priority)) ? String(goal.priority) : 'normal', phases: Array.isArray(goal.phases) ? goal.phases.map(value => cleanText(value, 40)).filter(Boolean).slice(0, 6) : [] };
+    if (!payload.goal.id || !payload.goal.label) return null;
+  }
+  if (command === 'tag_navigator_coverage') { payload.questionId = cleanText(payload.questionId, 160); payload.goalIds = Array.isArray(payload.goalIds) ? payload.goalIds.map(value => cleanText(value, 120)).filter(Boolean).slice(0, 32) : []; if (!payload.questionId) return null; }
+  if (command === 'mark_navigator_scenario_complete') { payload.scenarioId = cleanText(payload.scenarioId, 120); if (!payload.scenarioId) return null; }
   if (command === 'record_session_navigator_visit') {
     const visit = payload.visit && typeof payload.visit === 'object' ? payload.visit : {};
     payload.visit = { id: cleanText(visit.id, 160), tab: cleanText(visit.tab, 40) || 'now', entityType: cleanText(visit.entityType, 40), entityId: cleanText(visit.entityId, 160), reason: cleanText(visit.reason, 80) || 'operator_navigation' };
