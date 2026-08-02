@@ -25,6 +25,7 @@ const logStore = createSessionLogStore({
 });
 void logStore.purgeLegacyLocalLogs().catch(() => {});
 const operationCoordinator = createSessionMutationCoordinator();
+const acceptanceCoordinator = createSessionMutationCoordinator();
 const deliveryCoordinator = createSessionMutationCoordinator();
 const registryWriteCoordinator = createSessionMutationCoordinator();
 let registryPromise = null;
@@ -37,14 +38,14 @@ const rolePortHub = createRuntimePortHub({
     if (frame.operation !== 'final' || frame.identity?.role !== 'sender') {
       return { ok: false, error: 'unsupported_role_port_frame' };
     }
-    return serialize(async () => {
+    return acceptanceCoordinator.run(frame.identity.sessionId, async () => {
       const registry = await loadRegistry();
       return handleForward({
         type: 'PMIA_FORWARD',
         envelope: frame.payload?.envelope,
         runtimeInstanceId: frame.identity.instanceId
       }, frame.tabId, registry);
-    }, frame.identity.sessionId);
+    });
   }
 });
 pilotController = createRuntimePilotController({
@@ -466,16 +467,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === 'PMIA_FORWARD') {
+    acceptanceCoordinator.run(message.envelope?.sessionId, async () => {
+      const registry = await loadRegistry();
+      return handleForward(message, tabId, registry);
+    })
+      .then(sendResponse)
+      .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
+    return true;
+  }
+
   serialize(async () => {
     const registry = await loadRegistry();
 
     if (message?.type === 'PMIA_REGISTER') {
       sendResponse(await handleRegistration(message, sender.tab, registry));
-      return;
-    }
-
-    if (message?.type === 'PMIA_FORWARD') {
-      sendResponse(await handleForward(message, tabId, registry));
       return;
     }
 

@@ -20,6 +20,7 @@ import { createProviderSender } from './senders/provider-sender.js';
 import { createChatGptTurnTracker } from './senders/chatgpt-turn-tracker.js';
 import { createWakeSignal } from './answer-tracker.js';
 import { createReceiverAnswerOrchestrator } from './receiver-answer-orchestrator.js';
+import { createReceiverAnswerSettlement } from './receiver-answer-settlement.js';
 import { createLatestPreviewScheduler } from './preview-scheduler.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
 import { nextSequence } from '../shared/sequence.js';
@@ -133,6 +134,7 @@ async function startRuntime(runtimeConfig) {
   let latestBootContext = '';
   let telemetry = null;
   let receiverAnswerOrchestrator = null;
+  let receiverAnswerSettlement = null;
   let registrationActive = true;
   let assistantFinalHintVersion = 0;
   let claudeProtocolVoiceActive = false;
@@ -540,6 +542,7 @@ async function startRuntime(runtimeConfig) {
       onAnswer(value) { telemetry.answer(value); },
       onTerminal(value) {
         if (value?.timeout) telemetry.answerTimeout(value?.answerState?.batchId || '');
+        void receiverAnswerSettlement?.settle(value);
       },
       log: logEvent,
       setStatus: (...args) => overlay.setStatus(...args),
@@ -609,16 +612,17 @@ async function startRuntime(runtimeConfig) {
           verified: false,
           proof: 'submit_action_only'
         };
+        receiverAnswerSettlement?.begin({ batchId: batch.id, proof });
         void receiverAnswerOrchestrator.start({
           envelope: batchEnvelope,
           beforeText,
           hintVersionAtStart
-        }).then(answer => receiverBatchRuntime?.answerComplete(batch.id, {
-          answer: answer || null,
-          answerState: answer?.answerState || receiverAnswerOrchestrator.snapshot().answerState || null,
-          timeout: Boolean(answer?.timeout),
-          proof
-        }));
+        })
+          .then(answer => receiverAnswerSettlement?.settle(answer))
+          .catch(error => telemetry.event('answer_settlement_error', {
+            batchId: batch.id,
+            error: String(error?.message || error)
+          }));
         return { ok: true, proof };
       },
       onEvent(event) {
@@ -626,6 +630,15 @@ async function startRuntime(runtimeConfig) {
           type: 'PMIA_BATCH_EVENT',
           sessionId: runtimeConfig.sessionId,
           event
+        });
+      }
+    });
+    receiverAnswerSettlement = createReceiverAnswerSettlement({
+      completeBatch: (batchId, payload) => receiverBatchRuntime.answerComplete(batchId, payload),
+      onError(error, { batchId }) {
+        telemetry.event('answer_settlement_error', {
+          batchId,
+          error: String(error?.message || error)
         });
       }
     });

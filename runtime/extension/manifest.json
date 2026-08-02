@@ -72,6 +72,7 @@
         "content/answer-lifecycle.js",
         "content/answer-timeout-policy.js",
         "content/receiver-answer-orchestrator.js",
+        "content/receiver-answer-settlement.js",
         "content/composer-fingerprint.js",
         "content/adapter-capability-drift.js",
         "content/capability-probation.js",

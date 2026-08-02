@@ -37,3 +37,15 @@ test('boot delivery remains synchronous while normal finals are deferred', () =>
   assert.match(block, /if \(message\.envelope\.kind !== 'boot'\)/);
   assert.match(block, /const outcome = await completePersistedDelivery\(message\.envelope\)/);
 });
+
+
+test('direct and fallback final acceptance share a dedicated session lane', () => {
+  assert.match(source, /const acceptanceCoordinator = createSessionMutationCoordinator\(\)/);
+  assert.match(source, /acceptanceCoordinator\.run\(frame\.identity\.sessionId/);
+  assert.match(source, /acceptanceCoordinator\.run\(message\.envelope\?\.sessionId/);
+});
+
+test('generic session operations do not own PMIA_FORWARD persistence', () => {
+  const generic = sliceBetween("serialize(async () => {\n    const registry = await loadRegistry();", 'chrome.runtime.onConnect');
+  assert.doesNotMatch(generic, /message\?\.type === 'PMIA_FORWARD'/);
+});
