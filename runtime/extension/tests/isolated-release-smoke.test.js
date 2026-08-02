@@ -190,11 +190,14 @@ test('isolated smoke bounds MV3 worker discovery and suppresses Edge onboarding 
 });
 
 
-test('isolated smoke retries lifecycle registration with one bounded provider reload', () => {
+test('isolated smoke recovers redirected providers with bounded navigation and replacement', () => {
   assert.match(runner, /sampleManagedLifecycle/);
-  assert.match(runner, /managed lifecycle ready after provider reload/);
-  assert.match(runner, /Page\.reload/);
-  assert.match(runner, /providerReloads = 2/);
+  assert.match(runner, /Page\.navigate/);
+  assert.match(runner, /managed lifecycle ready after provider navigation/);
+  assert.match(runner, /managed lifecycle ready after provider replacement/);
+  assert.match(runner, /providerNavigations/);
+  assert.match(runner, /providerReplacements/);
+  assert.match(runner, /Target\.closeTarget/);
   assert.match(runner, /lifecycleRecovery\.recovered/);
 });
 

@@ -195,8 +195,8 @@ try {
   const senderUrl = `https://chatgpt.com/?pmia_session=${encodeURIComponent(session)}&pmia_role=sender&pmia_provider=chatgpt`;
   const receiverUrl = `https://chatgpt.com/?pmia_session=${encodeURIComponent(session)}&pmia_role=receiver&pmia_provider=chatgpt`;
   const dashboardUrl = `chrome-extension://${candidate.extensionId}/dashboard/index.html?session=${encodeURIComponent(session)}`;
-  const senderTarget = (await browser.send('Target.createTarget', { url: senderUrl, newWindow: true, background: true })).targetId;
-  const receiverTarget = (await browser.send('Target.createTarget', { url: receiverUrl, newWindow: true, background: true })).targetId;
+  let senderTarget = (await browser.send('Target.createTarget', { url: senderUrl, newWindow: true, background: true })).targetId;
+  let receiverTarget = (await browser.send('Target.createTarget', { url: receiverUrl, newWindow: true, background: true })).targetId;
   const dashboardTarget = (await browser.send('Target.createTarget', { url: dashboardUrl, newWindow: true, background: true })).targetId;
   createdTargets.push(senderTarget, receiverTarget, dashboardTarget);
   evidence.session = { id: session, senderTarget, receiverTarget, dashboardTarget };
@@ -210,26 +210,46 @@ try {
     const dashboardReady = selected.some(value => value.id === dashboardTarget && value.url === dashboardUrl);
     return { ok: senderReady && receiverReady && dashboardReady, value: selected.map(value => ({ id: value.id, title: value.title, url: value.url })) };
   };
-  evidence.lifecycleRecovery = { attempted: false, providerReloads: 0, recovered: false };
+  const suffix = session.replace(/[^A-Za-z0-9]+/g, '_').toUpperCase();
+  const expectedSenderTitle = `PMIA_SENDER_CHATGPT_${suffix}`;
+  const expectedReceiverTitle = `PMIA_RECEIVER_CHATGPT_${suffix}`;
+  async function navigateManagedTarget(targetId, url) {
+    const client = await targetClient(targetId);
+    try { await client.send('Page.navigate', { url }); }
+    finally { client.close(); }
+  }
+  async function replaceManagedTarget(targetId, url) {
+    const replacement = (await browser.send('Target.createTarget', { url, newWindow: true, background: true })).targetId;
+    createdTargets.push(replacement);
+    await browser.send('Target.closeTarget', { targetId }).catch(() => {});
+    return replacement;
+  }
+  evidence.lifecycleRecovery = { attempted: false, providerNavigations: 0, providerReplacements: 0, recovered: false };
   try {
     await waitFor('managed lifecycle ready', sampleManagedLifecycle, 30000, 500);
   } catch (initialLifecycleError) {
     evidence.lifecycleRecovery.attempted = true;
     evidence.lifecycleRecovery.initialFailure = String(initialLifecycleError?.message || initialLifecycleError);
-    const reloadSender = await targetClient(senderTarget);
-    const reloadReceiver = await targetClient(receiverTarget);
+    const initialTargets = await targets();
+    const senderReady = initialTargets.some(value => value.id === senderTarget && value.title === expectedSenderTitle);
+    const receiverReady = initialTargets.some(value => value.id === receiverTarget && value.title === expectedReceiverTitle);
+    if (!senderReady) { await navigateManagedTarget(senderTarget, senderUrl); evidence.lifecycleRecovery.providerNavigations += 1; }
+    if (!receiverReady) { await navigateManagedTarget(receiverTarget, receiverUrl); evidence.lifecycleRecovery.providerNavigations += 1; }
+
     try {
-      await Promise.all([
-        reloadSender.send('Page.reload', { ignoreCache: true }),
-        reloadReceiver.send('Page.reload', { ignoreCache: true })
-      ]);
-      evidence.lifecycleRecovery.providerReloads = 2;
-    } finally {
-      reloadSender.close();
-      reloadReceiver.close();
+      const recovered = await waitFor('managed lifecycle ready after provider navigation', sampleManagedLifecycle, 45000, 500);
+      evidence.lifecycleRecovery.recovered = recovered.ok;
+    } catch (navigationError) {
+      evidence.lifecycleRecovery.navigationFailure = String(navigationError?.message || navigationError);
+      const navigatedTargets = await targets();
+      const senderRecovered = navigatedTargets.some(value => value.id === senderTarget && value.title === expectedSenderTitle);
+      const receiverRecovered = navigatedTargets.some(value => value.id === receiverTarget && value.title === expectedReceiverTitle);
+      if (!senderRecovered) { senderTarget = await replaceManagedTarget(senderTarget, senderUrl); evidence.lifecycleRecovery.providerReplacements += 1; }
+      if (!receiverRecovered) { receiverTarget = await replaceManagedTarget(receiverTarget, receiverUrl); evidence.lifecycleRecovery.providerReplacements += 1; }
+      evidence.session = { id: session, senderTarget, receiverTarget, dashboardTarget };
+      const recovered = await waitFor('managed lifecycle ready after provider replacement', sampleManagedLifecycle, 60000, 500);
+      evidence.lifecycleRecovery.recovered = recovered.ok;
     }
-    const recovered = await waitFor('managed lifecycle ready after provider reload', sampleManagedLifecycle, 60000, 500);
-    evidence.lifecycleRecovery.recovered = recovered.ok;
   }
 
   sender = await targetClient(senderTarget);
