@@ -6,6 +6,7 @@ import { deriveBatchSchedulingDecision } from '../shared/batch-scheduling-policy
 import { deriveBatchPreview } from '../shared/batch-preview-model.js';
 import { normalizeReceiverDeliveryPolicy, postAnswerDecision, updateReceiverDeliveryPolicy } from '../shared/receiver-delivery-policy.js';
 import { acknowledgeAnswer, buildAnswerAcknowledgement, buildAnswerHandoff, buildInterruptPlan, resolveNoResponse } from '../shared/answer-operations.js';
+import { composeTurnCoordinatedPrompt, deriveTurnCoordinationSnapshot, normalizeTurnCoordination, transitionTurnCoordination } from '../shared/turn-coordination-state.js';
 
 export function createReceiverBatchRuntime({
   adapter,
@@ -16,7 +17,8 @@ export function createReceiverBatchRuntime({
   nowFn = Date.now,
   waitFn = ms => new Promise(resolve => setTimeout(resolve, ms)),
   interruptTimeoutMs = 800,
-  interruptPollMs = 25
+  interruptPollMs = 25,
+  turnCoordinationState = {}
 } = {}) {
   if (!adapter || typeof submitBatch !== 'function') {
     throw new TypeError('Receiver batch runtime requires adapter and submitBatch');
@@ -33,6 +35,10 @@ export function createReceiverBatchRuntime({
   let lastCompletedBatch = null;
   let pendingNoResponse = null;
   let interruptPlan = null;
+  let turnCoordination = normalizeTurnCoordination(turnCoordinationState, nowFn());
+  planner.setPromptComposer?.(args => composeTurnCoordinatedPrompt(args, turnCoordination));
+
+  const forwardingPaused = () => turnCoordination.mode === 'paused_accumulating';
 
   const emit = (type, data = {}) => {
     const event = { type, at: nowFn(), ...data };
@@ -274,6 +280,20 @@ export function createReceiverBatchRuntime({
         nextCount: planner.nextSize,
         partitionCount: planner.next().partitionCount
       });
+      if (forwardingPaused()) {
+        mirrorNext();
+        const next = planner.next();
+        return {
+          ok: true,
+          delivered: false,
+          staged: true,
+          reason: 'paused_accumulating',
+          batchId: 'next',
+          memberIds: [String(envelope.id)],
+          protectedCount: next.count,
+          partitionCount: next.partitionCount
+        };
+      }
       if (queueOnly.active || adapter.isGenerating?.() || planner.active()) {
         mirrorNext();
         const next = planner.next();
@@ -441,6 +461,36 @@ export function createReceiverBatchRuntime({
 
     mirrorNext,
     submitNext,
+    async pauseForwarding() {
+      turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'pause', at: nowFn() });
+      planner.setHold(true);
+      mirrorNext();
+      emit('forwarding_paused', deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()));
+      return { ok: true, reason: 'paused_accumulating', turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()) };
+    },
+    async resumeForwarding({ submit = true } = {}) {
+      turnCoordination = transitionTurnCoordination(turnCoordination, { type: submit ? 'resume_send' : 'resume_hold', at: nowFn() });
+      if (!submit) {
+        planner.setHold(true);
+        mirrorNext();
+        emit('forwarding_resumed_without_send', deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()));
+        return { ok: true, staged: planner.nextSize > 0, reason: 'resumed_without_send', turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()) };
+      }
+      planner.setHold(false);
+      turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'release_started', at: nowFn() });
+      const result = await submitNext({ force: true });
+      if (result?.ok && !result?.error) {
+        turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'release_finished', at: nowFn() });
+      }
+      emit('forwarding_resumed', { result: { ok: result?.ok !== false, reason: result?.reason || '' }, turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()) });
+      return { ...result, turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()) };
+    },
+    async sendHeldNow() {
+      const wasPaused = forwardingPaused();
+      const result = await submitNext({ force: true });
+      if (wasPaused) planner.setHold(true);
+      return { ...result, remainPaused: wasPaused };
+    },
     draftState() {
       return draftArbiter?.snapshot?.() || { owner: 'none', conflict: null };
     },
@@ -498,7 +548,8 @@ export function createReceiverBatchRuntime({
         answerAcknowledgement: lastAnswerOutcome ? { ...lastAnswerOutcome } : null,
         pendingNoResponse: pendingNoResponse ? { ...pendingNoResponse } : null,
         interruptPlan: interruptPlan ? { ...interruptPlan, activeMemberIds: [...interruptPlan.activeMemberIds], preservedIds: [...interruptPlan.preservedIds] } : null,
-        answerHandoff: lastAnswerOutcome ? buildAnswerHandoff(lastAnswerOutcome) : null
+        answerHandoff: lastAnswerOutcome ? buildAnswerHandoff(lastAnswerOutcome) : null,
+        turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot())
       };
     }
   };

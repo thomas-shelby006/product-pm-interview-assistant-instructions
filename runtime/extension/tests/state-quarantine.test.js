@@ -57,11 +57,11 @@ function memoryArea(initial = {}) {
 
 test('runtime store quarantines a future schema without overwriting it', async () => {
   const key = 'pilot';
-  const area = memoryArea({ [key]: { schemaVersion: 5, writerVersion: 'future', sessions: [{ sessionId: 'first' }] } });
+  const area = memoryArea({ [key]: { schemaVersion: 6, writerVersion: 'future', sessions: [{ sessionId: 'first' }] } });
   const store = createRuntimePilotStore({ storageArea: area, key, writerVersion: '0.9.0' });
   await assert.rejects(store.load(), /runtime_state_blocked:future_schema/);
   const captured = structuredClone(area.data[`${key}_quarantine`]);
-  area.data[key] = { schemaVersion: 5, writerVersion: 'future', sessions: [{ sessionId: 'second' }] };
+  area.data[key] = { schemaVersion: 6, writerVersion: 'future', sessions: [{ sessionId: 'second' }] };
   store.resetCache();
   await assert.rejects(store.load(), /runtime_state_blocked:future_schema/);
   assert.deepEqual(area.data[`${key}_quarantine`], captured);

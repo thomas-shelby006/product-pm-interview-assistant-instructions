@@ -21,15 +21,15 @@ test('schema three migration adds a bounded Navigator default', () => {
 });
 
 test('runtime migration is idempotent at the target schema', () => {
-  const envelope = { schemaVersion: 4, writerVersion: '0.11.0', committedAt: 10, sessions: [] };
-  const result = migrateRuntimeEnvelope(envelope, 4);
+  const envelope = { schemaVersion: 5, writerVersion: '0.12.0', committedAt: 10, sessions: [] };
+  const result = migrateRuntimeEnvelope(envelope, 5);
   assert.equal(result.ok, true);
   assert.deepEqual(result.applied, []);
   assert.deepEqual(result.envelope, envelope);
 });
 
 test('future runtime schema fails closed', () => {
-  const result = migrateRuntimeEnvelope({ schemaVersion: 5, sessions: [] }, 4);
+  const result = migrateRuntimeEnvelope({ schemaVersion: 6, sessions: [] }, 5);
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'future_schema');
 });
@@ -37,5 +37,5 @@ test('future runtime schema fails closed', () => {
 test('missing migration step is explicit', () => {
   const result = migrateRuntimeEnvelope({ schemaVersion: 1, sessions: [] }, 6);
   assert.equal(result.ok, false);
-  assert.equal(result.reason, 'missing_migration_4_to_5');
+  assert.equal(result.reason, 'missing_migration_5_to_6');
 });

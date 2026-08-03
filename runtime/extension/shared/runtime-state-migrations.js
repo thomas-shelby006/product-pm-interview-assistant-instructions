@@ -33,10 +33,25 @@ const MIGRATIONS = new Map([
         ? session.sessionNavigator
         : { version: 1, enabled: true, defaultTab: 'now', history: [], bookmarks: [], goals: [], coverage: {}, workspaces: [], activeWorkspaceId: '', scenarioCompletion: [], debriefExports: 0 }
     }))
+  })],
+  [4, (envelope, metadata = {}) => ({
+    ...clone(envelope),
+    schemaVersion: 5,
+    writerVersion: String(metadata.writerVersion || envelope.writerVersion || ''),
+    committedAt: Math.max(0, Number(metadata.now) || Number(envelope.committedAt) || Date.now()),
+    sessions: (clone(envelope.sessions || [])).map(session => ({
+      ...session,
+      batchState: {
+        ...(session?.batchState && typeof session.batchState === 'object' ? session.batchState : {}),
+        turnCoordination: session?.batchState?.turnCoordination && typeof session.batchState.turnCoordination === 'object'
+          ? session.batchState.turnCoordination
+          : { version: 1, mode: 'live', pausedAt: 0, resumedAt: 0, releaseIntent: '', updatedAt: 0, interruption: { state: 'none', chainId: '', memberIds: [], activeBatchId: '', continuationId: '', startedAt: 0, reason: '' } }
+      }
+    }))
   })]
 ]);
 
-export function migrateRuntimeEnvelope(value, targetVersion = 4, metadata = {}) {
+export function migrateRuntimeEnvelope(value, targetVersion = 5, metadata = {}) {
   let envelope = clone(value);
   const target = Math.max(1, Number(targetVersion) || 1);
   let current = Math.max(0, Number(envelope?.schemaVersion) || 0);

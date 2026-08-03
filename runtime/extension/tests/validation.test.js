@@ -374,12 +374,13 @@ test('content runtime exposes an exact managed-session end command', async () =>
   assert.match(controller, /clearSessionLogs\(sessionId\)/);
 });
 
-test('production sender uses bounded fallback only for ChatGPT', async () => {
+test('production ChatGPT sender requires authoritative DOM finals', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
-  assert.match(entry, /allowFallbackFinalization:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
-  assert.match(entry, /allowVoiceFallback:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
+  assert.match(entry, /allowFallbackFinalization:\s*runtimeConfig\.provider\s*!==\s*'chatgpt'/);
+  assert.match(entry, /allowPreview:\s*runtimeConfig\.provider\s*!==\s*'chatgpt'/);
+  assert.match(entry, /allowVoiceFallback:\s*false/);
   assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 180 \}\)/);
 });
 
@@ -458,12 +459,13 @@ test('service worker handles browser-level export commands without content focus
 });
 
 
-test('ChatGPT transport enables bounded stable finalization while Claude keeps protocol authority', async () => {
+test('ChatGPT transport disables weak-tail finalization while Claude keeps protocol authority', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
-  assert.match(entry, /allowFallbackFinalization: runtimeConfig\.provider === 'chatgpt'/);
-  assert.match(entry, /allowVoiceFallback: runtimeConfig\.provider === 'chatgpt'/);
+  assert.match(entry, /allowFallbackFinalization: runtimeConfig\.provider !== 'chatgpt'/);
+  assert.match(entry, /allowPreview: runtimeConfig\.provider !== 'chatgpt'/);
+  assert.match(entry, /allowVoiceFallback: false/);
   assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 180 \}\)/);
 });
 

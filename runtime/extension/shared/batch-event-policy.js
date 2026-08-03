@@ -63,6 +63,23 @@ export function safeBatchTelemetry(state = null) {
       ageMs: Math.max(0, Number(value.scheduling.ageMs) || 0),
       submitRecommended: Boolean(value.scheduling.submitRecommended),
       evaluatedAt: Number(value.scheduling.evaluatedAt || 0)
+    } : null,
+    turnCoordination: value.turnCoordination && typeof value.turnCoordination === 'object' ? {
+      version: Math.max(1, Number(value.turnCoordination.version) || 1),
+      mode: String(value.turnCoordination.mode || 'live'),
+      pausedAt: Math.max(0, Number(value.turnCoordination.pausedAt || 0)),
+      resumedAt: Math.max(0, Number(value.turnCoordination.resumedAt || 0)),
+      releaseIntent: String(value.turnCoordination.releaseIntent || ''),
+      updatedAt: Math.max(0, Number(value.turnCoordination.updatedAt || 0)),
+      interruption: value.turnCoordination.interruption && typeof value.turnCoordination.interruption === 'object' ? {
+        state: String(value.turnCoordination.interruption.state || 'none'),
+        chainId: String(value.turnCoordination.interruption.chainId || ''),
+        memberIds: Array.isArray(value.turnCoordination.interruption.memberIds) ? value.turnCoordination.interruption.memberIds.map(String) : [],
+        activeBatchId: String(value.turnCoordination.interruption.activeBatchId || ''),
+        continuationId: String(value.turnCoordination.interruption.continuationId || ''),
+        startedAt: Math.max(0, Number(value.turnCoordination.interruption.startedAt || 0)),
+        reason: String(value.turnCoordination.interruption.reason || '')
+      } : null
     } : null
   };
 }

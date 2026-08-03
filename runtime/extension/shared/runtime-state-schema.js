@@ -1,4 +1,4 @@
-export const RUNTIME_STATE_SCHEMA_VERSION = 4;
+export const RUNTIME_STATE_SCHEMA_VERSION = 5;
 
 function clone(value) {
   if (value === undefined) return undefined;

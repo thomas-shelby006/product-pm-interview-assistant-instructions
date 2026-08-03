@@ -885,6 +885,23 @@ async function startRuntime(runtimeConfig) {
         overlay.setStatus('FORWARDING ACTIVE', 'ok', 1600);
         telemetry.event('transport_resumed');
         return { ok: true, transportPaused, outboxReady: senderOutboxReady };
+      case 'pause_forwarding': {
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        const result = await receiverBatchRuntime.pauseForwarding();
+        overlay.setStatus('FORWARDING PAUSED · ACCUMULATING', 'warn');
+        telemetry.event('forwarding_paused', result.turnCoordination || {});
+        return result;
+      }
+      case 'resume_forwarding': {
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        const result = await receiverBatchRuntime.resumeForwarding({ submit: payload.submit !== false });
+        overlay.setStatus(payload.submit === false ? 'RESUMED · DRAFT HELD' : 'RESUMED · SENDING HELD QUESTIONS', 'ok', 2200);
+        telemetry.event('forwarding_resumed', result.turnCoordination || {});
+        return result;
+      }
+      case 'send_held_now':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.sendHeldNow();
       case 'reconcile_delivery':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.reconcile(payload);

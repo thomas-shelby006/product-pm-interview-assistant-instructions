@@ -14,6 +14,7 @@ import { normalizeLayoutHistory, popLayoutHistory, pushLayoutHistory } from './l
 import { defaultShortcutBindings, normalizeShortcutBindings, setShortcutBinding } from './shortcut-bindings.js';
 import { normalizeSessionNavigator, touchSessionNavigator, recordNavigatorHistory, upsertNavigatorBookmark, removeNavigatorBookmark, upsertNavigatorGoal, tagNavigatorCoverage, upsertNavigatorWorkspace, markNavigatorScenarioComplete, recordNavigatorDebriefExport } from './session-navigator-state.js';
 import { auditSessionNavigator, repairSessionNavigator } from './session-navigator-integrity.js';
+import { normalizeTurnCoordination } from './turn-coordination-state.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -200,7 +201,8 @@ function normalizeSession(item) {
       answerAcknowledgement: item.batchState?.answerAcknowledgement || null,
       pendingNoResponse: item.batchState?.pendingNoResponse || null,
       interruptPlan: item.batchState?.interruptPlan || null,
-      answerHandoff: item.batchState?.answerHandoff || null
+      answerHandoff: item.batchState?.answerHandoff || null,
+      turnCoordination: normalizeTurnCoordination(item.batchState?.turnCoordination || {}, createdAt)
     },
     ledger: new DeliveryLedger(item.ledger || item.queue || []),
     timeline: Array.isArray(item.timeline) ? item.timeline.slice(-MAX_TIMELINE) : [],
@@ -1051,7 +1053,8 @@ export class RuntimePilotState {
       answerAcknowledgement: preserveOrNull('answerAcknowledgement'),
       pendingNoResponse: preserveOrNull('pendingNoResponse'),
       interruptPlan: preserveOrNull('interruptPlan'),
-      answerHandoff: preserveOrNull('answerHandoff')
+      answerHandoff: preserveOrNull('answerHandoff'),
+      turnCoordination: owns('turnCoordination') ? normalizeTurnCoordination(next.turnCoordination || {}, now) : normalizeTurnCoordination(session.batchState.turnCoordination || {}, now)
     };
     const previous = JSON.stringify({
       active: session.batchState.active,
@@ -1067,7 +1070,8 @@ export class RuntimePilotState {
       answerAcknowledgement: session.batchState.answerAcknowledgement,
       pendingNoResponse: session.batchState.pendingNoResponse,
       interruptPlan: session.batchState.interruptPlan,
-      answerHandoff: session.batchState.answerHandoff
+      answerHandoff: session.batchState.answerHandoff,
+      turnCoordination: session.batchState.turnCoordination
     });
     const changed = previous !== JSON.stringify(normalized);
     if (!changed) return false;
@@ -1145,6 +1149,8 @@ export class RuntimePilotState {
         submitRecommended: Boolean(event.submitRecommended),
         evaluatedAt: Number(event.evaluatedAt || now)
       };
+    } else if (['forwarding_paused','forwarding_resumed','forwarding_resumed_without_send','source_interruption_detected','source_interruption_resolved'].includes(type)) {
+      session.batchState.turnCoordination = normalizeTurnCoordination(event.turnCoordination || event, now);
     } else if (type === 'batch_policy_changed') {
       if ('hold' in event) session.batchState.hold = Boolean(event.hold);
       if ('autoSubmit' in event) session.batchState.autoSubmit = Boolean(event.autoSubmit);

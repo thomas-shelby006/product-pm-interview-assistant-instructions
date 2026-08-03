@@ -460,3 +460,37 @@ test('dashboard broadcast contains live Production data instead of a blocked fal
   assert.notEqual(message.snapshot.production.diagnostics.state, 'waiting');
   assert.notEqual(message.snapshot.production.transportAssurance.state, 'unknown');
 });
+
+test('forwarding pause keeps sender admission live and holds only receiver submission', async () => {
+  const direct = [];
+  const { controller, registry, runtimeCommands } = setup({
+    async requestRole(frame) {
+      direct.push([frame.role, frame.command, frame.payload || {}]);
+      return { ok: true };
+    }
+  });
+  await ready(controller, registry);
+  const paused = await controller.handleCommand({ sessionId: 's1', requestId: 'pause-forwarding', command: 'pause', payload: {} });
+  assert.equal(paused.ok, true);
+  assert.deepEqual(direct, [['receiver', 'pause_forwarding', {}]]);
+  assert.equal(runtimeCommands.some(([, command]) => command === 'pause'), false);
+  assert.equal((await controller.snapshot('s1')).mode, 'paused');
+});
+
+test('resume catch-up submits the held receiver batch and only resumes sender for compatibility', async () => {
+  const direct = [];
+  const { controller, registry } = setup({
+    async requestRole(frame) {
+      direct.push([frame.role, frame.command, frame.payload || {}]);
+      if (frame.command === 'reconcile_delivery') return { ok: true, replayed: [] };
+      return { ok: true };
+    }
+  });
+  await ready(controller, registry);
+  await controller.handleCommand({ sessionId: 's1', requestId: 'pause-first', command: 'pause', payload: {} });
+  direct.length = 0;
+  const resumed = await controller.handleCommand({ sessionId: 's1', requestId: 'resume-send', command: 'resume_catch_up', payload: {} });
+  assert.equal(resumed.ok, true);
+  assert.equal(direct.some(([role, command, payload]) => role === 'receiver' && command === 'resume_forwarding' && payload.submit === true), true);
+  assert.equal(direct.some(([role, command]) => role === 'sender' && command === 'pause'), false);
+});

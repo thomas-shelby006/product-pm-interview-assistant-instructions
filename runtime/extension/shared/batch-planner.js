@@ -89,12 +89,14 @@ export class BatchPlanner {
   #known = new Set();
   #maxBatchMembers;
   #maxBatchChars;
+  #composePrompt;
 
-  constructor(state = {}, { maxBatchMembers = 8, maxBatchChars = 12000 } = {}) {
+  constructor(state = {}, { maxBatchMembers = 8, maxBatchChars = 12000, composePrompt = composeBatchPrompt } = {}) {
     this.#hold = Boolean(state?.hold);
     this.#maxBatchMembers = Math.max(1, Number(maxBatchMembers) || 8);
     this.#maxBatchChars = Math.max(256, Number(maxBatchChars) || 12000);
     this.#autoSubmit = state?.autoSubmit !== false;
+    this.#composePrompt = typeof composePrompt === 'function' ? composePrompt : composeBatchPrompt;
     this.#active = state?.active ? this.#normalizeBatch(state.active) : null;
     const nextEntries = Array.isArray(state?.next)
       ? state.next
@@ -122,7 +124,7 @@ export class BatchPlanner {
     if (!entries.length) return null;
     const selected = new Set(entries.map(entry => entry.id));
     this.#next = this.#next.filter(entry => !selected.has(entry.id));
-    const prompt = composeBatchPrompt({ entries });
+    const prompt = this.#composePrompt({ entries });
     this.#active = {
       id: batchId(entries),
       entries,
@@ -139,7 +141,7 @@ export class BatchPlanner {
     const interrupted = this.active();
     this.#active = null;
     const entries = [latest];
-    const prompt = composeBatchPrompt({ entries });
+    const prompt = this.#composePrompt({ entries });
     this.#active = {
       id: `interrupt-${Number(latest.envelope?.seq || 0)}-${String(latest.id).slice(-8)}`,
       entries,
@@ -187,6 +189,11 @@ export class BatchPlanner {
     return { restored, nextSize: this.#next.length };
   }
 
+  setPromptComposer(value) {
+    this.#composePrompt = typeof value === 'function' ? value : composeBatchPrompt;
+    return this.next().prompt;
+  }
+
   setHold(value) {
     this.#hold = Boolean(value);
     return this.#hold;
@@ -220,7 +227,7 @@ export class BatchPlanner {
     const first = partitions[0] || [];
     return {
       entries,
-      prompt: composeBatchPrompt({ entries: first }),
+      prompt: this.#composePrompt({ entries: first }),
       count: entries.length,
       partitionCount: partitions.length,
       firstPartitionCount: first.length,
@@ -250,7 +257,7 @@ export class BatchPlanner {
     return partitionEntries(this.#next, {
       maxMembers: this.#maxBatchMembers,
       maxChars: this.#maxBatchChars,
-      measure: entries => composeBatchPrompt({ entries }).text.length
+      measure: entries => this.#composePrompt({ entries }).text.length
     });
   }
 
@@ -261,7 +268,7 @@ export class BatchPlanner {
       entries,
       prompt: batch?.prompt?.memberFingerprint
         ? { ...batch.prompt }
-        : { ...composeBatchPrompt({ entries }), ...(batch?.prompt || {}) },
+        : { ...this.#composePrompt({ entries }), ...(batch?.prompt || {}) },
       createdAt: Number(batch?.createdAt || Date.now()),
       submittedAt: Number(batch?.submittedAt || 0)
     };

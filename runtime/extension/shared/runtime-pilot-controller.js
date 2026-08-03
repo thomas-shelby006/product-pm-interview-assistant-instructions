@@ -1609,22 +1609,32 @@ export function createRuntimePilotController({
       case 'set_quiet_mode':
         result = pilot.setQuietMode(sessionId, Boolean(payload.value));
         break;
-      case 'pause':
+      case 'pause': {
         pilot.setMode(sessionId, 'paused');
-        if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'paused', 'transport_pause');
-        result = { ok: true, roles: await sendToRoles(registry, sessionId, 'pause') };
+        if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'paused', 'forwarding_pause');
+        const receiver = await sendRuntimeCommand(registry, sessionId, 'receiver', 'pause_forwarding', {});
+        result = { ok: receiver?.ok !== false, reason: receiver?.reason || 'paused_accumulating', receiver };
         break;
-      case 'resume_without_send':
-        pilot.setMode(sessionId, 'active');
-        if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'active', 'transport_resume');
-        result = { ok: true, roles: await sendToRoles(registry, sessionId, 'resume') };
+      }
+      case 'resume_without_send': {
+        const sender = await sendRuntimeCommand(registry, sessionId, 'sender', 'resume', {});
+        const receiver = await sendRuntimeCommand(registry, sessionId, 'receiver', 'resume_forwarding', { submit: false });
+        if (receiver?.ok !== false) {
+          pilot.setMode(sessionId, 'active');
+          if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'active', 'forwarding_resume_hold');
+        }
+        result = { ok: receiver?.ok !== false, reason: receiver?.reason || 'resumed_without_send', sender, receiver };
         break;
+      }
       case 'resume_catch_up': {
-        pilot.setMode(sessionId, 'active');
-        if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'active', 'catch_up');
-        const roles = await sendToRoles(registry, sessionId, 'resume');
+        const sender = await sendRuntimeCommand(registry, sessionId, 'sender', 'resume', {});
+        const receiver = await sendRuntimeCommand(registry, sessionId, 'receiver', 'resume_forwarding', { submit: true });
+        if (receiver?.ok !== false) {
+          pilot.setMode(sessionId, 'active');
+          if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'active', 'catch_up');
+        }
         const catchUp = await reconcileSession(sessionId, { registry, pilot, commitResult: false });
-        result = { ok: catchUp?.ok !== false, reason: catchUp?.reason || 'catch_up_started', roles, catchUp };
+        result = { ok: receiver?.ok !== false && catchUp?.ok !== false, reason: receiver?.reason || catchUp?.reason || 'catch_up_started', sender, receiver, catchUp };
         break;
       }
       case 'add_marker':
