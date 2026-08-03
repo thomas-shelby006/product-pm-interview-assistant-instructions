@@ -221,9 +221,9 @@
 - [x] Implement explanation model and safe Retry Carryover / Keep Accumulating actions.
 - [x] Record a bookmarkable evidence event for review without transcript content.
 - [x] Verify support-bundle redaction and command replay idempotency.
-- [ ] Update checkpoint and commit `feat: explain turn interruptions and recovery`.
+- [x] Update checkpoint and commit `feat: explain turn interruptions and recovery` (`f41d5db`).
 
-**Task 14 checkpoint:** `turn-coordination-evidence.js` derives one bounded metadata-only evidence object from the existing coordination state and matching timeline event. The safe support bundle now includes chain/batch identities, reason codes, preserved count, stop latency and recommended recovery without question or answer text. Duplicate `retry_carryover` and `keep_accumulating` requests replay the stored result and reach the receiver exactly once. Focused integration gate: **25/25 passed**.
+**Task 14 checkpoint:** `turn-coordination-evidence.js` derives one bounded metadata-only evidence object from the existing coordination state and matching timeline event. The safe support bundle now includes chain/batch identities, reason codes, preserved count, stop latency and recommended recovery without question or answer text. Duplicate `retry_carryover` and `keep_accumulating` requests replay the stored result and reach the receiver exactly once. Focused integration gate: **27/27 passed**, including the existing support-bundle privacy suite.
 
 ### Task 15 Ã¢â‚¬â€ Cycles 321Ã¢â‚¬â€œ325: Efficiency scorecard and release evidence
 

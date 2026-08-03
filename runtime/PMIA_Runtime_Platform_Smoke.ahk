@@ -54,8 +54,7 @@ RunPlatformSmoke() {
         AssertPlatform(!ManagedWindowExists(ownedHwnd), "owned window remains closed")
 
         unrelated := Gui("+ToolWindow", "UNRELATED_WINDOW")
-        unrelated.Show("x-32000 y-32000 w120 h80 NoActivate")
-        unrelated.Hide()
+        unrelated.Show("Hide w120 h80")
         WriteManagedRuntimeJournal("pmia_smoke", config, unrelated.Hwnd, 0, 0, 201, 0, 0)
         journal := ReadManagedRuntimeJournal()
         AssertPlatform(journal["senderPid"] = 201, "journal process metadata")
