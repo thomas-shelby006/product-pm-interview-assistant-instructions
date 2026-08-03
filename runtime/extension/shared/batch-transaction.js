@@ -1,3 +1,21 @@
+const HISTORY_LIMIT = 20;
+const RESERVED_HISTORY_FIELDS = new Set(['from', 'to', 'at', 'reason']);
+
+function safeHistoryData(value = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !RESERVED_HISTORY_FIELDS.has(key)));
+}
+
+function normalizeHistory(values) {
+  return (Array.isArray(values) ? values : []).slice(-HISTORY_LIMIT).map(item => ({
+    ...safeHistoryData(item),
+    from: String(item?.from || ''),
+    to: String(item?.to || ''),
+    at: Math.max(0, Number(item?.at) || 0),
+    reason: String(item?.reason || '')
+  }));
+}
+
 const TRANSITIONS = Object.freeze({
   draft: new Set(['frozen', 'released']),
   frozen: new Set(['submitting', 'draft', 'released']),
@@ -20,7 +38,7 @@ export class BatchTransaction {
       createdAt: Number(createdAt) || Date.now(),
       updatedAt: Number(createdAt) || Date.now(),
       reason: '',
-      history: Array.isArray(history) ? history.map(item => ({ ...item })) : []
+      history: normalizeHistory(history)
     };
   }
 
@@ -34,8 +52,8 @@ export class BatchTransaction {
     this.#value.state = next;
     this.#value.updatedAt = Number(now) || Date.now();
     this.#value.reason = String(reason || '');
-    this.#value.history.push({ from, to: next, at: this.#value.updatedAt, reason: this.#value.reason, ...data });
-    this.#value.history = this.#value.history.slice(-20);
+    this.#value.history.push({ ...safeHistoryData(data), from, to: next, at: this.#value.updatedAt, reason: this.#value.reason });
+    this.#value.history = this.#value.history.slice(-HISTORY_LIMIT);
     return { ok: true, duplicate: false, transaction: this.snapshot() };
   }
 

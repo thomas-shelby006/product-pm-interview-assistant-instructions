@@ -19,3 +19,25 @@ test('batch transaction terminal transitions are idempotent', () => {
   assert.equal(duplicate.ok, true);
   assert.equal(duplicate.duplicate, true);
 });
+
+test('batch transaction bounds and sanitizes restored history', () => {
+  const history = Array.from({ length: 40 }, (_, index) => ({
+    from: index ? 'frozen' : 'draft', to: 'frozen', at: index, reason: index, extra: index
+  }));
+  const snapshot = new BatchTransaction({ batchId: 'b1', history }).snapshot();
+  assert.equal(snapshot.history.length, 20);
+  assert.equal(snapshot.history[0].extra, 20);
+  assert.equal(snapshot.history[19].extra, 39);
+  assert.equal(snapshot.history[0].reason, '20');
+});
+
+test('batch transition data cannot override canonical transition identity', () => {
+  const tx = new BatchTransaction({ batchId: 'b1' });
+  const result = tx.transition('frozen', {
+    reason: 'operator_pause', now: 123,
+    data: { from: 'released', to: 'terminal', at: 999, reason: 'forged', detail: 'safe' }
+  });
+  assert.deepEqual(result.transaction.history[0], {
+    detail: 'safe', from: 'draft', to: 'frozen', at: 123, reason: 'operator_pause'
+  });
+});
