@@ -24,7 +24,9 @@ async function fixture({ cleanup = true, normalProfileTouched = false, smokeComm
   const smoke = path.join(repo, 'smoke.json');
   await writeFile(gate, '# tests 10\n# pass 10\n# fail 0\nExtension validation passed: 5 JavaScript files, 2 required runtime surfaces, and 3 reachable production modules checked.\n');
   await writeFile(smoke, JSON.stringify({
-    ok: true, deliveryProofOk: true, transportDrillOk: true, pilotUiOk: true, productionUiOk: true, assistUiOk: true, reliabilityUiOk: true, operationsUiOk: true,
+    ok: true, deliveryProofOk: true, adaptiveTurnScenariosOk: true,
+    adaptiveTurnScenarios: Object.fromEntries(['authoritativeFinal','pauseResume','carryover','independentAccumulation','restartRecovery'].map(key => [key, { ok: true }])),
+    transportDrillOk: true, pilotUiOk: true, productionUiOk: true, assistUiOk: true, reliabilityUiOk: true, operationsUiOk: true,
     commandReachability: { ok: true, duplicateDomIds: [], visibleWithoutRegistry: [], visibleWithoutOwner: [] },
     commandRegistryDigest: 'registry-v1',
     commit: smokeCommit || commit,
@@ -114,4 +116,22 @@ test('runtime validator exposes optional commit-bound release evidence generatio
   assert.match(source, /\[string\]\$EvidenceManifest/);
   assert.match(source, /build-release-evidence-manifest\.mjs/);
   assert.match(source, /--repo[\s\S]*--gate-log[\s\S]*--smoke-evidence[\s\S]*--output/);
+});
+
+
+test('release evidence requires every Adaptive Turn scenario', async () => {
+  const value = await fixture();
+  const smoke = JSON.parse(await readFile(value.smoke, 'utf8'));
+  smoke.adaptiveTurnScenariosOk = false;
+  await writeFile(value.smoke, JSON.stringify(smoke));
+  const aggregate = run(value.repo, args(value, path.join(value.repo, 'adaptive-fail.json')));
+  assert.notEqual(aggregate.status, 0);
+  assert.match(aggregate.stderr, /Adaptive Turn scenarios are incomplete/);
+
+  smoke.adaptiveTurnScenariosOk = true;
+  smoke.adaptiveTurnScenarios.carryover.ok = false;
+  await writeFile(value.smoke, JSON.stringify(smoke));
+  const carryover = run(value.repo, args(value, path.join(value.repo, 'carryover-fail.json')));
+  assert.notEqual(carryover.status, 0);
+  assert.match(carryover.stderr, /carryover is incomplete/);
 });
