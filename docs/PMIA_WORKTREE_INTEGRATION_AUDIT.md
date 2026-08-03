@@ -12,7 +12,7 @@ Target branch: `main`
 | `product-pm-interview-assistant-instructions` | `main` at `66ea17e`, clean | Ancestor of integration; target remains unchanged pending final verification. |
 | `pmia-clean-smoke-e1203b4` | detached `e1203b4`, clean | Historical clean smoke checkpoint; ancestor of integration. |
 | `.worktrees/pmia-final-evidence` | `release/pmia-final-evidence` at `92e1d99`, clean | Five-scenario release evidence contract merged at `613b2ea`. |
-| `.worktrees/pmia-final-integration` | `improvement/pmia-0.7.0` includes implementation checkpoint `73554cb`; clean before this documentation checkpoint | Authoritative combined verification worktree. |
+| `.worktrees/pmia-final-integration` | `improvement/pmia-0.7.0` includes implementation checkpoint `bdf53ba`; clean before this documentation checkpoint | Authoritative combined verification worktree. |
 | `.worktrees/pmia-main-integration` | `test/pmia-main-integration` at `da1a5ad`, clean | Content-sensitive worktree readiness manifest merged at `4bf4851`. |
 | `product-pm-interview-assistant-improvement` | `fix/pmia-admission-lane` at `685c859`; assistant task temp remains | Admission repair merged at `8d32f66`; temp cleanup is deferred until evidence is retained. |
 | `.worktrees/pmia-0.11-completion` | `improvement/pmia-0.11-completion` at `8290d0b`; one untracked short design | Committed head is included. Dirty content is exactly fingerprinted and classified `superseded_preserved`; the fuller integrated design is authoritative. |
@@ -51,6 +51,8 @@ The sixth attempt exposed one final propagation omission: the smoothing wrapper 
 Exact `3d84ddd` passed the full automated gate with 1,326/1,326 tests and all validators. The seventh browser run then proved Q2 staged ownership, durable Q3, empty outbox, and stable Pause, but an older empty receiver telemetry checkpoint overwrote the newer `next_batch_draft` projection. Commit `2a2a0fc` makes batch checkpoint restoration causal by comparing telemetry capture time with the latest semantic batch-event time. Both stale preservation and newer explicit clearing are covered; the owning matrix passed 47/47 and the widened matrix passed 212/212.
 
 Exact `41fbbc9` passed 1,328/1,328 tests and all validators. The eighth browser run proved the freshness guard prevented rollback but exposed the prior queue: `PMIA_BATCH_EVENT` and receiver telemetry waited behind generic session operations, so Pilot never observed Q2's draft event before the smoke deadline. Commit `73554cb` routes those messages directly to their existing authorized per-session Pilot lane; the adjacent matrix passed 144/144.
+
+Exact `37e29c2` passed 1,329/1,329 tests and all validators. The ninth browser run reached the correct paused combined draft, then exposed a dashboard-only synchronization loop: an in-place resync reset the controller generation while the dashboard retained a newer local generation and rejected every regressed full snapshot. External CDP evidence also caught one initial null-snapshot managed-window exception. Commit `bdf53ba` preserves monotonic generation across resync and makes the initial model null-safe; the owning matrix passed 57/57 and the widened matrix passed 141/141.
 
 ## Final acceptance
 

@@ -5,7 +5,7 @@ Admission worktree: `C:\Users\Sundar\Documents\product-pm-interview-assistant-im
 Admission branch: `fix/pmia-admission-lane`
 Admission commit: `2cbec6ffe327b4ebd98bacfdb38194d86e533c2e`
 Integration lane-merge checkpoint: `improvement/pmia-0.7.0` at `4bf4851`
-Current implementation checkpoint: `73554cb`
+Current implementation checkpoint: `bdf53ba`
 Target after exact verification: `main`
 
 ## Scope
@@ -118,9 +118,17 @@ Exact `41fbbc9` passed the complete gate with **1,328/1,328** tests and all vali
 
 `PMIA_BATCH_EVENT` and `PMIA_RUNTIME_TELEMETRY` were still wrapped by the generic per-session background operation coordinator before entering the controller's own ordered mutation lane. Commit `73554cb` removes only that redundant outer queue. Authorization, role ownership, receiver-only event enforcement, and controller serialization remain intact. The owning regression failed first; the adjacent matrix passed **144/144**.
 
+## Ninth browser attempt and dashboard resync repair
+
+Exact `37e29c2` passed the complete gate with **1,329/1,329** tests and all validators. The following isolated browser run proved the combined paused draft was finally correct: Q1 was proven, Q2/Q3 were in `batchState.next`, Window 2 showed both questions under the paused banner, the sender outbox was empty, and Pause state remained authoritative. The run advanced to the dashboard control and timed out because the primary button still rendered `pause`.
+
+An external CDP monitor captured the dashboard connection as continuously `Resyncing` with hundreds of `Snapshot generation mismatch` recoveries. The dashboard retained local generation `17`, while the controller reset its per-port generation to `0` and returned a full snapshot at generation `1`; the dashboard correctly rejected the regressed full snapshot, creating a permanent loop. The same monitor captured one initial `deriveManagedWindowModel(null)` exception.
+
+Commit `bdf53ba` sends the dashboard's current generation with the resync request, preserves the maximum generation in the controller, and returns the next full snapshot at a strictly newer generation. It also makes the initial managed-window model null-safe. Functional proof verifies a generation-50 request receives a generation-51 full snapshot. The owning matrix passed **57/57** and the widened dashboard/controller/rendering/Adaptive Turn/validation matrix passed **141/141**.
+
 ## Remaining sequence
 
-1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact committed checkpoint containing `73554cb` and retain the complete gate log outside the repository.
+1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact committed checkpoint containing `bdf53ba` and retain the complete gate log outside the repository.
 2. Fix only reproduced owning-boundary failures, commit, and rerun if the tree changes.
 3. Run fresh isolated Edge evidence from exact HEAD. Require all five Adaptive Turn scenarios, three rendered finals, empty outbox, clear sequence state, 12/12 transport drill, responsive/print UI evidence, no normal-profile access, and exact cleanup.
 4. Generate deterministic release, handoff, and worktree-integration manifests.
