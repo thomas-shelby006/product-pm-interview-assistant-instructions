@@ -1,0 +1,37 @@
+{
+  "format": "pmia-worktree-dispositions/v1",
+  "entries": [
+    {
+      "branch": "improvement/pmia-0.11-completion",
+      "head": "8290d0bb09b0296daf1d15579e04eb1fa1a58e0b",
+      "statusHash": "2b4f563506d6f75224fa2e0d61e58b54042a5be2c222c6a5a92e66dd558de0f9",
+      "decision": "superseded_preserved",
+      "replacementCommits": [
+        "86f9ae02212ff71723069f7ea6dfa6b1917c180a",
+        "8257e041ec70e2ec3a6f6e32ecf3c492b42f3809"
+      ],
+      "replacementFiles": [
+        "docs/superpowers/specs/2026-08-03-pmia-adaptive-turn-coordination-design.md"
+      ],
+      "reason": "The untracked short design is an earlier subset of the fuller current Adaptive Turn design and implementation. It is preserved in its historical worktree and must not replace the integrated version."
+    },
+    {
+      "branch": "feature/runtime-0.6-session-review-loop",
+      "head": "9bfae74ddb413e2f868604a7448d018c0d8e0859",
+      "statusHash": "d28e217e43f45b61ea06e4db324059e1b8b3ccb3518d658b69602c83ae1794b8",
+      "decision": "superseded_preserved",
+      "replacementCommits": [
+        "025ac11",
+        "76d29c7"
+      ],
+      "replacementFiles": [
+        "runtime/Session_Tracker_End_Session.ahk",
+        "runtime/scripts/resolve-pmia-session-exports.ps1",
+        "runtime/scripts/push-session-to-tracker.ps1",
+        "runtime/extension/tests/session-review-loop.test.js",
+        "docs/SESSION_TRACKER_SETUP.md"
+      ],
+      "reason": "The dirty v0.6 Review Studio work is superseded by the committed current tracker/review flow and later reliability fixes, including UTC export pairing and stricter validation. The historical worktree remains preserved unchanged."
+    }
+  ]
+}
