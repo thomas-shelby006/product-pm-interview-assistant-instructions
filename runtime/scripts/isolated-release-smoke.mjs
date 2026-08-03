@@ -273,6 +273,18 @@ async function manualCopyAndAwaitOwnership(label, text) {
   return admitted.value;
 }
 
+async function awaitPausedBatchProjection(label, admission, text) {
+  return waitFor(`${label} projected into paused receiver batch`, async () => {
+    const pilot = await pilotState();
+    const state = await pageState('receiver');
+    const memberIds = (pilot?.batchState?.next?.memberIds || []).map(String);
+    return {
+      ok: memberIds.includes(String(admission.id)) && state.composer.includes(text),
+      value: { memberIds, questionCount: Number(pilot?.batchState?.next?.questionCount || 0), composerHasText: state.composer.includes(text) }
+    };
+  }, 30000, 250);
+}
+
 async function runAdaptiveModuleScenarios(client) {
   if (!client) throw new Error('Adaptive scenario extension-page client missing');
   const raw = await client.evaluate(`(async()=>{
@@ -490,7 +502,9 @@ try {
   }, 20000, 100);
 
   const q2Admission = await manualCopyAndAwaitOwnership('Q2', questions.q2);
+  await awaitPausedBatchProjection('Q2', q2Admission, questions.q2);
   const q3Admission = await manualCopyAndAwaitOwnership('Q3', questions.q3);
+  await awaitPausedBatchProjection('Q3', q3Admission, questions.q3);
   const pausedDraft = await waitFor('paused combined draft mirrored in Window 2', async () => {
     const pilot = await pilotState();
     const state = await pageState('receiver');

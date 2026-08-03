@@ -288,3 +288,11 @@ test('adaptive module scenarios run in the packaged dashboard page not the servi
   );
   assert.doesNotMatch(scenarioBody, /worker\.evaluate/);
 });
+
+
+test('isolated smoke waits for each paused admission projection before combined proof', async () => {
+  const runner = await readFile(new URL('../../scripts/isolated-release-smoke.mjs', import.meta.url), 'utf8');
+  assert.match(runner, /async function awaitPausedBatchProjection/);
+  assert.match(runner, /await awaitPausedBatchProjection\('Q2'/);
+  assert.match(runner, /await awaitPausedBatchProjection\('Q3'/);
+});
