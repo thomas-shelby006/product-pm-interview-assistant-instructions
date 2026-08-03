@@ -198,3 +198,37 @@ test('answer terminal state is counted once per batch', () => {
   state.recordAnswer('pmia_session', { batchId: 'b1', state: 'timed_out' }, 1100);
   assert.equal(state.snapshot('pmia_session', 1200).metrics.answersTimedOut, 1);
 });
+
+
+test('stale receiver coordination cannot overwrite a newer operator pause', () => {
+  const state = new RuntimePilotState([], { nowFn: () => 100 });
+  state.ensure('pmia_session', 100);
+  state.updateBatchState('pmia_session', {
+    type: 'forwarding_paused',
+    turnCoordination: { mode: 'paused_accumulating', pausedAt: 200, updatedAt: 200 }
+  }, 200);
+  state.updateBatchState('pmia_session', {
+    type: 'turn_coordination_restored',
+    turnCoordination: { mode: 'live', updatedAt: 150 }
+  }, 300);
+  const value = state.snapshot('pmia_session', 301).batchState.turnCoordination;
+  assert.equal(value.mode, 'paused_accumulating');
+  assert.equal(value.updatedAt, 200);
+});
+
+test('stale receiver checkpoint cannot roll coordination backward', () => {
+  const state = new RuntimePilotState([], { nowFn: () => 100 });
+  state.ensure('pmia_session', 100);
+  state.updateBatchState('pmia_session', {
+    type: 'forwarding_paused',
+    turnCoordination: { mode: 'paused_accumulating', pausedAt: 200, updatedAt: 200 }
+  }, 200);
+  state.restoreBatchState('pmia_session', {
+    turnCoordination: { mode: 'live', updatedAt: 150 }
+  }, 300);
+  assert.equal(state.snapshot('pmia_session', 301).batchState.turnCoordination.mode, 'paused_accumulating');
+  state.restoreBatchState('pmia_session', {
+    turnCoordination: { mode: 'live', resumedAt: 400, updatedAt: 400 }
+  }, 400);
+  assert.equal(state.snapshot('pmia_session', 401).batchState.turnCoordination.mode, 'live');
+});

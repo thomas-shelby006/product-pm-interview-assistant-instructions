@@ -19,6 +19,13 @@ import { createTurnCoordinationPerformance, recordTurnCoordinationSample as reco
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
+const COORDINATION_EVENT_TYPES = new Set([
+  'forwarding_paused',
+  'forwarding_resumed',
+  'forwarding_resumed_without_send',
+  'source_interruption_detected',
+  'source_interruption_resolved'
+]);
 const MAX_TIMELINE = 200;
 const MAX_COMMAND_RESULTS = 128;
 const MAX_METRIC_SAMPLES = 40;
@@ -86,6 +93,27 @@ function normalizeMetrics(value = {}) {
     answerElapsedMs: Array.isArray(source.answerElapsedMs) ? source.answerElapsedMs.slice(-MAX_METRIC_SAMPLES) : [],
     turnCoordination: createTurnCoordinationPerformance(source.turnCoordination || {})
   };
+}
+
+function isDefaultTurnCoordination(value = {}) {
+  const state = normalizeTurnCoordination(value, 0);
+  return state.policy === 'adaptive'
+    && state.mode === 'live'
+    && state.pausedAt === 0
+    && state.resumedAt === 0
+    && !state.releaseIntent
+    && ['none', ''].includes(String(state.interruption?.state || 'none'))
+    && !state.interruption?.chainId
+    && !(state.interruption?.memberIds || []).length;
+}
+
+function mergeTurnCoordination(current = {}, incoming = {}, now = Date.now(), fallbackUpdatedAt = 0) {
+  const currentState = normalizeTurnCoordination(current, now);
+  const incomingUpdatedAt = Math.max(0, Number(incoming?.updatedAt || fallbackUpdatedAt || 0));
+  if (!incomingUpdatedAt) return currentState;
+  const candidate = normalizeTurnCoordination({ ...incoming, updatedAt: incomingUpdatedAt }, incomingUpdatedAt);
+  if (isDefaultTurnCoordination(currentState) && !isDefaultTurnCoordination(candidate)) return candidate;
+  return candidate.updatedAt > currentState.updatedAt ? candidate : currentState;
 }
 
 function normalizeOutboxState(value = {}) {
@@ -1064,7 +1092,9 @@ export class RuntimePilotState {
       pendingNoResponse: preserveOrNull('pendingNoResponse'),
       interruptPlan: preserveOrNull('interruptPlan'),
       answerHandoff: preserveOrNull('answerHandoff'),
-      turnCoordination: owns('turnCoordination') ? normalizeTurnCoordination(next.turnCoordination || {}, now) : normalizeTurnCoordination(session.batchState.turnCoordination || {}, now)
+      turnCoordination: owns('turnCoordination')
+        ? mergeTurnCoordination(session.batchState.turnCoordination, next.turnCoordination || {}, now)
+        : normalizeTurnCoordination(session.batchState.turnCoordination || {}, now)
     };
     const previous = JSON.stringify({
       active: session.batchState.active,
@@ -1094,8 +1124,16 @@ export class RuntimePilotState {
     const session = this.ensure(sessionId, now);
     const type = String(event.type || 'batch_event');
     const memberIds = Array.isArray(event.memberIds) ? event.memberIds.map(String) : [];
-    if (event.turnCoordination && typeof event.turnCoordination === 'object') {
-      session.batchState.turnCoordination = normalizeTurnCoordination(event.turnCoordination, now);
+    const coordinationSource = event.turnCoordination && typeof event.turnCoordination === 'object'
+      ? event.turnCoordination
+      : (COORDINATION_EVENT_TYPES.has(type) ? event : null);
+    if (coordinationSource) {
+      session.batchState.turnCoordination = mergeTurnCoordination(
+        session.batchState.turnCoordination,
+        coordinationSource,
+        now,
+        COORDINATION_EVENT_TYPES.has(type) ? now : 0
+      );
     }
     if (type === 'batch_submitting' || type === 'batch_submitted') {
       session.batchState.active = {
@@ -1162,8 +1200,6 @@ export class RuntimePilotState {
         submitRecommended: Boolean(event.submitRecommended),
         evaluatedAt: Number(event.evaluatedAt || now)
       };
-    } else if (['forwarding_paused','forwarding_resumed','forwarding_resumed_without_send','source_interruption_detected','source_interruption_resolved'].includes(type)) {
-      session.batchState.turnCoordination = normalizeTurnCoordination(event.turnCoordination || event, now);
     } else if (type === 'batch_policy_changed') {
       if ('hold' in event) session.batchState.hold = Boolean(event.hold);
       if ('autoSubmit' in event) session.batchState.autoSubmit = Boolean(event.autoSubmit);

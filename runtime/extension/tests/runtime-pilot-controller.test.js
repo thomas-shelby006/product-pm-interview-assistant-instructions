@@ -657,3 +657,28 @@ test('a final queued after exact session end is rejected without recreating stat
   assert.equal(late.response.error, 'session_not_owned');
   assert.equal(await controller.snapshot('s1'), null);
 });
+
+
+test('late receiver coordination telemetry cannot undo Pause before the next final', async () => {
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  await controller.handleCommand({
+    sessionId: 's1', requestId: 'pause-stale-telemetry', command: 'pause', payload: {}
+  });
+  const paused = await controller.snapshot('s1');
+  const pausedAt = paused.batchState.turnCoordination.updatedAt;
+  await controller.batchEvent({
+    sessionId: 's1',
+    event: {
+      type: 'turn_coordination_restored',
+      at: pausedAt + 100,
+      turnCoordination: { mode: 'live', updatedAt: pausedAt - 1 }
+    }
+  });
+  const afterTelemetry = await controller.snapshot('s1');
+  assert.equal(afterTelemetry.mode, 'paused');
+  assert.equal(afterTelemetry.batchState.turnCoordination.mode, 'paused_accumulating');
+  const admission = await controller.beforeForward(envelope('q-after-pause', 2));
+  assert.equal(admission.persisted, true);
+  assert.equal((await controller.snapshot('s1')).ledger.some(item => item.id === 'q-after-pause'), true);
+});
