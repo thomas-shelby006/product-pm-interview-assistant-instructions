@@ -560,3 +560,8 @@ html[data-compact-density="true"] .shell { gap: 8px; } html[data-compact-density
 @media (max-width: 520px){.turn-coordination-policy{grid-template-columns:1fr}.turn-coordination-policy label{grid-column:auto}.turn-coordination-policy-preview-actions{display:grid;grid-template-columns:1fr 1fr}}
 @media (max-width: 320px){.turn-coordination-policy-preview-actions{grid-template-columns:1fr}}
 @media print{.turn-coordination-policy,.turn-coordination-policy-preview{display:none!important}}
+
+.turn-coordination-resume-preview{margin-top:.65rem;padding:.55rem .65rem;border:1px solid var(--line);border-radius:.65rem;background:var(--surface-2)}
+.turn-coordination-resume-preview summary{cursor:pointer;font-weight:700}
+.turn-coordination-resume-preview p{margin:.35rem 0;color:var(--muted);font-size:.72rem;overflow-wrap:anywhere}
+@media print{.turn-coordination-resume-preview{display:block!important}.turn-coordination-resume-preview summary{display:none}}

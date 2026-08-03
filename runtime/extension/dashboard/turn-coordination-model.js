@@ -101,9 +101,15 @@ export function deriveTurnCoordinationCockpit(snapshot = {}, now = Date.now()) {
     },
     preview: {
       count: heldCount,
+      memberIds: heldIds,
       partitionCount: Math.max(0, Number(batch.next?.partitionCount || (heldCount ? 1 : 0))),
+      firstPartitionIds: ids(batch.next?.partitions?.[0]?.memberIds || batch.next?.prompt?.memberIds || heldIds),
+      remainingCount: Math.max(0, Number(batch.next?.remainingCount || 0)),
       focusId: String(batch.next?.focusId || coordination.heldMemberIds?.at?.(-1) || heldIds.at(-1) || ''),
-      releaseIntent: String(coordination.releaseIntent || '')
+      releaseIntent: String(coordination.releaseIntent || ''),
+      onResume: heldCount
+        ? Math.max(0, Number(batch.next?.partitionCount || 1)) > 1 ? 'submit_first_partition' : 'submit_combined_draft'
+        : 'nothing_to_submit'
     },
     primary,
     secondary,

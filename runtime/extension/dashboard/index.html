@@ -217,6 +217,12 @@
               <button id="turnCoordinationPrimary" data-command="pause">Pause forwarding</button>
               <button id="turnCoordinationSecondary" data-command="resume_without_send" hidden>Resume without sending</button>
             </div>
+            <details id="turnCoordinationResumePreview" class="turn-coordination-resume-preview" hidden>
+              <summary>Resume preview</summary>
+              <p id="turnCoordinationResumeCounts">0 protected · 0 partitions</p>
+              <p id="turnCoordinationResumeMembers">No held member IDs.</p>
+              <p id="turnCoordinationResumeBehavior">Nothing will submit.</p>
+            </details>
             <div class="turn-coordination-policy">
               <label for="turnCoordinationPolicySelect">Interruption policy</label>
               <select id="turnCoordinationPolicySelect">
