@@ -90,3 +90,11 @@ test('background decorates only the scheduled delivery copy with coordination mo
   assert.match(forward, /schedulePersistedDelivery\(deliveryEnvelope\)/);
   assert.doesNotMatch(forward, /message\.envelope\.metadata\.coordinationMode\s*=/);
 });
+
+test('receiver batch events and telemetry bypass slow generic session operations', () => {
+  const fastPath = sliceBetween('chrome.runtime.onMessage.addListener', 'serialize(async () => {');
+  assert.match(fastPath, /PMIA_BATCH_EVENT[\s\S]*pilotController\.batchEvent/);
+  assert.match(fastPath, /PMIA_RUNTIME_TELEMETRY[\s\S]*pilotController\.telemetry/);
+  const generic = sliceBetween("serialize(async () => {\n    const registry = await loadRegistry();", 'chrome.runtime.onConnect');
+  assert.doesNotMatch(generic, /PMIA_BATCH_EVENT|PMIA_RUNTIME_TELEMETRY/);
+});

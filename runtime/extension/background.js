@@ -533,6 +533,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === 'PMIA_BATCH_EVENT') {
+    loadRegistry()
+      .then(registry => {
+        if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
+          return { ok: false, error: 'session_not_owned' };
+        }
+        const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
+        if (role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return pilotController.batchEvent({
+          sessionId: message.sessionId,
+          event: message.event
+        });
+      })
+      .then(sendResponse)
+      .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
+    return true;
+  }
+
+  if (message?.type === 'PMIA_RUNTIME_TELEMETRY') {
+    loadRegistry()
+      .then(registry => {
+        if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
+          return { ok: false, error: 'session_not_owned' };
+        }
+        const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
+        return pilotController.telemetry({
+          sessionId: message.sessionId,
+          role,
+          tabId,
+          telemetry: message.telemetry
+        });
+      })
+      .then(sendResponse)
+      .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
+    return true;
+  }
+
   serialize(async () => {
     const registry = await loadRegistry();
 
@@ -547,38 +584,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       sendResponse(await pilotController.handleCommand(message));
-      return;
-    }
-
-    if (message?.type === 'PMIA_BATCH_EVENT') {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
-        sendResponse({ ok: false, error: 'session_not_owned' });
-        return;
-      }
-      const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
-      if (role !== 'receiver') {
-        sendResponse({ ok: false, error: 'receiver_only' });
-        return;
-      }
-      sendResponse(await pilotController.batchEvent({
-        sessionId: message.sessionId,
-        event: message.event
-      }));
-      return;
-    }
-
-    if (message?.type === 'PMIA_RUNTIME_TELEMETRY') {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
-        sendResponse({ ok: false, error: 'session_not_owned' });
-        return;
-      }
-      const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
-      sendResponse(await pilotController.telemetry({
-        sessionId: message.sessionId,
-        role,
-        tabId,
-        telemetry: message.telemetry
-      }));
       return;
     }
 
