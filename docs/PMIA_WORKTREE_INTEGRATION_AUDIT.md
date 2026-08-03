@@ -42,6 +42,8 @@ Exact `8d8d375` then passed the complete automated gate. The next browser run ex
 
 The third browser attempt then preserved Pause and admitted Q2 but exposed another acceptance boundary: sender outbox state still used global generic background serialization, delaying persistence acknowledgement and blocking Q3. Commit `a9840e3` moves sender outbox GET/SET/REMOVE to the per-session acceptance lane; 82/82 focused tests passed.
 
+The fourth browser attempt proved durable Q2/Q3 ownership and an empty outbox but exposed receiver admission backpressure during Pause. Commit `94c298f` permits staging-only credits during `paused_accumulating` while retaining all hard safety/capacity blocks; 69/69 focused tests passed.
+
 ## Final acceptance
 
 Readiness remains blocked until:

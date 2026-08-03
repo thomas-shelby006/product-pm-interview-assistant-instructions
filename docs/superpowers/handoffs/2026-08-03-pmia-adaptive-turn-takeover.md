@@ -87,6 +87,12 @@ The third browser attempt preserved Pause and admitted Q2, then timed out waitin
 
 Commit `a9840e3` extracts the sender-outbox state handler and routes GET/SET/REMOVE through `acceptanceCoordinator.run(sessionId)`. Outbox state and final persistence remain ordered on one per-session acceptance lane, while dashboard, telemetry, and other generic work cannot block them. Authorization, sender-only namespace checks, state validation, and session storage remain unchanged. Focused verification passed **82/82**.
 
+## Fourth browser attempt and paused-staging credit fix
+
+The fourth browser attempt proved Q2 and Q3 durable ownership and an empty sender outbox, then timed out waiting for the protected combined draft in Window 2. The receiver rejected both deliveries with `receiver_backpressure` / `operator_hold` before sequence admission, leaving the ledger safe but the local next batch empty.
+
+Commit `94c298f` adds `stagingOnly` to receiver credits and enables it only when local coordination is `paused_accumulating`. Operator hold no longer blocks provider-free staging into the existing sequence buffer and BatchPlanner. Transport pause, storage critical, manual draft conflict, and actual buffer exhaustion remain blocking. The existing receiver runtime then owns accumulation, paused-banner mirroring, and no-submit behavior. Focused verification passed **69/69**.
+
 ## Remaining sequence
 
 1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact combined integration HEAD and retain the complete gate log outside the repository.

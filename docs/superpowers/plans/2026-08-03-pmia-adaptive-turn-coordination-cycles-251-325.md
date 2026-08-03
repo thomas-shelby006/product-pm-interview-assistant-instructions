@@ -312,7 +312,10 @@ The focused owning matrix passed **91/91** tests across controller, store recove
 - Focused owning and adjacent matrix passed **98/98**.
 - Third fresh browser attempt preserved Pause and admitted Q2, then timed out at Q3. Q2 was durable in the ledger but remained in the sender outbox for about 16.8 seconds before acknowledgement.
 - Root cause: sender outbox GET/SET/REMOVE still ran inside the global generic background lane before final acceptance. Commit `a9840e3` routes outbox durability through the same per-session acceptance lane as final persistence, preserving exact order while bypassing dashboard/telemetry work.
-- Focused acceptance, direct/fallback port, registration recovery, controller/store, and outbox matrix passed **82/82**. Complete new-HEAD gate and fresh isolated browser evidence remain pending.
+- Focused acceptance, direct/fallback port, registration recovery, controller/store, and outbox matrix passed **82/82**.
+- Fourth fresh browser attempt proved Q2/Q3 durable ownership and an empty sender outbox, then timed out waiting for the paused combined draft. Both finals remained durable; receiver delivery returned `operator_hold` backpressure before sequence/batch ownership.
+- Root cause: ordinary receiver credits treated operator hold as zero capacity even when forwarding pause requires provider-free staging. Commit `94c298f` adds a narrow `stagingOnly` credit mode for `paused_accumulating`; it ignores operator hold only, while preserving transport pause, storage, draft-conflict, and sequence-capacity blocks.
+- Focused receiver, sequence, batching, queue-only, Adaptive Turn, recovery, and safety matrix passed **69/69**. Complete new-HEAD gate and fresh isolated browser evidence remain pending.
 
 ### Remaining in scope
 
