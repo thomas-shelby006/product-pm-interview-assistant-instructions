@@ -47,3 +47,19 @@ test('controller focused window mutation is guarded by focus intent validation',
   assert.match(block, /chromeApi\.windows\.update\(windowId, \{ focused: true/);
   assert.doesNotMatch(source.slice(source.indexOf('async function repair'), start), /focused:\s*true/);
 });
+
+
+test('managed window navigator accepts the initial null snapshot', () => {
+  assert.deepEqual(deriveManagedWindowModel(null), {
+    mode: 'three_window',
+    focusedRole: '',
+    canGoBack: false,
+    hidden: false,
+    targets: [
+      { target: 'sender', focused: false, label: 'Window 1' },
+      { target: 'receiver', focused: false, label: 'Window 2' },
+      { target: 'pilot', focused: false, label: 'Runtime Pilot' }
+    ],
+    description: 'Three-window layout'
+  });
+});

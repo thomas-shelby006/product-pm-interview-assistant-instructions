@@ -475,6 +475,28 @@ test('dashboard broadcast contains live Production data instead of a blocked fal
   assert.notEqual(message.snapshot.production.transportAssurance.state, 'unknown');
 });
 
+test('dashboard resync returns a full snapshot newer than the requested generation', async () => {
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  const messages = [];
+  let onMessage = null;
+  const port = {
+    name: 'pmia-dashboard:s1',
+    sender: { tab: { id: 3, windowId: 13 } },
+    postMessage(message) { messages.push(message); },
+    onMessage: { addListener(listener) { onMessage = listener; } },
+    onDisconnect: { addListener() {} }
+  };
+  assert.equal(controller.connectPort(port), true);
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal(typeof onMessage, 'function');
+  onMessage({ type: 'PMIA_DASHBOARD_RESYNC_REQUEST', sessionId: 's1', generation: 50 });
+  await new Promise(resolve => setTimeout(resolve, 40));
+  const full = [...messages].reverse().find(item => item.type === 'PMIA_DASHBOARD_SNAPSHOT');
+  assert.ok(full, JSON.stringify(messages));
+  assert.equal(full.generation, 51);
+});
+
 test('forwarding pause keeps sender admission live and holds only receiver submission', async () => {
   const direct = [];
   const { controller, registry, runtimeCommands } = setup({

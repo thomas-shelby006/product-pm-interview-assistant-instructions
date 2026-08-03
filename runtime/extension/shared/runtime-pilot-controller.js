@@ -2105,8 +2105,9 @@ export function createRuntimePilotController({
 
     port.onMessage.addListener(raw => {
       if (raw?.type === 'PMIA_DASHBOARD_RESYNC_REQUEST') {
+        const requestedGeneration = Math.max(0, Number(raw.generation || 0));
         entry.lastSnapshot = null;
-        entry.generation = 0;
+        entry.generation = Math.max(entry.generation, requestedGeneration);
         mutationCoordinator.run(sessionId, () => broadcast(sessionId)).catch(() => {});
         return;
       }

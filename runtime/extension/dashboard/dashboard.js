@@ -258,7 +258,8 @@ function requestDashboardResync(reason = 'snapshot_resync_required') {
   state.efficiency.lastResyncReason = String(reason || 'snapshot_resync_required');
   state.efficiency.lastMode = 'Resync';
   setConnection('Resyncing', 'warn');
-  try { state.port?.postMessage({ type:'PMIA_DASHBOARD_RESYNC_REQUEST', sessionId, reason:state.efficiency.lastResyncReason }); } catch {}
+  const generation = snapshotSync.snapshot().generation;
+  try { state.port?.postMessage({ type:'PMIA_DASHBOARD_RESYNC_REQUEST', sessionId, reason:state.efficiency.lastResyncReason, generation }); } catch {}
 }
 
 function handlePortMessage(message) {
