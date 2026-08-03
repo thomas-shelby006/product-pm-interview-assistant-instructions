@@ -37,6 +37,8 @@ test('inventory is derived from readiness, manifests, evidence, Git and retained
   assert.match(source, /worktree-integration-manifest\.json/);
   assert.match(source, /pmia-deployment-inventory\/v2/);
   assert.match(source, /remainingDeploymentEntries/);
+  assert.match(source, /RetainEvidencePath/);
+  assert.match(source, /rawEvidenceRetained/);
   assert.match(source, /onlyMainBranch/);
   assert.match(source, /onlyMainWorktree/);
 });

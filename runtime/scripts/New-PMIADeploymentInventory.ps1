@@ -5,7 +5,8 @@ param(
     [string]$ProfileDirectory = 'Default',
     [string]$EvidenceDirectory = '',
     [string]$GuideFile = '',
-    [string]$OutputPath = ''
+    [string]$OutputPath = '',
+    [switch]$RetainEvidencePath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,7 +87,8 @@ $inventory = [ordered]@{
         manualEdgeLoadRequired = [bool]$readiness.readyForManualEdgeLoad
     }
     evidence = [ordered]@{
-        path = $EvidenceDirectory
+        path = if ($RetainEvidencePath) { $EvidenceDirectory } else { '' }
+        rawEvidenceRetained = [bool]$RetainEvidencePath
         releaseManifestHash = if ($release) { [string]$release.manifestHash } else { '' }
         handoffHash = if ($handoff) { [string]$handoff.handoffHash } else { '' }
         worktreeManifestHash = if ($worktreeEvidence) { [string]$worktreeEvidence.manifestHash } else { '' }
