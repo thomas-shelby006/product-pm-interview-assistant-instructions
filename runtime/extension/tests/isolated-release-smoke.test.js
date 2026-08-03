@@ -246,3 +246,27 @@ test('isolated smoke admits each manual-copy final before injecting the next one
   assert.ok(q3At > q2At);
   assert.ok(proofAt > q3At);
 });
+
+
+test('isolated smoke proves all five Adaptive Turn scenarios', () => {
+  for (const key of [
+    'authoritativeFinal', 'pauseResume', 'carryover',
+    'independentAccumulation', 'restartRecovery'
+  ]) {
+    assert.match(runner, new RegExp(`${key}: \\{ ok: false \\}`));
+  }
+  assert.match(runner, /runAdaptiveModuleScenarios/);
+  assert.match(runner, /paused combined draft mirrored in Window 2/);
+  assert.match(runner, /FORWARDING PAUSED/i);
+  assert.match(runner, /resume_catch_up/);
+  assert.match(runner, /rendered_user_turn/);
+  assert.match(runner, /stopCalls===1/);
+  assert.match(runner, /independentAccumulation/);
+  assert.match(runner, /restoredMode/);
+  assert.match(runner, /adaptiveTurnScenariosOk/);
+});
+
+test('isolated smoke final gate and cleanup retain Adaptive Turn evidence', () => {
+  assert.match(runner, /evidence\.ok = evidence\.deliveryProofOk && evidence\.adaptiveTurnScenariosOk/);
+  assert.match(powershell, /-and \$evidence\.adaptiveTurnScenariosOk/);
+});

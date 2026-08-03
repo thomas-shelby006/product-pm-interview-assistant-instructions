@@ -117,6 +117,7 @@ finally {
             }
             $evidence.ok = [bool](
                 $evidence.deliveryProofOk `
+                -and $evidence.adaptiveTurnScenariosOk `
                 -and $evidence.transportDrillOk `
                 -and $evidence.pilotUiOk `
                 -and $evidence.productionUiOk `

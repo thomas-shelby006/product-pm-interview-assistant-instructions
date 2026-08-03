@@ -110,10 +110,13 @@ test('pause persists every final and resume reconciles the entire lossless inbox
   const { controller, registry, deliveries, runtimeCommands } = setup();
   await ready(controller, registry);
   await controller.handleCommand({ sessionId: 's1', requestId: 'pause-1', command: 'pause' });
-  await controller.beforeForward(envelope('q1', 1));
-  await controller.beforeForward(envelope('q2', 2));
+  const firstAdmission = await controller.beforeForward(envelope('q1', 1));
+  const secondAdmission = await controller.beforeForward(envelope('q2', 2));
+  assert.equal(firstAdmission.response, null);
+  assert.equal(secondAdmission.response, null);
   const paused = await controller.snapshot('s1');
   assert.equal(paused.mode, 'paused');
+  assert.equal(paused.batchState.turnCoordination.mode, 'paused_accumulating');
   assert.deepEqual(paused.ledger.map(item => [item.id, item.state]), [
     ['q1', 'persisted'], ['q2', 'persisted']
   ]);
@@ -517,4 +520,39 @@ test('duplicate coordination recovery requests execute the receiver command once
       `${command} must execute exactly once`
     );
   }
+});
+
+
+test('controller records final persistence and first receiver staging latency', async () => {
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  const final = envelope('metric-q1', 1);
+  final.createdAt = Date.now() - 5;
+  await controller.beforeForward(final);
+  await controller.batchEvent({
+    sessionId: 's1',
+    event: {
+      type: 'next_batch_draft',
+      at: Date.now(),
+      memberIds: ['metric-q1'],
+      questionCount: 1,
+      written: true
+    }
+  });
+  await controller.batchEvent({
+    sessionId: 's1',
+    event: {
+      type: 'batch_submitting',
+      at: Date.now() + 1,
+      batchId: 'metric-batch',
+      memberIds: ['metric-q1'],
+      questionCount: 1
+    }
+  });
+  const snapshot = await controller.snapshot('s1');
+  const samples = snapshot.metrics.turnCoordination.samples;
+  assert.equal(samples.filter(item => item.stage === 'observe_persist').length, 1);
+  assert.equal(samples.filter(item => item.stage === 'persist_stage').length, 1);
+  assert.equal(samples.every(item => item.correlationId === 'metric-q1'), true);
+  assert.doesNotMatch(JSON.stringify(samples), /Question 1/);
 });

@@ -6,8 +6,18 @@ function setText(document, id, value) {
 }
 
 function formatLatency(value = {}) {
-  if (!Number(value.sampleCount || 0)) return 'No latency samples';
-  return `p95 ${Math.round(Number(value.p95Ms || 0))} ms · ${Number(value.sampleCount || 0)} samples`;
+  const samples = Number(value.sampleCount || 0);
+  const throughput = value.throughput || {};
+  const rate = Number(throughput.turnsPerMinute || 0);
+  const target = Number(throughput.targetPerMinute || 20);
+  if (!samples) {
+    return Number(value.staleCount || 0)
+      ? `Latency samples stale · ${rate}/${target} turns per minute`
+      : `No latency samples · ${rate}/${target} turns per minute`;
+  }
+  const owner = String(value.dominantStage || '').replaceAll('_', ' ') || 'mixed stages';
+  const targetState = throughput.targetMet ? 'target met' : 'target pending';
+  return `p95 ${Math.round(Number(value.p95Ms || 0))} ms · ${samples} samples · ${owner} · ${rate}/${target} turns per minute (${targetState})`;
 }
 
 export function renderTurnCoordination({ document, snapshot = null, model: suppliedModel = null, now = Date.now(), sessionEnded = false } = {}) {

@@ -105,8 +105,10 @@
 - [x] Write failing tests for repeated resume, resume during persistence, resume during generation, and service-worker replay.
 - [x] Confirm RED on current command split and missing staged-draft submission contract.
 - [x] Implement one idempotent resume transaction ordered by the session mutation coordinator.
-- [ ] Record observeÃ¢â€ â€™persist, persistÃ¢â€ â€™stage, resumeÃ¢â€ â€™submit and stopÃ¢â€ â€™resubmit latency without transcript text.
-- [ ] Update checkpoint and commit `feat: resume paused batches atomically`.
+- [x] Record observe→persist, persist→stage, resume→submit and stop→resubmit latency without transcript text.
+- [ ] Update checkpoint and commit the completed latency work with Task 15.
+
+**Task 5 latency checkpoint:** The existing Pilot state now owns a bounded metadata-only sample store. The four stage samples are emitted only after durable final commit, first receiver staging, actual Resume submission start, and actual Stop-to-replacement submission start. Stage/correlation replay is idempotent and raw question, answer and prompt fields are not accepted.
 
 ---
 ## Phase B Ã¢â‚¬â€ Cycles 276Ã¢â‚¬â€œ300: bug-fixing and race hardening
@@ -231,10 +233,12 @@
 
 **Interfaces:** Report p50/p95 final admission, pause-stage, resume-submit and stop-resubmit latency; target processing capacity is measured from runtime events, not claimed from cycle-writing speed.
 
-- [ ] Write failing tests for bounded metrics, no text leakage, stale sample handling and scorecard thresholds.
-- [ ] Add isolated smoke scenarios: ChatGPT final-only; pause two finals and auto-resume; same-turn continuation carryover; ordinary new-question accumulation; restart recovery.
+- [x] Write failing tests for bounded metrics, no text leakage, stale sample handling and scorecard thresholds.
+- [x] Add isolated smoke scenarios: ChatGPT final-only; pause two finals and auto-resume; same-turn continuation carryover; ordinary new-question accumulation; restart recovery.
 - [ ] Run focused suites, full Node suite, extension validator, three AutoHotkey checks, fresh isolated Edge smoke and exact cleanup.
 - [ ] Update release/handoff evidence from exact HEAD; remove only assistant-created task-temp files.
+
+**Task 15 automated-gate checkpoint:** Focused release contracts passed **69/69**. The complete repository gate passed **1,305/1,305 tests**, extension validation checked **512 JavaScript files**, **18 required runtime surfaces**, and **287 reachable production modules**, and all three AutoHotkey validators passed with exit **0**. Fresh isolated Edge evidence remains before this task can be marked complete.
 - [ ] Mark every task checkpoint complete and commit `feat: complete adaptive turn coordination`.
 
 

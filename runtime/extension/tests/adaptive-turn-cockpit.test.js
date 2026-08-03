@@ -53,15 +53,23 @@ test('turn coordination cockpit derives live paused carryover blocked and recove
   assert.equal(recovered.primary.command, 'pause');
 });
 
-test('cockpit reports bounded metadata-only latency and counts', () => {
+test('cockpit reports bounded metadata-only latency throughput and counts', () => {
   const model = deriveTurnCoordinationCockpit(snapshot({ mode: 'paused_accumulating', heldCount: 3 }, {
     batchState: { active: { memberIds: ['q0'] }, next: { memberIds: ['q1', 'q2', 'q3'] } },
-    metrics: { turnCoordination: { p95Ms: 180, sampleCount: 12, dominantStage: 'resume_submit' } }
+    turnPerformance: {
+      state: 'healthy', p50Ms: 90, p95Ms: 180, maxMs: 210,
+      sampleCount: 12, staleCount: 0, dominantStage: 'resume_submit',
+      stages: { resume_submit: { p95Ms: 180, budgetMs: 200, state: 'healthy' } },
+      throughput: { admittedLastMinute: 20, turnsPerMinute: 20, targetPerMinute: 20, targetMet: true }
+    }
   }), 1000);
   assert.equal(model.activeCount, 1);
   assert.equal(model.heldCount, 3);
   assert.equal(model.latency.p95Ms, 180);
   assert.equal(model.latency.sampleCount, 12);
+  assert.equal(model.latency.dominantStage, 'resume_submit');
+  assert.equal(model.latency.throughput.targetMet, true);
+  assert.equal(model.latency.throughput.turnsPerMinute, 20);
   assert.doesNotMatch(JSON.stringify(model), /question text|answer text/i);
 });
 

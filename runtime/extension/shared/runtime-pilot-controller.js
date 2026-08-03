@@ -714,8 +714,19 @@ export function createRuntimePilotController({
         }
       };
     }
-    const persistedSnapshot = pilot.snapshot(envelope.sessionId);
-    if (persistedSnapshot?.mode === 'paused') {
+    const persistedCompletedAt = Date.now();
+    pilot.recordTurnCoordinationSample(envelope.sessionId, {
+      stage: 'observe_persist',
+      correlationId: envelope.id,
+      startedAt: Number(envelope?.metadata?.observedAt || envelope.createdAt || persistedCompletedAt),
+      completedAt: persistedCompletedAt,
+      memberCount: 1,
+      sequence: Number(envelope.seq || 0)
+    }, persistedCompletedAt);
+    scheduleBatchCheckpoint(envelope.sessionId);
+    const persistedSnapshot = pilot.snapshot(envelope.sessionId, persistedCompletedAt);
+    const forwardingHold = persistedSnapshot?.batchState?.turnCoordination?.mode === 'paused_accumulating';
+    if (persistedSnapshot?.mode === 'paused' && !forwardingHold) {
       return {
         paused: true,
         persisted: true,
@@ -794,7 +805,28 @@ export function createRuntimePilotController({
     const value = event && typeof event === 'object' ? { ...event } : {};
     const memberIds = Array.isArray(value.memberIds) ? value.memberIds.map(String) : [];
     const batchId = String(value.batchId || '');
-    pilot.updateBatchState(sessionId, value);
+    const eventAt = Math.max(0, Number(value.at || Date.now()));
+    pilot.updateBatchState(sessionId, value, eventAt);
+    if (['next_batch_draft', 'batch_submitting'].includes(String(value.type || '')) && memberIds.length) {
+      const ledger = pilot.snapshot(sessionId, eventAt)?.ledger || [];
+      const byId = new Map(ledger.map(item => [String(item.id), item]));
+      for (const memberId of memberIds) {
+        const entry = byId.get(memberId);
+        const persistedAt = Math.max(0, Number(entry?.persistedAt || 0));
+        if (!persistedAt) continue;
+        pilot.recordTurnCoordinationSample(sessionId, {
+          stage: 'persist_stage',
+          correlationId: memberId,
+          startedAt: persistedAt,
+          completedAt: Math.max(persistedAt, eventAt),
+          memberCount: memberIds.length,
+          sequence: Number(entry?.envelope?.seq || 0)
+        }, eventAt);
+      }
+    }
+    if (value.coordinationLatency && typeof value.coordinationLatency === 'object') {
+      pilot.recordTurnCoordinationSample(sessionId, value.coordinationLatency, eventAt);
+    }
     if (value.type === 'batch_submitting' && batchId) {
       pilot.markLedgerStaged(sessionId, memberIds, batchId, Date.now(), {
         fingerprint: value.fingerprint || value.proof?.fingerprint || '',
@@ -1610,9 +1642,22 @@ export function createRuntimePilotController({
         result = pilot.setQuietMode(sessionId, Boolean(payload.value));
         break;
       case 'pause': {
+        const pausedAt = Date.now();
         pilot.setMode(sessionId, 'paused');
         if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'paused', 'forwarding_pause');
         const receiver = await sendRuntimeCommand(registry, sessionId, 'receiver', 'pause_forwarding', {});
+        if (receiver?.ok !== false) {
+          const current = pilot.snapshot(sessionId, pausedAt)?.batchState?.turnCoordination || {};
+          pilot.updateBatchState(sessionId, {
+            type: 'forwarding_paused',
+            turnCoordination: receiver?.turnCoordination || {
+              ...current,
+              mode: 'paused_accumulating',
+              pausedAt: Number(current.pausedAt || pausedAt),
+              updatedAt: pausedAt
+            }
+          }, pausedAt);
+        }
         result = { ok: receiver?.ok !== false, reason: receiver?.reason || 'paused_accumulating', receiver };
         break;
       }

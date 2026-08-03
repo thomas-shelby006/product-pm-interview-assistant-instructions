@@ -137,6 +137,14 @@ const evidence = {
   selfTest: { ok: false },
   sourceSubmission: { attempts: 0, rendered: false },
   manualCopyAdmissions: [],
+  adaptiveTurnScenarios: {
+    authoritativeFinal: { ok: false },
+    pauseResume: { ok: false },
+    carryover: { ok: false },
+    independentAccumulation: { ok: false },
+    restartRecovery: { ok: false }
+  },
+  adaptiveTurnScenariosOk: false,
   finals: [],
   batches: {},
   ledger: [],
@@ -233,6 +241,59 @@ async function manualCopyAndAwaitOwnership(label, text) {
   return admitted.value;
 }
 
+async function runAdaptiveModuleScenarios() {
+  const raw = await worker.evaluate(`(async()=>{
+    const [{createReceiverBatchRuntime},{BatchPlanner},{RuntimePilotState}]=await Promise.all([
+      import(chrome.runtime.getURL('content/receiver-batch-runtime.js')),
+      import(chrome.runtime.getURL('shared/batch-planner.js')),
+      import(chrome.runtime.getURL('shared/runtime-pilot-state.js'))
+    ]);
+    const envelope=(id,seq,metadata={})=>({id,sessionId:'browser-scenario',sourceProvider:'chatgpt',kind:'question',seq,text:'Synthetic '+id,metadata,createdAt:seq});
+    let clock=100;let generating=false;let stopCalls=0;const submissions=[];
+    const runtime=createReceiverBatchRuntime({
+      adapter:{provider:'chatgpt',isGenerating:()=>generating,stopGenerating:()=>{stopCalls+=1;generating=false;return true;},setComposerText:()=>true},
+      submitBatch:async batch=>{submissions.push({batchId:batch.id,memberIds:[...batch.prompt.memberIds],coordinationMode:String(batch.prompt.coordinationMode||'')});return {ok:true,proof:{ok:true,verified:true}};},
+      nowFn:()=>++clock,waitFn:async()=>{},cancelActiveAnswer:async()=>({ok:true})
+    });
+    await runtime.accept(envelope('q1',1,{sourceTurnId:'turn-1',boundary:'rendered_user_turn'}));
+    generating=true;
+    const independent=await runtime.accept(envelope('q2',2,{sourceTurnId:'turn-2',boundary:'rendered_user_turn'}));
+    const independentSnapshot=runtime.snapshot();
+    const stopsBeforeCarryover=stopCalls;
+    const carryover=await runtime.accept(envelope('q3',3,{sourceTurnId:'turn-1',continuationOf:'turn-1',revisionOf:'q1',boundary:'rendered_user_turn_revision',sourceOutcome:'interrupted',generationToken:'browser-generation-1'}));
+    const carryoverSnapshot=runtime.snapshot();
+
+    let restartClock=1000;const restartSubmissions=[];
+    const paused=createReceiverBatchRuntime({
+      adapter:{provider:'chatgpt',isGenerating:()=>false,setComposerText:()=>true},
+      submitBatch:async batch=>{restartSubmissions.push([...batch.prompt.memberIds]);return {ok:true,proof:{ok:true,verified:true}};},
+      nowFn:()=>++restartClock
+    });
+    await paused.pauseForwarding();
+    await paused.accept(envelope('r1',1));
+    await paused.accept(envelope('r2',2));
+    const checkpoint=paused.snapshot();
+    const pilot=new RuntimePilotState([], {nowFn:()=>restartClock});
+    pilot.updateBatchState('restart',{type:'forwarding_paused',turnCoordination:checkpoint.turnCoordination},restartClock);
+    const restoredPilot=new RuntimePilotState(pilot.exportState(), {nowFn:()=>restartClock+1});
+    const restored=createReceiverBatchRuntime({
+      planner:new BatchPlanner(checkpoint),turnCoordinationState:checkpoint.turnCoordination,
+      adapter:{provider:'chatgpt',isGenerating:()=>false,setComposerText:()=>true},
+      submitBatch:async batch=>{restartSubmissions.push([...batch.prompt.memberIds]);return {ok:true,proof:{ok:true,verified:true}};},
+      nowFn:()=>++restartClock
+    });
+    const restoredBefore=restored.snapshot();
+    const restartResult=await restored.resumeForwarding({submit:true});
+    const replacement=submissions.at(-1)||{};
+    return JSON.stringify({
+      carryover:{ok:carryover?.ok===true&&stopCalls===1&&replacement.memberIds?.join(',')==='q1,q3',stopCalls,replacementMemberIds:replacement.memberIds||[],preservedNextIds:(carryoverSnapshot.next?.entries||[]).map(item=>String(item.id)),chainId:String(carryover?.correlation?.chainId||'')},
+      independentAccumulation:{ok:independent?.reason==='receiver_busy'&&stopsBeforeCarryover===0&&(independentSnapshot.next?.entries||[]).some(item=>String(item.id)==='q2'),reason:String(independent?.reason||''),stopCalls:stopsBeforeCarryover,nextMemberIds:(independentSnapshot.next?.entries||[]).map(item=>String(item.id))},
+      restartRecovery:{ok:restoredBefore.turnCoordination?.mode==='paused_accumulating'&&restoredPilot.snapshot('restart',restartClock+1)?.batchState?.turnCoordination?.mode==='paused_accumulating'&&restartResult?.ok===true&&restartSubmissions.at(-1)?.join(',')==='r1,r2',restoredMode:String(restoredBefore.turnCoordination?.mode||''),submittedMemberIds:restartSubmissions.at(-1)||[],pilotRestored:true}
+    });
+  })()`);
+  return JSON.parse(raw);
+}
+
 try {
   const discovered = await waitFor('candidate extension worker', async () => {
     const values = await extensionTargets();
@@ -244,6 +305,13 @@ try {
   if (!candidate) throw new Error('Exact PMIA extension identity not found');
   const workerTarget = (await targets()).find(value => value.id === candidate.id);
   worker = await new CDP(workerTarget.webSocketDebuggerUrl).open();
+  const moduleScenarios = await runAdaptiveModuleScenarios();
+  evidence.adaptiveTurnScenarios.carryover = moduleScenarios.carryover;
+  evidence.adaptiveTurnScenarios.independentAccumulation = moduleScenarios.independentAccumulation;
+  evidence.adaptiveTurnScenarios.restartRecovery = moduleScenarios.restartRecovery;
+  if (!moduleScenarios.carryover?.ok || !moduleScenarios.independentAccumulation?.ok || !moduleScenarios.restartRecovery?.ok) {
+    throw new Error(`Adaptive module scenarios failed: ${JSON.stringify(moduleScenarios)}`);
+  }
 
   const senderUrl = `https://chatgpt.com/?pmia_session=${encodeURIComponent(session)}&pmia_role=sender&pmia_provider=chatgpt`;
   const receiverUrl = `https://chatgpt.com/?pmia_session=${encodeURIComponent(session)}&pmia_role=receiver&pmia_provider=chatgpt`;
@@ -372,9 +440,44 @@ try {
     const state = await pageState('receiver');
     return { ok: state.users.includes(questions.q1), value: state };
   }, 90000, 500);
+  const authoritative = await waitFor('authoritative ChatGPT final admitted', async () => {
+    const pilot = await pilotState();
+    const entry = (pilot?.ledger || []).find(item => item?.envelope?.text === questions.q1);
+    const boundary = String(entry?.envelope?.metadata?.boundary || '');
+    return { ok: Boolean(entry && ['rendered_user_turn','assistant_successor','explicit_copied_final'].includes(boundary)), value: entry ? { id:entry.id, seq:Number(entry.envelope?.seq||0), state:entry.state, boundary } : null };
+  }, 30000, 250);
+  evidence.adaptiveTurnScenarios.authoritativeFinal = { ok:true, ...authoritative.value };
 
-  await manualCopyAndAwaitOwnership('Q2', questions.q2);
-  await manualCopyAndAwaitOwnership('Q3', questions.q3);
+  const pauseClicked = await dashboard.evaluate(`(()=>{const button=document.getElementById('turnCoordinationPrimary');if(!button||button.dataset.command!=='pause'||button.disabled)return false;button.click();return true})()`, { userGesture: true });
+  if (!pauseClicked) throw new Error('Turn Coordination Pause action was unavailable');
+  await waitFor('forwarding pause committed', async () => {
+    const pilot = await pilotState();
+    return { ok: pilot?.mode === 'paused' && pilot?.batchState?.turnCoordination?.mode === 'paused_accumulating', value: pilot?.batchState?.turnCoordination || null };
+  }, 20000, 100);
+
+  const q2Admission = await manualCopyAndAwaitOwnership('Q2', questions.q2);
+  const q3Admission = await manualCopyAndAwaitOwnership('Q3', questions.q3);
+  const pausedDraft = await waitFor('paused combined draft mirrored in Window 2', async () => {
+    const pilot = await pilotState();
+    const state = await pageState('receiver');
+    const ids = (pilot?.batchState?.next?.memberIds || []).map(String);
+    const expected = [q2Admission.id, q3Admission.id].every(id => ids.includes(String(id)));
+    return { ok: expected && /FORWARDING PAUSED/i.test(state.composer) && state.composer.includes(questions.q2) && state.composer.includes(questions.q3), value: { memberIds:ids, composerBanner:/FORWARDING PAUSED/i.test(state.composer), questionCount:Number(pilot?.batchState?.next?.questionCount||0) } };
+  }, 30000, 250);
+
+  const resumeReady = await waitFor('Resume and send control ready', async () => {
+    const raw = await dashboard.evaluate(`(()=>{const button=document.getElementById('turnCoordinationPrimary');return JSON.stringify({command:String(button?.dataset?.command||''),disabled:Boolean(button?.disabled),hidden:Boolean(button?.hidden)})})()`);
+    const value = JSON.parse(raw);
+    return { ok: value.command === 'resume_catch_up' && !value.disabled && !value.hidden, value };
+  }, 15000, 100);
+  const resumeClicked = await dashboard.evaluate(`(()=>{const button=document.getElementById('turnCoordinationPrimary');if(!button||button.dataset.command!=='resume_catch_up'||button.disabled)return false;button.click();return true})()`, { userGesture: true });
+  if (!resumeClicked) throw new Error('Turn Coordination Resume and send action was unavailable');
+  const resumed = await waitFor('forwarding resume committed', async () => {
+    const pilot = await pilotState();
+    const mode = String(pilot?.batchState?.turnCoordination?.mode || '');
+    return { ok: pilot?.mode === 'active' && mode !== 'paused_accumulating', value: { mode, pilotMode:pilot?.mode } };
+  }, 20000, 100);
+  evidence.adaptiveTurnScenarios.pauseResume = { ok:true, paused:pausedDraft.value, resumeControl:resumeReady.value, resumed:resumed.value };
 
   evidence.noResponseResolution = { required: false, action: '', completedAt: 0 };
 
@@ -404,6 +507,13 @@ try {
   const pilot = proof.value.pilot;
   const receiverState = await pageState('receiver');
   evidence.finals = Object.entries(questions).map(([key, text]) => ({ key, text, proven: proof.value.selected.some(item => item.envelope?.text === text && item.state === 'proven') }));
+  const pausedProofs = evidence.finals.filter(item => ['q2','q3'].includes(item.key));
+  evidence.adaptiveTurnScenarios.pauseResume = {
+    ...evidence.adaptiveTurnScenarios.pauseResume,
+    provenFinals: pausedProofs.map(item => item.key),
+    ok: evidence.adaptiveTurnScenarios.pauseResume?.ok === true && pausedProofs.length === 2 && pausedProofs.every(item => item.proven)
+  };
+  evidence.adaptiveTurnScenariosOk = Object.values(evidence.adaptiveTurnScenarios).every(value => value?.ok === true);
   evidence.batches = { active: pilot?.batchState?.active || null, next: pilot?.batchState?.next || null, lastCompleted: pilot?.batchState?.lastCompleted || null, receiverUsers: receiverState.users };
   evidence.ledger = proof.value.selected.map(item => ({ id: item.id, seq: item.envelope?.seq || 0, state: item.state, batchId: item.batchId || '', text: item.envelope?.text || '' }));
   evidence.outbox = { count: Number(pilot?.senderOutboxState?.count || 0), state: pilot?.senderOutboxState?.state || 'clear', restoredCount: Number(pilot?.senderOutboxState?.restoredCount || 0) };
@@ -601,7 +711,7 @@ try {
   ));
 
   evidence.deliveryProofOk = proof.value.deliveryProofOk && evidence.outbox.count === 0 && evidence.gap.clear;
-  evidence.ok = evidence.deliveryProofOk && evidence.transportDrillOk && evidence.pilotUiOk && evidence.productionUiOk && evidence.assistUiOk && evidence.reliabilityUiOk && evidence.operationsUiOk;
+  evidence.ok = evidence.deliveryProofOk && evidence.adaptiveTurnScenariosOk && evidence.transportDrillOk && evidence.pilotUiOk && evidence.productionUiOk && evidence.assistUiOk && evidence.reliabilityUiOk && evidence.operationsUiOk;
 } catch (error) {
   failure = error;
   evidence.error = String(error?.stack || error);
@@ -641,5 +751,5 @@ try {
   await fs.writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
 }
 
-console.log(JSON.stringify({ ok: evidence.ok, evidencePath, deliveryProofOk: evidence.deliveryProofOk, transportDrillOk: evidence.transportDrillOk, pilotUiOk: evidence.pilotUiOk, productionUiOk: evidence.productionUiOk, selfTest: evidence.selfTest?.ok === true, outbox: evidence.outbox, gap: evidence.gap, answerCapability: evidence.answerCapability, limitations: evidence.limitations }, null, 2));
+console.log(JSON.stringify({ ok: evidence.ok, evidencePath, deliveryProofOk: evidence.deliveryProofOk, adaptiveTurnScenariosOk: evidence.adaptiveTurnScenariosOk, transportDrillOk: evidence.transportDrillOk, pilotUiOk: evidence.pilotUiOk, productionUiOk: evidence.productionUiOk, selfTest: evidence.selfTest?.ok === true, outbox: evidence.outbox, gap: evidence.gap, answerCapability: evidence.answerCapability, limitations: evidence.limitations }, null, 2));
 if (failure || !evidence.ok) process.exit(1);

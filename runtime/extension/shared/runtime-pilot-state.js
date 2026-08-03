@@ -15,6 +15,7 @@ import { defaultShortcutBindings, normalizeShortcutBindings, setShortcutBinding 
 import { normalizeSessionNavigator, touchSessionNavigator, recordNavigatorHistory, upsertNavigatorBookmark, removeNavigatorBookmark, upsertNavigatorGoal, tagNavigatorCoverage, upsertNavigatorWorkspace, markNavigatorScenarioComplete, recordNavigatorDebriefExport } from './session-navigator-state.js';
 import { auditSessionNavigator, repairSessionNavigator } from './session-navigator-integrity.js';
 import { normalizeTurnCoordination } from './turn-coordination-state.js';
+import { createTurnCoordinationPerformance, recordTurnCoordinationSample as recordCoordinationSample, deriveTurnCoordinationPerformance } from './turn-coordination-performance.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -60,7 +61,8 @@ function emptyMetrics() {
     answersCancelled: 0,
     answerTerminalBatches: [],
     deliveryProofMs: [],
-    answerElapsedMs: []
+    answerElapsedMs: [],
+    turnCoordination: createTurnCoordinationPerformance()
   };
 }
 
@@ -81,7 +83,8 @@ function normalizeMetrics(value = {}) {
     answersCancelled: Number(source.answersCancelled || 0),
     answerTerminalBatches: Array.isArray(source.answerTerminalBatches) ? source.answerTerminalBatches.map(String).slice(-128) : [],
     deliveryProofMs: Array.isArray(source.deliveryProofMs) ? source.deliveryProofMs.slice(-MAX_METRIC_SAMPLES) : [],
-    answerElapsedMs: Array.isArray(source.answerElapsedMs) ? source.answerElapsedMs.slice(-MAX_METRIC_SAMPLES) : []
+    answerElapsedMs: Array.isArray(source.answerElapsedMs) ? source.answerElapsedMs.slice(-MAX_METRIC_SAMPLES) : [],
+    turnCoordination: createTurnCoordinationPerformance(source.turnCoordination || {})
   };
 }
 
@@ -566,6 +569,13 @@ export class RuntimePilotState {
     const entry = session.commandJournal.record(requestId, command, result, startedAt, completedAt);
     session.updatedAt = completedAt;
     return entry;
+  }
+
+  recordTurnCoordinationSample(sessionId, sample = {}, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    session.metrics.turnCoordination = recordCoordinationSample(session.metrics.turnCoordination, sample);
+    session.updatedAt = now;
+    return deriveTurnCoordinationPerformance(session.metrics.turnCoordination, now);
   }
 
   updateRole(sessionId, role, telemetry, now = Date.now()) {
@@ -1382,10 +1392,12 @@ export class RuntimePilotState {
       answerState: session.answerState ? { ...session.answerState } : null,
       recoveryBudget: session.recoveryBudget.snapshot(now),
       performanceBudget: session.performanceBudget.snapshot(),
+      turnPerformance: deriveTurnCoordinationPerformance(session.metrics.turnCoordination, now),
       deliveryForecast,
       lastTransportDrill: session.lastTransportDrill ? JSON.parse(JSON.stringify(session.lastTransportDrill)) : null,
       metrics: {
         ...session.metrics,
+        turnCoordination: createTurnCoordinationPerformance(session.metrics.turnCoordination),
         deliverySuccessRate: session.metrics.delivered + session.metrics.failed
           ? Math.round((session.metrics.delivered / (session.metrics.delivered + session.metrics.failed)) * 100)
           : 100,

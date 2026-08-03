@@ -129,7 +129,7 @@ export function createReceiverBatchRuntime({
     return { ok: true, token };
   };
 
-  async function executeBatch(batch, source = 'automatic') {
+  async function executeBatch(batch, source = 'automatic', coordinationLatency = null) {
     if (!batch) return { ok: false, staged: true, error: 'batch_missing' };
     if (hasManualConflict()) {
       planner.failActive();
@@ -167,6 +167,14 @@ export function createReceiverBatchRuntime({
     const submittingTransition = transitionTransaction('submitting', source);
     if (!submittingTransition?.ok) return { ok: false, staged: true, error: submittingTransition?.error || 'batch_transaction_invalid' };
     submitting = true;
+    const submittingAt = nowFn();
+    const latency = coordinationLatency?.stage ? {
+      stage: String(coordinationLatency.stage),
+      correlationId: String(coordinationLatency.correlationId || batch.id),
+      startedAt: Number(coordinationLatency.startedAt || submittingAt),
+      completedAt: submittingAt,
+      memberCount: batch.prompt.memberIds.length
+    } : null;
     emit('batch_submitting', {
       batchId: batch.id,
       memberIds: batch.prompt.memberIds,
@@ -174,7 +182,8 @@ export function createReceiverBatchRuntime({
       focusId: batch.prompt.focusId,
       fingerprint: batch.prompt.fingerprint,
       memberFingerprint: batch.prompt.memberFingerprint,
-      source
+      source,
+      ...(latency ? { coordinationLatency: latency } : {})
     });
     let result;
     try {
@@ -246,7 +255,7 @@ export function createReceiverBatchRuntime({
     };
   }
 
-  async function submitNext({ force = false } = {}) {
+  async function submitNext({ force = false, source = '', coordinationLatency = null } = {}) {
     if (submitting || planner.active()) {
       return { ok: true, staged: true, reason: 'active_batch' };
     }
@@ -293,7 +302,11 @@ export function createReceiverBatchRuntime({
     }
     const batch = planner.freezeNext(nowFn());
     ensureTransaction(batch);
-    return executeBatch(batch, force ? 'operator_submit_now' : 'automatic');
+    return executeBatch(
+      batch,
+      source || (force ? 'operator_submit_now' : 'automatic'),
+      coordinationLatency
+    );
   }
 
   async function waitUntilIdle() {
@@ -565,6 +578,7 @@ export function createReceiverBatchRuntime({
         const recovery = markCarryoverRecovery(correlation, active, 'receiver_not_generating');
         return { ok: false, error: 'receiver_not_generating', correlation, turnCoordination: recovery };
       }
+      const stopStartedAt = nowFn();
       if (!adapter.stopGenerating?.()) {
         const recovery = markCarryoverRecovery(correlation, active, 'stop_failed');
         return { ok: false, error: 'stop_failed', correlation, turnCoordination: recovery };
@@ -613,7 +627,11 @@ export function createReceiverBatchRuntime({
         memberIds: carried.batch.prompt.memberIds,
         preservedNextIds: carried.preservedNextIds
       });
-      const result = await executeBatch(carried.batch, 'automatic_source_carryover');
+      const result = await executeBatch(carried.batch, 'automatic_source_carryover', {
+        stage: 'stop_resubmit',
+        correlationId: correlation.chainId,
+        startedAt: stopStartedAt
+      });
       if (result?.ok) {
         turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'interrupt_resolved', at: nowFn() });
       } else {
@@ -703,6 +721,7 @@ export function createReceiverBatchRuntime({
       return { ok: true, reason: 'paused_accumulating', turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()) };
     },
     async resumeForwarding({ submit = true } = {}) {
+      const resumeStartedAt = nowFn();
       if (submit && hasManualConflict()) {
         planner.setHold(true);
         mirrorNext();
@@ -722,7 +741,14 @@ export function createReceiverBatchRuntime({
       }
       planner.setHold(false);
       turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'release_started', at: nowFn() });
-      const result = await submitNext({ force: true });
+      const result = await submitNext({
+        force: true,
+        source: 'resume_forwarding',
+        coordinationLatency: {
+          stage: 'resume_submit',
+          startedAt: resumeStartedAt
+        }
+      });
       if (result?.ok && !result?.error) {
         turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'release_finished', at: nowFn() });
       } else {

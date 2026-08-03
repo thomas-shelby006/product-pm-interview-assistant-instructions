@@ -84,6 +84,7 @@ export function buildSafeSupportBundle(snapshot = {}, { manifest = {}, sourceHas
       consistency: snapshot.consistencyAudit ? { ok: snapshot.consistencyAudit.ok === true, reason: clean(snapshot.consistencyAudit.reason, 80), repairs: safeCodes(snapshot.consistencyAudit.repairs), blocked: safeCodes(snapshot.consistencyAudit.blocked) } : null
     },
     performance: safeMetadata(snapshot.performanceBudget || null),
+    turnPerformance: safeMetadata(snapshot.turnPerformance || null),
     liveUx: {
       budget: safeMetadata(snapshot.liveUxBudget || null),
       integrity: snapshot.liveCommandIntegrity ? { ok: snapshot.liveCommandIntegrity.ok === true, state: clean(snapshot.liveCommandIntegrity.state, 40), issues: safeCodes(snapshot.liveCommandIntegrity.issues) } : null,

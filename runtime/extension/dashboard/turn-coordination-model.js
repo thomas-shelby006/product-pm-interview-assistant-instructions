@@ -12,13 +12,23 @@ function countMembers(value = {}) {
 }
 
 function normalizeLatency(snapshot = {}) {
-  const value = snapshot?.metrics?.turnCoordination || snapshot?.turnPerformance || {};
+  const value = snapshot?.turnPerformance || snapshot?.metrics?.turnCoordinationSummary || snapshot?.metrics?.turnCoordination || {};
+  const throughput = value.throughput && typeof value.throughput === 'object' ? value.throughput : {};
   return {
+    state: String(value.state || 'insufficient'),
     p50Ms: Math.max(0, Number(value.p50Ms || 0)),
     p95Ms: Math.max(0, Number(value.p95Ms || 0)),
     maxMs: Math.max(0, Number(value.maxMs || 0)),
     sampleCount: Math.max(0, Number(value.sampleCount || 0)),
-    dominantStage: String(value.dominantStage || '')
+    staleCount: Math.max(0, Number(value.staleCount || 0)),
+    dominantStage: String(value.dominantStage || ''),
+    stages: value.stages && typeof value.stages === 'object' ? { ...value.stages } : {},
+    throughput: {
+      admittedLastMinute: Math.max(0, Number(throughput.admittedLastMinute || 0)),
+      turnsPerMinute: Math.max(0, Number(throughput.turnsPerMinute || 0)),
+      targetPerMinute: Math.max(1, Number(throughput.targetPerMinute || 20)),
+      targetMet: throughput.targetMet === true
+    }
   };
 }
 
