@@ -92,12 +92,18 @@ test('smoke never rewrites provider composer DOM before input', () => {
 });
 
 
-test('smoke mirrors the production ChatGPT composer and send selectors', () => {
+test('smoke mirrors the production ChatGPT composer, send, and transcript selectors', () => {
   assert.match(runner, /textarea\[name="prompt-textarea"\]/);
   assert.match(runner, /#prompt-textarea/);
   assert.match(runner, /contenteditable="true"\]\[role="textbox"\]/);
   assert.match(runner, /button\[aria-label\^="Send"\]/);
   assert.match(runner, /'value' in composer/);
+  assert.match(runner, /data-message-author-role/);
+  assert.match(runner, /data-conversation-transcript/);
+  assert.match(runner, /data-message-role/);
+  assert.match(runner, /data-user-message-copy/);
+  assert.match(runner, /data-user-message-bubble/);
+  assert.match(runner, /data-submit-message-animation-target/);
 });
 
 

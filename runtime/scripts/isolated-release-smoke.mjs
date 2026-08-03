@@ -45,6 +45,17 @@ const chatGptSendSelector = [
   'button[data-testid="send-button"]',
   'button[aria-label^="Send"]'
 ].join(',');
+const chatGptMessageSelector = [
+  '[data-message-author-role="user"]',
+  '[data-message-author-role="assistant"]',
+  '[data-conversation-transcript] [data-message-role="user"]',
+  '[data-conversation-transcript] [data-message-role="assistant"]'
+].join(',');
+const chatGptCompactTextSelectors = [
+  '[data-user-message-copy]',
+  '[data-user-message-bubble]',
+  '[data-submit-message-animation-target]'
+];
 
 class CDP {
   constructor(url) { this.url = url; this.socket = null; this.sequence = 0; this.pending = new Map(); }
@@ -219,7 +230,28 @@ async function pilotState() {
   return JSON.parse(raw);
 }
 async function pageState(role) {
-  const raw = await evaluateRead(role, `(()=>{const composer=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);return JSON.stringify({title:document.title,url:location.href,composer:composer?String('value' in composer?composer.value:composer.innerText||'').trim():'',users:[...document.querySelectorAll('[data-message-author-role="user"]')].map(node=>node.innerText.trim()),assistants:[...document.querySelectorAll('[data-message-author-role="assistant"]')].map(node=>node.innerText.trim()),stopAvailable:[...document.querySelectorAll('button')].some(button=>/stop generating|stop response|stop streaming/i.test([button.getAttribute('aria-label'),button.getAttribute('data-testid'),button.innerText].join(' ')))})})()`, `${role}_page_state`);
+  const raw = await evaluateRead(role, `(()=>{
+    const composer=[...document.querySelectorAll(${JSON.stringify(chatGptComposerSelector)})].find(node=>node.offsetWidth||node.offsetHeight||node.getClientRects().length);
+    const text=node=>String(node?.innerText||node?.textContent||'').trim();
+    const roleOf=node=>String(node?.getAttribute?.('data-message-author-role')||node?.getAttribute?.('data-message-role')||'').trim().toLowerCase();
+    const isChrome=node=>Boolean(node?.getAttribute?.('data-message-attribution')!==null||node?.getAttribute?.('data-message-actions')!==null||node?.getAttribute?.('data-assistant-message-actions')!==null||node?.getAttribute?.('data-conversation-inline-beacon-slot')!==null);
+    const compactText=node=>{
+      for(const selector of ${JSON.stringify(chatGptCompactTextSelectors)}){const candidate=node?.querySelector?.(selector);const value=text(candidate);if(value)return value;}
+      const candidates=[...(node?.children||[])].filter(child=>!isChrome(child)).map(text).filter(Boolean).sort((left,right)=>right.length-left.length);
+      return candidates[0]||text(node);
+    };
+    const messages=[...document.querySelectorAll(${JSON.stringify(chatGptMessageSelector)})]
+      .map(node=>({role:roleOf(node),text:node?.getAttribute?.('data-message-role')?compactText(node):text(node)}))
+      .filter(item=>['user','assistant'].includes(item.role)&&item.text);
+    return JSON.stringify({
+      title:document.title,
+      url:location.href,
+      composer:composer?String('value' in composer?composer.value:composer.innerText||'').trim():'',
+      users:messages.filter(item=>item.role==='user').map(item=>item.text),
+      assistants:messages.filter(item=>item.role==='assistant').map(item=>item.text),
+      stopAvailable:[...document.querySelectorAll('button')].some(button=>/stop generating|stop response|stop streaming/i.test([button.getAttribute('aria-label'),button.getAttribute('data-testid'),button.innerText].join(' ')))
+    });
+  })()`, `${role}_page_state`);
   return JSON.parse(raw);
 }
 async function manualCopy(text) {
