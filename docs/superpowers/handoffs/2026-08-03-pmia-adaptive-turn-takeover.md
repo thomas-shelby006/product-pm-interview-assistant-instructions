@@ -93,6 +93,12 @@ The fourth browser attempt proved Q2 and Q3 durable ownership and an empty sende
 
 Commit `94c298f` adds `stagingOnly` to receiver credits and enables it only when local coordination is `paused_accumulating`. Operator hold no longer blocks provider-free staging into the existing sequence buffer and BatchPlanner. Transport pause, storage critical, manual draft conflict, and actual buffer exhaustion remain blocking. The existing receiver runtime then owns accumulation, paused-banner mirroring, and no-submit behavior. Focused verification passed **69/69**.
 
+## Fifth browser attempt and explicit delivery-mode fix
+
+The fifth browser attempt showed that local receiver coordination could still lag the controller Pause decision. Q2 and Q3 were durably acknowledged with an empty sender outbox, but delivery copies arrived while the receiver still reported operator hold without local `paused_accumulating` state.
+
+Commit `06b010c` implements the planned internal `coordinationMode: paused_stage` route. The controller classifies the already-persisted final; background creates a delivery-only envelope copy with that metadata; the receiver admits staging from explicit mode or local state. The durable ledger envelope and identity remain unchanged. Focused verification passed **113/113**.
+
 ## Remaining sequence
 
 1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact combined integration HEAD and retain the complete gate log outside the repository.

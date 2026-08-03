@@ -44,6 +44,8 @@ The third browser attempt then preserved Pause and admitted Q2 but exposed anoth
 
 The fourth browser attempt proved durable Q2/Q3 ownership and an empty outbox but exposed receiver admission backpressure during Pause. Commit `94c298f` permits staging-only credits during `paused_accumulating` while retaining all hard safety/capacity blocks; 69/69 focused tests passed.
 
+The fifth attempt proved local receiver coordination can lag the controller decision. Commit `06b010c` carries `paused_stage` only on the scheduled delivery copy so receiver staging is explicit without mutating the durable ledger envelope; 113/113 focused tests passed.
+
 ## Final acceptance
 
 Readiness remains blocked until:

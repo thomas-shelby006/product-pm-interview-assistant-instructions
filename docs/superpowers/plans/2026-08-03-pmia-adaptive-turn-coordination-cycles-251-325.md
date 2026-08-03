@@ -315,7 +315,10 @@ The focused owning matrix passed **91/91** tests across controller, store recove
 - Focused acceptance, direct/fallback port, registration recovery, controller/store, and outbox matrix passed **82/82**.
 - Fourth fresh browser attempt proved Q2/Q3 durable ownership and an empty sender outbox, then timed out waiting for the paused combined draft. Both finals remained durable; receiver delivery returned `operator_hold` backpressure before sequence/batch ownership.
 - Root cause: ordinary receiver credits treated operator hold as zero capacity even when forwarding pause requires provider-free staging. Commit `94c298f` adds a narrow `stagingOnly` credit mode for `paused_accumulating`; it ignores operator hold only, while preserving transport pause, storage, draft-conflict, and sequence-capacity blocks.
-- Focused receiver, sequence, batching, queue-only, Adaptive Turn, recovery, and safety matrix passed **69/69**. Complete new-HEAD gate and fresh isolated browser evidence remain pending.
+- Focused receiver, sequence, batching, queue-only, Adaptive Turn, recovery, and safety matrix passed **69/69**.
+- Fifth browser attempt still found local receiver state lagging the controller Pause decision; Q2/Q3 were durable and the outbox was empty, but both delivery attempts returned `operator_hold` before local coordination was visible.
+- Commit `06b010c` implements the original planned internal delivery contract: `beforeForward` returns `deliveryMode: paused_stage`, background decorates only the scheduled delivery copy with `metadata.coordinationMode`, and receiver credits use the explicit mode or local state. The durable ledger envelope remains unchanged.
+- Focused controller/background/direct-fallback/outbox/receiver/recovery matrix passed **113/113**. Complete new-HEAD gate and fresh isolated browser evidence remain pending.
 
 ### Remaining in scope
 
