@@ -306,7 +306,10 @@ The focused owning matrix passed **91/91** tests across controller, store recove
 - First fresh browser attempt at `c71315f` failed on the smoke harness wait `Q1 rendered in receiver`; cleanup passed. Runtime evidence already showed durable persistence, exact rendered proof, and a completed 116-word answer, while the external reader returned no messages.
 - Root cause: the smoke reader supported only legacy `data-message-author-role` nodes, while the production adapter also supports compact `data-conversation-transcript` / `data-message-role` nodes.
 - Compact transcript parity fix committed at `c609d19`; adjacent adapter, transcript, smoke, and release-evidence matrix passed **86/86**.
-- Complete corrected-HEAD gate and fresh isolated browser evidence remain pending.
+- Corrected compact-reader HEAD `8d8d375` passed the complete gate: **1,315/1,315 tests**, **513 JavaScript files**, **18 required runtime surfaces**, **287 reachable production modules**, all three AutoHotkey validations, exit `0`.
+- Second fresh browser attempt reached Pause and failed at `Q2 admitted to durable ownership`; cleanup and normal-profile isolation passed. Evidence showed Pause had initially committed, then a late Q1 receiver event `turn_coordination_restored` replaced newer `paused_accumulating` state with an older `live` snapshot.
+- Owning-boundary fix committed at `7779cd1`: coordination and restored checkpoints now merge monotonically by `updatedAt`; a meaningful recovered state can replace only a default placeholder, while established newer operator state cannot be rolled back by stale telemetry.
+- Focused owning and adjacent matrix passed **98/98**. Complete new-HEAD gate and fresh isolated browser evidence remain pending.
 
 ### Remaining in scope
 

@@ -38,6 +38,8 @@ Exact commit `31a8c0f` passed 1,315/1,315 tests, extension validation across 513
 
 The first browser attempt at `c71315f` exposed a stale smoke-observer boundary, not a transport regression: runtime proof and answer completion succeeded, but the external reader omitted compact ChatGPT message nodes. Commit `c609d19` aligns the smoke reader with production transcript selectors; 86/86 focused tests passed.
 
+Exact `8d8d375` then passed the complete automated gate. The next browser run exposed a real state-ownership race: a late receiver restore event carrying older `live` coordination rolled back a newer operator Pause before Q2. Commit `7779cd1` makes coordination/checkpoint merges monotonic while preserving meaningful recovery over a default placeholder. The owning and adjacent matrix passed 98/98.
+
 ## Final acceptance
 
 Readiness remains blocked until:

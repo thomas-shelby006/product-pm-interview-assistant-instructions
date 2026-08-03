@@ -75,6 +75,12 @@ Attempt `c71315f` failed at the smoke-only observation `Q1 rendered in receiver`
 
 Commit `c609d19` updates the smoke reader to mirror the production adapter's legacy and compact transcript selectors and compact text extraction. Focused adjacent verification passed **86/86**. Re-run the complete gate before the next browser attempt.
 
+## Second browser attempt and coordination rollback fix
+
+Exact `8d8d375` passed the complete automated gate before the second browser run. The browser run then reached Pause but timed out waiting for Q2 ownership. Structured evidence showed a late Q1 receiver `turn_coordination_restored` event carrying older `live` coordination replaced the newer operator `paused_accumulating` state. Q2 therefore arrived after the hold state had been rolled backward. Process-tree/profile cleanup and normal-profile isolation passed.
+
+Commit `7779cd1` fixes the state owner: receiver events and restored checkpoints merge coordination monotonically by explicit `updatedAt`. A meaningful recovered state may replace a newly-created default placeholder, but stale/default telemetry cannot overwrite established operator state. Controller and state regressions prove Pause survives the late event and the next final remains durably admitted. Focused adjacent verification passed **98/98**.
+
 ## Remaining sequence
 
 1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact combined integration HEAD and retain the complete gate log outside the repository.
