@@ -7,7 +7,7 @@ function setText(document, id, value) {
 
 function formatLatency(value = {}) {
   if (!Number(value.sampleCount || 0)) return 'No latency samples';
-  return `p95 ${Math.round(Number(value.p95Ms || 0))} ms Â· ${Number(value.sampleCount || 0)} samples`;
+  return `p95 ${Math.round(Number(value.p95Ms || 0))} ms · ${Number(value.sampleCount || 0)} samples`;
 }
 
 export function renderTurnCoordination({ document, snapshot = null, model: suppliedModel = null, now = Date.now(), sessionEnded = false } = {}) {
@@ -37,8 +37,17 @@ export function renderTurnCoordination({ document, snapshot = null, model: suppl
   setText(document, 'turnCoordinationTitle', model.title);
   setText(document, 'turnCoordinationDetail', model.detail);
   setText(document, 'turnCoordinationHeld', `${model.heldCount} held`);
-  setText(document, 'turnCoordinationActive', `${model.activeCount} active${model.carryoverCount ? ` Â· ${model.carryoverCount} carryover` : ''}`);
+  setText(document, 'turnCoordinationActive', `${model.activeCount} active${model.carryoverCount ? ` · ${model.carryoverCount} carryover` : ''}`);
   setText(document, 'turnCoordinationLatency', formatLatency(model.latency));
+  const resumePreview = document.getElementById('turnCoordinationResumePreview');
+  if (resumePreview) resumePreview.hidden = model.state !== 'paused' || model.heldCount === 0;
+  setText(document, 'turnCoordinationResumeCounts', `${model.preview.count} protected · ${model.preview.partitionCount} partition${model.preview.partitionCount === 1 ? '' : 's'}`);
+  setText(document, 'turnCoordinationResumeMembers', model.preview.memberIds.length ? `Member IDs: ${model.preview.memberIds.join(', ')}` : 'No held member IDs.');
+  setText(document, 'turnCoordinationResumeBehavior', model.preview.onResume === 'submit_first_partition'
+    ? `Resume and send submits ${model.preview.firstPartitionIds.length} member${model.preview.firstPartitionIds.length === 1 ? '' : 's'} first, then preserves ${model.preview.remainingCount} for the next ordered partition.`
+    : model.preview.onResume === 'submit_combined_draft'
+      ? 'Resume and send submits the protected combined draft once.'
+      : 'Nothing will submit.');
 
   const primary = document.getElementById('turnCoordinationPrimary');
   if (primary) {

@@ -6,7 +6,7 @@ import { deriveBatchSchedulingDecision } from '../shared/batch-scheduling-policy
 import { deriveBatchPreview } from '../shared/batch-preview-model.js';
 import { normalizeReceiverDeliveryPolicy, postAnswerDecision, updateReceiverDeliveryPolicy } from '../shared/receiver-delivery-policy.js';
 import { acknowledgeAnswer, buildAnswerAcknowledgement, buildAnswerHandoff, buildInterruptPlan, resolveNoResponse } from '../shared/answer-operations.js';
-import { composeTurnCoordinatedPrompt, correlateSourceInterruption, deriveTurnCoordinationSnapshot, normalizeTurnCoordination, transitionTurnCoordination } from '../shared/turn-coordination-state.js';
+import { composePausedDraftPrompt, composeTurnCoordinatedPrompt, correlateSourceInterruption, deriveTurnCoordinationSnapshot, deriveTurnResumePreview, normalizeTurnCoordination, transitionTurnCoordination } from '../shared/turn-coordination-state.js';
 import { classifyTurnRelation } from '../shared/turn-coordination-policy.js';
 
 export function createReceiverBatchRuntime({
@@ -90,15 +90,25 @@ export function createReceiverBatchRuntime({
     applyProviderBudget();
     const next = planner.next();
     if (!next.count) return false;
+    const firstIds = new Set(next.partitions?.[0]?.memberIds?.map(String) || next.prompt?.memberIds?.map(String) || []);
+    const presentation = forwardingPaused()
+      ? composePausedDraftPrompt({
+          entries: next.entries.filter(entry => firstIds.has(String(entry.id))),
+          totalCount: next.count,
+          partitionCount: next.partitionCount
+        }, turnCoordination)
+      : next.prompt;
     const written = Boolean(
-      draftArbiter?.writeBatch?.(next.prompt.text)
-      ?? adapter.setComposerText?.(next.prompt.text)
+      draftArbiter?.writeBatch?.(presentation.text)
+      ?? adapter.setComposerText?.(presentation.text)
     );
     emit('next_batch_draft', {
       memberIds: next.prompt.memberIds,
       questionCount: next.prompt.questionCount,
       focusId: next.prompt.focusId,
       fingerprint: next.prompt.fingerprint,
+      presentationFingerprint: presentation.fingerprint,
+      presentationOnly: presentation.presentationOnly === true,
       protectedCount: next.count,
       partitionCount: next.partitionCount,
       firstPartitionCount: next.firstPartitionCount,
@@ -135,6 +145,23 @@ export function createReceiverBatchRuntime({
         memberIds: batch.prompt.memberIds,
         error: 'draft_conflict'
       };
+    }
+    if (batch.prompt?.coordinationMode) {
+      const finalDraftWritten = Boolean(
+        draftArbiter?.writeBatch?.(batch.prompt.text)
+        ?? adapter.setComposerText?.(batch.prompt.text)
+      );
+      if (!finalDraftWritten) {
+        planner.failActive();
+        mirrorNext();
+        emit('batch_submit_blocked', { batchId:batch.id, memberIds:batch.prompt.memberIds, reason:'final_draft_write_failed' });
+        return { ok:false, staged:true, batchId:batch.id, memberIds:batch.prompt.memberIds, error:'final_draft_write_failed' };
+      }
+      emit('paused_banner_replaced', {
+        batchId:batch.id,
+        memberIds:batch.prompt.memberIds,
+        fingerprint:batch.prompt.fingerprint
+      });
     }
     const transaction = ensureTransaction(batch);
     const submittingTransition = transitionTransaction('submitting', source);
@@ -766,6 +793,12 @@ export function createReceiverBatchRuntime({
       if (planner.autoSubmit && !planner.hold && !queueOnly.active) return submitNext();
       mirrorNext();
       return { ok: true, hold: planner.hold, autoSubmit: planner.autoSubmit, queueOnly: { ...queueOnly } };
+    },
+    resumePreview({ submit = true } = {}) {
+      const state = submit
+        ? transitionTurnCoordination(turnCoordination, { type:'resume_send', at:nowFn() })
+        : transitionTurnCoordination(turnCoordination, { type:'resume_hold', at:nowFn() });
+      return deriveTurnResumePreview(state, planner.snapshot());
     },
     snapshot() {
       return {

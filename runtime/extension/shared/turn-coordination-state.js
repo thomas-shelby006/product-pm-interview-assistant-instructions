@@ -119,9 +119,11 @@ export function composeTurnCoordinatedPrompt({ entries = [] } = {}, state = {}) 
   if (!base.questionCount || (coordination.mode === 'live' && !carried)) return base;
   const latest = normalizedEntries.at(-1)?.envelope;
   const earlier = normalizedEntries.slice(0, -1);
-  const reason = carried ? 'the previous answer was interrupted and should be treated as not delivered' : 'forwarding was paused';
+  const opening = carried
+    ? 'The previous answer was interrupted and should be treated as not delivered.'
+    : 'Forwarding was paused.';
   const text = [
-    `Forwarding was paused or ${reason}.`,
+    opening,
     'Use every question segment below as one combined context. Preserve relevant earlier context, focus primarily on the latest question, and answer the combined request.',
     'Do not assume the previous answer reached the user.',
     '',
@@ -137,6 +139,56 @@ export function composeTurnCoordinatedPrompt({ entries = [] } = {}, state = {}) 
     coordinationMode: carried ? 'carryover' : 'paused'
   };
 }
+export function composePausedDraftPrompt({ entries = [], totalCount = 0, partitionCount = 1 } = {}, state = {}) {
+  const normalizedEntries = (Array.isArray(entries) ? entries : []).map(asPlannerEntry);
+  const finalPrompt = composeTurnCoordinatedPrompt({ entries: normalizedEntries }, { ...state, mode:'paused_accumulating' });
+  const protectedCount = Math.max(normalizedEntries.length, Number(totalCount || 0));
+  const partitions = Math.max(1, Number(partitionCount || 1));
+  const text = [
+    'FORWARDING PAUSED — NOT SUBMITTED',
+    `${protectedCount} protected segment${protectedCount === 1 ? '' : 's'}${partitions > 1 ? ` across ${partitions} ordered partitions` : ''}.`,
+    'Resume and send will replace this banner with the final combined-turn instruction before submission.',
+    'Resume without sending will keep this protected draft in Window 2.',
+    '',
+    finalPrompt.text
+  ].join('\n');
+  return {
+    ...finalPrompt,
+    text,
+    fingerprint: stableFingerprint(`paused-presentation::${finalPrompt.fingerprint}::${protectedCount}::${partitions}`),
+    finalFingerprint: finalPrompt.fingerprint,
+    presentationOnly: true,
+    protectedCount,
+    partitionCount: partitions
+  };
+}
+
+export function deriveTurnResumePreview(value = {}, plannerState = {}) {
+  const state = normalizeTurnCoordination(value);
+  const next = plannerState?.next && typeof plannerState.next === 'object' ? plannerState.next : {};
+  const memberIds = Array.isArray(next.entries)
+    ? next.entries.map(entry => String(entry?.id || '')).filter(Boolean)
+    : Array.isArray(next.memberIds) ? next.memberIds.map(String).filter(Boolean) : [];
+  const partitions = Array.isArray(next.partitions) ? next.partitions : [];
+  const firstPartitionIds = partitions[0]?.memberIds?.map(String).filter(Boolean)
+    || next.prompt?.memberIds?.map(String).filter(Boolean)
+    || [];
+  const partitionCount = Math.max(0, Number(next.partitionCount || partitions.length || (memberIds.length ? 1 : 0)));
+  const submit = state.releaseIntent !== 'hold';
+  return {
+    mode: state.mode,
+    policy: state.policy,
+    heldCount: memberIds.length,
+    memberIds,
+    partitionCount,
+    firstPartitionIds,
+    remainingCount: Math.max(0, Number(next.remainingCount || memberIds.length - firstPartitionIds.length)),
+    onResume: submit ? (partitionCount > 1 ? 'submit_first_partition' : 'submit_combined_draft') : 'retain_protected_draft',
+    releaseIntent: submit ? 'send' : 'hold',
+    actionable: memberIds.length > 0 && ['paused_accumulating','resume_pending'].includes(state.mode)
+  };
+}
+
 export function deriveTurnCoordinationSnapshot(value = {}, plannerState = {}) {
   const state = normalizeTurnCoordination(value);
   const entries = Array.isArray(plannerState?.next?.entries) ? plannerState.next.entries : [];
