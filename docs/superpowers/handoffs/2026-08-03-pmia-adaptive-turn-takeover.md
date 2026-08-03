@@ -55,7 +55,19 @@ Focused verification: **91/91 passed** across controller, store, background acce
 - Release Evidence: `92e1d99`, merged at `613b2ea`; focused release matrix **58/58**.
 - Main Integration: `da1a5ad`, merged at `4bf4851`; focused manifest matrix **5/5**.
 
-The integration worktree is clean. The real v2 manifest recognizes the two dirty historical worktrees only through exact content-sensitive disposition records. It still blocks readiness until active task-temp cleanup and all final gates are complete.
+The integration worktree is clean. The real v2 manifest recognizes the two dirty historical worktrees only through exact content-sensitive disposition records. It still blocks readiness until active task-temp cleanup and final browser evidence are complete.
+
+## Automated verification checkpoint
+
+Exact commit `31a8c0f` passed:
+
+- **1,315/1,315** Node tests;
+- **513** JavaScript files;
+- **18** required runtime surfaces;
+- **287** reachable production modules;
+- Main launcher, Session Review companion, and Runtime Platform AutoHotkey validation.
+
+Retained log: `C:\Users\Sundar\Documents\PMIA-Evidence-Archive\adaptive-turn-31a8c0f-20260803-final\complete-gate.log`.
 
 ## Remaining sequence
 

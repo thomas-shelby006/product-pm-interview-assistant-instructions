@@ -301,7 +301,9 @@ The focused owning matrix passed **91/91** tests across controller, store recove
 - Main Integration commit `da1a5ad` merged at `4bf4851`. Its focused disposition/readiness matrix passed **5/5**.
 - The v2 worktree manifest accounts for dirty historical work only through exact branch, HEAD, tracked-diff, and untracked-content hashes plus verified integrated replacement commits/files.
 - The real pre-merge manifest correctly recognized both preserved historical worktrees while blocking on the still-unmerged or dirty active lanes.
-- Integration is clean. Full repository and fresh browser gates remain pending.
+- Integration is clean.
+- Complete automated gate on exact commit `31a8c0f` passed **1,315/1,315 tests**, **513 JavaScript files**, **18 required runtime surfaces**, **287 reachable production modules**, and all three AutoHotkey validations.
+- Fresh isolated browser evidence remains pending.
 
 ### Remaining in scope
 

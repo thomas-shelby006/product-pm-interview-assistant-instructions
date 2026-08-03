@@ -32,6 +32,10 @@ The exact historical records are in `docs/evidence/2026-08-03-pmia-worktree-disp
 
 The lane file sets were non-overlapping and the integration worktree is clean.
 
+## Automated verification
+
+Exact commit `31a8c0f` passed 1,315/1,315 tests, extension validation across 513 JavaScript files, 18 required runtime surfaces, 287 reachable production modules, and all three AutoHotkey validations. The complete log is retained outside the repository under `PMIA-Evidence-Archive\adaptive-turn-31a8c0f-20260803-final`.
+
 ## Final acceptance
 
 Readiness remains blocked until:
