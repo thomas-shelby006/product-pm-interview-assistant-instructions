@@ -81,6 +81,12 @@ Exact `8d8d375` passed the complete automated gate before the second browser run
 
 Commit `7779cd1` fixes the state owner: receiver events and restored checkpoints merge coordination monotonically by explicit `updatedAt`. A meaningful recovered state may replace a newly-created default placeholder, but stale/default telemetry cannot overwrite established operator state. Controller and state regressions prove Pause survives the late event and the next final remains durably admitted. Focused adjacent verification passed **98/98**.
 
+## Third browser attempt and sender-outbox acceptance fix
+
+The third browser attempt preserved Pause and admitted Q2, then timed out waiting for Q3. Structured evidence showed Q2 durable in the ledger but retained in the sender outbox, with about 16.8 seconds between envelope creation and ledger persistence. The pre-final outbox GET/SET/REMOVE messages still ran through the global generic background operation lane, so operational work could block sender durability before final acceptance began.
+
+Commit `a9840e3` extracts the sender-outbox state handler and routes GET/SET/REMOVE through `acceptanceCoordinator.run(sessionId)`. Outbox state and final persistence remain ordered on one per-session acceptance lane, while dashboard, telemetry, and other generic work cannot block them. Authorization, sender-only namespace checks, state validation, and session storage remain unchanged. Focused verification passed **82/82**.
+
 ## Remaining sequence
 
 1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact combined integration HEAD and retain the complete gate log outside the repository.

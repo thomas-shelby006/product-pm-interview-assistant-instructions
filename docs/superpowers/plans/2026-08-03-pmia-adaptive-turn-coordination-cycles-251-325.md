@@ -309,7 +309,10 @@ The focused owning matrix passed **91/91** tests across controller, store recove
 - Corrected compact-reader HEAD `8d8d375` passed the complete gate: **1,315/1,315 tests**, **513 JavaScript files**, **18 required runtime surfaces**, **287 reachable production modules**, all three AutoHotkey validations, exit `0`.
 - Second fresh browser attempt reached Pause and failed at `Q2 admitted to durable ownership`; cleanup and normal-profile isolation passed. Evidence showed Pause had initially committed, then a late Q1 receiver event `turn_coordination_restored` replaced newer `paused_accumulating` state with an older `live` snapshot.
 - Owning-boundary fix committed at `7779cd1`: coordination and restored checkpoints now merge monotonically by `updatedAt`; a meaningful recovered state can replace only a default placeholder, while established newer operator state cannot be rolled back by stale telemetry.
-- Focused owning and adjacent matrix passed **98/98**. Complete new-HEAD gate and fresh isolated browser evidence remain pending.
+- Focused owning and adjacent matrix passed **98/98**.
+- Third fresh browser attempt preserved Pause and admitted Q2, then timed out at Q3. Q2 was durable in the ledger but remained in the sender outbox for about 16.8 seconds before acknowledgement.
+- Root cause: sender outbox GET/SET/REMOVE still ran inside the global generic background lane before final acceptance. Commit `a9840e3` routes outbox durability through the same per-session acceptance lane as final persistence, preserving exact order while bypassing dashboard/telemetry work.
+- Focused acceptance, direct/fallback port, registration recovery, controller/store, and outbox matrix passed **82/82**. Complete new-HEAD gate and fresh isolated browser evidence remain pending.
 
 ### Remaining in scope
 

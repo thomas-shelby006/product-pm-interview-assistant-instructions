@@ -40,6 +40,8 @@ The first browser attempt at `c71315f` exposed a stale smoke-observer boundary, 
 
 Exact `8d8d375` then passed the complete automated gate. The next browser run exposed a real state-ownership race: a late receiver restore event carrying older `live` coordination rolled back a newer operator Pause before Q2. Commit `7779cd1` makes coordination/checkpoint merges monotonic while preserving meaningful recovery over a default placeholder. The owning and adjacent matrix passed 98/98.
 
+The third browser attempt then preserved Pause and admitted Q2 but exposed another acceptance boundary: sender outbox state still used global generic background serialization, delaying persistence acknowledgement and blocking Q3. Commit `a9840e3` moves sender outbox GET/SET/REMOVE to the per-session acceptance lane; 82/82 focused tests passed.
+
 ## Final acceptance
 
 Readiness remains blocked until:
