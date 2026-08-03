@@ -5,7 +5,7 @@ Admission worktree: `C:\Users\Sundar\Documents\product-pm-interview-assistant-im
 Admission branch: `fix/pmia-admission-lane`
 Admission commit: `2cbec6ffe327b4ebd98bacfdb38194d86e533c2e`
 Integration lane-merge checkpoint: `improvement/pmia-0.7.0` at `4bf4851`
-Current implementation checkpoint: `bdf53ba`
+Current implementation checkpoint: `4bcc2c2`
 Target after exact verification: `main`
 
 ## Scope
@@ -126,9 +126,15 @@ An external CDP monitor captured the dashboard connection as continuously `Resyn
 
 Commit `bdf53ba` sends the dashboard's current generation with the resync request, preserves the maximum generation in the controller, and returns the next full snapshot at a strictly newer generation. It also makes the initial managed-window model null-safe. Functional proof verifies a generation-50 request receives a generation-51 full snapshot. The owning matrix passed **57/57** and the widened dashboard/controller/rendering/Adaptive Turn/validation matrix passed **141/141**.
 
+## Tenth browser attempt and durable resume decision
+
+Exact `00e7bbb` passed the complete gate with **1,332/1,332** tests and all validators. The next isolated browser run passed the combined draft and dashboard-control gates, clicked `resume_catch_up`, and then timed out waiting for forwarding to become active. Q2/Q3 remained safely protected. The controller did not lose the click; it held the operator decision in memory while awaiting the receiver's full provider submission and rendered-proof path, and only committed state after that slow operation returned.
+
+Commit `4bcc2c2` splits the action into durable control-plane and provider phases. It commits `active / resume_pending` before any remote role command, then performs sender compatibility resume and Window 2 submission. Success finalizes `live`; failure commits an exact protected-Pause rollback. The new durability and rollback tests failed first, then passed; the widened owning matrix passed **196/196**.
+
 ## Remaining sequence
 
-1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact committed checkpoint containing `bdf53ba` and retain the complete gate log outside the repository.
+1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact committed checkpoint containing `4bcc2c2` and retain the complete gate log outside the repository.
 2. Fix only reproduced owning-boundary failures, commit, and rerun if the tree changes.
 3. Run fresh isolated Edge evidence from exact HEAD. Require all five Adaptive Turn scenarios, three rendered finals, empty outbox, clear sequence state, 12/12 transport drill, responsive/print UI evidence, no normal-profile access, and exact cleanup.
 4. Generate deterministic release, handoff, and worktree-integration manifests.

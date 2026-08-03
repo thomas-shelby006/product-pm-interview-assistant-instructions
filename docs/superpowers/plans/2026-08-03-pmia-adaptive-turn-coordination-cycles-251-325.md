@@ -250,7 +250,7 @@
 
 **Integration branch:** `improvement/pmia-0.7.0`
 **Lane-merge checkpoint:** `4bf4851` (Admission, Release Evidence, and Main Integration merged)
-**Current implementation checkpoint:** `bdf53ba`
+**Current implementation checkpoint:** `4bcc2c2`
 **Target after exact verification:** `main`
 **Detailed takeover file:** `docs/superpowers/handoffs/2026-08-03-pmia-adaptive-turn-takeover.md`
 
@@ -335,10 +335,13 @@ The focused owning matrix passed **91/91** tests across controller, store recove
 - Ninth isolated browser evidence moved past the combined-draft gate: Q1 was proven, Q2/Q3 were both protected in the authoritative `next` batch and mirrored in Window 2, Pause remained actionable, and the sender outbox was empty. It then timed out because the visible Turn Coordination primary control remained `pause` instead of `resume_catch_up`.
 - External CDP monitoring proved the dashboard was trapped in an in-place resync loop: its local synchronizer had generation `17`, while the controller reset the port entry to generation `0` and returned a full snapshot at generation `1`; the dashboard correctly rejected that snapshot as regressed and repeatedly requested another resync. The monitor also captured one startup null-snapshot exception in `deriveManagedWindowModel`.
 - Commit `bdf53ba` makes in-place resync generations monotonic: the dashboard sends its current generation, the controller preserves the maximum observed generation, clears only the cached snapshot, and returns the next full snapshot at a strictly newer generation. Initial managed-window rendering is also null-safe. The regressions failed first, then passed **57/57** owning controller/navigation/sync tests and **141/141** widened dashboard, rendering, controller, snapshot, Adaptive Turn, and validation tests.
+- Exact documentation checkpoint `00e7bbb` passed the complete gate: **1,332/1,332 tests**, **513 JavaScript files**, **18 runtime surfaces**, **287 reachable modules**, and all three AutoHotkey validations, exit `0`.
+- Tenth isolated browser evidence passed the dashboard resync and Resume-control readiness boundaries. The operator click was accepted, but Pilot remained `paused / paused_accumulating` until timeout while Q2/Q3 stayed protected. The controller waited for Window 2's complete provider submission and rendered-proof path before persisting or broadcasting the resume decision.
+- Commit `4bcc2c2` implements a durable two-phase resume. It first commits and broadcasts `active / resume_pending` with release intent `send`, then starts sender compatibility resume and receiver submission. Receiver success finalizes `live`; receiver failure durably rolls back to `paused / paused_accumulating` without losing the held batch. The owning tests were red before the change, then passed **47/47**, the final controller matrix passed **32/32**, and the widened Adaptive Turn, batching, direct/fallback transport, persistence, telemetry, and validation matrix passed **196/196**.
 
 ### Remaining in scope
 
-1. Run the complete repository gate on the exact committed checkpoint containing `bdf53ba`.
+1. Run the complete repository gate on the exact committed checkpoint containing `4bcc2c2`.
 2. Run fresh isolated Edge evidence and require all five Adaptive Turn scenarios, three exact rendered proofs, empty outbox, clear sequence state, 12/12 transport drill, all UI layouts, and exact cleanup.
 3. Generate release, handoff, and worktree-integration manifests; verify original checkout, normal Edge, tags, push state, and preserved historical worktrees.
 4. Remove only assistant-created task-temp files after their evidence is retained, then regenerate the readiness manifest.
