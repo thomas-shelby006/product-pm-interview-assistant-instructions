@@ -238,41 +238,87 @@
 - [ ] Run focused suites, full Node suite, extension validator, three AutoHotkey checks, fresh isolated Edge smoke and exact cleanup.
 - [ ] Update release/handoff evidence from exact HEAD; remove only assistant-created task-temp files.
 
-**Task 15 automated-gate checkpoint:** Focused release contracts passed **69/69**. The complete repository gate passed **1,305/1,305 tests**, extension validation checked **512 JavaScript files**, **18 required runtime surfaces**, and **287 reachable production modules**, and all three AutoHotkey validators passed with exit **0**. Fresh isolated Edge evidence remains before this task can be marked complete.
-- [ ] Mark every task checkpoint complete and commit `feat: complete adaptive turn coordination`.
+**Task 15 automated-gate checkpoint:** Focused release contracts passed **69/69** before the harness correction. The exact committed `7b0e4bb` repository gate passed **1,306/1,306 tests**, extension validation checked **512 JavaScript files**, **18 required runtime surfaces**, and **287 reachable production modules**, and all three AutoHotkey validators passed with exit **0**. Two fresh isolated Edge attempts produced actionable evidence; the latest exposed durable-admission head-of-line blocking while preserving Q2 in the ledger and sender outbox. Task 15 remains open until the acceptance-lane repair and a fully green fresh smoke.
+- [x] Commit the completed coordination feature block (`8257e04`) and MV3 smoke-boundary correction (`7b0e4bb`).
+- [x] Commit the durable-admission repair after focused verification (`2cbec6f`).
+- [ ] Complete exact-HEAD isolated browser evidence, release integration, cleanup, and final atlas update.
 
 
 ---
 
-## Current status at requested pause ? 2026-08-03
+## Live execution and takeover status — 2026-08-03
 
-**Feature implementation HEAD:** `ded5fe4` on `improvement/pmia-0.7.0`. This status update intentionally pauses implementation; it does not claim Tasks 14?15 are complete.
+**Integration branch:** `improvement/pmia-0.7.0`
+**Current committed HEAD:** `7b0e4bb`
+**Target after exact verification:** `main`
+**Detailed takeover file:** `docs/superpowers/handoffs/2026-08-03-pmia-adaptive-turn-takeover.md`
 
-### Original requirement reconciliation
+### User requirement and inferred system requirement
 
-**Completed**
-- ChatGPT now admits only authoritative finalized DOM turns; weak stable-tail submission is disabled while Claude protocol finals remain unchanged.
-- Pause blocks Window 2 provider submission but keeps sender observation, durable admission, exact sequence ownership, and Window 2 draft mirroring active.
-- One or many paused questions remain one ordered BatchPlanner-owned draft with exact member IDs, partition safety, a clear non-submitted banner, and explicit latest-question priority.
-- Default Resume submits the accumulated batch exactly once; Resume Without Send retains the protected draft; Send Held Now is available without silently losing pause state.
-- Same-turn authoritative continuations can automatically stop the active answer, cancel the superseded answer once, and resubmit active plus continuation members. Independent or ambiguous later questions accumulate without automatic Stop.
-- Stop failure, timeout, reload, hidden-page recovery, duplicate commands, late old-answer terminals, draft conflicts, storage pressure, session end, provider-route change, and release handoff retain safe ownership.
-- The Turn Coordination cockpit shows live, paused, carryover, blocked, and recovered states; policy presets are `adaptive`, `conservative`, and `manual` with preview confirmation.
-- Paused banner replacement and metadata-only resume preview are complete and committed. Focused Task 13 gate passed 7/7; extension validation passed with 508 JavaScript files, 18 required runtime surfaces, and 285 reachable production modules.
+The user requires every PMIA implementation from every registered worktree to be incorporated, all original Adaptive Turn requirements completed, and the work continued without restarting or dropping completed scope. The system requirement is lossless final ownership: durable admission must not wait for receiver submission, provider answer observation, dashboard commands, self-tests, reconciliation, or other slow operational work.
 
-**Still pending from the original requirement**
-1. Finish metadata-only latency instrumentation for `observe?persist`, `persist?stage`, `resume?submit`, and `stop?resubmit`; add bounded/stale-sample scorecard thresholds. This is the remaining Task 5 work and closes with Task 15.
-2. Finish Task 14 evidence export: add a bookmarkable interruption evidence locator and coordination summary to the safe support bundle, then prove coordination-specific redaction and duplicate Retry/Keep command replay. Recovery behavior itself is already implemented.
-3. Complete Task 15 release evidence: five isolated scenarios (authoritative ChatGPT final; pause two finals and resume; same-turn carryover; independent-question accumulation; restart recovery).
-4. Run the exact final gates from committed HEAD: focused suites, full Node suite, extension validator, all three AutoHotkey checks, fresh isolated Edge smoke, and exact process/profile cleanup.
-5. Update release/handoff evidence, remove only assistant-created task-temp files, mark all remaining checkpoints complete, and create the final coordination completion commit.
+### Worktree reconciliation
 
-### Paused worktree state
+The five pre-parallel committed PMIA worktree heads are contained in the integration history. The parallel PMIA 0.11 completion head was explicitly reconciled and merged at `86f9ae0`. There are now eight registered worktrees because Admission, Release Evidence, and Main Integration verification lanes were added. Uncommitted historical work was also inspected: the shorter PMIA 0.11 Adaptive Turn spec is superseded by the fuller current spec, and the old `Session_Review_Studio.ahk` implementation is superseded by the committed `Session_Tracker_End_Session.ahk` flow with UTC pairing, validation, dry-run, and tracker safeguards. Those historical worktrees remain untouched and are not backward-merged.
 
-- No tracked production change is intentionally left pending at this pause point.
-- Untracked `runtime/extension/tests/adaptive-turn-evidence.test.js` is a started RED test for Task 14 evidence export; production support-bundle implementation has not been added.
-- Untracked `.pmia-task-temp/` contains assistant-created task files and must be removed only during final verified cleanup.
-- Normal Edge, the original checkout, and unrelated files remain out of scope and must not be changed.
+### Completed since the prior checkpoint
+
+- Task 14 interruption/recovery evidence, safe support projection, and replay-idempotent Retry/Keep actions committed at `f41d5db`.
+- Worktree reconciliation committed at `dc3bc8f`; PMIA 0.11 ancestry merged at `86f9ae0`.
+- Task 15 metrics, throughput proof, paused staging correction, and five-scenario isolated smoke committed at `8257e04`.
+- MV3 smoke helper corrected to run browser module scenarios in the packaged dashboard page at `7b0e4bb`.
+- Exact `7b0e4bb` automated gate passed 1,306/1,306 tests, 512 JavaScript files, 18 required runtime surfaces, 287 reachable production modules, and all three AutoHotkey checks.
+
+### Fresh browser evidence
+
+Run 1 at `8257e04` failed before provider windows because dynamic `import()` was attempted in `ServiceWorkerGlobalScope`; cleanup passed and `7b0e4bb` fixed the harness boundary.
+
+Run 2 at `7b0e4bb` passed exact extension identity, command reachability, module carryover, independent accumulation, restart recovery, managed lifecycle, and active self-test. It failed while waiting for Q3 durable admission. Evidence: `C:\Users\Sundar\Documents\PMIA-Evidence-Archive\adaptive-turn-7b0e4bb-20260803\pmia-isolated-release-evidence.json`.
+
+Q2 was safely persisted and the sender outbox retained one replaying item, so no data was lost. Persistence took about 13.2 seconds because controller `beforeForward` shares the general per-session mutation coordinator with slow operational work. The sender correctly refused to advance to Q3 until durable acknowledgement.
+
+### Admission repair checkpoint
+
+The root cause was confirmed from fresh browser evidence and reproduced in a focused test: `beforeForward` shared the general operational mutation lane, so an active self-test could delay durable final acknowledgement by about 13.2 seconds.
+
+The repair is committed at `2cbec6f` on `fix/pmia-admission-lane`:
+
+- non-boot final admission uses a dedicated per-session acceptance coordinator;
+- the urgent durable write bypasses derived-policy refresh, checkpoint derivation, storage accounting, dashboard broadcast, and receiver work;
+- store writes and clear operations are serialized through one write lane;
+- post-admission maintenance returns to the existing coalesced operational lane;
+- exact-session prepare/end/removal are fenced through the acceptance lane;
+- a fresh registry ownership check rejects finals after session end instead of recreating state;
+- failed persistence resets and reloads the prior committed state before sender retry.
+
+The focused owning matrix passed **91/91** tests across controller, store recovery, background durable acceptance, end-session guards, state journal/integrity/quarantine, and Adaptive Turn coordination, carryover, recovery, safety, and performance.
+
+### Remaining in scope
+
+1. Finish focused verification and commit the Release Evidence lane.
+2. Finish focused verification and commit the Main Integration manifest lane.
+3. Merge Admission, Release Evidence, and Main Integration into the clean integration worktree in that order.
+4. Run the complete repository gate on the exact combined HEAD.
+5. Run fresh isolated Edge evidence and require all five Adaptive Turn scenarios, three exact rendered proofs, empty outbox, clear sequence state, 12/12 transport drill, all UI layouts, and exact cleanup.
+6. Generate release, handoff, and worktree-integration manifests; verify original checkout, normal Edge, tags, push state, and preserved historical worktrees.
+7. Merge the exact verified result into `main`, rerun the repository gate if the commit context changes, then update the technical atlas once at the end.
+
+### Parallel execution map
+
+The remaining work is split into isolated branches/worktrees:
+
+| Lane | Branch | Worktree | Owned scope |
+|---|---|---|---|
+| Admission | `fix/pmia-admission-lane` | `product-pm-interview-assistant-improvement` | Controller acceptance lane, store write serialization, concurrency tests, current plan/handoff updates. |
+| Release evidence | `release/pmia-final-evidence` | `.worktrees/pmia-final-evidence` | Exact-HEAD release manifest, Adaptive Turn evidence requirements, browser-evidence binding. |
+| Main integration | `test/pmia-main-integration` | `.worktrees/pmia-main-integration` | Registered-worktree ancestry proof, target-main cleanliness, no-push/tag/merge-state verification, cleanup manifest. |
+| Integration | `improvement/pmia-0.7.0` | `.worktrees/pmia-final-integration` | Receives reviewed green commits only; runs combined gates and final browser verification. |
+
+Merge order: Admission → Release evidence → Main integration. If branches touch the same file, do not auto-merge; review and reconcile manually in the integration worktree. The technical atlas remains deferred until the merged `main` result is verified.
+
+### Synchronization rule
+
+After every major block—parallel branch completion, integration merge, full gate, isolated browser, release integration, and atlas update—update this plan and the takeover handoff before proceeding. The documents must describe actual repository/evidence state, not intended future state.
 
 ---
 
