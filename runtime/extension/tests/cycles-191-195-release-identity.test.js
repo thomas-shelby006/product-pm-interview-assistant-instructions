@@ -45,5 +45,5 @@ test('Cycle 195: release identity requires 0.9 commit manifest and evidence hash
 test('mechanics hardening report imports every Cycle 171-195 owner', async () => {
   const { readFile } = await import('node:fs/promises');
   const source = await readFile(new URL('../shared/mechanics-hardening-report.js', import.meta.url), 'utf8');
-  for (const name of ['prerender-guard','runtime-injection-fence','wake-history','selector-probe-registry','partial-proof-report','durable-tombstones','fair-batch-scheduler','cleanup-transaction-journal','fault-catalog','architecture-budget-report','release-identity']) assert.match(source, new RegExp(name));
+  for (const name of ['prerender-guard','runtime-injection-fence','wake-history','selector-probe-registry','partial-proof-report','durable-tombstones','fair-batch-scheduler','cleanup-transaction-journal','fault-catalog','architecture-budget-report','architecture-boundary-audit','release-identity']) assert.match(source, new RegExp(name));
 });

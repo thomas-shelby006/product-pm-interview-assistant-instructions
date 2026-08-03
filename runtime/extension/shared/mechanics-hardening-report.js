@@ -22,6 +22,7 @@ import { searchFaultCatalog } from './fault-catalog.js';
 import { createReproducibilitySeed } from './reproducibility-seed.js';
 import { auditReasonCodeRegistry } from './reason-code-registry.js';
 import { buildArchitectureBudgetReport } from './architecture-budget-report.js';
+import { auditArchitectureBoundaries } from './architecture-boundary-audit.js';
 import { validateReleaseIdentity } from './release-identity.js';
 
 export function deriveMechanicsHardeningReport(snapshot = {}, context = {}) {
@@ -54,6 +55,7 @@ export function deriveMechanicsHardeningReport(snapshot = {}, context = {}) {
     reproducibility: createReproducibilitySeed(`${snapshot.sessionId || ''}:${snapshot.createdAt || 0}`),
     reasonCodes: auditReasonCodeRegistry(snapshot.timeline || []),
     architectureBudget: buildArchitectureBudgetReport(context.modules || []),
+    architectureBoundaries: auditArchitectureBoundaries(context.modules || []),
     releaseIdentity: validateReleaseIdentity(snapshot.releaseIdentity || {})
   };
 }
