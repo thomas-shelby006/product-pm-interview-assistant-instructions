@@ -4,6 +4,7 @@ const COMMAND_IDS = Object.freeze([
   'snooze_incident','clear_incident','set_quiet_mode','add_marker','remove_marker','resume_checkpoint',
   'resume_live_session','dismiss_crash_resume','resume_catch_up','set_question_pin','defer_question',
   'set_question_priority','link_question_follow_up','undo_question_action','submit_selected','resume_without_send',
+  'send_held_now','set_turn_coordination_policy','retry_carryover','keep_accumulating',
   'set_auto_submit','set_hold','set_receiver_policy','submit_now','interrupt_latest','acknowledge_answer','resolve_operator_choice',
   'resolve_no_response','preview_interrupt_latest','resolve_draft_keep_manual','resolve_draft_restore_pmia',
   'resolve_draft_merge','archive_selected','archive_all','archive_proven','compact_proven','retry_outbox',
@@ -20,6 +21,7 @@ const COMMAND_IDS = Object.freeze([
 
 const GROUPS = Object.freeze({
   pause:'Delivery', resume_catch_up:'Delivery', resume_without_send:'Delivery', submit_selected:'Delivery',
+  send_held_now:'Delivery', retry_carryover:'Delivery', keep_accumulating:'Delivery', set_turn_coordination_policy:'Delivery',
   submit_now:'Delivery', interrupt_latest:'Delivery', set_auto_submit:'Delivery', set_hold:'Delivery',
   set_receiver_policy:'Delivery', retry_outbox:'Delivery', compact_proven:'Storage', archive_selected:'Review',
   archive_all:'Review', archive_proven:'Review', export_session:'Review', export_support_bundle:'Review',

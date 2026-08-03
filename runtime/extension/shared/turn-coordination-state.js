@@ -27,6 +27,7 @@ export function normalizeTurnCoordination(value = {}, now = Date.now()) {
     : {};
   return {
     version: 1,
+    policy: ['adaptive', 'conservative', 'manual'].includes(String(source.policy)) ? String(source.policy) : 'adaptive',
     mode: MODES.has(String(source.mode)) ? String(source.mode) : 'live',
     pausedAt: Math.max(0, Number(source.pausedAt || 0)),
     resumedAt: Math.max(0, Number(source.resumedAt || 0)),

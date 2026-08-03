@@ -23,7 +23,8 @@ function normalizePolicyPreview(value) {
 const STRICT_PAYLOAD_KEYS = Object.freeze({
   end_session:['confirmToken','mode'], apply_operating_profile:['profile','preview'], set_containment_override:['enabled','durationMs','reason','preview'],
   resolve_operator_choice:['choiceId','fingerprint','option'], resolve_no_response:['action'], interrupt_latest:['token'],
-  export_support_bundle:[], set_session_phase:['phase','reason'], start_mock:['plannedDurationMs']
+  export_support_bundle:[], set_session_phase:['phase','reason'], start_mock:['plannedDurationMs'],
+  set_turn_coordination_policy:['policy']
 });
 function pruneStrictPayload(command,payload){ const keys=STRICT_PAYLOAD_KEYS[command]; if(!keys) return payload; return Object.fromEntries(keys.filter(key=>key in payload).map(key=>[key,payload[key]])); }
 
@@ -114,6 +115,11 @@ export function normalizeDashboardCommand(value) {
   }
   if (['set_auto_submit', 'set_hold', 'set_focus_mode', 'set_quiet_mode'].includes(command)) {
     payload.value = Boolean(payload.value);
+  }
+  if (command === 'set_turn_coordination_policy') {
+    const policy = cleanText(payload.policy, 24).toLowerCase();
+    if (!['adaptive', 'conservative', 'manual'].includes(policy)) return null;
+    payload.policy = policy;
   }
   if (command === 'set_receiver_policy') {
     payload.policy = payload.policy && typeof payload.policy === 'object' ? { ...payload.policy } : {};

@@ -312,7 +312,7 @@ export function createReceiverBatchRuntime({
             revisionOf: metadata.revisionOf,
             boundary: metadata.boundary
           },
-          policy: metadata.coordinationPolicy || 'adaptive',
+          policy: metadata.coordinationPolicy || turnCoordination.policy || 'adaptive',
           now: nowFn()
         });
         if (relation.autoInterrupt && sourceSegmentIds.length) {
@@ -601,6 +601,17 @@ export function createReceiverBatchRuntime({
 
     mirrorNext,
     submitNext,
+    setCoordinationPolicy(policy = 'adaptive') {
+      const normalized = String(policy || '').trim().toLowerCase();
+      if (!['adaptive', 'conservative', 'manual'].includes(normalized)) {
+        return { ok: false, error: 'coordination_policy_invalid', policy: turnCoordination.policy || 'adaptive' };
+      }
+      turnCoordination = normalizeTurnCoordination({ ...turnCoordination, policy: normalized, updatedAt: nowFn() }, nowFn());
+      const snapshot = deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot());
+      emit('turn_coordination_policy_changed', snapshot);
+      return { ok: true, policy: normalized, turnCoordination: snapshot };
+    },
+
     async pauseForwarding() {
       turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'pause', at: nowFn() });
       planner.setHold(true);
@@ -644,6 +655,17 @@ export function createReceiverBatchRuntime({
       const result = await submitNext({ force: true });
       if (wasPaused) planner.setHold(true);
       return { ...result, remainPaused: wasPaused };
+    },
+    setCoordinationPolicy(value) {
+      const policy = String(value || '').trim().toLowerCase();
+      if (!['adaptive', 'conservative', 'manual'].includes(policy)) {
+        return { ok: false, error: 'invalid_coordination_policy' };
+      }
+      turnCoordination = normalizeTurnCoordination({ ...turnCoordination, policy, updatedAt: nowFn() }, nowFn());
+      planner.setPromptComposer?.(args => composeTurnCoordinatedPrompt(args, turnCoordination));
+      const snapshot = deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot());
+      emit('turn_coordination_policy_changed', { turnCoordination: snapshot });
+      return { ok: true, policy, turnCoordination: snapshot };
     },
     draftState() {
       return draftArbiter?.snapshot?.() || { owner: 'none', conflict: null };

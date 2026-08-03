@@ -910,6 +910,12 @@ async function startRuntime(runtimeConfig) {
       case 'send_held_now':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.sendHeldNow();
+      case 'set_turn_coordination_policy':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.setCoordinationPolicy(payload.policy);
+      case 'keep_accumulating':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.pauseForwarding();
       case 'reconcile_delivery':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.reconcile(payload);

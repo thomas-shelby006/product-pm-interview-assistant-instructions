@@ -1700,6 +1700,20 @@ export function createRuntimePilotController({
           value: Boolean(payload.value)
         });
         break;
+      case 'set_turn_coordination_policy':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_turn_coordination_policy', {
+          policy: payload.policy
+        });
+        break;
+      case 'send_held_now':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'send_held_now', { source: 'dashboard' });
+        break;
+      case 'retry_carryover':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'retry_carryover', { source: 'dashboard' });
+        break;
+      case 'keep_accumulating':
+        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'keep_accumulating', { source: 'dashboard' });
+        break;
       case 'set_receiver_policy':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_receiver_policy', {
           policy: payload.policy || {}
