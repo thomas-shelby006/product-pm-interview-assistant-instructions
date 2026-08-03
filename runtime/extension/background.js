@@ -383,6 +383,30 @@ function validSenderOutboxState(value, sessionId) {
   });
 }
 
+async function handleSenderOutboxState(message, tabId, registry) {
+  if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
+    return { ok: false, error: 'session_not_owned' };
+  }
+  const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
+  if (role !== 'sender' || message.namespace !== 'sender_outbox') {
+    return { ok: false, error: 'sender_outbox_only' };
+  }
+  const key = senderOutboxStorageKey(message.sessionId);
+  if (message.type === 'PMIA_SESSION_STATE_GET') {
+    const stored = await chrome.storage.session.get(key);
+    return { ok: true, value: stored[key] ?? null };
+  }
+  if (message.type === 'PMIA_SESSION_STATE_REMOVE') {
+    await chrome.storage.session.remove(key);
+    return { ok: true };
+  }
+  if (!validSenderOutboxState(message.value, message.sessionId)) {
+    return { ok: false, error: 'invalid_sender_outbox_state' };
+  }
+  await chrome.storage.session.set({ [key]: message.value });
+  return { ok: true };
+}
+
 async function broadcastLinkStatus(sessionId, registry) {
   const session = registry.getSession(sessionId);
   const status = currentSessionStatus(registry, sessionId);
@@ -480,6 +504,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (['PMIA_SESSION_STATE_GET', 'PMIA_SESSION_STATE_SET', 'PMIA_SESSION_STATE_REMOVE'].includes(message?.type)) {
+    acceptanceCoordinator.run(message.sessionId, async () => {
+      const registry = await loadRegistry();
+      return handleSenderOutboxState(message, tabId, registry);
+    })
+      .then(sendResponse)
+      .catch(error => sendResponse({ ok: false, error: String(error?.message || error) }));
+    return true;
+  }
+
   if (message?.type === 'PMIA_FORWARD') {
     acceptanceCoordinator.run(message.envelope?.sessionId, async () => {
       const registry = await loadRegistry();
@@ -504,36 +538,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       sendResponse(await pilotController.handleCommand(message));
-      return;
-    }
-
-    if (['PMIA_SESSION_STATE_GET', 'PMIA_SESSION_STATE_SET', 'PMIA_SESSION_STATE_REMOVE'].includes(message?.type)) {
-      if (!authorizeSessionMessage(registry, message.sessionId, tabId, message.runtimeInstanceId)) {
-        sendResponse({ ok: false, error: 'session_not_owned' });
-        return;
-      }
-      const role = registry.roleForTab(message.sessionId, tabId, message.runtimeInstanceId);
-      if (role !== 'sender' || message.namespace !== 'sender_outbox') {
-        sendResponse({ ok: false, error: 'sender_outbox_only' });
-        return;
-      }
-      const key = senderOutboxStorageKey(message.sessionId);
-      if (message.type === 'PMIA_SESSION_STATE_GET') {
-        const stored = await chrome.storage.session.get(key);
-        sendResponse({ ok: true, value: stored[key] ?? null });
-        return;
-      }
-      if (message.type === 'PMIA_SESSION_STATE_REMOVE') {
-        await chrome.storage.session.remove(key);
-        sendResponse({ ok: true });
-        return;
-      }
-      if (!validSenderOutboxState(message.value, message.sessionId)) {
-        sendResponse({ ok: false, error: 'invalid_sender_outbox_state' });
-        return;
-      }
-      await chrome.storage.session.set({ [key]: message.value });
-      sendResponse({ ok: true });
       return;
     }
 

@@ -69,3 +69,15 @@ test('successful receiver ownership clears the one-shot delivery alarm', () => {
   const block = sliceBetween('async function completePersistedDelivery', 'async function schedulePersistedDelivery');
   assert.match(block, /chrome\.alarms\.clear\(deliveryAlarmName\(envelope\.sessionId\)\)/);
 });
+
+
+test('sender outbox durability shares the per-session acceptance lane', () => {
+  const listener = sliceBetween('chrome.runtime.onMessage.addListener', 'serialize(async () => {');
+  assert.match(listener, /PMIA_SESSION_STATE_GET[\s\S]*acceptanceCoordinator\.run\(message\.sessionId/);
+  assert.match(listener, /handleSenderOutboxState\(message, tabId, registry\)/);
+});
+
+test('generic operational serialization cannot block sender outbox state', () => {
+  const generic = sliceBetween("serialize(async () => {\n    const registry = await loadRegistry();", 'chrome.runtime.onConnect');
+  assert.doesNotMatch(generic, /PMIA_SESSION_STATE_GET|PMIA_SESSION_STATE_SET|PMIA_SESSION_STATE_REMOVE/);
+});
