@@ -99,3 +99,14 @@ test('receiver admission marks forwarding pause as staging-only credit use', asy
   const receive = source.slice(source.indexOf('async function receiveEnvelope'), source.indexOf('async function handleRuntimeCommand'));
   assert.match(receive, /stagingOnly:\s*envelope\?\.metadata\?\.coordinationMode === 'paused_stage'\s*\|\|\s*currentBatchState\?\.turnCoordination\?\.mode === 'paused_accumulating'/);
 });
+
+
+test('smoothed receiver credits preserve explicit staging-only input', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { dirname, resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const helper = source.slice(source.indexOf('function deriveSmoothedReceiverCredits'), source.indexOf('function isCombinedVoiceActive'));
+  assert.match(helper, /stagingOnly:\s*input\.stagingOnly/);
+});

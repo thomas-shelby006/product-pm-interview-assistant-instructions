@@ -183,7 +183,8 @@ async function startRuntime(runtimeConfig) {
       hold: input.hold,
       paused: input.paused,
       storageCritical: input.storageCritical,
-      draftConflict: input.draftConflict
+      draftConflict: input.draftConflict,
+      stagingOnly: input.stagingOnly
     });
     return receiverCreditHysteresis.update(raw, {
       now: Date.now(),
