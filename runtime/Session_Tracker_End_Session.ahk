@@ -1,5 +1,6 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
+#Warn All, StdOut
 
 global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 global PMIA_RUNTIME_CONTROL_MESSAGE := "PMIA_RUNTIME_CONTROL_V1"

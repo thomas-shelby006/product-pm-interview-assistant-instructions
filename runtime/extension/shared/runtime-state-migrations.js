@@ -21,10 +21,22 @@ const MIGRATIONS = new Map([
         ? session.productionControls
         : { operatingProfile: 'balanced', containmentOverrideUntil: 0, containmentOverrideReason: '', lastProfileChangeAt: 0, lastProfileChangeSource: '', lastNavigation: null }
     }))
+  })],
+  [3, (envelope, metadata = {}) => ({
+    ...clone(envelope),
+    schemaVersion: 4,
+    writerVersion: String(metadata.writerVersion || envelope.writerVersion || ''),
+    committedAt: Math.max(0, Number(metadata.now) || Number(envelope.committedAt) || Date.now()),
+    sessions: (clone(envelope.sessions || [])).map(session => ({
+      ...session,
+      sessionNavigator: session?.sessionNavigator && typeof session.sessionNavigator === 'object'
+        ? session.sessionNavigator
+        : { version: 1, enabled: true, defaultTab: 'now', history: [], bookmarks: [], goals: [], coverage: {}, workspaces: [], activeWorkspaceId: '', scenarioCompletion: [], debriefExports: 0 }
+    }))
   })]
 ]);
 
-export function migrateRuntimeEnvelope(value, targetVersion = 3, metadata = {}) {
+export function migrateRuntimeEnvelope(value, targetVersion = 4, metadata = {}) {
   let envelope = clone(value);
   const target = Math.max(1, Number(targetVersion) || 1);
   let current = Math.max(0, Number(envelope?.schemaVersion) || 0);

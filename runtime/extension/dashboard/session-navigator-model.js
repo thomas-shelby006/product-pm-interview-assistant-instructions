@@ -1,4 +1,4 @@
-﻿import { deriveSessionNavigatorNow } from './session-navigator-now-model.js';
+import { deriveSessionNavigatorNow } from './session-navigator-now-model.js';
 import { buildSessionSearchIndex, searchSessionEntities, buildSearchPreview, recentNavigatorHistory } from './session-navigator-search-model.js';
 import { buildQuestionThreadGraph, questionFollowUpChain, deriveThreadCompletion, dependencyMarkers } from './session-navigator-thread-model.js';
 import { derivePaceBaseline, answerDurationBands, segmentTimeRemaining, silenceDeviation, derivePaceGuidance } from './session-navigator-pace-model.js';
@@ -9,10 +9,15 @@ import { deriveBookmarkNavigator, bookmarkCategories, bookmarkReviewQueue } from
 import { deriveGoalCoverageMatrix, prioritizeGoalGaps, derivePhaseCoverage } from './session-navigator-goal-model.js';
 import { deriveGuidedDebrief } from './session-navigator-debrief-model.js';
 
-export function deriveSessionNavigator(snapshot = {}, local = {}, now = Date.now()) {
-  const index=buildSessionSearchIndex(snapshot);const results=searchSessionEntities(index,local.query||'',60);const selected=results[Math.max(0,Math.min(results.length-1,Number(local.selectedIndex||0)))]||null;
-  const threads=buildQuestionThreadGraph(snapshot);const selectedQuestionId=String(local.selectedEntityId||selected?.type==='question'&&selected?.id||'');const selectedRoot=selectedQuestionId&&threads.nodes[selectedQuestionId]?questionFollowUpChain(threads,selectedQuestionId)[0]?.id:threads.roots[0];
-  const paceBaseline=derivePaceBaseline(snapshot);const debrief=deriveGuidedDebrief(snapshot);const postInterview={exportComplete:Number(snapshot.sessionNavigator?.debriefExports||0)>0,reviewReady:debrief.exportReady};const breadcrumbsNow=deriveSessionNavigatorNow({...snapshot,postInterview},local,now);
+export function deriveSessionNavigator(snapshot = {}, local = {}, now = Date.now(), options = {}) {
+  const cached = options.base?._cache || null;
+  const index=cached?.searchIndex || buildSessionSearchIndex(snapshot);const results=searchSessionEntities(index,local.query||'',60);const selected=results[Math.max(0,Math.min(results.length-1,Number(local.selectedIndex||0)))]||null;
+  const threads=cached?.threadGraph || buildQuestionThreadGraph(snapshot);const selectedQuestionId=String(local.selectedEntityId || (selected?.type==='question' ? selected.id : ''));const selectedRoot=selectedQuestionId&&threads.nodes[selectedQuestionId]?questionFollowUpChain(threads,selectedQuestionId)[0]?.id:threads.roots[0];
+  const paceBaseline=derivePaceBaseline(snapshot);
+  const debrief=deriveGuidedDebrief(snapshot);
+  const completedRoleExport=(snapshot.commandJournal||[]).some(item=>item?.command==='export_session' && item?.result?.ok===true && Array.isArray(item.result.exportedTabIds) && item.result.exportedTabIds.length===2);
+  const postInterview={exportComplete:completedRoleExport,debriefExported:Number(snapshot.sessionNavigator?.debriefExports||0)>0,reviewReady:completedRoleExport&&debrief.exportReady};
+  const breadcrumbsNow=deriveSessionNavigatorNow({...snapshot,postInterview},local,now);
   return{
     ...breadcrumbsNow,
     search:{query:String(local.query||''),results,selected,preview:buildSearchPreview(selected),recent:recentNavigatorHistory(snapshot.sessionNavigator?.history||[],local.recent||[])},
@@ -24,7 +29,8 @@ export function deriveSessionNavigator(snapshot = {}, local = {}, now = Date.now
     bookmarks:{...deriveBookmarkNavigator(snapshot,local.bookmarks||{}),categories:bookmarkCategories(snapshot),reviewQueue:bookmarkReviewQueue(snapshot)},
     goals:{matrix:deriveGoalCoverageMatrix(snapshot),gaps:prioritizeGoalGaps(snapshot),phaseCoverage:derivePhaseCoverage(snapshot)},
     debrief,
-    postInterview
+    postInterview,
+    _cache:{searchIndex:index,threadGraph:threads}
   };
 }
 

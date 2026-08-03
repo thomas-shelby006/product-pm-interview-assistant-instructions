@@ -2,7 +2,8 @@
 param(
     [string]$UserDataRoot = (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data'),
     [string]$ExpectedExtensionPath = '',
-    [string]$ProfileDirectory = ''
+    [string]$ProfileDirectory = '',
+    [string]$BrowserName = 'Chromium browser'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -116,7 +117,7 @@ function New-PmiaProfileRow {
     $issueMessage = 'PMIA extension registration matches this profile.'
     if ($null -eq $Candidate) {
         $issueCode = 'EXTENSION_NOT_REGISTERED'
-        $issueMessage = 'PMIA is not registered in this Edge profile.'
+        $issueMessage = "PMIA is not registered in this $BrowserName profile."
     } else {
         $extensionId = [string]$Candidate.Id
         $registeredPath = [string]$Candidate.RegisteredPath

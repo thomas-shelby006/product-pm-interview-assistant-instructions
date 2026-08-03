@@ -34,7 +34,7 @@ test('Cycle 151 persists navigator metadata through Pilot export and restore', (
 test('Cycles 152-153 derive current-state rail and workflow breadcrumbs', () => {
   const value = deriveSessionNavigatorNow(snapshot({liveSession:{phase:'debrief'},postInterview:{exportComplete:true,reviewReady:true}}),{},100);
   assert.equal(value.phase,'review');
-  assert.equal(value.rail.length,4);
+  assert.equal(value.rail.length,5);
   assert.equal(value.breadcrumbs.find(item=>item.id==='review').state,'current');
   assert.equal(value.breadcrumbs.find(item=>item.id==='shutdown').state,'upcoming');
 });
@@ -68,7 +68,7 @@ test('Cycles 151-155 package one Navigator surface and allow-listed visit comman
   ]);
   assert.match(html,/data-view="navigator"[\s\S]*id="panelNavigator"/);
   assert.match(html,/id="sessionNavigatorBreadcrumbs"[\s\S]*data-navigator-tab="debrief"/);
-  assert.match(script,/deriveSessionNavigatorNow[\s\S]*renderSessionNavigator/);
+  assert.match(script,/deriveSessionNavigator[\s\S]*renderSessionNavigator/);
   assert.match(script,/navigatorQuickOpenFromKeyboard/);
   assert.match(css,/session-navigator-rail/);
   assert.match(protocol,/record_session_navigator_visit/);

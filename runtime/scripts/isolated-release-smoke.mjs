@@ -136,6 +136,7 @@ const evidence = {
   commandRegistryDigest,
   selfTest: { ok: false },
   sourceSubmission: { attempts: 0, rendered: false },
+  manualCopyAdmissions: [],
   finals: [],
   batches: {},
   ledger: [],
@@ -215,6 +216,21 @@ async function pageState(role) {
 }
 async function manualCopy(text) {
   return sender.evaluate(`(()=>{const node=document.createElement('div');node.textContent=${JSON.stringify(text)};node.style.cssText='position:fixed;left:-9999px;top:-9999px;white-space:pre-wrap';document.body.append(node);const range=document.createRange();range.selectNodeContents(node);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('copy',{bubbles:true,cancelable:true}));selection.removeAllRanges();node.remove();return true})()`, { userGesture: true });
+}
+
+async function manualCopyAndAwaitOwnership(label, text) {
+  const copied = await manualCopy(text);
+  if (!copied) throw new Error(`${label} manual copy was not dispatched`);
+  const admitted = await waitFor(`${label} admitted to durable ownership`, async () => {
+    const pilot = await pilotState();
+    const entry = (pilot?.ledger || []).find(item => item?.envelope?.text === text);
+    return {
+      ok: Boolean(entry),
+      value: entry ? { id: entry.id, seq: Number(entry.envelope?.seq || 0), state: entry.state } : null
+    };
+  }, 30000, 250);
+  evidence.manualCopyAdmissions.push({ label, text, ...admitted.value, admittedAt: Date.now() });
+  return admitted.value;
 }
 
 try {
@@ -357,9 +373,8 @@ try {
     return { ok: state.users.includes(questions.q1), value: state };
   }, 90000, 500);
 
-  await manualCopy(questions.q2);
-  await sleep(350);
-  await manualCopy(questions.q3);
+  await manualCopyAndAwaitOwnership('Q2', questions.q2);
+  await manualCopyAndAwaitOwnership('Q3', questions.q3);
 
   evidence.noResponseResolution = { required: false, action: '', completedAt: 0 };
 
