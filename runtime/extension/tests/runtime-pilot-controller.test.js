@@ -494,3 +494,27 @@ test('resume catch-up submits the held receiver batch and only resumes sender fo
   assert.equal(direct.some(([role, command, payload]) => role === 'receiver' && command === 'resume_forwarding' && payload.submit === true), true);
   assert.equal(direct.some(([role, command]) => role === 'sender' && command === 'pause'), false);
 });
+
+
+test('duplicate coordination recovery requests execute the receiver command once', async () => {
+  const { controller, registry, runtimeCommands } = setup();
+  await ready(controller, registry);
+  for (const command of ['retry_carryover', 'keep_accumulating']) {
+    const request = {
+      sessionId: 's1',
+      requestId: `${command}-same-request`,
+      command,
+      payload: {}
+    };
+    const first = await controller.handleCommand(request);
+    const second = await controller.handleCommand(request);
+    assert.equal(first.ok, true);
+    assert.equal(second.ok, true);
+    assert.equal(second.replayed, true);
+    assert.equal(
+      runtimeCommands.filter(([, value]) => value === command).length,
+      1,
+      `${command} must execute exactly once`
+    );
+  }
+});

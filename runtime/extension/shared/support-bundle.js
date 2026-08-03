@@ -1,3 +1,5 @@
+import { deriveTurnCoordinationEvidence } from './turn-coordination-evidence.js';
+
 function clean(value, max = 160) {
   return String(value || '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, max);
 }
@@ -71,6 +73,7 @@ export function buildSafeSupportBundle(snapshot = {}, { manifest = {}, sourceHas
     deliveryPolicy: {
       active: Boolean(snapshot.deliveryPolicy?.active), reason: clean(snapshot.deliveryPolicy?.reason, 80), resumeWhen: clean(snapshot.deliveryPolicy?.resumeWhen, 120), allowPersist: snapshot.deliveryPolicy?.allowPersist !== false, allowProviderWrite: snapshot.deliveryPolicy?.allowProviderWrite !== false
     },
+    turnCoordination: deriveTurnCoordinationEvidence(snapshot),
     roles: { sender: role(snapshot.sender), receiver: role(snapshot.receiver) },
     ledger: {
       counts: { ...(snapshot.ledgerCounts || {}) },
