@@ -5,7 +5,8 @@ export function deriveReceiverCredits({
   hold = false,
   paused = false,
   storageCritical = false,
-  draftConflict = false
+  draftConflict = false,
+  stagingOnly = false
 } = {}) {
   const capacity = Math.max(1, Number(maxBuffered) || 200);
   const buffered = Math.max(0, Number(bufferedCount) || 0);
@@ -13,7 +14,7 @@ export function deriveReceiverCredits({
   let reason = '';
   if (storageCritical) reason = 'storage_critical';
   else if (paused) reason = 'transport_paused';
-  else if (hold) reason = 'operator_hold';
+  else if (hold && !stagingOnly) reason = 'operator_hold';
   else if (draftConflict) reason = 'draft_conflict';
   const available = reason ? 0 : Math.max(0, capacity - buffered - Math.min(active, capacity));
   return {

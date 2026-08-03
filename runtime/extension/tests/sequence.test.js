@@ -88,3 +88,14 @@ test('receiver duplicate acknowledgement returns before batch admission', async 
   assert.match(receive, /duplicate:\s*true/);
   assert.match(receive, /buffered:\s*Boolean\(sequenceDecision\.buffered\)/);
 });
+
+
+test('receiver admission marks forwarding pause as staging-only credit use', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { dirname, resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const source = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
+  const receive = source.slice(source.indexOf('async function receiveEnvelope'), source.indexOf('async function handleRuntimeCommand'));
+  assert.match(receive, /stagingOnly:\s*currentBatchState\?\.turnCoordination\?\.mode === 'paused_accumulating'/);
+});
