@@ -99,6 +99,10 @@ The fifth browser attempt showed that local receiver coordination could still la
 
 Commit `06b010c` implements the planned internal `coordinationMode: paused_stage` route. The controller classifies the already-persisted final; background creates a delivery-only envelope copy with that metadata; the receiver admits staging from explicit mode or local state. The durable ledger envelope and identity remain unchanged. Focused verification passed **113/113**.
 
+## Sixth browser attempt and credit-smoothing propagation fix
+
+The sixth attempt confirmed the explicit mode reached `receiveEnvelope`, but the local `deriveSmoothedReceiverCredits` wrapper reconstructed the raw input without `stagingOnly`. Commit `74a3956` forwards that field into `deriveReceiverCredits`, preserving the explicit provider-free path through hysteresis. Focused paused-delivery verification passed **114/114**.
+
 ## Remaining sequence
 
 1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact combined integration HEAD and retain the complete gate log outside the repository.

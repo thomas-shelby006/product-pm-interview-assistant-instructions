@@ -46,6 +46,8 @@ The fourth browser attempt proved durable Q2/Q3 ownership and an empty outbox bu
 
 The fifth attempt proved local receiver coordination can lag the controller decision. Commit `06b010c` carries `paused_stage` only on the scheduled delivery copy so receiver staging is explicit without mutating the durable ledger envelope; 113/113 focused tests passed.
 
+The sixth attempt exposed one final propagation omission: the smoothing wrapper dropped `stagingOnly`. Commit `74a3956` forwards it through hysteresis; 114/114 focused tests passed.
+
 ## Final acceptance
 
 Readiness remains blocked until:
