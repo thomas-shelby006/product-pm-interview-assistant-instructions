@@ -38,7 +38,7 @@ export function buildHandoffManifest({ snapshot = {}, production = {}, evidence 
   const release = deriveReleaseHandoff(snapshot, production, evidence);
   return {
     schema: 'pmia-handoff/v1',
-    version: String(production.diagnostics?.fingerprint?.version || '0.10.1'),
+    version: String(production.diagnostics?.fingerprint?.version || '0.10.2'),
     commit: release.commit,
     ready: release.ready,
     gates: release.gates,

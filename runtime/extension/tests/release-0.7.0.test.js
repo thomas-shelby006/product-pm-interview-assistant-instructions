@@ -9,19 +9,19 @@ const runtimeRoot = resolve(extensionRoot, '..');
 const repoRoot = resolve(runtimeRoot, '..');
 const read = (path) => readFile(resolve(repoRoot, path), 'utf8');
 
-test('release surfaces identify PMIA runtime 0.10.1', async () => {
+test('release surfaces identify PMIA runtime 0.10.2', async () => {
   const manifest = JSON.parse(await readFile(resolve(extensionRoot, 'manifest.json'), 'utf8'));
   const rootReadme = await read('README.md');
   const extensionReadme = await read('runtime/extension/README.md');
   const deploymentGuide = await read('DEPLOYMENT_GUIDE.md');
-  assert.equal(manifest.version, '0.10.1');
-  assert.match(rootReadme, /0\.10\.1/);
-  assert.match(extensionReadme, /Runtime 0\.10\.1/);
+  assert.equal(manifest.version, '0.10.2');
+  assert.match(rootReadme, /0\.10\.2/);
+  assert.match(extensionReadme, /Runtime 0\.10\.2/);
   assert.match(rootReadme, /Runtime Pilot Dashboard/);
   assert.match(extensionReadme, /Runtime Pilot Dashboard/);
   assert.match(deploymentGuide, /PMIA Deployment\\current\\runtime\\extension/);
   assert.match(deploymentGuide, /pmia-0\.6\.1-installed/);
-  assert.match(deploymentGuide, /0\.10\.1/);
+  assert.match(deploymentGuide, /0\.10\.2/);
 });
 
 test('active docs describe structured memory-only session setup', async () => {

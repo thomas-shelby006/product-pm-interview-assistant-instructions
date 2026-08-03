@@ -41,22 +41,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 
 The command must return JSON with `"ok": true`.
 
-## Load the current extension in Microsoft Edge
+## Activate the current extension in Microsoft Edge
 
 1. In the Edge profile used for interviews, open `edge://extensions`.
 2. Turn on **Developer mode**.
-3. Find the existing **PM Interview Dual-Provider Runtime** entry. Record its version and leave it enabled until the new entry has loaded successfully.
-4. Select **Load unpacked**.
-5. Choose this directory, not its parent:
+3. Find the existing **PM Interview Dual-Provider Runtime** entry.
+4. Select **Reload** first. The retained compatibility path resolves to the stable `PMIA Deployment\current` package.
+5. Confirm the card says **PM Interview Dual-Provider Runtime** and version **0.10.2**.
+6. If the card is missing, Reload fails, or Edge remains on an older version, select **Load unpacked** and choose this exact directory:
 
 ```text
 C:\Users\Sundar\Documents\PMIA Deployment\current\runtime\extension
 ```
 
-6. Confirm the loaded card says **PM Interview Dual-Provider Runtime** and version **0.10.1**.
-7. Select **Reload** on the new card once.
-8. If Edge reuses the same extension ID and replaces the old path, verify the card's inspected source points to the `PMIA Deployment\current` path.
-9. If Edge shows two PMIA cards, keep both temporarily until the current one passes preflight.
+7. If Edge shows two PMIA cards, keep both temporarily until the current card passes Preflight, then remove only the old card.
+
+Before Reload, Profile Doctor may report `pathMatches=True` with `EXTENSION_VERSION_MISMATCH`; that means the path is correct but Edge still caches the old manifest. After Reload it must report version 0.10.2 and `issueCode=OK`.
 
 Do not manually edit `Preferences` or `Secure Preferences`. Do not use command-line `--load-extension` with the normal profile.
 
@@ -75,7 +75,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 
 The selected row must report:
 
-- `version` = `0.10.1`
+- `version` = `0.10.2`
 - `pathMatches` = `True`
 - `issueCode` = `OK`
 
@@ -90,7 +90,7 @@ In Session Studio:
 1. Select the same Edge profile.
 2. Select the required sender and receiver providers.
 3. Select **Preflight**.
-4. Confirm the health line says PMIA 0.10.1 is registered from the expected path.
+4. Confirm the health line says PMIA 0.10.2 is registered from the expected path.
 5. Launch a disposable session without sensitive Resume/JD content.
 6. Confirm sender, receiver, and Runtime Pilot Dashboard all reach READY.
 7. Run **Check Live** or press `Alt+H`.

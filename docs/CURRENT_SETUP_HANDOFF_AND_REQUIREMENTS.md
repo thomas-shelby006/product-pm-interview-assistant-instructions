@@ -10,7 +10,7 @@ Operate a low-latency, exactly-once Product Management mock-interview assistant 
 
 - **Browser:** Microsoft Edge Stable, one selected profile verified by Profile Doctor.
 - **Launcher:** `runtime/Final_2_Window_Extension.ahk`.
-- **Provider/dashboard runtime:** `runtime/extension/`, Manifest V3 version 0.10.1 candidate.
+- **Provider/dashboard runtime:** `runtime/extension/`, Manifest V3 version 0.10.2 candidate.
 - **Transport:** disposable preview plus sender outbox, durable lossless final ledger, session-level pause, direct role ports and active/next receiver batching through the extension service worker.
 - **Dashboard:** `runtime/extension/dashboard/`, a session-scoped third Edge app window connected by a long-lived runtime port.
 - **Providers:** ChatGPT and Claude independently selectable as sender or receiver.
@@ -80,8 +80,8 @@ Review Studio detects one exact READY pair, exports both roles through `PMIA_RUN
 ## Repositories and paths
 
 - System repository: `thomas-shelby006/product-pm-interview-assistant-instructions`.
-- Active isolated candidate: `C:\Users\Sundar\Documents\product-pm-interview-assistant-improvement`.
-- Original checkout: `C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions`.
+- Active isolated candidate: `C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\.worktrees\pmia-0102-hardening`, branch `hardening/pmia-0.10.2`.
+- Canonical checkout: `C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions`, branch `main`; promotion occurs only after exact candidate verification.
 - Private tracker: `thomas-shelby006/pm-interview-session-tracker`.
 - Local tracker: `C:\Users\Sundar\Documents\pm-interview-session-tracker`.
 
@@ -91,4 +91,4 @@ Review Studio detects one exact READY pair, exports both roles through `PMIA_RUN
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-The exact candidate tree must pass Node tests, JavaScript validation, main-launcher validation, Review Studio validation, diff/encoding review, and any required browser-evidence smoke before publication. Do not push, merge, tag, or alter canonical main as part of this candidate unless separately authorized.
+The exact candidate tree must pass Node tests, JavaScript validation, main-launcher validation, Review Studio validation, diff/encoding review, and any required browser-evidence smoke before publication. The current task authorizes a local fast-forward of `main` after exact verification. Do not push, tag, publish, or deploy to cloud infrastructure.

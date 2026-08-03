@@ -1,6 +1,6 @@
 function clean(value, max = 160) { return String(value || '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, max); }
 
-export function buildReleaseIdentity({ name = 'PMIA', version = '0.10.1', commit = '', manifestHash = '', evidenceHash = '', builtAt = 0 } = {}) {
+export function buildReleaseIdentity({ name = 'PMIA', version = '0.10.2', commit = '', manifestHash = '', evidenceHash = '', builtAt = 0 } = {}) {
   return { name: clean(name, 80), version: clean(version, 32), commit: clean(commit, 64), manifestHash: clean(manifestHash, 128), evidenceHash: clean(evidenceHash, 128), builtAt: Math.max(0, Number(builtAt || 0)), channel: 'candidate' };
 }
 

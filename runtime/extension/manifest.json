@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PM Interview Dual-Provider Runtime",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Low-latency dual-provider PM interview runtime with provisional previews, lossless final delivery, provider-rendered delivery proof, non-preemptive batching, self-healing background-safe recovery, ephemeral session state, live interview navigation, accessibility, and the Runtime Pilot Dashboard.",
   "permissions": [
     "storage",
