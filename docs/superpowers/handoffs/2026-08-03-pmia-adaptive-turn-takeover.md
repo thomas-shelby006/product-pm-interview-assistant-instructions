@@ -69,6 +69,12 @@ Exact commit `31a8c0f` passed:
 
 Retained log: `C:\Users\Sundar\Documents\PMIA-Evidence-Archive\adaptive-turn-31a8c0f-20260803-final\complete-gate.log`.
 
+## First corrected-line browser attempt
+
+Attempt `c71315f` failed at the smoke-only observation `Q1 rendered in receiver`; process-tree and disposable-profile cleanup both passed. The same evidence proved Q1 was persisted, submitted, rendered-proof verified, and answered with 116 words. The external page reader returned empty user/assistant arrays because it only queried legacy ChatGPT message attributes.
+
+Commit `c609d19` updates the smoke reader to mirror the production adapter's legacy and compact transcript selectors and compact text extraction. Focused adjacent verification passed **86/86**. Re-run the complete gate before the next browser attempt.
+
 ## Remaining sequence
 
 1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact combined integration HEAD and retain the complete gate log outside the repository.

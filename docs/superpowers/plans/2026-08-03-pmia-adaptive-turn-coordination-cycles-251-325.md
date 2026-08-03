@@ -303,7 +303,10 @@ The focused owning matrix passed **91/91** tests across controller, store recove
 - The real pre-merge manifest correctly recognized both preserved historical worktrees while blocking on the still-unmerged or dirty active lanes.
 - Integration is clean.
 - Complete automated gate on exact commit `31a8c0f` passed **1,315/1,315 tests**, **513 JavaScript files**, **18 required runtime surfaces**, **287 reachable production modules**, and all three AutoHotkey validations.
-- Fresh isolated browser evidence remains pending.
+- First fresh browser attempt at `c71315f` failed on the smoke harness wait `Q1 rendered in receiver`; cleanup passed. Runtime evidence already showed durable persistence, exact rendered proof, and a completed 116-word answer, while the external reader returned no messages.
+- Root cause: the smoke reader supported only legacy `data-message-author-role` nodes, while the production adapter also supports compact `data-conversation-transcript` / `data-message-role` nodes.
+- Compact transcript parity fix committed at `c609d19`; adjacent adapter, transcript, smoke, and release-evidence matrix passed **86/86**.
+- Complete corrected-HEAD gate and fresh isolated browser evidence remain pending.
 
 ### Remaining in scope
 

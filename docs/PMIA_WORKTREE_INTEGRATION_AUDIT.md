@@ -36,6 +36,8 @@ The lane file sets were non-overlapping and the integration worktree is clean.
 
 Exact commit `31a8c0f` passed 1,315/1,315 tests, extension validation across 513 JavaScript files, 18 required runtime surfaces, 287 reachable production modules, and all three AutoHotkey validations. The complete log is retained outside the repository under `PMIA-Evidence-Archive\adaptive-turn-31a8c0f-20260803-final`.
 
+The first browser attempt at `c71315f` exposed a stale smoke-observer boundary, not a transport regression: runtime proof and answer completion succeeded, but the external reader omitted compact ChatGPT message nodes. Commit `c609d19` aligns the smoke reader with production transcript selectors; 86/86 focused tests passed.
+
 ## Final acceptance
 
 Readiness remains blocked until:
