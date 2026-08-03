@@ -481,8 +481,9 @@ async function startRuntime(runtimeConfig) {
         : undefined,
       isVoiceActive: isCombinedVoiceActive,
       isComposerEmpty: () => adapter.isComposerEmpty?.() ?? true,
-      allowFallbackFinalization: runtimeConfig.provider === 'chatgpt',
-      allowVoiceFallback: runtimeConfig.provider === 'chatgpt',
+      allowFallbackFinalization: runtimeConfig.provider !== 'chatgpt',
+      allowPreview: runtimeConfig.provider !== 'chatgpt',
+      allowVoiceFallback: false,
       onPreview(preview) {
         if (runtimeConfig.provider === 'claude' && isCombinedVoiceActive()) return false;
         return previewScheduler.push(preview);

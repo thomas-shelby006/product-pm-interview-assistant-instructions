@@ -12,7 +12,8 @@ export function createProviderSender({
   setTimeoutFn = globalThis.setTimeout,
   clearTimeoutFn = globalThis.clearTimeout,
   allowVoiceFallback = false,
-  allowFallbackFinalization = true
+  allowFallbackFinalization = String(adapter?.provider || '').toLowerCase() !== 'chatgpt',
+  allowPreview = String(adapter?.provider || '').toLowerCase() !== 'chatgpt'
 }) {
   let timer = null;
   let stopped = false;
@@ -57,7 +58,7 @@ export function createProviderSender({
         renderedBoundary: isProviderGenerating()
       });
       const preview = tracker.takePreview?.();
-      if (preview) emitPreview(preview);
+      if (allowPreview && preview) emitPreview(preview);
       for (const final of finals) emitFinal(final);
       scheduleFallback(now);
       return finals;

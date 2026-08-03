@@ -1,0 +1,242 @@
+# PMIA Adaptive Turn Coordination Cycles 251–325 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Deliver final-only ChatGPT admission, lossless pause/accumulate/resume, and evidence-gated interrupted-answer carryover while reducing latency without weakening proof, privacy, or recovery.
+
+**Architecture:** Keep the MV3 service worker, sender outbox, DeliveryLedger, contiguous sequence gate, BatchPlanner, receiver batch runtime, and rendered-turn proof as the only authorities. Add one pure turn-coordination policy/state owner that classifies authoritative turn relationships and supplies prompt mode metadata; receiver staging and interruption remain transactions of the existing planner rather than a second queue.
+
+**Tech Stack:** Manifest V3 JavaScript modules, Chrome storage/session APIs, DOM MutationObserver-based provider adapters, Node `node:test`, AutoHotkey v2 launcher, isolated Edge smoke.
+
+## Global Constraints
+
+- No final transcript may be dropped, evicted, replaced by text similarity, or acknowledged before durable ownership.
+- ChatGPT provider submission may start only from an authoritative finalized DOM turn; weak stable-tail fallback is disabled.
+- Claude voice protocol finals remain authoritative; DOM fallback remains provider-specific and conservative.
+- Ordinary later questions accumulate without stopping Window 2; automatic stop requires explicit supersession/continuation evidence.
+- Pause means provider submission is blocked while durable admission and Window 2 draft mirroring continue.
+- Default resume automatically submits the complete accumulated batch exactly once; Resume Without Send remains available.
+- No automatic foreground activation, tab focus, broad window cleanup, external API, or new persistent transcript store.
+- Question, answer, resume, JD, and combined prompt text remain session-scoped; support exports stay metadata-only.
+- Event-driven observers are primary; timers are bounded watchdogs because hidden pages can throttle timers.
+- Every production behavior begins with a failing test, then minimal implementation, focused green gate, and module checkpoint update.
+
+---
+## Research and owning-boundary findings
+
+- Chrome extension service workers are ephemeral; coordinator state required after suspension must be committed through the existing runtime store, not held only in service-worker globals.
+- `chrome.storage.session` is appropriate for sensitive in-session state and is cleared on extension reload/browser restart; the durable DeliveryLedger remains the recovery authority.
+- MutationObserver/provider lifecycle signals must drive finalization and interruption. Hidden-page timers are only deadlines/watchdogs.
+- Current ChatGPT premature submission risk is `stable_tail_fallback` after 300 ms. `rendered_user_turn` and `assistant_successor` are stronger DOM boundaries.
+- Current pause already persists finals in the service worker but suppresses receiver delivery, so Window 2 cannot mirror the accumulated combined prompt.
+- Current `interrupt_latest` discards the active-answer context and sends only the latest waiting final. The new carryover operation must preserve active plus waiting member identities.
+
+## File and interface map
+
+**Create**
+- `runtime/extension/shared/turn-coordination-policy.js`: classify final authority, turn relation, pause/resume mode, and automatic-interrupt eligibility.
+- `runtime/extension/shared/turn-coordination-prompt.js`: compose paused-draft and interrupted-carryover prompt variants without changing member identity.
+- `runtime/extension/shared/turn-coordination-state.js`: normalize/export restart-safe metadata-only coordination state.
+- `runtime/extension/dashboard/turn-coordination-model.js`: derive user-facing state, reason, counts, latency and safe actions.
+- `runtime/extension/tests/pmia-0.12-turn-coordination-251-325.test.js`: focused cross-module contracts.
+
+**Modify**
+- `content/senders/provider-sender.js`, `content/senders/dom-turn-tracker.js`, `content/entry.js`
+- `shared/batch-planner.js`, `content/receiver-batch-runtime.js`, `content/receiver-answer-orchestrator.js`
+- `shared/runtime-pilot-state.js`, `shared/runtime-pilot-controller.js`, state schema/migrations/store
+- dashboard model/render/controller, command registry/catalog/protocol, HTML/CSS
+- isolated release smoke, validator, release docs and cycle plan.
+
+---
+### Task 1 — Cycles 251–255: Authoritative ChatGPT final admission
+
+**Files:** Modify `content/senders/provider-sender.js`, `content/senders/dom-turn-tracker.js`, `content/entry.js`; test `tests/chatgpt-turn-tracker.test.js`, `tests/provider-sender.test.js`, focused phase suite.
+
+**Interfaces:** Produce `finalAuthority(boundary, provider) -> { authoritative, reason }`; ChatGPT accepts `rendered_user_turn`, `assistant_successor`, and explicit copied final, never `stable_tail_fallback`.
+
+- [x] Write failing tests proving a stable ChatGPT tail and interim preview cannot emit or submit a final, while a stable-ID rendered user turn can.
+- [x] Run focused tests and confirm RED on current 300 ms fallback behavior.
+- [x] Add provider-specific `allowPreview` and final-authority policy; keep Claude protocol final behavior unchanged.
+- [x] Run focused sender/runtime tests; verify no ordinary receiver stop call and no lost explicit copied final.
+- [x] Update this plan checkpoint and commit `feat: require authoritative ChatGPT final turns`.
+
+### Task 2 — Cycles 256–260: Pause accumulation state machine
+
+**Files:** Create `shared/turn-coordination-state.js`; modify runtime state/schema/migrations and `runtime-pilot-controller.js`; test focused phase suite and state migration tests.
+
+**Interfaces:** Produce `normalizeTurnCoordination(value)` with `mode`, `pausedAt`, `resumeAction`, `stagedMemberIds`, `activeCarryover`, `lastReason`, `revision`.
+
+- [ ] Write failing tests for pause persistence, restart restore, bounded metadata, and no raw transcript text.
+- [ ] Verify RED because current pause is only a mode Boolean.
+- [ ] Implement schema-v5 migration and state transitions through the existing per-session mutation lane.
+- [ ] Verify pause/reload/resume preserves ledger ownership and exact member IDs.
+- [ ] Update checkpoint and commit `feat: persist turn coordination state`.
+
+### Task 3 — Cycles 261–265: Provider-free paused staging
+
+**Files:** Modify `runtime-pilot-controller.js`, `background.js`, `content/entry.js`, `content/receiver-batch-runtime.js`; test controller, runtime and receiver batch suites.
+
+**Interfaces:** Add internal delivery metadata `coordinationMode: 'paused_stage'`; receiver accepts it only from the managed service-worker route, forces queue-only, and mirrors the next prompt without provider submission.
+
+- [ ] Write failing tests that a paused final is durable, delivered to receiver staging, visible in the draft, and never calls `submitBatch`.
+- [ ] Confirm RED because paused finals currently remain only in the service-worker ledger.
+- [ ] Implement staged delivery after persistence; duplicate reconcile remains idempotent.
+- [ ] Verify sender/receiver disconnect, missing receiver and storage failure keep unresolved ownership.
+- [ ] Update checkpoint and commit `feat: mirror paused finals without submission`.
+
+### Task 4 — Cycles 266–270: Paused and combined prompt variants
+
+**Files:** Create `shared/turn-coordination-prompt.js`; modify `shared/batch-planner.js` and receiver draft mirroring; test batch planner and prompt contracts.
+
+**Interfaces:** Produce `composeCoordinatedPrompt({ entries, mode })`; modes `ordinary`, `paused`, `carryover`; returned member IDs and member fingerprint remain entry-derived and exact.
+
+- [ ] Write failing tests for one/many paused questions, latest-focus copy, exact order, Unicode, size partitioning and no identity change.
+- [ ] Confirm RED because current prompts have no pause/carryover semantics.
+- [ ] Implement prompt modes as presentation metadata on planner batches, not new queue entries.
+- [ ] Verify rendered-proof fingerprints use the final submitted prompt, while the paused draft may carry a non-submitted banner.
+- [ ] Update checkpoint and commit `feat: add coordinated batch prompts`.
+
+### Task 5 — Cycles 271–275: Atomic resume and latency budgets
+
+**Files:** Modify receiver runtime, controller, dashboard protocol; create coordination latency metrics in state/model; test pause/resume races.
+
+**Interfaces:** `resume_catch_up` clears pause staging and submits once; `resume_without_send` clears transport pause but retains hold/draft; operation returns exact staged/submitted member IDs and latency.
+
+- [ ] Write failing tests for repeated resume, resume during persistence, resume during generation, and service-worker replay.
+- [ ] Confirm RED on current command split and missing staged-draft submission contract.
+- [ ] Implement one idempotent resume transaction ordered by the session mutation coordinator.
+- [ ] Record observe→persist, persist→stage, resume→submit and stop→resubmit latency without transcript text.
+- [ ] Update checkpoint and commit `feat: resume paused batches atomically`.
+
+---
+## Phase B — Cycles 276–300: bug-fixing and race hardening
+
+### Task 6 — Cycles 276–280: Turn relation and supersession policy
+
+**Files:** Create `shared/turn-coordination-policy.js`; test same-turn revision, continuation, independent question and stale replay cases.
+
+**Interfaces:** `classifyTurnRelation({ active, incoming, now, policy }) -> { relation, confidence, autoInterrupt, reasons }`; only `supersedes` or `continues_active` may auto-interrupt.
+
+- [ ] Write failing table tests using stable turn IDs, text extension, boundary strength, sequence and time window.
+- [ ] Verify RED because no relation classifier exists.
+- [ ] Implement deterministic evidence scoring with no semantic model or network dependency.
+- [ ] Verify independent later questions return `accumulate`, and ambiguous evidence fails closed.
+- [ ] Update checkpoint and commit `feat: classify interviewer turn relationships`.
+
+### Task 7 — Cycles 281–285: Active-answer carryover transaction
+
+**Files:** Modify `shared/batch-planner.js`, `content/receiver-batch-runtime.js`, `content/receiver-answer-orchestrator.js`; test planner and receiver runtime.
+
+**Interfaces:** Add `planner.createCarryover(now, metadata)` that freezes active entries plus eligible next entries in sequence order and returns old/new batch identities; no member is removed from known ownership.
+
+- [ ] Write failing tests proving active + waiting members are retained, ordinary next entries remain when excluded, and failed stop restores original state.
+- [ ] Confirm RED because `interruptLatest` currently sends only the newest waiting final.
+- [ ] Implement prepare/stop/commit rollback semantics around the existing BatchTransaction.
+- [ ] Settle the old answer as `cancelled: superseded_turn` exactly once before observing the new batch.
+- [ ] Update checkpoint and commit `feat: carry interrupted answers into combined batch`.
+
+### Task 8 — Cycles 286–290: Automatic evidence-gated interruption
+
+**Files:** Modify `content/entry.js`, receiver runtime and controller; test end-to-end content runtime commands.
+
+**Interfaces:** Incoming authoritative final calls the relation classifier against the active batch; automatic carryover requires policy enabled, active generation, no manual draft conflict, and exact relation evidence.
+
+- [ ] Write failing tests for same-turn continuation auto-stop, independent question no-stop, stop failure, stop timeout and duplicate incoming final.
+- [ ] Verify RED while current runtime only supports token-confirmed operator interruption.
+- [ ] Implement automatic internal command with reason-coded telemetry and no dashboard confirmation token.
+- [ ] Preserve manual `interrupt_latest` as an explicit latest-only operator action.
+- [ ] Update checkpoint and commit `feat: auto-interrupt superseded interviewer turns`.
+
+### Task 9 — Cycles 291–295: Restart, hidden-page and deadline repair
+
+**Files:** Modify runtime store/state recovery, receiver page lifecycle coordinator and alarm schedule; test suspension/reload/hidden tab paths.
+
+**Interfaces:** Persist only coordination metadata and rely on ledger/planner export for members; recovery reconstructs staged/carryover state and schedules the nearest semantic deadline.
+
+- [ ] Write failing tests for service-worker termination after persist, receiver reload while paused, hidden stop watchdog, and stale alarm generation.
+- [ ] Confirm RED where coordination state is not yet recoverable.
+- [ ] Rehydrate through existing schema/store and use MutationObserver/lifecycle pulses before timer watchdogs.
+- [ ] Verify no foreground activation, no repeated submit, and no global service-worker memory authority.
+- [ ] Update checkpoint and commit `fix: recover coordinated turns across lifecycle changes`.
+
+### Task 10 — Cycles 296–300: Proof, storage, draft and command races
+
+**Files:** Modify proof reconciliation, composer arbiter integration, command journal and storage accounting; test conflict/replay/compaction cases.
+
+**Interfaces:** A carryover batch has exact member-set proof and its own prompt fingerprint; paused drafts remain PMIA-owned but manual edits trigger the existing conflict workspace.
+
+- [ ] Write failing tests for partial proof, old-batch late terminal event, manual edit during pause, compact/reload, repeated command and stale confirmation.
+- [ ] Confirm RED on each reproduced regression before implementation.
+- [ ] Fix the owning boundary; do not add compatibility whitelists or text-only duplicate suppression.
+- [ ] Run all coordination, batch, ledger, answer and state tests after each fix block.
+- [ ] Update checkpoint and commit `fix: harden coordinated turn races`.
+
+---
+
+## Phase C — Cycles 301–325: inferred user-facing features
+
+### Task 11 — Cycles 301–305: Turn Coordination cockpit
+
+**Files:** Create `dashboard/turn-coordination-model.js`; modify dashboard HTML/CSS/render and Navigator Now rail.
+
+**Interfaces:** Show mode, staged count, active/carryover count, latest safe action, reason, auto-send state and latency without transcript text in telemetry cards.
+
+- [ ] Write failing model/render tests for active, paused, carryover, blocked and recovered states.
+- [ ] Implement one compact live card and responsive/print behavior; no duplicate controls.
+- [ ] Add Pause, Resume and Resume Without Send actions through the command registry.
+- [ ] Verify keyboard focus, ARIA status and 320/280 px layouts.
+- [ ] Update checkpoint and commit `feat: add turn coordination cockpit`.
+
+### Task 12 — Cycles 306–310: Coordination policy presets
+
+**Files:** Modify production controls/state, command catalog and cockpit; test policy application and preview confirmation.
+
+**Interfaces:** Presets `conservative`, `adaptive`, `manual`; default `adaptive` disables weak finalization and permits only evidence-gated same-turn carryover.
+
+- [ ] Write failing tests for preset impact, invalid policy, persistence and containment interaction.
+- [ ] Implement policy preview before changing automatic interruption behavior.
+- [ ] Keep provider final authority non-overridable; presets may only become more conservative.
+- [ ] Verify profile changes cannot unpause, submit or interrupt by themselves.
+- [ ] Update checkpoint and commit `feat: add coordination policy presets`.
+
+### Task 13 — Cycles 311–315: Pause draft banner and resume preview
+
+**Files:** Modify composer arbiter, receiver batch preview, cockpit and dashboard dialog.
+
+**Interfaces:** Paused composer shows a clear non-submitted banner, protected-question count, latest-focus statement, and whether resume sends or retains the draft.
+
+- [ ] Write failing tests for banner replacement, no duplicate banner, manual conflict, one-question and partitioned drafts.
+- [ ] Implement banner as prompt presentation, never as an extra ledger member.
+- [ ] Add a metadata-only resume preview listing counts, IDs and expected partitions.
+- [ ] Verify resume replaces the UI-only banner with the final combined-turn instruction before proof.
+- [ ] Update checkpoint and commit `feat: preview paused resume behavior`.
+
+### Task 14 — Cycles 316–320: Interruption explanation and recovery controls
+
+**Files:** Extend interruption recovery card, command history, Navigator events and support-bundle metadata.
+
+**Interfaces:** Expose reason codes, relation evidence, old/new batch IDs, preserved count, stop latency and recovery action; never expose question or answer text.
+
+- [ ] Write failing tests for successful carryover, blocked ambiguity, stop failure, late old-answer event and restart recovery.
+- [ ] Implement explanation model and safe Retry Carryover / Keep Accumulating actions.
+- [ ] Record a bookmarkable evidence event for review without transcript content.
+- [ ] Verify support-bundle redaction and command replay idempotency.
+- [ ] Update checkpoint and commit `feat: explain turn interruptions and recovery`.
+
+### Task 15 — Cycles 321–325: Efficiency scorecard and release evidence
+
+**Files:** Extend performance budget/scorecard, isolated smoke, validator, release docs and handoff manifest.
+
+**Interfaces:** Report p50/p95 final admission, pause-stage, resume-submit and stop-resubmit latency; target processing capacity is measured from runtime events, not claimed from cycle-writing speed.
+
+- [ ] Write failing tests for bounded metrics, no text leakage, stale sample handling and scorecard thresholds.
+- [ ] Add isolated smoke scenarios: ChatGPT final-only; pause two finals and auto-resume; same-turn continuation carryover; ordinary new-question accumulation; restart recovery.
+- [ ] Run focused suites, full Node suite, extension validator, three AutoHotkey checks, fresh isolated Edge smoke and exact cleanup.
+- [ ] Update release/handoff evidence from exact HEAD; remove only assistant-created task-temp files.
+- [ ] Mark every task checkpoint complete and commit `feat: complete adaptive turn coordination`.
+
+---
+
+## Completion test
+
+The phase is complete only when the exact committed HEAD proves all of the following: no ChatGPT weak-tail submission; paused finals remain durable and visible as a combined Window 2 draft; default resume submits once; Resume Without Send retains the draft; same-turn continuation stops and carries the previous active question forward; independent questions do not auto-stop; restart/reload preserves ownership; support data is text-free; full validation and fresh isolated-browser evidence exit zero; original worktree and normal browser remain untouched.

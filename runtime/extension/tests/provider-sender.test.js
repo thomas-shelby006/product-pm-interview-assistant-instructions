@@ -242,3 +242,35 @@ test('provider sender can disable every stable-tail finalization path while pres
   assert.equal(finals[0].boundary, 'assistant_successor');
   sender.disconnect();
 });
+
+test('ChatGPT defaults to final-only DOM admission with no provisional preview or fallback timer', () => {
+  let messages = [];
+  let generating = false;
+  const timers = [];
+  const previews = [];
+  const finals = [];
+  const adapter = {
+    provider: 'chatgpt',
+    getConversationMessages: () => messages,
+    isVoiceActive: () => false,
+    isComposerEmpty: () => true,
+    isGenerating: () => generating
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    onPreview: value => previews.push(value),
+    onFinal: value => finals.push(value),
+    setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeoutFn: () => {}
+  });
+  messages = [message('chatgpt-u1', 'user', 'How would you')];
+  sender.observe(10);
+  assert.deepEqual(previews, []);
+  assert.deepEqual(timers, []);
+  assert.deepEqual(finals, []);
+  generating = true;
+  messages = [message('chatgpt-u2', 'user', 'How would you prioritize this launch?')];
+  sender.observe(20);
+  assert.deepEqual(finals, [{ id: 'chatgpt-u2', text: 'How would you prioritize this launch?', boundary: 'rendered_user_turn' }]);
+  sender.disconnect();
+});
