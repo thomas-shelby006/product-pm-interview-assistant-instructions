@@ -9,11 +9,13 @@ export class RecoveryBudget {
   #maxAutomatic;
   #windowMs;
   #cooldownMs;
+  #maxStoredAttempts;
 
-  constructor(state = {}, { maxAutomatic = 4, windowMs = 300000, cooldownMs = 60000 } = {}) {
+  constructor(state = {}, { maxAutomatic = 4, windowMs = 300000, cooldownMs = 60000, maxStoredAttempts = 32 } = {}) {
     this.#maxAutomatic = Math.max(1, Number(maxAutomatic) || 4);
     this.#windowMs = Math.max(1000, Number(windowMs) || 300000);
     this.#cooldownMs = Math.max(1000, Number(cooldownMs) || 60000);
+    this.#maxStoredAttempts = Math.max(this.#maxAutomatic, Number(maxStoredAttempts) || 32);
     this.#value = {
       attempts: normalizeAttempts(state?.attempts),
       exhaustedAt: Math.max(0, Number(state?.exhaustedAt) || 0),
@@ -25,7 +27,15 @@ export class RecoveryBudget {
 
   #prune(now) {
     const threshold = Number(now) - this.#windowMs;
-    this.#value.attempts = this.#value.attempts.filter(item => item.at >= threshold);
+    const active = this.#value.attempts.filter(item => item.at >= threshold);
+    if (active.length > this.#maxStoredAttempts) {
+      const automatic = active.filter(item => item.source === 'automatic').slice(-this.#maxAutomatic);
+      const remaining = Math.max(0, this.#maxStoredAttempts - automatic.length);
+      const manual = active.filter(item => item.source !== 'automatic').slice(-remaining);
+      this.#value.attempts = [...automatic, ...manual].sort((left, right) => left.at - right.at);
+    } else {
+      this.#value.attempts = active;
+    }
     if (this.#value.cooldownUntil && Number(now) >= this.#value.cooldownUntil) {
       this.#value.exhaustedAt = 0;
       this.#value.cooldownUntil = 0;
