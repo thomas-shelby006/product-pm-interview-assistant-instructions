@@ -345,7 +345,16 @@ async function handleForward(message, tabId, registry) {
   }
 
   if (message.envelope.kind !== 'boot') {
-    await schedulePersistedDelivery(message.envelope);
+    const deliveryEnvelope = pilotDecision.deliveryMode && pilotDecision.deliveryMode !== 'normal'
+      ? {
+          ...message.envelope,
+          metadata: {
+            ...(message.envelope.metadata || {}),
+            coordinationMode: pilotDecision.deliveryMode
+          }
+        }
+      : message.envelope;
+    await schedulePersistedDelivery(deliveryEnvelope);
     return {
       ok: true,
       persisted: true,

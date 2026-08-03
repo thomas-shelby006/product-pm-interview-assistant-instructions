@@ -97,5 +97,5 @@ test('receiver admission marks forwarding pause as staging-only credit use', asy
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const source = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
   const receive = source.slice(source.indexOf('async function receiveEnvelope'), source.indexOf('async function handleRuntimeCommand'));
-  assert.match(receive, /stagingOnly:\s*currentBatchState\?\.turnCoordination\?\.mode === 'paused_accumulating'/);
+  assert.match(receive, /stagingOnly:\s*envelope\?\.metadata\?\.coordinationMode === 'paused_stage'\s*\|\|\s*currentBatchState\?\.turnCoordination\?\.mode === 'paused_accumulating'/);
 });

@@ -778,7 +778,13 @@ export function createRuntimePilotController({
         }
       };
     }
-    return { paused: false, persisted: true, duplicate: false, response: null };
+    return {
+      paused: false,
+      persisted: true,
+      duplicate: false,
+      response: null,
+      deliveryMode: forwardingHold ? 'paused_stage' : 'normal'
+    };
   }
 
   function applyDeliveryOutcome(pilot, envelope, outcome) {

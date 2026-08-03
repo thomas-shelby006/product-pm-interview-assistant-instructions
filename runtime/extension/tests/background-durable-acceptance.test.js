@@ -10,7 +10,7 @@ function sliceBetween(start, end) {
 
 test('non-boot forwarding acknowledges durable ownership before receiver delivery', () => {
   const block = sliceBetween('async function handleForward', 'function authorizeSessionMessage');
-  const scheduleAt = block.indexOf('schedulePersistedDelivery(message.envelope)');
+  const scheduleAt = block.indexOf('schedulePersistedDelivery(deliveryEnvelope)');
   const responseAt = block.indexOf("reason: 'delivery_scheduled'");
   assert.ok(scheduleAt >= 0);
   assert.ok(responseAt > scheduleAt);
@@ -80,4 +80,13 @@ test('sender outbox durability shares the per-session acceptance lane', () => {
 test('generic operational serialization cannot block sender outbox state', () => {
   const generic = sliceBetween("serialize(async () => {\n    const registry = await loadRegistry();", 'chrome.runtime.onConnect');
   assert.doesNotMatch(generic, /PMIA_SESSION_STATE_GET|PMIA_SESSION_STATE_SET|PMIA_SESSION_STATE_REMOVE/);
+});
+
+
+test('background decorates only the scheduled delivery copy with coordination mode', () => {
+  const forward = sliceBetween('async function handleForward', 'function authorizeSessionMessage');
+  assert.match(forward, /pilotDecision\.deliveryMode/);
+  assert.match(forward, /coordinationMode:\s*pilotDecision\.deliveryMode/);
+  assert.match(forward, /schedulePersistedDelivery\(deliveryEnvelope\)/);
+  assert.doesNotMatch(forward, /message\.envelope\.metadata\.coordinationMode\s*=/);
 });

@@ -779,7 +779,8 @@ async function startRuntime(runtimeConfig) {
       paused: Boolean(transportPaused || paused),
       storageCritical: false,
       draftConflict: Boolean(currentBatchState?.draftConflict),
-      stagingOnly: currentBatchState?.turnCoordination?.mode === 'paused_accumulating'
+      stagingOnly: envelope?.metadata?.coordinationMode === 'paused_stage'
+        || currentBatchState?.turnCoordination?.mode === 'paused_accumulating'
     });
     if (!receiverCredits.canAccept && Number(envelope?.seq || 0) > receiverSequenceBuffer.lastAcceptedSeq) {
       return {

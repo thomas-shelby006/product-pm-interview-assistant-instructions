@@ -682,3 +682,16 @@ test('late receiver coordination telemetry cannot undo Pause before the next fin
   assert.equal(admission.persisted, true);
   assert.equal((await controller.snapshot('s1')).ledger.some(item => item.id === 'q-after-pause'), true);
 });
+
+
+test('paused final admission returns explicit provider-free delivery mode', async () => {
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  await controller.handleCommand({
+    sessionId: 's1', requestId: 'pause-delivery-mode', command: 'pause', payload: {}
+  });
+  const result = await controller.beforeForward(envelope('paused-mode-q1', 1));
+  assert.equal(result.persisted, true);
+  assert.equal(result.deliveryMode, 'paused_stage');
+  assert.equal(result.response, null);
+});
