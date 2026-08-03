@@ -695,3 +695,45 @@ test('paused final admission returns explicit provider-free delivery mode', asyn
   assert.equal(result.deliveryMode, 'paused_stage');
   assert.equal(result.response, null);
 });
+
+test('receiver telemetry captured before a draft event cannot erase the staged batch', async () => {
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  const eventAt = Date.now();
+  await controller.batchEvent({
+    sessionId: 's1',
+    event: {
+      type: 'next_batch_draft',
+      at: eventAt,
+      memberIds: ['q2'],
+      questionCount: 1,
+      protectedCount: 1,
+      written: true
+    }
+  });
+  await controller.telemetry({
+    sessionId: 's1', role: 'receiver', tabId: 2,
+    telemetry: {
+      heartbeatAt: eventAt - 1,
+      composerReady: true,
+      phase: 'ready',
+      batchState: {
+        next: { memberIds: [], questionCount: 0, protectedCount: 0 },
+        hold: true,
+        autoSubmit: true
+      }
+    }
+  });
+  assert.deepEqual((await controller.snapshot('s1')).batchState.next.memberIds, ['q2']);
+
+  await controller.telemetry({
+    sessionId: 's1', role: 'receiver', tabId: 2,
+    telemetry: {
+      heartbeatAt: eventAt + 1,
+      composerReady: true,
+      phase: 'ready',
+      batchState: { next: null, hold: false, autoSubmit: true }
+    }
+  });
+  assert.equal((await controller.snapshot('s1')).batchState.next, null);
+});

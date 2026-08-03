@@ -898,9 +898,10 @@ export function createRuntimePilotController({
     const telemetryState = value && typeof value === 'object' ? { ...value } : {};
     delete telemetryState.event;
     const batchCheckpoint = role === 'receiver' ? telemetryState.batchState : null;
+    const batchCheckpointAt = Math.max(0, Number(telemetryState.heartbeatAt || Date.now()));
     delete telemetryState.batchState;
     const batchChanged = batchCheckpoint
-      ? pilot.restoreBatchState(sessionId, batchCheckpoint)
+      ? pilot.restoreBatchState(sessionId, { ...batchCheckpoint, updatedAt: batchCheckpointAt })
       : false;
     const nextRole = {
       ...previousRole,

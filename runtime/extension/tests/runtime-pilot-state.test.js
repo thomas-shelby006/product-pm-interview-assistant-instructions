@@ -232,3 +232,28 @@ test('stale receiver checkpoint cannot roll coordination backward', () => {
   }, 400);
   assert.equal(state.snapshot('pmia_session', 401).batchState.turnCoordination.mode, 'live');
 });
+
+test('stale receiver checkpoint cannot clear a newer staged next batch', () => {
+  const state = new RuntimePilotState();
+  state.updateBatchState('pmia_session', {
+    type: 'next_batch_draft',
+    at: 200,
+    memberIds: ['q2'],
+    questionCount: 1,
+    protectedCount: 1,
+    written: true
+  }, 200);
+  state.restoreBatchState('pmia_session', {
+    updatedAt: 150,
+    next: { memberIds: [], questionCount: 0, protectedCount: 0 },
+    hold: true
+  }, 300);
+  assert.deepEqual(state.snapshot('pmia_session', 301).batchState.next.memberIds, ['q2']);
+
+  state.restoreBatchState('pmia_session', {
+    updatedAt: 250,
+    next: null,
+    hold: false
+  }, 400);
+  assert.equal(state.snapshot('pmia_session', 401).batchState.next, null);
+});

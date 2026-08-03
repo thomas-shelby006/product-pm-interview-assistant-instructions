@@ -216,6 +216,7 @@ function normalizeSession(item) {
     latestFinal: item.latestFinal || null,
     latestProof: item.latestProof || null,
     batchState: {
+      updatedAt: Math.max(0, Number(item.batchState?.updatedAt || 0)),
       active: item.batchState?.active || null,
       next: item.batchState?.next || null,
       hold: Boolean(item.batchState?.hold),
@@ -1069,6 +1070,9 @@ export class RuntimePilotState {
   restoreBatchState(sessionId, checkpoint = {}, now = Date.now()) {
     const session = this.ensure(sessionId, now);
     const next = checkpoint && typeof checkpoint === 'object' ? checkpoint : {};
+    const checkpointUpdatedAt = Math.max(0, Number(next.updatedAt || now));
+    const currentUpdatedAt = Math.max(0, Number(session.batchState.updatedAt || 0));
+    if (currentUpdatedAt && checkpointUpdatedAt <= currentUpdatedAt) return false;
     const owns = key => Object.prototype.hasOwnProperty.call(next, key);
     const currentActive = session.batchState.active;
     const incomingActive = owns('active') ? (next.active || null) : currentActive;
@@ -1078,6 +1082,7 @@ export class RuntimePilotState {
       : incomingActive;
     const preserveOrNull = key => owns(key) ? (next[key] || null) : session.batchState[key];
     const normalized = {
+      updatedAt: checkpointUpdatedAt,
       active,
       next: preserveOrNull('next'),
       hold: owns('hold') ? Boolean(next.hold) : Boolean(session.batchState.hold),
@@ -1097,6 +1102,7 @@ export class RuntimePilotState {
         : normalizeTurnCoordination(session.batchState.turnCoordination || {}, now)
     };
     const previous = JSON.stringify({
+      updatedAt: session.batchState.updatedAt,
       active: session.batchState.active,
       next: session.batchState.next,
       hold: session.batchState.hold,
@@ -1215,6 +1221,10 @@ export class RuntimePilotState {
       session.batchState.interruptPlan = null;
     }
     session.batchState.lastEvent = { ...safeEventData(event), at: now };
+    session.batchState.updatedAt = Math.max(
+      Math.max(0, Number(session.batchState.updatedAt || 0)),
+      Math.max(0, Number(now || 0))
+    );
     session.updatedAt = now;
     this.record(sessionId, type, event, now);
     return { ...session.batchState };
