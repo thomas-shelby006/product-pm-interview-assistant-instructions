@@ -104,10 +104,10 @@ NormalizeBrowserExtraFlags(value) {
 LoadBrowserRuntimeConfig(settingsFile) {
     family := NormalizeBrowserFamily(IniRead(settingsFile, "Browser", "Family", "edge"))
     executable := Trim(IniRead(settingsFile, "Browser", "Executable", ""))
-    if (executable = "")
+    if (executable = "" || !FileExist(executable))
         executable := DefaultBrowserExecutable(family)
     userDataRoot := Trim(IniRead(settingsFile, "Browser", "UserDataRoot", ""))
-    if (userDataRoot = "")
+    if (userDataRoot = "" || !DirExist(userDataRoot))
         userDataRoot := DefaultBrowserUserDataRoot(family)
     extraFlags := NormalizeBrowserExtraFlags(IniRead(settingsFile, "Browser", "ExtraFlags", ""))
     return Map("family", family, "executable", executable, "userDataRoot", userDataRoot, "extraFlags", extraFlags)

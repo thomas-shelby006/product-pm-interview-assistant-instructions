@@ -40,6 +40,8 @@ test('launcher uses a configurable Chromium-family platform with Edge as the saf
   for (const family of ['edge','chrome','brave','vivaldi']) assert.match(platform, new RegExp(`"${family}"`));
   assert.match(platform, /--profile-directory=/);
   assert.match(platform, /--new-window --app=/);
+  assert.match(platform, /!FileExist\(executable\)/);
+  assert.match(platform, /!DirExist\(userDataRoot\)/);
   assert.doesNotMatch(launcher, /Edge Beta|Canary/);
 });
 

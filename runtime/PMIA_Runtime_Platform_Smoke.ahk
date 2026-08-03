@@ -34,6 +34,22 @@ RunPlatformSmoke() {
         AssertPlatform(InStr(flags, "remote-debugging") = 0, "remote debugging flag removed")
         AssertPlatform(InStr(flags, "disable-features=Unsafe") = 0, "managed feature flags cannot be overridden")
 
+        invalidSettings := SETTINGS_DIR "\invalid.ini"
+        IniWrite "edge", invalidSettings, "Browser", "Family"
+        IniWrite "\Microsoft\Edge\Application\msedge.exe", invalidSettings, "Browser", "Executable"
+        IniWrite SETTINGS_DIR "\missing-user-data", invalidSettings, "Browser", "UserDataRoot"
+        invalidConfig := LoadBrowserRuntimeConfig(invalidSettings)
+        AssertPlatform(invalidConfig["executable"] = DefaultBrowserExecutable("edge"), "missing saved executable falls back")
+        AssertPlatform(invalidConfig["userDataRoot"] = DefaultBrowserUserDataRoot("edge"), "missing saved user-data root falls back")
+
+        validSettings := SETTINGS_DIR "\valid.ini"
+        IniWrite "edge", validSettings, "Browser", "Family"
+        IniWrite A_AhkPath, validSettings, "Browser", "Executable"
+        IniWrite SETTINGS_DIR, validSettings, "Browser", "UserDataRoot"
+        validConfig := LoadBrowserRuntimeConfig(validSettings)
+        AssertPlatform(validConfig["executable"] = A_AhkPath, "valid custom executable retained")
+        AssertPlatform(validConfig["userDataRoot"] = SETTINGS_DIR, "valid custom user-data root retained")
+
         config := Map("family", "chrome", "executable", A_AhkPath, "userDataRoot", SETTINGS_DIR, "extraFlags", flags)
         built := BuildPmiaBrowserFlags(config, "Profile 1")
         expectedProfileFlag := "--profile-directory=" Chr(34) "Profile 1" Chr(34)
