@@ -11,7 +11,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $readinessScript = Join-Path $PSScriptRoot 'Get-PMIADeploymentReadiness.ps1'
-$raw = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $readinessScript -DeploymentRoot $DeploymentRoot -SourceRoot $SourceRoot -ProfileDirectory $ProfileDirectory 2>&1
+$releaseEvidencePath = if ($EvidenceDirectory) { Join-Path $EvidenceDirectory 'release-evidence-manifest.json' } else { '' }
+$raw = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $readinessScript -DeploymentRoot $DeploymentRoot -SourceRoot $SourceRoot -ProfileDirectory $ProfileDirectory -ReleaseEvidencePath $releaseEvidencePath 2>&1
 if ($LASTEXITCODE -ne 0) { throw (($raw | Out-String).Trim()) }
 $readiness = ($raw | Out-String).Trim() | ConvertFrom-Json
 if (-not $SourceRoot) { $SourceRoot = [string]$readiness.source.root }
@@ -44,7 +45,7 @@ if ($SourceRoot -and (Test-Path -LiteralPath $SourceRoot -PathType Container)) {
 $entries = @(Get-ChildItem -LiteralPath $DeploymentRoot -Force | Select-Object -ExpandProperty Name | Sort-Object)
 
 $inventory = [ordered]@{
-    schema = 'pmia-deployment-inventory/v2'
+    schema = 'pmia-deployment-inventory/v3'
     generatedAt = [DateTimeOffset]::UtcNow.ToString('o')
     deploymentRoot = [IO.Path]::GetFullPath($DeploymentRoot)
     archive = [ordered]@{
@@ -94,13 +95,17 @@ $inventory = [ordered]@{
         worktreeManifestHash = if ($worktreeEvidence) { [string]$worktreeEvidence.manifestHash } else { '' }
         equivalenceHash = if ($equivalence) { [string]$equivalence.equivalenceHash } else { '' }
         finalGate = if ($release) { $release.gate } else { $null }
+        releaseVerification = $readiness.releaseVerification
         productionObjectCount = if ($equivalence) { [int]$equivalence.productionObjectCount } elseif ($release) { @($release.sourceHashes.PSObject.Properties).Count } else { 0 }
     }
     prerequisites = $readiness.prerequisites
     readiness = [ordered]@{
         packagesReady = [bool]$readiness.packagesReady
+        packageReady = [bool]$readiness.packageReady
+        activationReady = [bool]$readiness.activationReady
         sourceReady = [bool]$readiness.source.clean
-        browserReady = [bool]$readiness.ready
+        browserReady = [bool]$readiness.releaseVerification.normalProfileActivation.ok
+        releaseVerification = $readiness.releaseVerification
         readyForManualEdgeReload = [bool]$readiness.readyForManualEdgeReload
         readyForManualEdgeLoad = [bool]$readiness.readyForManualEdgeLoad
         issues = $readiness.issues

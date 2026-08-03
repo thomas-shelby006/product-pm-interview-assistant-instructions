@@ -24,7 +24,7 @@ async function fixture({ cleanup = true, normalProfileTouched = false, smokeComm
   const smoke = path.join(repo, 'smoke.json');
   await writeFile(gate, '# tests 10\n# pass 10\n# fail 0\nExtension validation passed: 5 JavaScript files, 2 required runtime surfaces, and 3 reachable production modules checked.\n');
   await writeFile(smoke, JSON.stringify({
-    ok: true, deliveryProofOk: true, adaptiveTurnScenariosOk: true,
+    ok: true, deterministicBrowser: { ok: true, checks: {} }, providerCanary: { status: 'passed', reason: '', deliveryProofOk: true }, deliveryProofOk: true, adaptiveTurnScenariosOk: true,
     adaptiveTurnScenarios: Object.fromEntries(['authoritativeFinal','pauseResume','carryover','independentAccumulation','restartRecovery'].map(key => [key, { ok: true }])),
     transportDrillOk: true, pilotUiOk: true, productionUiOk: true, assistUiOk: true, reliabilityUiOk: true, operationsUiOk: true,
     commandReachability: { ok: true, duplicateDomIds: [], visibleWithoutRegistry: [], visibleWithoutOwner: [] },

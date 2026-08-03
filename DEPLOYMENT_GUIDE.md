@@ -209,3 +209,11 @@ Regenerate the authoritative inventory after final package verification, browser
   -ProfileDirectory "Default" `
   -EvidenceDirectory "<final evidence directory>"
 ```
+
+## PMIA 0.10.4 four-lane verification
+
+Release status is reported through four independent lanes: source/package, deterministic browser, provider canary, and normal-profile activation. Package promotion requires the first two lanes. Final activation additionally requires a passed provider canary and Profile Doctor confirmation for the expected normal-profile path and version.
+
+A provider canary marked `limited` preserves its exact reason and diagnostic evidence. It is not a pass. Use a real-provider normal-profile acceptance flow before declaring activation ready.
+
+Use Reload on the existing unpacked extension card first. Use Load unpacked only when the card is missing or resolves to the wrong path. Never edit Edge Preferences or Secure Preferences directly.
