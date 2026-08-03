@@ -135,3 +135,21 @@ test('release evidence requires every Adaptive Turn scenario', async () => {
   assert.notEqual(carryover.status, 0);
   assert.match(carryover.stderr, /carryover is incomplete/);
 });
+
+test('release evidence reads Windows PowerShell UTF-16 gate logs', async () => {
+  const value = await fixture();
+  const gateText = '# tests 10\r\n# pass 10\r\n# fail 0\r\nExtension validation passed: 5 JavaScript files, 2 required runtime surfaces, and 3 reachable production modules checked.\r\n';
+  await writeFile(value.gate, Buffer.from(`\uFEFF${gateText}`, 'utf16le'));
+  const output = path.join(value.repo, 'utf16-gate.json');
+  const result = run(value.repo, args(value, output));
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const manifest = JSON.parse(await readFile(output, 'utf8'));
+  assert.deepEqual(manifest.gate, {
+    tests: 10,
+    passed: 10,
+    failed: 0,
+    javascriptFiles: 5,
+    runtimeSurfaces: 2,
+    productionModules: 3
+  });
+});

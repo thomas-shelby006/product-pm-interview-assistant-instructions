@@ -15,6 +15,12 @@ function canonical(value) {
 }
 function digest(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
 async function exists(file) { try { await fs.access(file); return true; } catch { return false; } }
+async function readTextFile(file) {
+  const raw = await fs.readFile(file);
+  if (raw[0] === 0xff && raw[1] === 0xfe) return raw.subarray(2).toString('utf16le');
+  if (raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf) return raw.subarray(3).toString('utf8');
+  return raw.toString('utf8').replace(/^\uFEFF/, '');
+}
 
 const options = args(process.argv);
 const repoOption = String(options.repo || '').trim();
@@ -36,7 +42,7 @@ const git = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8
 if (git.status !== 0) throw new Error(git.stderr || 'Unable to resolve repository commit');
 const commit = git.stdout.trim();
 const manifest = JSON.parse(await fs.readFile(path.join(repo, 'runtime/extension/manifest.json'), 'utf8'));
-const gateText = await fs.readFile(gateLog, 'utf8');
+const gateText = await readTextFile(gateLog);
 const smoke = JSON.parse(await fs.readFile(smokeEvidence, 'utf8'));
 const smokeCommit = String(smoke.commit || smoke.sourceCommit || '').trim();
 if (!smokeCommit) throw new Error('Smoke evidence is not bound to a source commit');
