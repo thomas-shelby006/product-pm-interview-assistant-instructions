@@ -26,9 +26,21 @@ if ($ExpectedVersion -and $version -ne $ExpectedVersion) {
 $runtimeRoot = Split-Path -Parent $resolvedExtension
 $sourceRoot = Split-Path -Parent $runtimeRoot
 $sourceCommit = Get-PmiaGitCommit -SourceRoot $sourceRoot
+if (-not $sourceCommit) {
+    $sourceDeploymentManifest = Join-Path $sourceRoot 'deployment-manifest.json'
+    if (Test-Path -LiteralPath $sourceDeploymentManifest -PathType Leaf) {
+        try {
+            $sourceCommit = [string]((Get-Content -Raw -LiteralPath $sourceDeploymentManifest | ConvertFrom-Json).sourceCommit)
+        } catch {}
+    }
+}
+if ([string]::IsNullOrWhiteSpace($sourceCommit)) {
+    throw 'Installed archive source commit is missing.'
+}
 $registeredFull = [IO.Path]::GetFullPath($RegisteredPath).TrimEnd('\')
-New-Item -ItemType Directory -Force $DeploymentRoot | Out-Null
 $deployment = [IO.Path]::GetFullPath($DeploymentRoot).TrimEnd('\')
+Assert-PmiaPathsSeparate -SourceRoot $sourceRoot -DeploymentRoot $deployment
+New-Item -ItemType Directory -Force $deployment | Out-Null
 $archiveParent = Join-Path $deployment 'archive'
 $archiveRoot = Join-Path $archiveParent "pmia-$version-installed"
 if (Test-Path -LiteralPath $archiveRoot) {
@@ -67,13 +79,12 @@ try {
     )
     Write-PmiaChecksums -PackageRoot $staging | Out-Null
     & $verifyScript -PackageRoot $staging -ExpectedKind 'installed-archive' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Installed archive staging verification failed.' }
     New-Item -ItemType Directory -Force $archiveParent | Out-Null
     Move-Item -LiteralPath $staging -Destination $archiveRoot
     & $verifyScript -PackageRoot $archiveRoot -ExpectedKind 'installed-archive' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Installed archive final verification failed.' }
 } catch {
     if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+    if (Test-Path -LiteralPath $archiveRoot) { Remove-Item -LiteralPath $archiveRoot -Recurse -Force }
     throw
 }
 

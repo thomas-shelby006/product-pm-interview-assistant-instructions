@@ -21,13 +21,15 @@ $extensionManifest = Get-Content -Raw -LiteralPath $extensionManifestPath | Conv
 $version = [string]$extensionManifest.version
 if ([string]::IsNullOrWhiteSpace($version)) { throw 'Source extension version is missing.' }
 
-New-Item -ItemType Directory -Force $DeploymentRoot | Out-Null
 $deployment = [IO.Path]::GetFullPath($DeploymentRoot).TrimEnd('\')
+Assert-PmiaPathsSeparate -SourceRoot $source -DeploymentRoot $deployment
+New-Item -ItemType Directory -Force $deployment | Out-Null
 $token = [guid]::NewGuid().ToString('N')
 $staging = Join-Path $deployment ".current-staging-$token"
 $current = Join-Path $deployment 'current'
 $backup = Join-Path $deployment ".current-previous-$token"
 $verifyScript = Join-Path $PSScriptRoot 'Test-PMIADeployment.ps1'
+$promoted = $false
 
 try {
     New-Item -ItemType Directory -Force $staging | Out-Null
@@ -54,19 +56,22 @@ try {
     )
     Write-PmiaChecksums -PackageRoot $staging | Out-Null
     & $verifyScript -PackageRoot $staging -ExpectedKind 'current' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Staged current deployment verification failed.' }
 
     if (Test-Path -LiteralPath $current) { Move-Item -LiteralPath $current -Destination $backup }
     Move-Item -LiteralPath $staging -Destination $current
+    $promoted = $true
     & $verifyScript -PackageRoot $current -ExpectedKind 'current' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Promoted current deployment verification failed.' }
     if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
 } catch {
+    $failure = $_
     if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
-    if ((Test-Path -LiteralPath $backup) -and -not (Test-Path -LiteralPath $current)) {
+    if (Test-Path -LiteralPath $backup) {
+        if (Test-Path -LiteralPath $current) { Remove-Item -LiteralPath $current -Recurse -Force }
         Move-Item -LiteralPath $backup -Destination $current
+    } elseif ($promoted -and (Test-Path -LiteralPath $current)) {
+        Remove-Item -LiteralPath $current -Recurse -Force
     }
-    throw
+    throw $failure
 }
 
 & $verifyScript -PackageRoot $current -ExpectedKind 'current'

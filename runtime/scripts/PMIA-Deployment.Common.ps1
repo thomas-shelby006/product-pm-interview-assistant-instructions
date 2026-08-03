@@ -26,6 +26,33 @@ function Resolve-PmiaCanonicalPath {
     return [IO.Path]::GetFullPath($item.FullName).TrimEnd('\')
 }
 
+function Test-PmiaPathWithin {
+    param([string]$Parent, [string]$Candidate)
+    $parentFull = [IO.Path]::GetFullPath($Parent).TrimEnd('\')
+    $candidateFull = [IO.Path]::GetFullPath($Candidate).TrimEnd('\')
+    if ($candidateFull.Equals($parentFull, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    return $candidateFull.StartsWith($parentFull + '\', [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Assert-PmiaPathsSeparate {
+    param([string]$SourceRoot, [string]$DeploymentRoot)
+    if ((Test-PmiaPathWithin -Parent $SourceRoot -Candidate $DeploymentRoot) -or
+        (Test-PmiaPathWithin -Parent $DeploymentRoot -Candidate $SourceRoot)) {
+        throw "Source and deployment roots must not overlap: $SourceRoot ; $DeploymentRoot"
+    }
+}
+
+function Assert-PmiaNoReparsePoints {
+    param([string]$Root)
+    if (-not (Test-Path -LiteralPath $Root)) { return }
+    $items = @((Get-Item -LiteralPath $Root -Force)) + @(Get-ChildItem -LiteralPath $Root -Recurse -Force)
+    foreach ($item in $items) {
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Reparse point is not allowed in a PMIA package boundary: $($item.FullName)"
+        }
+    }
+}
+
 function Get-PmiaRelativePath {
     param([string]$Root, [string]$Path)
     $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
@@ -51,6 +78,7 @@ function Copy-PmiaDirectoryFiltered {
         [Parameter(Mandatory = $true)][string]$Destination
     )
     if (-not (Test-Path -LiteralPath $Source -PathType Container)) { return }
+    Assert-PmiaNoReparsePoints -Root $Source
     $sourceFull = [IO.Path]::GetFullPath($Source).TrimEnd('\')
     foreach ($file in Get-ChildItem -LiteralPath $sourceFull -Recurse -File -Force) {
         $relative = Get-PmiaRelativePath -Root $sourceFull -Path $file.FullName
@@ -73,14 +101,23 @@ function Copy-PmiaAllowlistedSource {
     foreach ($fileName in $script:PmiaRootFiles) {
         $source = Join-Path $SourceRoot $fileName
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { continue }
+        $sourceItem = Get-Item -LiteralPath $source -Force
+        if (($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Reparse point is not allowed in a PMIA package boundary: $source"
+        }
         Copy-Item -LiteralPath $source -Destination (Join-Path $DestinationRoot $fileName) -Force
     }
 }
 
 function Get-PmiaGitCommit {
     param([string]$SourceRoot)
-    $output = & git.exe -C $SourceRoot rev-parse HEAD 2>$null
-    if ($LASTEXITCODE -ne 0) { return '' }
+    try {
+        $output = & git.exe -C $SourceRoot rev-parse HEAD 2>$null
+        $exitCode = $LASTEXITCODE
+    } catch {
+        return ''
+    }
+    if ($exitCode -ne 0) { return '' }
     return ([string]($output | Select-Object -First 1)).Trim()
 }
 
