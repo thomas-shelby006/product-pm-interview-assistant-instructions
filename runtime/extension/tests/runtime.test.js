@@ -835,3 +835,112 @@ test('receiver proof confirmation terminates by elapsed time when no rendered tu
   assert.equal(result, false);
   assert.equal(yields, 2);
 });
+
+
+test('receiver retries once when submit clears the composer without rendering a user turn', async () => {
+  let now = 0;
+  let composer = '';
+  let submitCalls = 0;
+  const messages = [];
+  const question = 'Retry a cleared swallowed submission?';
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter: {
+      setComposerText(text) { composer = text; return true; },
+      getComposerText: () => composer,
+      composerContains: text => composer === text,
+      canSubmit: () => true,
+      isGenerating: () => false,
+      submit() {
+        submitCalls += 1;
+        const submitted = composer;
+        composer = '';
+        if (submitCalls === 2) messages.push({ id: 'u2', role: 'user', text: submitted });
+        return true;
+      },
+      getConversationMessages: () => messages
+    },
+    text: question,
+    nowFn: () => now,
+    yieldFn: async () => { now += 13000; return 'heartbeat'; },
+    retryAfterMs: 12000,
+    retryAfterEmptyComposerMs: 12000,
+    maxConfirmWaitMs: 30000,
+    maxConfirmChecks: 4
+  });
+  assert.equal(result, true);
+  assert.equal(submitCalls, 2);
+});
+
+test('receiver does not retry an empty composer while provider generation is active', async () => {
+  let now = 0;
+  let composer = '';
+  let submitCalls = 0;
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter: {
+      setComposerText(text) { composer = text; return true; },
+      getComposerText: () => composer,
+      composerContains: text => composer === text,
+      canSubmit: () => true,
+      isGenerating: () => true,
+      submit() { submitCalls += 1; composer = ''; return true; },
+      getConversationMessages: () => []
+    },
+    text: 'Do not retry during generation',
+    nowFn: () => now,
+    yieldFn: async () => { now += 13000; return 'heartbeat'; },
+    retryAfterEmptyComposerMs: 12000,
+    maxConfirmWaitMs: 13000,
+    maxConfirmChecks: 2
+  });
+  assert.equal(result, false);
+  assert.equal(submitCalls, 1);
+});
+
+test('receiver preserves a newer provider draft instead of retrying swallowed text', async () => {
+  let now = 0;
+  let composer = '';
+  let submitCalls = 0;
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter: {
+      setComposerText(text) { composer = text; return true; },
+      getComposerText: () => composer,
+      composerContains: text => composer === text,
+      canSubmit: () => true,
+      isGenerating: () => false,
+      submit() { submitCalls += 1; composer = 'newer operator draft'; return true; },
+      getConversationMessages: () => []
+    },
+    text: 'Original swallowed text',
+    nowFn: () => now,
+    yieldFn: async () => { now += 13000; return 'heartbeat'; },
+    retryAfterEmptyComposerMs: 12000,
+    maxConfirmWaitMs: 13000,
+    maxConfirmChecks: 2
+  });
+  assert.equal(result, false);
+  assert.equal(submitCalls, 1);
+  assert.equal(composer, 'newer operator draft');
+});
+
+test('receiver stops empty-composer recovery after delivery supersession', async () => {
+  let current = true;
+  let composer = '';
+  let submitCalls = 0;
+  const result = await runtimeModule.submitComposerWhenReady({
+    adapter: {
+      setComposerText(text) { composer = text; return true; },
+      getComposerText: () => composer,
+      composerContains: text => composer === text,
+      canSubmit: () => true,
+      isGenerating: () => false,
+      submit() { submitCalls += 1; composer = ''; return true; },
+      getConversationMessages: () => []
+    },
+    text: 'Superseded question',
+    isCurrent: () => current,
+    yieldFn: async () => { current = false; return 'heartbeat'; },
+    maxConfirmChecks: 2
+  });
+  assert.equal(result, false);
+  assert.equal(submitCalls, 1);
+});
