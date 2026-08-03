@@ -6,7 +6,7 @@ Last updated: 2026-08-02 (PMIA 0.10 control-plane coherence and live-feature pro
 
 | Area | Status | Notes |
 |---|---|---|
-| Runtime release | PMIA 0.10.0 worktree candidate | Verified lossless delivery, explicit operator choices, canonical command routing, Pilot/Production evidence closure, and the approved live-interview feature and bug-hardening program. |
+| Runtime release | PMIA 0.10.1 worktree candidate | Verified lossless delivery, explicit operator choices, canonical command routing, Pilot/Production evidence closure, and the approved live-interview feature and bug-hardening program. |
 | Worktree | Isolated | `C:\Users\Sundar\Documents\product-pm-interview-assistant-improvement`, branch `improvement/pmia-0.7.0`. |
 | Original checkout | Preserved | `product-pm-interview-assistant-instructions` remains unchanged. |
 | Browser | Microsoft Edge Stable | Selected profile verified by Profile Doctor. |

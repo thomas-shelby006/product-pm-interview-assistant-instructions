@@ -1,6 +1,6 @@
 # AI System Context — PM Interview Assistant
 
-This file is the active technical context for reviewing Sundar's Product Management mock-interview system. It describes the active PMIA runtime 0.10.0 candidate, not the preserved legacy implementation.
+This file is the active technical context for reviewing Sundar's Product Management mock-interview system. It describes the active PMIA runtime 0.10.1 candidate, not the preserved legacy implementation.
 
 ## Product objective
 
