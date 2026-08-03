@@ -250,6 +250,7 @@
 
 **Integration branch:** `improvement/pmia-0.7.0`
 **Lane-merge checkpoint:** `4bf4851` (Admission, Release Evidence, and Main Integration merged)
+**Current integration checkpoint:** `2a2a0fc`
 **Target after exact verification:** `main`
 **Detailed takeover file:** `docs/superpowers/handoffs/2026-08-03-pmia-adaptive-turn-takeover.md`
 
@@ -320,11 +321,16 @@ The focused owning matrix passed **91/91** tests across controller, store recove
 - Commit `06b010c` implements the original planned internal delivery contract: `beforeForward` returns `deliveryMode: paused_stage`, background decorates only the scheduled delivery copy with `metadata.coordinationMode`, and receiver credits use the explicit mode or local state. The durable ledger envelope remains unchanged.
 - Focused controller/background/direct-fallback/outbox/receiver/recovery matrix passed **113/113**.
 - Sixth browser attempt showed the explicit delivery mode reached `receiveEnvelope`, but `deriveSmoothedReceiverCredits` rebuilt the raw input without forwarding `stagingOnly`, so it still returned `operator_hold`.
-- Commit `74a3956` forwards the field through the smoothing wrapper. Focused paused-delivery ownership matrix passed **114/114**. Complete new-HEAD gate and fresh isolated browser evidence remain pending.
+- Commit `74a3956` forwards the field through the smoothing wrapper. Focused paused-delivery ownership matrix passed **114/114**.
+- Exact `3d84ddd` then passed the complete gate: **1,326/1,326 tests**, **513 JavaScript files**, **18 required runtime surfaces**, **287 reachable production modules**, all three AutoHotkey validations, exit `0`.
+- Seventh isolated browser evidence reached receiver staging: Q2 was ledger-owned as `staged`, Q3 remained durable, the sender outbox was empty, and Pause remained `paused_accumulating`; however, authoritative `batchState.next` and the combined composer projection returned to an empty checkpoint.
+- The owning cause was a stale receiver telemetry snapshot captured before Q2 staging and processed after the newer `next_batch_draft` event. Batch checkpoints had no causal capture-time guard, so the older empty `next` state overwrote the newer semantic event even though final ownership was safe.
+- Commit `2a2a0fc` adds durable batch-state freshness, stamps receiver checkpoints from their telemetry `heartbeatAt`, and rejects checkpoints that are not newer than the latest semantic batch event. A genuinely newer checkpoint can still clear `next`, preserving restart recovery and explicit state transitions.
+- The regression was observed red at both state and controller boundaries, then passed **47/47** owning tests and **212/212** widened Adaptive Turn, receiver batching, telemetry, sequencing, durability, and validation tests.
 
 ### Remaining in scope
 
-1. Run the complete repository gate on the exact combined integration HEAD.
+1. Run the complete repository gate on exact committed integration HEAD `2a2a0fc`.
 2. Run fresh isolated Edge evidence and require all five Adaptive Turn scenarios, three exact rendered proofs, empty outbox, clear sequence state, 12/12 transport drill, all UI layouts, and exact cleanup.
 3. Generate release, handoff, and worktree-integration manifests; verify original checkout, normal Edge, tags, push state, and preserved historical worktrees.
 4. Remove only assistant-created task-temp files after their evidence is retained, then regenerate the readiness manifest.

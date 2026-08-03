@@ -5,6 +5,7 @@ Admission worktree: `C:\Users\Sundar\Documents\product-pm-interview-assistant-im
 Admission branch: `fix/pmia-admission-lane`
 Admission commit: `2cbec6ffe327b4ebd98bacfdb38194d86e533c2e`
 Integration lane-merge checkpoint: `improvement/pmia-0.7.0` at `4bf4851`
+Current integration checkpoint: `2a2a0fc`
 Target after exact verification: `main`
 
 ## Scope
@@ -103,9 +104,17 @@ Commit `06b010c` implements the planned internal `coordinationMode: paused_stage
 
 The sixth attempt confirmed the explicit mode reached `receiveEnvelope`, but the local `deriveSmoothedReceiverCredits` wrapper reconstructed the raw input without `stagingOnly`. Commit `74a3956` forwards that field into `deriveReceiverCredits`, preserving the explicit provider-free path through hysteresis. Focused paused-delivery verification passed **114/114**.
 
+## Seventh browser attempt and stale batch-checkpoint fix
+
+Exact `3d84ddd` passed the complete automated gate with **1,326/1,326** tests, 513 JavaScript files, 18 runtime surfaces, 287 reachable modules, and all three AutoHotkey checks. The seventh isolated browser run then proved Q2 receiver acceptance and ledger staging, durable Q3 ownership, empty sender outbox, and stable Pause. It still timed out because Pilot `batchState.next` and the visible combined draft returned to an empty checkpoint.
+
+The receiver had emitted the newer `next_batch_draft`, but an older telemetry snapshot captured before Q2 staging arrived later and restored an empty `next`. Turn coordination already had monotonic protection; the rest of the batch checkpoint did not.
+
+Commit `2a2a0fc` records the latest semantic batch-event time in durable Pilot state, stamps receiver checkpoints with their telemetry capture time, and rejects checkpoints that are not newer. A later checkpoint can still explicitly clear the staged batch. The new state/controller regression failed before the fix, then passed **47/47**; the widened owning matrix passed **212/212**.
+
 ## Remaining sequence
 
-1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact combined integration HEAD and retain the complete gate log outside the repository.
+1. Run `runtime\Validate_Extension_Runtime.ps1` on exact committed integration HEAD `2a2a0fc` and retain the complete gate log outside the repository.
 2. Fix only reproduced owning-boundary failures, commit, and rerun if the tree changes.
 3. Run fresh isolated Edge evidence from exact HEAD. Require all five Adaptive Turn scenarios, three rendered finals, empty outbox, clear sequence state, 12/12 transport drill, responsive/print UI evidence, no normal-profile access, and exact cleanup.
 4. Generate deterministic release, handoff, and worktree-integration manifests.

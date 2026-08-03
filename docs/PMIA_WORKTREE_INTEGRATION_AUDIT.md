@@ -12,7 +12,7 @@ Target branch: `main`
 | `product-pm-interview-assistant-instructions` | `main` at `66ea17e`, clean | Ancestor of integration; target remains unchanged pending final verification. |
 | `pmia-clean-smoke-e1203b4` | detached `e1203b4`, clean | Historical clean smoke checkpoint; ancestor of integration. |
 | `.worktrees/pmia-final-evidence` | `release/pmia-final-evidence` at `92e1d99`, clean | Five-scenario release evidence contract merged at `613b2ea`. |
-| `.worktrees/pmia-final-integration` | `improvement/pmia-0.7.0` at `4bf4851`, clean | Authoritative combined verification worktree. |
+| `.worktrees/pmia-final-integration` | `improvement/pmia-0.7.0` at `2a2a0fc`, clean before this documentation checkpoint | Authoritative combined verification worktree. |
 | `.worktrees/pmia-main-integration` | `test/pmia-main-integration` at `da1a5ad`, clean | Content-sensitive worktree readiness manifest merged at `4bf4851`. |
 | `product-pm-interview-assistant-improvement` | `fix/pmia-admission-lane` at `685c859`; assistant task temp remains | Admission repair merged at `8d32f66`; temp cleanup is deferred until evidence is retained. |
 | `.worktrees/pmia-0.11-completion` | `improvement/pmia-0.11-completion` at `8290d0b`; one untracked short design | Committed head is included. Dirty content is exactly fingerprinted and classified `superseded_preserved`; the fuller integrated design is authoritative. |
@@ -47,6 +47,8 @@ The fourth browser attempt proved durable Q2/Q3 ownership and an empty outbox bu
 The fifth attempt proved local receiver coordination can lag the controller decision. Commit `06b010c` carries `paused_stage` only on the scheduled delivery copy so receiver staging is explicit without mutating the durable ledger envelope; 113/113 focused tests passed.
 
 The sixth attempt exposed one final propagation omission: the smoothing wrapper dropped `stagingOnly`. Commit `74a3956` forwards it through hysteresis; 114/114 focused tests passed.
+
+Exact `3d84ddd` passed the full automated gate with 1,326/1,326 tests and all validators. The seventh browser run then proved Q2 staged ownership, durable Q3, empty outbox, and stable Pause, but an older empty receiver telemetry checkpoint overwrote the newer `next_batch_draft` projection. Commit `2a2a0fc` makes batch checkpoint restoration causal by comparing telemetry capture time with the latest semantic batch-event time. Both stale preservation and newer explicit clearing are covered; the owning matrix passed 47/47 and the widened matrix passed 212/212.
 
 ## Final acceptance
 
