@@ -915,7 +915,10 @@ async function startRuntime(runtimeConfig) {
         return receiverBatchRuntime.setCoordinationPolicy(payload.policy);
       case 'keep_accumulating':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
-        return receiverBatchRuntime.pauseForwarding();
+        return receiverBatchRuntime.keepAccumulating();
+      case 'retry_carryover':
+        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        return receiverBatchRuntime.retryCarryover();
       case 'reconcile_delivery':
         if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.reconcile(payload);

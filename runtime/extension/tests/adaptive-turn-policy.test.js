@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createReceiverBatchRuntime } from '../content/receiver-batch-runtime.js';
 import { normalizeDashboardCommand } from '../shared/dashboard-protocol.js';
+import { buildPolicyImpactPreview } from '../shared/policy-impact-preview.js';
 
 function envelope(id, seq, metadata = {}) {
   return { id, sessionId: 's', sourceProvider: 'chatgpt', kind: 'question', seq, text: `Question ${seq}`, metadata, createdAt: seq };
@@ -42,11 +43,15 @@ test('manual policy accumulates exact continuations without automatic Stop', asy
   assert.equal(result.reason, 'receiver_busy');
   assert.deepEqual(runtime.snapshot().next.prompt.memberIds, ['q2']);
 });
-test('dashboard policy command accepts only supported presets', () => {
+test('dashboard policy command accepts only previewed supported presets', () => {
+  const snapshot = { sessionId:'s', batchState:{ turnCoordination:{ policy:'adaptive', mode:'live', heldCount:0 } }, ledgerCounts:{ unresolved:0 } };
   const base = { sessionId: 's', requestId: 'r', command: 'set_turn_coordination_policy' };
-  assert.equal(normalizeDashboardCommand({ ...base, payload: { policy: 'adaptive' } }).payload.policy, 'adaptive');
-  assert.equal(normalizeDashboardCommand({ ...base, requestId: 'r2', payload: { policy: 'manual' } }).payload.policy, 'manual');
-  assert.equal(normalizeDashboardCommand({ ...base, requestId: 'r3', payload: { policy: 'unsafe' } }), null);
+  const adaptive = buildPolicyImpactPreview(snapshot, { kind:'turn_coordination', policy:'adaptive' }, 100);
+  const manual = buildPolicyImpactPreview(snapshot, { kind:'turn_coordination', policy:'manual' }, 100);
+  assert.equal(normalizeDashboardCommand({ ...base, payload: { policy: 'adaptive', preview:adaptive } }).payload.policy, 'adaptive');
+  assert.equal(normalizeDashboardCommand({ ...base, requestId: 'r2', payload: { policy: 'manual', preview:manual } }).payload.policy, 'manual');
+  assert.equal(normalizeDashboardCommand({ ...base, requestId: 'r3', payload: { policy: 'unsafe', preview:manual } }), null);
+  assert.equal(normalizeDashboardCommand({ ...base, requestId: 'r4', payload: { policy: 'manual' } }), null);
 });
 
 test('Pilot controller routes coordination controls only to the receiver owner', async () => {

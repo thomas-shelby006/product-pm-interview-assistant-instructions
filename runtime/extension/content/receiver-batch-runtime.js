@@ -278,6 +278,29 @@ export function createReceiverBatchRuntime({
     return !adapter.isGenerating?.();
   }
 
+  function markCarryoverRecovery(correlation, active, failureReason) {
+    turnCoordination = transitionTurnCoordination(turnCoordination, {
+      type: 'interrupt_failed',
+      at: nowFn(),
+      chainId: correlation?.chainId,
+      memberIds: correlation?.memberIds,
+      activeBatchId: active?.id,
+      continuationId: correlation?.continuationId,
+      reason: correlation?.reason,
+      failureReason
+    });
+    const snapshot = deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot());
+    emit('source_interruption_recovery_required', {
+      turnCoordination: snapshot,
+      chainId: snapshot.interruption.chainId,
+      memberIds: snapshot.interruption.memberIds,
+      activeBatchId: snapshot.interruption.activeBatchId,
+      continuationId: snapshot.interruption.continuationId,
+      failureReason: snapshot.interruption.failureReason
+    });
+    return snapshot;
+  }
+
   return {
     planner,
 
@@ -511,18 +534,29 @@ export function createReceiverBatchRuntime({
         now: nowFn()
       });
       if (!correlation.correlated) return { ok: false, error: correlation.reason, correlation };
-      if (!adapter.isGenerating?.()) return { ok: false, error: 'receiver_not_generating', correlation };
-      if (!adapter.stopGenerating?.()) return { ok: false, error: 'stop_failed', correlation };
+      if (!adapter.isGenerating?.()) {
+        const recovery = markCarryoverRecovery(correlation, active, 'receiver_not_generating');
+        return { ok: false, error: 'receiver_not_generating', correlation, turnCoordination: recovery };
+      }
+      if (!adapter.stopGenerating?.()) {
+        const recovery = markCarryoverRecovery(correlation, active, 'stop_failed');
+        return { ok: false, error: 'stop_failed', correlation, turnCoordination: recovery };
+      }
       emit('source_interruption_stop_requested', {
         activeBatchId: active.id,
         chainId: correlation.chainId,
         memberIds: correlation.memberIds,
         generationToken: token.token
       });
-      if (!await waitUntilIdle()) return { ok: false, error: 'stop_timeout', correlation };
+      if (!await waitUntilIdle()) {
+        const recovery = markCarryoverRecovery(correlation, active, 'stop_timeout');
+        return { ok: false, error: 'stop_timeout', correlation, turnCoordination: recovery };
+      }
       const cancellation = await cancelActiveAnswer(active.id, 'superseded_turn');
       if (cancellation?.ok === false && cancellation?.error !== 'answer_settlement_missing') {
-        return { ok: false, error: cancellation?.error || 'answer_cancel_failed', correlation };
+        const failureReason = cancellation?.error || 'answer_cancel_failed';
+        const recovery = markCarryoverRecovery(correlation, active, failureReason);
+        return { ok: false, error: failureReason, correlation, turnCoordination: recovery };
       }
       turnCoordination = transitionTurnCoordination(turnCoordination, {
         type: 'interrupt_detected',
@@ -538,8 +572,10 @@ export function createReceiverBatchRuntime({
         continuationIds: [payload.continuationId]
       });
       if (!carried?.ok) {
-        emit('source_interruption_failed', { error: carried?.error || 'carryover_failed', chainId: correlation.chainId });
-        return { ...(carried || {}), ok: false, correlation };
+        const failureReason = carried?.error || 'carryover_failed';
+        const recovery = markCarryoverRecovery(correlation, active, failureReason);
+        emit('source_interruption_failed', { error: failureReason, chainId: correlation.chainId });
+        return { ...(carried || {}), ok: false, correlation, turnCoordination: recovery };
       }
       activeTransaction = null;
       emit('source_interruption_detected', {
@@ -553,6 +589,8 @@ export function createReceiverBatchRuntime({
       const result = await executeBatch(carried.batch, 'automatic_source_carryover');
       if (result?.ok) {
         turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'interrupt_resolved', at: nowFn() });
+      } else {
+        markCarryoverRecovery(correlation, active, result?.error || 'carryover_submit_failed');
       }
       return {
         ...result,
@@ -560,6 +598,35 @@ export function createReceiverBatchRuntime({
         interruptedBatchId: carried.interrupted?.id || '',
         turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot())
       };
+    },
+
+    async retryCarryover() {
+      const interruption = turnCoordination.interruption || {};
+      if (interruption.state !== 'recovery_required') {
+        return { ok: false, error: 'carryover_recovery_missing' };
+      }
+      const continuationId = String(interruption.continuationId || '');
+      const sourceSegmentIds = (interruption.memberIds || []).map(String).filter(id => id && id !== continuationId);
+      if (!continuationId || !sourceSegmentIds.length) {
+        return { ok: false, error: 'carryover_recovery_incomplete' };
+      }
+      return this.carryoverInterruption({
+        activeBatchId: interruption.activeBatchId,
+        sourceSegmentIds,
+        sourceOutcome: 'interrupted',
+        continuationId,
+        generationToken: `${interruption.chainId || 'carryover'}:retry:${Number(interruption.attempts || 0) + 1}:${nowFn()}`
+      });
+    },
+
+    async keepAccumulating() {
+      turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'interrupt_resolved', at: nowFn() });
+      turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'pause', at: nowFn() });
+      planner.setHold(true);
+      mirrorNext();
+      const snapshot = deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot());
+      emit('source_interruption_keep_accumulating', { turnCoordination: snapshot });
+      return { ok: true, reason: 'paused_accumulating', turnCoordination: snapshot };
     },
 
     acknowledgeLastAnswer() {
@@ -601,17 +668,6 @@ export function createReceiverBatchRuntime({
 
     mirrorNext,
     submitNext,
-    setCoordinationPolicy(policy = 'adaptive') {
-      const normalized = String(policy || '').trim().toLowerCase();
-      if (!['adaptive', 'conservative', 'manual'].includes(normalized)) {
-        return { ok: false, error: 'coordination_policy_invalid', policy: turnCoordination.policy || 'adaptive' };
-      }
-      turnCoordination = normalizeTurnCoordination({ ...turnCoordination, policy: normalized, updatedAt: nowFn() }, nowFn());
-      const snapshot = deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot());
-      emit('turn_coordination_policy_changed', snapshot);
-      return { ok: true, policy: normalized, turnCoordination: snapshot };
-    },
-
     async pauseForwarding() {
       turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'pause', at: nowFn() });
       planner.setHold(true);

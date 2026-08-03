@@ -12,7 +12,7 @@ function cleanText(value, max = 160) {
 
 function normalizePolicyPreview(value) {
   if (!value || typeof value !== 'object') return null;
-  const kind = ['operating_profile','containment_override'].includes(String(value.kind || '')) ? String(value.kind) : '';
+  const kind = ['operating_profile','containment_override','turn_coordination'].includes(String(value.kind || '')) ? String(value.kind) : '';
   const id = cleanText(value.id, 500);
   const fingerprint = cleanText(value.fingerprint, 500);
   const target = cleanText(value.target, 40);
@@ -24,7 +24,7 @@ const STRICT_PAYLOAD_KEYS = Object.freeze({
   end_session:['confirmToken','mode'], apply_operating_profile:['profile','preview'], set_containment_override:['enabled','durationMs','reason','preview'],
   resolve_operator_choice:['choiceId','fingerprint','option'], resolve_no_response:['action'], interrupt_latest:['token'],
   export_support_bundle:[], set_session_phase:['phase','reason'], start_mock:['plannedDurationMs'],
-  set_turn_coordination_policy:['policy']
+  set_turn_coordination_policy:['policy','preview']
 });
 function pruneStrictPayload(command,payload){ const keys=STRICT_PAYLOAD_KEYS[command]; if(!keys) return payload; return Object.fromEntries(keys.filter(key=>key in payload).map(key=>[key,payload[key]])); }
 
@@ -118,8 +118,11 @@ export function normalizeDashboardCommand(value) {
   }
   if (command === 'set_turn_coordination_policy') {
     const policy = cleanText(payload.policy, 24).toLowerCase();
-    if (!['adaptive', 'conservative', 'manual'].includes(policy)) return null;
-    payload.policy = policy;
+    const preview = normalizePolicyPreview(payload.preview);
+    if (!['adaptive', 'conservative', 'manual'].includes(policy) || !preview) return null;
+    if (preview.kind !== 'turn_coordination' || preview.target !== policy) return null;
+    for (const key of Object.keys(payload)) delete payload[key];
+    Object.assign(payload, { policy, preview });
   }
   if (command === 'set_receiver_policy') {
     payload.policy = payload.policy && typeof payload.policy === 'object' ? { ...payload.policy } : {};

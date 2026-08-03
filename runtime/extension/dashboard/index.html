@@ -217,6 +217,23 @@
               <button id="turnCoordinationPrimary" data-command="pause">Pause forwarding</button>
               <button id="turnCoordinationSecondary" data-command="resume_without_send" hidden>Resume without sending</button>
             </div>
+            <div class="turn-coordination-policy">
+              <label for="turnCoordinationPolicySelect">Interruption policy</label>
+              <select id="turnCoordinationPolicySelect">
+                <option value="adaptive">Adaptive</option>
+                <option value="conservative">Conservative</option>
+                <option value="manual">Manual</option>
+              </select>
+              <button id="turnCoordinationPolicyPreviewButton" type="button">Preview policy</button>
+            </div>
+            <div id="turnCoordinationPolicyPreview" class="turn-coordination-policy-preview" hidden aria-live="polite">
+              <strong id="turnCoordinationPolicyPreviewTitle">Policy preview</strong>
+              <p id="turnCoordinationPolicyPreviewDetail"></p>
+              <div class="turn-coordination-policy-preview-actions">
+                <button id="turnCoordinationPolicyConfirm" type="button">Apply policy</button>
+                <button id="turnCoordinationPolicyCancel" type="button">Cancel</button>
+              </div>
+            </div>
           </article>
 
           <article class="live-panel current-answer-panel">

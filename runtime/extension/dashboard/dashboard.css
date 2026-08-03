@@ -550,3 +550,13 @@ html[data-compact-density="true"] .shell { gap: 8px; } html[data-compact-density
 .turn-coordination-actions button{flex:1 1 10rem}
 @media (max-width: 320px){.turn-coordination-panel{grid-column:auto}.turn-coordination-counts{grid-template-columns:1fr}.turn-coordination-actions{display:grid;grid-template-columns:1fr}.turn-coordination-actions button{width:100%}}
 @media print{.turn-coordination-panel{grid-column:span 2;break-inside:avoid}.turn-coordination-actions{display:none}}
+
+.turn-coordination-policy{display:grid;grid-template-columns:minmax(8rem,1fr) minmax(10rem,1fr) auto;gap:8px;align-items:end;margin-top:.75rem}
+.turn-coordination-policy label{grid-column:1/-1;color:var(--muted);font-size:.7rem}
+.turn-coordination-policy select{width:100%;min-width:0}
+.turn-coordination-policy-preview{margin-top:.65rem;padding:.7rem;border:1px solid var(--line);border-radius:.65rem;background:var(--surface-2)}
+.turn-coordination-policy-preview p{margin:.35rem 0;color:var(--muted);font-size:.75rem}
+.turn-coordination-policy-preview-actions{display:flex;flex-wrap:wrap;gap:8px}
+@media (max-width: 520px){.turn-coordination-policy{grid-template-columns:1fr}.turn-coordination-policy label{grid-column:auto}.turn-coordination-policy-preview-actions{display:grid;grid-template-columns:1fr 1fr}}
+@media (max-width: 320px){.turn-coordination-policy-preview-actions{grid-template-columns:1fr}}
+@media print{.turn-coordination-policy,.turn-coordination-policy-preview{display:none!important}}

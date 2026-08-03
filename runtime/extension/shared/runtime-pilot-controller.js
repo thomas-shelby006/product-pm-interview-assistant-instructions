@@ -1700,11 +1700,17 @@ export function createRuntimePilotController({
           value: Boolean(payload.value)
         });
         break;
-      case 'set_turn_coordination_policy':
+      case 'set_turn_coordination_policy': {
+        const validation = validatePolicyImpactConfirmation(pilot.snapshot(sessionId), payload.preview, Date.now());
+        if (!validation.ok || validation.preview?.kind !== 'turn_coordination' || validation.preview?.target !== payload.policy) {
+          result = validation.ok ? { ok:false, error:'policy_preview_mismatch' } : validation;
+          break;
+        }
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_turn_coordination_policy', {
           policy: payload.policy
         });
         break;
+      }
       case 'send_held_now':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'send_held_now', { source: 'dashboard' });
         break;

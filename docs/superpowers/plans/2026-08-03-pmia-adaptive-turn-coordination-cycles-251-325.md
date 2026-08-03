@@ -1,4 +1,4 @@
-# PMIA Adaptive Turn Coordination Cycles 251â€“325 Implementation Plan
+# PMIA Adaptive Turn Coordination Cycles 251Ã¢â‚¬â€œ325 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -48,7 +48,7 @@
 - isolated release smoke, validator, release docs and cycle plan.
 
 ---
-### Task 1 â€” Cycles 251â€“255: Authoritative ChatGPT final admission
+### Task 1 Ã¢â‚¬â€ Cycles 251Ã¢â‚¬â€œ255: Authoritative ChatGPT final admission
 
 **Files:** Modify `content/senders/provider-sender.js`, `content/senders/dom-turn-tracker.js`, `content/entry.js`; test `tests/chatgpt-turn-tracker.test.js`, `tests/provider-sender.test.js`, focused phase suite.
 
@@ -60,7 +60,7 @@
 - [x] Run focused sender/runtime tests; verify no ordinary receiver stop call and no lost explicit copied final.
 - [x] Update this plan checkpoint and commit `feat: require authoritative ChatGPT final turns`.
 
-### Task 2 â€” Cycles 256â€“260: Pause accumulation state machine
+### Task 2 Ã¢â‚¬â€ Cycles 256Ã¢â‚¬â€œ260: Pause accumulation state machine
 
 **Files:** Create `shared/turn-coordination-state.js`; modify runtime state/schema/migrations and `runtime-pilot-controller.js`; test focused phase suite and state migration tests.
 
@@ -72,7 +72,7 @@
 - [x] Verify pause/reload/resume preserves ledger ownership and exact member IDs.
 - [x] Update checkpoint and commit `feat: persist turn coordination state`.
 
-### Task 3 â€” Cycles 261â€“265: Provider-free paused staging
+### Task 3 Ã¢â‚¬â€ Cycles 261Ã¢â‚¬â€œ265: Provider-free paused staging
 
 **Files:** Modify `runtime-pilot-controller.js`, `background.js`, `content/entry.js`, `content/receiver-batch-runtime.js`; test controller, runtime and receiver batch suites.
 
@@ -84,7 +84,7 @@
 - [x] Verify sender/receiver disconnect, missing receiver and storage failure keep unresolved ownership.
 - [x] Update checkpoint and commit `feat: mirror paused finals without submission`.
 
-### Task 4 â€” Cycles 266â€“270: Paused and combined prompt variants
+### Task 4 Ã¢â‚¬â€ Cycles 266Ã¢â‚¬â€œ270: Paused and combined prompt variants
 
 **Files:** Create `shared/turn-coordination-prompt.js`; modify `shared/batch-planner.js` and receiver draft mirroring; test batch planner and prompt contracts.
 
@@ -96,7 +96,7 @@
 - [x] Verify rendered-proof fingerprints use the final submitted prompt, while the paused draft may carry a non-submitted banner.
 - [x] Update checkpoint and commit `feat: add coordinated batch prompts`.
 
-### Task 5 â€” Cycles 271â€“275: Atomic resume and latency budgets
+### Task 5 Ã¢â‚¬â€ Cycles 271Ã¢â‚¬â€œ275: Atomic resume and latency budgets
 
 **Files:** Modify receiver runtime, controller, dashboard protocol; create coordination latency metrics in state/model; test pause/resume races.
 
@@ -105,13 +105,13 @@
 - [x] Write failing tests for repeated resume, resume during persistence, resume during generation, and service-worker replay.
 - [x] Confirm RED on current command split and missing staged-draft submission contract.
 - [x] Implement one idempotent resume transaction ordered by the session mutation coordinator.
-- [ ] Record observeâ†’persist, persistâ†’stage, resumeâ†’submit and stopâ†’resubmit latency without transcript text.
+- [ ] Record observeÃ¢â€ â€™persist, persistÃ¢â€ â€™stage, resumeÃ¢â€ â€™submit and stopÃ¢â€ â€™resubmit latency without transcript text.
 - [ ] Update checkpoint and commit `feat: resume paused batches atomically`.
 
 ---
-## Phase B â€” Cycles 276â€“300: bug-fixing and race hardening
+## Phase B Ã¢â‚¬â€ Cycles 276Ã¢â‚¬â€œ300: bug-fixing and race hardening
 
-### Task 6 â€” Cycles 276â€“280: Turn relation and supersession policy
+### Task 6 Ã¢â‚¬â€ Cycles 276Ã¢â‚¬â€œ280: Turn relation and supersession policy
 
 **Files:** Create `shared/turn-coordination-policy.js`; test same-turn revision, continuation, independent question and stale replay cases.
 
@@ -123,7 +123,7 @@
 - [x] Verify independent later questions return `accumulate`, and ambiguous evidence fails closed.
 - [x] Update checkpoint and commit `feat: classify interviewer turn relationships`.
 
-### Task 7 â€” Cycles 281â€“285: Active-answer carryover transaction
+### Task 7 Ã¢â‚¬â€ Cycles 281Ã¢â‚¬â€œ285: Active-answer carryover transaction
 
 **Files:** Modify `shared/batch-planner.js`, `content/receiver-batch-runtime.js`, `content/receiver-answer-orchestrator.js`; test planner and receiver runtime.
 
@@ -135,7 +135,7 @@
 - [x] Settle the old answer as `cancelled: superseded_turn` exactly once before observing the new batch.
 - [x] Update checkpoint and commit `feat: carry interrupted answers into combined batch`.
 
-### Task 8 â€” Cycles 286â€“290: Automatic evidence-gated interruption
+### Task 8 Ã¢â‚¬â€ Cycles 286Ã¢â‚¬â€œ290: Automatic evidence-gated interruption
 
 **Files:** Modify `content/entry.js`, receiver runtime and controller; test end-to-end content runtime commands.
 
@@ -147,7 +147,7 @@
 - [x] Preserve manual `interrupt_latest` as an explicit latest-only operator action.
 - [x] Update checkpoint and commit `feat: auto-interrupt superseded interviewer turns`.
 
-### Task 9 â€” Cycles 291â€“295: Restart, hidden-page and deadline repair
+### Task 9 Ã¢â‚¬â€ Cycles 291Ã¢â‚¬â€œ295: Restart, hidden-page and deadline repair
 
 **Files:** Modify runtime store/state recovery, receiver page lifecycle coordinator and alarm schedule; test suspension/reload/hidden tab paths.
 
@@ -159,7 +159,7 @@
 - [x] Verify no foreground activation, no repeated submit, and no global service-worker memory authority.
 - [x] Update checkpoint and commit `fix: recover coordinated turns across lifecycle changes`.
 
-### Task 10 â€” Cycles 296â€“300: Proof, storage, draft and command races
+### Task 10 Ã¢â‚¬â€ Cycles 296Ã¢â‚¬â€œ300: Proof, storage, draft and command races
 
 **Files:** Modify proof reconciliation, composer arbiter integration, command journal and storage accounting; test conflict/replay/compaction cases.
 
@@ -173,9 +173,9 @@
 
 ---
 
-## Phase C â€” Cycles 301â€“325: inferred user-facing features
+## Phase C Ã¢â‚¬â€ Cycles 301Ã¢â‚¬â€œ325: inferred user-facing features
 
-### Task 11 â€” Cycles 301â€“305: Turn Coordination cockpit
+### Task 11 Ã¢â‚¬â€ Cycles 301Ã¢â‚¬â€œ305: Turn Coordination cockpit
 
 **Files:** Create `dashboard/turn-coordination-model.js`; modify dashboard HTML/CSS/render and Navigator Now rail.
 
@@ -187,19 +187,19 @@
 - [x] Verify keyboard focus, ARIA status and 320/280 px layouts.
 - [x] Update checkpoint and commit `feat: add turn coordination cockpit`.
 
-### Task 12 â€” Cycles 306â€“310: Coordination policy presets
+### Task 12 Ã¢â‚¬â€ Cycles 306Ã¢â‚¬â€œ310: Coordination policy presets
 
 **Files:** Modify production controls/state, command catalog and cockpit; test policy application and preview confirmation.
 
 **Interfaces:** Presets `conservative`, `adaptive`, `manual`; default `adaptive` disables weak finalization and permits only evidence-gated same-turn carryover.
 
-- [ ] Write failing tests for preset impact, invalid policy, persistence and containment interaction.
-- [ ] Implement policy preview before changing automatic interruption behavior.
-- [ ] Keep provider final authority non-overridable; presets may only become more conservative.
-- [ ] Verify profile changes cannot unpause, submit or interrupt by themselves.
-- [ ] Update checkpoint and commit `feat: add coordination policy presets`.
+- [x] Write failing tests for preset impact, invalid policy, persistence and containment interaction.
+- [x] Implement policy preview before changing automatic interruption behavior.
+- [x] Keep provider final authority non-overridable; presets may only become more conservative.
+- [x] Verify profile changes cannot unpause, submit or interrupt by themselves.
+- [x] Update checkpoint and commit `feat: add coordination policy presets`.
 
-### Task 13 â€” Cycles 311â€“315: Pause draft banner and resume preview
+### Task 13 Ã¢â‚¬â€ Cycles 311Ã¢â‚¬â€œ315: Pause draft banner and resume preview
 
 **Files:** Modify composer arbiter, receiver batch preview, cockpit and dashboard dialog.
 
@@ -211,7 +211,7 @@
 - [ ] Verify resume replaces the UI-only banner with the final combined-turn instruction before proof.
 - [ ] Update checkpoint and commit `feat: preview paused resume behavior`.
 
-### Task 14 â€” Cycles 316â€“320: Interruption explanation and recovery controls
+### Task 14 Ã¢â‚¬â€ Cycles 316Ã¢â‚¬â€œ320: Interruption explanation and recovery controls
 
 **Files:** Extend interruption recovery card, command history, Navigator events and support-bundle metadata.
 
@@ -223,7 +223,7 @@
 - [ ] Verify support-bundle redaction and command replay idempotency.
 - [ ] Update checkpoint and commit `feat: explain turn interruptions and recovery`.
 
-### Task 15 â€” Cycles 321â€“325: Efficiency scorecard and release evidence
+### Task 15 Ã¢â‚¬â€ Cycles 321Ã¢â‚¬â€œ325: Efficiency scorecard and release evidence
 
 **Files:** Extend performance budget/scorecard, isolated smoke, validator, release docs and handoff manifest.
 
@@ -242,7 +242,7 @@
 The phase is complete only when the exact committed HEAD proves all of the following: no ChatGPT weak-tail submission; paused finals remain durable and visible as a combined Window 2 draft; default resume submits once; Resume Without Send retains the draft; same-turn continuation stops and carries the previous active question forward; independent questions do not auto-stop; restart/reload preserves ownership; support data is text-free; full validation and fresh isolated-browser evidence exit zero; original worktree and normal browser remain untouched.
 
 
-## Checkpoint â€” Cycles 256â€“300 core coordination and hardening
+## Checkpoint Ã¢â‚¬â€ Cycles 256Ã¢â‚¬â€œ300 core coordination and hardening
 
 - Schema v5 persists metadata-only turn coordination through the existing Pilot state envelope.
 - Pause keeps sender observation and durable admission active while receiver submission is held.

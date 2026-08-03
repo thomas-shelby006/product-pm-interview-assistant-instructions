@@ -101,6 +101,8 @@ const state = {
   productionProfileDraft: 'balanced',
   productionDecision: null,
   policyPreview: null,
+  coordinationPolicyDraft: 'adaptive',
+  coordinationPolicyPreview: null,
   assistTriageView: 'urgent',
   assistCommandQuery: '',
   assistWizardStage: 'start',
@@ -692,6 +694,32 @@ async function executePaletteSelection() {
   closeCommandPalette();
 }
 
+function renderTurnCoordinationPolicy(snapshot, now = Date.now()) {
+  const select = byId('turnCoordinationPolicySelect');
+  const current = String(snapshot?.batchState?.turnCoordination?.policy || 'adaptive');
+  if (!state.coordinationPolicyDraft) state.coordinationPolicyDraft = current;
+  if (select && document.activeElement !== select) select.value = state.coordinationPolicyDraft || current;
+  const panel = byId('turnCoordinationPolicyPreview');
+  let preview = state.coordinationPolicyPreview;
+  if (preview) {
+    const validation = validatePolicyImpactConfirmation(snapshot || {}, preview, now);
+    if (!validation.ok && validation.error !== 'policy_preview_blocked') {
+      state.coordinationPolicyPreview = null;
+      preview = null;
+    }
+  }
+  if (!panel) return;
+  panel.hidden = !preview;
+  if (!preview) return;
+  const change = preview.changes?.[0];
+  text('turnCoordinationPolicyPreviewTitle', `${humanizeCode(preview.target)} interruption policy`);
+  text('turnCoordinationPolicyPreviewDetail', change
+    ? `Changes classification from ${humanizeCode(change.from)} to ${humanizeCode(change.to)}. Provider writes, pause state, held drafts, and final authority remain unchanged.`
+    : `The ${humanizeCode(preview.target)} policy is already active. No runtime behavior changes.`);
+  const confirm = byId('turnCoordinationPolicyConfirm');
+  if (confirm) confirm.disabled = preview.allowed !== true;
+}
+
 function renderLiveCommandCenter(snapshot, now) {
   if (!snapshot) {
     const stateCard = document.querySelector('.live-state-card');
@@ -702,6 +730,7 @@ function renderLiveCommandCenter(snapshot, now) {
       : 'Waiting for the first authoritative ledger snapshot.');
     renderTruthRail({ document, snapshot: null, now, text, sessionEnded: state.sessionEnded });
     renderTurnCoordination({ document, snapshot: null, now, sessionEnded: state.sessionEnded });
+    renderTurnCoordinationPolicy(null, now);
     for (const id of ['inboxPending', 'inboxInFlight', 'inboxProven']) text(id, '0');
     text('currentAnswerBadge', 'Idle');
     text('currentBatchTitle', 'No active batch');
@@ -763,6 +792,7 @@ function renderLiveCommandCenter(snapshot, now) {
     now,
     sessionEnded: state.sessionEnded
   });
+  renderTurnCoordinationPolicy(snapshot, now);
   const stateCard = document.querySelector('.live-state-card');
   if (stateCard) stateCard.dataset.catchUp = inbox.catchUpState;
   text('catchUpState', catchUpLabel(inbox.catchUpState));
@@ -1760,6 +1790,37 @@ document.addEventListener('click', event => {
     void runCommand(event.target.closest('#assistPolicyConfirm'),command,payload).then(result=>{ if(result?.ok) state.policyPreview=null; scheduleRender(); });
     return;
   }
+  if (event.target.closest('#turnCoordinationPolicyPreviewButton')) {
+    const policy = byId('turnCoordinationPolicySelect')?.value || state.coordinationPolicyDraft || 'adaptive';
+    state.coordinationPolicyDraft = policy;
+    state.coordinationPolicyPreview = buildPolicyImpactPreview(state.snapshot || {}, { kind:'turn_coordination', policy }, Date.now());
+    scheduleRender();
+    return;
+  }
+  if (event.target.closest('#turnCoordinationPolicyConfirm')) {
+    const validation = validatePolicyImpactConfirmation(state.snapshot || {}, state.coordinationPolicyPreview, Date.now());
+    if (!validation.ok || validation.preview?.kind !== 'turn_coordination') {
+      showToast(validation.error || 'policy_preview_mismatch', 'error');
+      state.coordinationPolicyPreview = null;
+      scheduleRender();
+      return;
+    }
+    const preview = validation.preview;
+    void runCommand(event.target.closest('#turnCoordinationPolicyConfirm'), 'set_turn_coordination_policy', { policy:preview.target, preview })
+      .then(result => {
+        if (result?.ok) {
+          state.coordinationPolicyDraft = preview.target;
+          state.coordinationPolicyPreview = null;
+        }
+        scheduleRender();
+      });
+    return;
+  }
+  if (event.target.closest('#turnCoordinationPolicyCancel')) {
+    state.coordinationPolicyPreview = null;
+    scheduleRender();
+    return;
+  }
   if (event.target.closest('#assistWizardStart')) { state.assistWizardStage='start'; scheduleRender(); return; }
   if (event.target.closest('#assistWizardEnd')) { state.assistWizardStage='end'; scheduleRender(); return; }
   const button = event.target.closest('[data-command]');
@@ -1776,6 +1837,12 @@ document.addEventListener('click', event => {
             : {};
     void runCommand(button, command, payload);
   }
+});
+
+byId('turnCoordinationPolicySelect').addEventListener('change', event => {
+  state.coordinationPolicyDraft = event.currentTarget.value;
+  state.coordinationPolicyPreview = null;
+  renderTurnCoordinationPolicy(state.snapshot, Date.now());
 });
 
 byId('operatingProfileSelect').addEventListener('change', event => {

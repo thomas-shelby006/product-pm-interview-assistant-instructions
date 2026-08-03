@@ -40,7 +40,10 @@ export function normalizeTurnCoordination(value = {}, now = Date.now()) {
       activeBatchId: String(interruption.activeBatchId || ''),
       continuationId: String(interruption.continuationId || ''),
       startedAt: Math.max(0, Number(interruption.startedAt || 0)),
-      reason: String(interruption.reason || '')
+      lastAttemptAt: Math.max(0, Number(interruption.lastAttemptAt || 0)),
+      attempts: Math.max(0, Number(interruption.attempts || 0)),
+      reason: String(interruption.reason || ''),
+      failureReason: String(interruption.failureReason || '')
     }
   };
 }
@@ -79,11 +82,30 @@ export function transitionTurnCoordination(current = {}, event = {}) {
       }
     };
   }
+  if (type === 'interrupt_failed') {
+    return {
+      ...state,
+      updatedAt: at,
+      interruption: {
+        ...state.interruption,
+        state: 'recovery_required',
+        chainId: String(event.chainId || state.interruption.chainId || `chain-${at}`),
+        memberIds: uniqueIds(event.memberIds || state.interruption.memberIds),
+        activeBatchId: String(event.activeBatchId || state.interruption.activeBatchId || ''),
+        continuationId: String(event.continuationId || state.interruption.continuationId || ''),
+        startedAt: state.interruption.startedAt || at,
+        lastAttemptAt: at,
+        attempts: Math.max(1, Number(state.interruption.attempts || 0) + 1),
+        reason: String(event.reason || state.interruption.reason || 'source_answer_interrupted'),
+        failureReason: String(event.failureReason || 'carryover_failed')
+      }
+    };
+  }
   if (type === 'interrupt_resolved') {
     return {
       ...state,
       updatedAt: at,
-      interruption: { ...state.interruption, state: 'resolved' }
+      interruption: { ...state.interruption, state: 'resolved', failureReason: '', lastAttemptAt: at }
     };
   }
   return state;

@@ -20,6 +20,13 @@ export function policySnapshotFingerprint(snapshot = {}) {
     productionControls:{
       operatingProfile:String(snapshot.productionControls?.operatingProfile || 'balanced'),
       containmentOverrideUntil:Math.max(0,Number(snapshot.productionControls?.containmentOverrideUntil || 0))
+    },
+    turnCoordination:{
+      policy:String(snapshot.batchState?.turnCoordination?.policy || 'adaptive'),
+      mode:String(snapshot.batchState?.turnCoordination?.mode || 'live'),
+      heldCount:Math.max(0,Number(snapshot.batchState?.turnCoordination?.heldCount || 0)),
+      interruptionState:String(snapshot.batchState?.turnCoordination?.interruption?.state || 'none'),
+      chainId:String(snapshot.batchState?.turnCoordination?.interruption?.chainId || '')
     }
   });
 }
@@ -40,6 +47,19 @@ export function buildPolicyImpactPreview(snapshot = {}, request = {}, now = Date
       postAnswer:profile.receiverPolicy.pauseAfterAnswer ? 'pause' : profile.receiverPolicy.drainMode === 'all' ? 'drain_all' : profile.receiverPolicy.submitOnIdle ? 'submit_on_idle' : 'unchanged',
       reversible:true, risk:profile.id === 'fast' || startsWrites ? 'caution' : 'safe', changes:profile.changes.map(item=>({...item})) };
   }
+  if (kind === 'turn_coordination') {
+    const supported = new Set(['adaptive','conservative','manual']);
+    const target = supported.has(String(request.policy || '')) ? String(request.policy) : '';
+    const current = supported.has(String(snapshot.batchState?.turnCoordination?.policy || ''))
+      ? String(snapshot.batchState.turnCoordination.policy)
+      : 'adaptive';
+    const allowed = Boolean(target);
+    return { id:allowed ? `policy:${kind}:${target}:${fingerprint}` : '', kind, target, fingerprint, createdAt:now, expiresAt:allowed ? now+TTL_MS : now,
+      allowed, blockers:allowed ? [] : ['unsupported_coordination_policy'], protectedCount:count,
+      providerWrites:'unchanged', postAnswer:'unchanged', reversible:true, risk:'safe',
+      effect:{ autoInterrupt:target === 'adaptive', pauseStateChanges:false, submitsHeldDraft:false, finalAuthority:'unchanged' },
+      changes:allowed && target !== current ? [{ field:'turnCoordinationPolicy', from:current, to:target }] : [] };
+  }
   if (kind === 'containment_override') {
     const status = deriveContainmentStatus(snapshot, now);
     const enabled = Boolean(request.enabled);
@@ -56,7 +76,7 @@ export function validatePolicyImpactConfirmation(snapshot = {}, preview = {}, no
   if (!preview?.id) return { ok:false, error:'policy_preview_missing' };
   if (now > Number(preview.expiresAt || 0)) return { ok:false, error:'policy_preview_expired' };
   if (policySnapshotFingerprint(snapshot) !== String(preview.fingerprint || '')) return { ok:false, error:'policy_preview_stale' };
-  const rebuilt=buildPolicyImpactPreview(snapshot,{ kind:preview.kind, profile:preview.target, enabled:preview.target === 'enable' },Number(preview.createdAt || now));
+  const rebuilt=buildPolicyImpactPreview(snapshot,{ kind:preview.kind, profile:preview.target, policy:preview.target, enabled:preview.target === 'enable' },Number(preview.createdAt || now));
   if (!rebuilt.allowed) return { ok:false, error:'policy_preview_blocked', blockers:rebuilt.blockers };
   if (rebuilt.id !== preview.id || rebuilt.protectedCount !== preview.protectedCount) return { ok:false, error:'policy_preview_changed' };
   return { ok:true, preview:rebuilt };
