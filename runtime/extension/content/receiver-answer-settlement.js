@@ -3,23 +3,41 @@ function clone(value) {
   try { return structuredClone(value); } catch { return JSON.parse(JSON.stringify(value)); }
 }
 
-export function createReceiverAnswerSettlement({ completeBatch, onError = () => {} } = {}) {
+export function createReceiverAnswerSettlement({ completeBatch, onError = () => {}, historyLimit = 32 } = {}) {
   if (typeof completeBatch !== 'function') throw new TypeError('completeBatch is required');
   let pending = null;
   let inFlight = null;
   let settledBatchId = '';
+  const terminal = new Map();
+  const limit = Math.max(4, Number(historyLimit) || 32);
+
+  function remember(batchId, { state = 'complete', reason = '' } = {}) {
+    const id = String(batchId || '');
+    if (!id) return null;
+    if (terminal.has(id)) terminal.delete(id);
+    const record = { batchId: id, state: String(state || 'complete'), reason: String(reason || '') };
+    terminal.set(id, record);
+    while (terminal.size > limit) terminal.delete(terminal.keys().next().value);
+    settledBatchId = id;
+    return record;
+  }
+
+  function duplicateResult(batchId) {
+    const record = terminal.get(String(batchId || ''));
+    return record ? { ok: true, duplicate: true, ...record } : null;
+  }
 
   function begin({ batchId = '', proof = null } = {}) {
     const id = String(batchId || '');
     if (!id) return { ok: false, error: 'batch_id_missing' };
     pending = { batchId: id, proof: clone(proof) };
-    if (settledBatchId !== id) settledBatchId = '';
     return { ok: true, batchId: id };
   }
 
   function settle(result = {}) {
     const batchId = String(result?.answerState?.batchId || pending?.batchId || '');
-    if (settledBatchId && settledBatchId === batchId) return Promise.resolve({ ok: true, duplicate: true, batchId });
+    const duplicate = duplicateResult(batchId);
+    if (duplicate) return Promise.resolve(duplicate);
     if (!pending || !batchId || pending.batchId !== batchId) {
       return Promise.resolve({ ok: false, error: 'answer_settlement_missing', batchId });
     }
@@ -33,7 +51,10 @@ export function createReceiverAnswerSettlement({ completeBatch, onError = () => 
     inFlight = Promise.resolve().then(() => completeBatch(batchId, payload))
       .then(value => {
         if (value?.ok !== false) {
-          settledBatchId = batchId;
+          remember(batchId, {
+            state: result?.answerState?.state || value?.state || 'complete',
+            reason: result?.answerState?.reason || value?.reason || ''
+          });
           pending = null;
         }
         return value;
@@ -46,13 +67,27 @@ export function createReceiverAnswerSettlement({ completeBatch, onError = () => 
     return inFlight;
   }
 
+  function cancel({ batchId = '', reason = 'cancelled' } = {}) {
+    const id = String(batchId || pending?.batchId || '');
+    const duplicate = duplicateResult(id);
+    if (duplicate) return duplicate;
+    if (inFlight) return { ok: false, error: 'answer_settlement_in_flight', batchId: id };
+    if (!pending || !id || pending.batchId !== id) {
+      return { ok: false, error: 'answer_settlement_missing', batchId: id };
+    }
+    const record = remember(id, { state: 'cancelled', reason });
+    pending = null;
+    return { ok: true, ...record };
+  }
+
   function snapshot() {
     return {
       pendingBatchId: String(pending?.batchId || ''),
       inFlight: Boolean(inFlight),
-      settledBatchId
+      settledBatchId,
+      terminalCount: terminal.size
     };
   }
 
-  return { begin, settle, snapshot };
+  return { begin, settle, cancel, snapshot };
 }

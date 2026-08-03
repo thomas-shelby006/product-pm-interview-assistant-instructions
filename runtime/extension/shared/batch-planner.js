@@ -152,6 +152,43 @@ export class BatchPlanner {
     return { batch: this.active(), interrupted };
   }
 
+  createCarryover(now = Date.now(), { activeBatchId = '', continuationIds = [] } = {}) {
+    if (!this.#active) return { ok: false, error: 'active_batch_missing' };
+    if (activeBatchId && String(this.#active.id) !== String(activeBatchId)) {
+      return { ok: false, error: 'active_batch_mismatch' };
+    }
+    const requested = new Set((Array.isArray(continuationIds) ? continuationIds : []).map(String).filter(Boolean));
+    if (!requested.size) return { ok: false, error: 'continuation_missing' };
+    const available = new Map(this.#next.map(entry => [String(entry.id), entry]));
+    for (const id of requested) {
+      if (!available.has(id)) return { ok: false, error: 'continuation_not_waiting', missingId: id };
+    }
+    const interrupted = this.active();
+    const selected = this.#next.filter(entry => requested.has(String(entry.id))).map(cloneEntry);
+    const entriesById = new Map();
+    for (const entry of [...interrupted.entries.map(cloneEntry), ...selected]) {
+      if (!entriesById.has(entry.id)) entriesById.set(entry.id, entry);
+    }
+    const entries = [...entriesById.values()]
+      .sort((a, b) => Number(a.envelope?.seq || 0) - Number(b.envelope?.seq || 0));
+    this.#next = this.#next.filter(entry => !requested.has(String(entry.id)));
+    const prompt = this.#composePrompt({ entries });
+    this.#active = {
+      id: `carryover-${Number(entries[0]?.envelope?.seq || 0)}-${Number(entries.at(-1)?.envelope?.seq || 0)}-${String(entries.at(-1)?.id || '').slice(-8)}`,
+      entries,
+      prompt,
+      createdAt: now,
+      submittedAt: 0
+    };
+    return {
+      ok: true,
+      batch: this.active(),
+      interrupted,
+      continuationIds: [...requested],
+      preservedNextIds: this.#next.map(entry => String(entry.id))
+    };
+  }
+
   markSubmitted(now = Date.now()) {
     if (!this.#active) return null;
     this.#active.submittedAt = now;

@@ -6,7 +6,8 @@ import { deriveBatchSchedulingDecision } from '../shared/batch-scheduling-policy
 import { deriveBatchPreview } from '../shared/batch-preview-model.js';
 import { normalizeReceiverDeliveryPolicy, postAnswerDecision, updateReceiverDeliveryPolicy } from '../shared/receiver-delivery-policy.js';
 import { acknowledgeAnswer, buildAnswerAcknowledgement, buildAnswerHandoff, buildInterruptPlan, resolveNoResponse } from '../shared/answer-operations.js';
-import { composeTurnCoordinatedPrompt, deriveTurnCoordinationSnapshot, normalizeTurnCoordination, transitionTurnCoordination } from '../shared/turn-coordination-state.js';
+import { composeTurnCoordinatedPrompt, correlateSourceInterruption, deriveTurnCoordinationSnapshot, normalizeTurnCoordination, transitionTurnCoordination } from '../shared/turn-coordination-state.js';
+import { classifyTurnRelation } from '../shared/turn-coordination-policy.js';
 
 export function createReceiverBatchRuntime({
   adapter,
@@ -18,7 +19,8 @@ export function createReceiverBatchRuntime({
   waitFn = ms => new Promise(resolve => setTimeout(resolve, ms)),
   interruptTimeoutMs = 800,
   interruptPollMs = 25,
-  turnCoordinationState = {}
+  turnCoordinationState = {},
+  cancelActiveAnswer = async () => ({ ok: true, reason: 'no_settlement_owner' })
 } = {}) {
   if (!adapter || typeof submitBatch !== 'function') {
     throw new TypeError('Receiver batch runtime requires adapter and submitBatch');
@@ -35,6 +37,8 @@ export function createReceiverBatchRuntime({
   let lastCompletedBatch = null;
   let pendingNoResponse = null;
   let interruptPlan = null;
+  const interruptionTokens = new Set();
+  const interruptionTokenOrder = [];
   let turnCoordination = normalizeTurnCoordination(turnCoordinationState, nowFn());
   planner.setPromptComposer?.(args => composeTurnCoordinatedPrompt(args, turnCoordination));
 
@@ -105,6 +109,15 @@ export function createReceiverBatchRuntime({
   };
 
   const hasManualConflict = () => draftArbiter?.snapshot?.().owner === 'manual';
+  const claimInterruptionToken = value => {
+    const token = String(value || '').trim();
+    if (!token) return { ok: false, error: 'interruption_token_missing' };
+    if (interruptionTokens.has(token)) return { ok: false, error: 'interruption_token_replayed' };
+    interruptionTokens.add(token);
+    interruptionTokenOrder.push(token);
+    while (interruptionTokenOrder.length > 64) interruptionTokens.delete(interruptionTokenOrder.shift());
+    return { ok: true, token };
+  };
 
   async function executeBatch(batch, source = 'automatic') {
     if (!batch) return { ok: false, staged: true, error: 'batch_missing' };
@@ -280,6 +293,49 @@ export function createReceiverBatchRuntime({
         nextCount: planner.nextSize,
         partitionCount: planner.next().partitionCount
       });
+      const metadata = envelope?.metadata && typeof envelope.metadata === 'object' ? envelope.metadata : {};
+      const active = planner.active();
+      if (!forwardingPaused() && !queueOnly.active && active && adapter.isGenerating?.() && metadata.continuationOf) {
+        const sourceSegmentIds = active.entries
+          .filter(entry => String(entry.envelope?.metadata?.sourceTurnId || entry.id) === String(metadata.continuationOf))
+          .map(entry => String(entry.id));
+        const relation = classifyTurnRelation({
+          active: {
+            sourceTurnId: metadata.continuationOf,
+            memberIds: sourceSegmentIds,
+            outcome: metadata.sourceOutcome
+          },
+          incoming: {
+            id: envelope.id,
+            sourceTurnId: metadata.sourceTurnId,
+            continuationOf: metadata.continuationOf,
+            revisionOf: metadata.revisionOf,
+            boundary: metadata.boundary
+          },
+          policy: metadata.coordinationPolicy || 'adaptive',
+          now: nowFn()
+        });
+        if (relation.autoInterrupt && sourceSegmentIds.length) {
+          const carryover = await this.carryoverInterruption({
+            activeBatchId: active.id,
+            sourceSegmentIds,
+            sourceOutcome: metadata.sourceOutcome,
+            continuationId: envelope.id,
+            generationToken: metadata.generationToken || `${active.id}:${metadata.continuationOf}:${envelope.id}`
+          });
+          if (carryover?.ok) return { ...carryover, reason: 'automatic_source_carryover', relation };
+          return {
+            ok: true,
+            delivered: false,
+            staged: true,
+            reason: `carryover_${carryover?.error || 'failed'}`,
+            batchId: 'next',
+            memberIds: [String(envelope.id)],
+            relation,
+            recovery: carryover
+          };
+        }
+      }
       if (forwardingPaused()) {
         mirrorNext();
         const next = planner.next();
@@ -422,6 +478,75 @@ export function createReceiverBatchRuntime({
       return executeBatch(selected.batch, 'operator_interrupt_latest');
     },
 
+    async carryoverInterruption(payload = {}) {
+      if (submitting) return { ok: false, error: 'submission_in_progress' };
+      if (hasManualConflict()) return { ok: false, error: 'draft_conflict' };
+      const token = claimInterruptionToken(payload.generationToken);
+      if (!token.ok) return token;
+      const active = planner.active();
+      if (!active) return { ok: false, error: 'active_batch_missing' };
+      if (payload.activeBatchId && String(payload.activeBatchId) !== String(active.id)) {
+        return { ok: false, error: 'active_batch_mismatch' };
+      }
+      const correlation = correlateSourceInterruption({
+        activeBatchMemberIds: active.prompt?.memberIds || [],
+        sourceSegmentIds: payload.sourceSegmentIds || [],
+        sourceOutcome: payload.sourceOutcome,
+        continuationId: payload.continuationId,
+        now: nowFn()
+      });
+      if (!correlation.correlated) return { ok: false, error: correlation.reason, correlation };
+      if (!adapter.isGenerating?.()) return { ok: false, error: 'receiver_not_generating', correlation };
+      if (!adapter.stopGenerating?.()) return { ok: false, error: 'stop_failed', correlation };
+      emit('source_interruption_stop_requested', {
+        activeBatchId: active.id,
+        chainId: correlation.chainId,
+        memberIds: correlation.memberIds,
+        generationToken: token.token
+      });
+      if (!await waitUntilIdle()) return { ok: false, error: 'stop_timeout', correlation };
+      const cancellation = await cancelActiveAnswer(active.id, 'superseded_turn');
+      if (cancellation?.ok === false && cancellation?.error !== 'answer_settlement_missing') {
+        return { ok: false, error: cancellation?.error || 'answer_cancel_failed', correlation };
+      }
+      turnCoordination = transitionTurnCoordination(turnCoordination, {
+        type: 'interrupt_detected',
+        at: nowFn(),
+        chainId: correlation.chainId,
+        memberIds: correlation.memberIds,
+        activeBatchId: active.id,
+        continuationId: payload.continuationId,
+        reason: correlation.reason
+      });
+      const carried = planner.createCarryover(nowFn(), {
+        activeBatchId: active.id,
+        continuationIds: [payload.continuationId]
+      });
+      if (!carried?.ok) {
+        emit('source_interruption_failed', { error: carried?.error || 'carryover_failed', chainId: correlation.chainId });
+        return { ...(carried || {}), ok: false, correlation };
+      }
+      activeTransaction = null;
+      emit('source_interruption_detected', {
+        turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()),
+        chainId: correlation.chainId,
+        interruptedBatchId: carried.interrupted?.id || '',
+        batchId: carried.batch.id,
+        memberIds: carried.batch.prompt.memberIds,
+        preservedNextIds: carried.preservedNextIds
+      });
+      const result = await executeBatch(carried.batch, 'automatic_source_carryover');
+      if (result?.ok) {
+        turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'interrupt_resolved', at: nowFn() });
+      }
+      return {
+        ...result,
+        correlation,
+        interruptedBatchId: carried.interrupted?.id || '',
+        turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot())
+      };
+    },
+
     acknowledgeLastAnswer() {
       if (!lastAnswerOutcome) return { ok: false, error: 'answer_outcome_missing' };
       lastAnswerOutcome = acknowledgeAnswer(lastAnswerOutcome, nowFn());
@@ -469,6 +594,16 @@ export function createReceiverBatchRuntime({
       return { ok: true, reason: 'paused_accumulating', turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()) };
     },
     async resumeForwarding({ submit = true } = {}) {
+      if (submit && hasManualConflict()) {
+        planner.setHold(true);
+        mirrorNext();
+        return {
+          ok: false,
+          staged: planner.nextSize > 0,
+          error: 'draft_conflict',
+          turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot())
+        };
+      }
       turnCoordination = transitionTurnCoordination(turnCoordination, { type: submit ? 'resume_send' : 'resume_hold', at: nowFn() });
       if (!submit) {
         planner.setHold(true);
@@ -481,6 +616,10 @@ export function createReceiverBatchRuntime({
       const result = await submitNext({ force: true });
       if (result?.ok && !result?.error) {
         turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'release_finished', at: nowFn() });
+      } else {
+        planner.setHold(true);
+        turnCoordination = transitionTurnCoordination(turnCoordination, { type: 'pause', at: nowFn() });
+        mirrorNext();
       }
       emit('forwarding_resumed', { result: { ok: result?.ok !== false, reason: result?.reason || '' }, turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()) });
       return { ...result, turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot()) };

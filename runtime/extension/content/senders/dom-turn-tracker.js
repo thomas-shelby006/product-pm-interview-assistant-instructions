@@ -54,6 +54,8 @@ export class DomTurnTracker {
     this.externalShadows = [];
     this.recentEmissionFingerprints = new Map();
     this.previewRevisions = new Map();
+    this.emittedTextById = new Map();
+    this.revisionCounts = new Map();
     this.queuedPreview = null;
     this.pending = null;
   }
@@ -71,6 +73,28 @@ export class DomTurnTracker {
     while (this.previewRevisions.size > this.historyLimit) {
       this.previewRevisions.delete(this.previewRevisions.keys().next().value);
     }
+  }
+
+  rememberEmissionText(id, text) {
+    const key = String(id || '').trim();
+    const value = normalizeTranscript(text);
+    if (!key || !value) return;
+    if (this.emittedTextById.has(key)) this.emittedTextById.delete(key);
+    this.emittedTextById.set(key, value);
+    while (this.emittedTextById.size > this.historyLimit) {
+      this.emittedTextById.delete(this.emittedTextById.keys().next().value);
+    }
+  }
+
+  nextRevisionId(id) {
+    const key = String(id || '').trim();
+    const revision = (this.revisionCounts.get(key) || 0) + 1;
+    if (this.revisionCounts.has(key)) this.revisionCounts.delete(key);
+    this.revisionCounts.set(key, revision);
+    while (this.revisionCounts.size > this.historyLimit) {
+      this.revisionCounts.delete(this.revisionCounts.keys().next().value);
+    }
+    return `${key}:revision:${revision}`;
   }
 
   rememberExternalShadow(text, now) {
@@ -138,6 +162,8 @@ export class DomTurnTracker {
       this.rememberSet(this.historicalIds, message.id, this.scanMessageLimit);
     }
     this.previewRevisions.clear();
+    this.emittedTextById.clear();
+    this.revisionCounts.clear();
     this.recentEmissionFingerprints.clear();
     this.externalShadows = [];
     this.queuedPreview = null;
@@ -148,6 +174,7 @@ export class DomTurnTracker {
     const normalizedId = String(id).trim();
     const normalizedText = normalizeTranscript(text);
     if (normalizedId) this.rememberSet(this.emittedIds, normalizedId);
+    if (normalizedId && normalizedText) this.rememberEmissionText(normalizedId, normalizedText);
     if (normalizedText) this.rememberExternalShadow(normalizedText, now);
     if (this.pending && (
       this.pending.id === normalizedId || normalizeTranscript(this.pending.text) === normalizedText
@@ -189,15 +216,43 @@ export class DomTurnTracker {
     }
     this.rememberSet(this.emittedIds, message.id);
     this.rememberEmission(message, now);
-    if (this.pending?.id === message.id) this.pending = null;
-    if (this.queuedPreview?.turnKey === message.id) this.queuedPreview = null;
-    return { id: message.id, text: message.text, boundary };
+    this.rememberEmissionText(message.revisionOf || message.id, message.text);
+    if (this.pending?.id === message.id || this.pending?.id === message.revisionOf) this.pending = null;
+    if (this.queuedPreview?.turnKey === message.id || this.queuedPreview?.turnKey === message.revisionOf) this.queuedPreview = null;
+    const final = { id: message.id, text: message.text, boundary };
+    if (message.sourceTurnId) final.sourceTurnId = String(message.sourceTurnId);
+    if (message.continuationOf) final.continuationOf = String(message.continuationOf);
+    if (message.revisionOf) final.revisionOf = String(message.revisionOf);
+    return final;
   }
 
   update(messages, now = Date.now(), { renderedBoundary = false } = {}) {
     const ordered = normalizeMessages(messages, this.scanMessageLimit);
     this.lastScanSize = ordered.length;
     const emitted = [];
+
+    if (renderedBoundary) {
+      for (const message of ordered) {
+        if (message.role !== 'user' || !this.emittedIds.has(message.id)) continue;
+        const previousText = this.emittedTextById.get(message.id) || '';
+        const previousCanonical = canonicalTranscript(previousText);
+        const currentCanonical = canonicalTranscript(message.text);
+        const isGrowth = previousCanonical.length >= 8
+          && currentCanonical.length > previousCanonical.length
+          && currentCanonical.includes(previousCanonical);
+        if (!isGrowth) continue;
+        const sourceTurnId = String(message.turnId || message.id);
+        const revisionMessage = {
+          ...message,
+          id: this.nextRevisionId(message.id),
+          sourceTurnId,
+          continuationOf: sourceTurnId,
+          revisionOf: message.id
+        };
+        const final = this.emit(revisionMessage, 'rendered_user_turn_revision', now, { allowRecentRepeat: true });
+        if (final) emitted.push(final);
+      }
+    }
 
     for (let index = 0; index < ordered.length; index += 1) {
       const message = ordered[index];

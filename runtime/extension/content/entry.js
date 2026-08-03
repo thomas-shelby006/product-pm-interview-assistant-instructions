@@ -493,7 +493,11 @@ async function startRuntime(runtimeConfig) {
           source: 'dom_turn',
           messageId: final.id,
           turnKey: final.id,
-          boundary: final.boundary
+          boundary: final.boundary,
+          sourceTurnId: final.sourceTurnId || final.id,
+          continuationOf: final.continuationOf || '',
+          revisionOf: final.revisionOf || '',
+          sourceOutcome: final.continuationOf ? 'interrupted' : ''
         });
       }
     });
@@ -592,6 +596,10 @@ async function startRuntime(runtimeConfig) {
     receiverBatchRuntime = createReceiverBatchRuntime({
       adapter,
       draftArbiter: composerArbiter,
+      async cancelActiveAnswer(batchId, reason) {
+        return receiverAnswerSettlement?.cancel({ batchId, reason })
+          || { ok: true, reason: 'settlement_not_started' };
+      },
       async submitBatch(batch) {
         const latest = batch.entries.at(-1)?.envelope;
         if (!latest) return { ok: false, error: 'batch_empty' };

@@ -59,3 +59,24 @@ test('receiver entry converges terminal callback and returned promise on one set
   assert.match(entry, /\.then\(answer => receiverAnswerSettlement\?\.settle\(answer\)\)/);
   assert.ok(manifest.web_accessible_resources.flatMap(item => item.resources || []).includes('content/receiver-answer-settlement.js'));
 });
+
+test('explicit supersession cancels one pending batch and remembers late terminals', async () => {
+  let completed = 0;
+  const settlement = createReceiverAnswerSettlement({
+    completeBatch: async () => { completed += 1; return { ok: true }; }
+  });
+  settlement.begin({ batchId: 'old-batch', proof: { verified: true } });
+  const cancelled = settlement.cancel({ batchId: 'old-batch', reason: 'superseded_turn' });
+  assert.deepEqual(cancelled, {
+    ok: true,
+    batchId: 'old-batch',
+    state: 'cancelled',
+    reason: 'superseded_turn'
+  });
+  settlement.begin({ batchId: 'new-batch' });
+  const late = await settlement.settle({ answerState: { batchId: 'old-batch', state: 'complete' } });
+  assert.equal(late.duplicate, true);
+  assert.equal(late.state, 'cancelled');
+  assert.equal(completed, 0);
+  assert.equal(settlement.snapshot().pendingBatchId, 'new-batch');
+});
