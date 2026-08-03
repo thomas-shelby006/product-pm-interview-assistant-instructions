@@ -380,3 +380,7 @@ The phase is complete only when the exact committed HEAD proves all of the follo
 - Receiver reload restores pause before ledger replay; hidden Stop timeout and concurrent Resume preserve ownership.
 - Focused gates: 131/131 coordination tests, 23/23 lifecycle tests, and 48/48 proof/race/storage/end-session tests.
 - Remaining in Task 5: metadata-only coordination latency samples and thresholds, completed with Task 15 release evidence.
+
+## PMIA 0.10.1 production deployment checkpoint
+
+Adaptive Turn remains fully included through the PMIA 0.10.1 deployment work. The production-focused 248-test matrix passed, followed by exact `e09e284` at 1,337/1,337 tests and a green isolated Edge release smoke. The subsequent `e36ce58` repair is release-tooling-only and adds BOM-aware Windows PowerShell gate-log decoding. The installed 0.6.1 browser runtime is already preserved as a checksum-verified rollback archive; the final exact documentation checkpoint now owns the decisive gate, smoke, local-main promotion, current package, and allowlist cleanup.

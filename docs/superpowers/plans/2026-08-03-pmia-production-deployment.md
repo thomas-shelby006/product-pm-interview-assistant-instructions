@@ -147,3 +147,14 @@
 - Cleanup is sequenced after source promotion and deployment verification.
 - No placeholder, public-write, cloud-deploy, or test-weakening step remains.
 - The final manual browser-internal action is documented rather than bypassed through preference-file editing.
+
+## Execution checkpoint — 2026-08-03
+
+- Twenty-five production-readiness cycles are complete; see `docs/PMIA_0101_PRODUCTION_DEPLOYMENT_CYCLES.md`.
+- Browser configuration recovery is committed at `a0b214c`.
+- Deterministic deployment packaging is committed at `8c3fa55`.
+- PMIA 0.10.1 active release identity and deployment guide are committed at `e09e284`.
+- Windows PowerShell gate-log release evidence parsing is committed at `e36ce58`.
+- Installed PMIA 0.6.1 is archived and checksum-verified at `C:\Users\Sundar\Documents\PMIA Deployment\archive\pmia-0.6.1-installed`, source commit `66ea17e`.
+- The exact final documentation checkpoint must pass the complete gate and isolated smoke before Tasks 7–10 execute.
+- Final post-merge/package/cleanup truth is written to `C:\Users\Sundar\Documents\PMIA Deployment\DEPLOYMENT_INVENTORY.json`; that inventory is authoritative for destructive cleanup completion.

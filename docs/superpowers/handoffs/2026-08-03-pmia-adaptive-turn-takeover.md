@@ -149,3 +149,7 @@ Commit `4bcc2c2` splits the action into durable control-plane and provider phase
 - Do not touch normal Edge or unrelated repositories.
 - Do not delete source files or host-owned worktrees.
 - Do not weaken tests or increase smoke timeouts to conceal a runtime defect.
+
+## PMIA 0.10.1 deployment completion phase
+
+The Adaptive Turn implementation is included in the PMIA 0.10.1 production deployment candidate. After exact `e09e284` passed 1,337/1,337 tests and a fully green isolated Edge release smoke, the release evidence builder itself was fixed at `e36ce58` to decode Windows PowerShell UTF-16LE gate logs. The installed browser version 0.6.1 was then archived before any target-branch change, with source commit `66ea17e`, exact profile/extension identity, and 96 verified checksums. The final documentation checkpoint must receive the decisive exact-HEAD gate and smoke before local `main` promotion.

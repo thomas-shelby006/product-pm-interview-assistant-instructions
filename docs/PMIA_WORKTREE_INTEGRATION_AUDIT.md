@@ -68,3 +68,7 @@ Readiness remains blocked until:
 6. the final technical atlas is updated last.
 
 This audit does not authorize deletion of any worktree.
+
+## PMIA 0.10.1 deployment checkpoint
+
+The real pre-merge worktree manifest generated after assistant-task-temp cleanup reports **8 registered, 8 included, and 8 accounted** worktrees. Both historical dirty worktrees match their exact content-sensitive dispositions; every replacement commit and file exists in `improvement/pmia-0.7.0`. The installed 0.6.1 runtime is preserved separately as a checksum-verified deployment archive before target `main` changes. No push, tag, PR, or public remote action is part of this phase.
