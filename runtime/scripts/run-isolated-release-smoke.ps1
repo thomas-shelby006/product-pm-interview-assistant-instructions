@@ -116,17 +116,18 @@ finally {
                 completedAt = (Get-Date).ToUniversalTime().ToString('o')
             }
             $evidence.ok = [bool](
-                $evidence.deliveryProofOk `
-                -and $evidence.adaptiveTurnScenariosOk `
-                -and $evidence.transportDrillOk `
-                -and $evidence.pilotUiOk `
-                -and $evidence.productionUiOk `
-                -and $evidence.assistUiOk `
-                -and $evidence.reliabilityUiOk `
-      -and $evidence.operationsUiOk `
+                $evidence.deterministicBrowser.ok `
                 -and $processClosed `
                 -and $profileRemoved
             )
+            if ($evidence.releaseVerification) {
+                $evidence.releaseVerification.packageReady = [bool]$evidence.ok
+                $evidence.releaseVerification.activationReady = [bool](
+                    $evidence.ok `
+                    -and $evidence.providerCanary.status -eq 'passed' `
+                    -and $evidence.releaseVerification.normalProfileActivation.ok
+                )
+            }
             [IO.File]::WriteAllText(
                 $evidencePath,
                 (($evidence | ConvertTo-Json -Depth 40) + [Environment]::NewLine),

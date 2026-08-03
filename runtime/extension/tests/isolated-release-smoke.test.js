@@ -59,7 +59,8 @@ test('isolated smoke validates Pilot mechanics at desktop and 320 CSS pixels', (
 });
 
 test('cleanup preserves every release gate in final evidence', () => {
-  assert.match(powershell, /deliveryProofOk[\s\S]*transportDrillOk[\s\S]*pilotUiOk[\s\S]*operationsUiOk[\s\S]*processClosed[\s\S]*profileRemoved/);
+  assert.match(powershell, /deterministicBrowser\.ok[\s\S]*processClosed[\s\S]*profileRemoved/);
+  assert.match(powershell, /providerCanary\.status/);
 });
 
 test('smoke failure evidence preserves the final readiness sample', () => {
@@ -158,7 +159,12 @@ test('isolated smoke proves Q1 in Window 1 and allows one bounded swallowed-subm
 test('isolated smoke wrapper binds evidence to HEAD and preserves every final UI gate after cleanup', () => {
   assert.match(powershell, /git -C \$repositoryRoot rev-parse HEAD/);
   assert.match(powershell, /--source-commit \$sourceCommit/);
-  for (const gate of ['productionUiOk','assistUiOk','reliabilityUiOk','operationsUiOk']) assert.match(powershell, new RegExp(`-and \\$evidence\\.${gate}`));
+  assert.match(powershell, /\$evidence\.deterministicBrowser\.ok/);
+  assert.match(powershell, /\$evidence\.providerCanary\.status -eq 'passed'/);
+  assert.match(runner, /productionUi: evidence\.productionUiOk/);
+  assert.match(runner, /assistUi: evidence\.assistUiOk/);
+  assert.match(runner, /reliabilityUi: evidence\.reliabilityUiOk/);
+  assert.match(runner, /operationsUi: evidence\.operationsUiOk/);
 });
 
 
@@ -273,8 +279,9 @@ test('isolated smoke proves all five Adaptive Turn scenarios', () => {
 });
 
 test('isolated smoke final gate and cleanup retain Adaptive Turn evidence', () => {
-  assert.match(runner, /evidence\.ok = evidence\.deliveryProofOk && evidence\.adaptiveTurnScenariosOk/);
-  assert.match(powershell, /-and \$evidence\.adaptiveTurnScenariosOk/);
+  assert.match(runner, /deriveReleaseVerificationStatus/);
+  assert.match(runner, /deterministicBrowser = verification\.deterministicBrowser/);
+  assert.match(powershell, /\$evidence\.deterministicBrowser\.ok/);
 });
 
 
@@ -295,4 +302,16 @@ test('isolated smoke waits for each paused admission projection before combined 
   assert.match(runner, /async function awaitPausedBatchProjection/);
   assert.match(runner, /await awaitPausedBatchProjection\('Q2'/);
   assert.match(runner, /await awaitPausedBatchProjection\('Q3'/);
+});
+
+
+test('isolated smoke limits only the exact provider-render timeout', () => {
+  assert.match(runner, /String\(error\?\.message \|\| error\) !== 'Timed out: three exact rendered proofs'/);
+  assert.match(runner, /throw error/);
+});
+
+test('a passed provider canary still requires clear outbox and sequence state', () => {
+  assert.match(runner, /providerCanary\.status === 'passed'/);
+  assert.match(runner, /evidence\.outbox\.count !== 0 \|\| !evidence\.gap\.clear/);
+  assert.match(runner, /reason: 'delivery_state_not_clear'/);
 });

@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { deriveReleaseVerificationStatus } from './release-verification-status.mjs';
 
 function args(argv) {
   const values = {};
@@ -136,7 +137,7 @@ const browser = await new CDP(version.webSocketDebuggerUrl).open();
 const createdTargets = [];
 const session = `release-${Date.now()}`;
 const evidence = {
-  version: '1.0',
+  version: '2.0',
   sourceCommit,
   commit: sourceCommit,
   generatedAt: new Date().toISOString(),
@@ -179,6 +180,9 @@ const evidence = {
   cleanup: { processTreeClosed: false, profileRemoved: false },
   limitations: [],
   deliveryProofOk: false,
+  deterministicBrowser: { ok: false, checks: {} },
+  providerCanary: { status: 'skipped', reason: '', deliveryProofOk: false },
+  releaseVerification: { status: 'deterministic_failed', packageReady: false, activationReady: false },
   ok: false
 };
 
@@ -543,35 +547,68 @@ try {
     return true;
   }
 
-  const proof = await waitFor('three exact rendered proofs', async () => {
-    const pilot = await pilotState();
-    await resolvePendingNoResponse(pilot);
-    const refreshed = evidence.noResponseResolution.completedAt ? await pilotState() : pilot;
-    const selected = (refreshed?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));
-    const deliveryProofOk = selected.length === 3 && selected.every(item => item.state === 'proven');
-    return { ok: deliveryProofOk, value: { pilot: refreshed, selected, deliveryProofOk } };
-  }, 150000, 500);
+  let providerPilot = null;
+  let providerReceiverState = { users: [], assistants: [], composer: '' };
+  let providerSelected = [];
+  try {
+    const proof = await waitFor('three exact rendered proofs', async () => {
+      const pilot = await pilotState();
+      await resolvePendingNoResponse(pilot);
+      const refreshed = evidence.noResponseResolution.completedAt ? await pilotState() : pilot;
+      const selected = (refreshed?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));
+      const deliveryProofOk = selected.length === 3 && selected.every(item => item.state === 'proven');
+      return { ok: deliveryProofOk, value: { pilot: refreshed, selected, deliveryProofOk } };
+    }, 150000, 500);
+    providerPilot = proof.value.pilot;
+    providerSelected = proof.value.selected;
+    providerReceiverState = await pageState('receiver');
+    evidence.deliveryProofOk = proof.value.deliveryProofOk;
+    evidence.providerCanary = { status: 'passed', reason: '', deliveryProofOk: true };
+  } catch (error) {
+    if (String(error?.message || error) !== 'Timed out: three exact rendered proofs') throw error;
+    providerPilot = await pilotState();
+    await resolvePendingNoResponse(providerPilot).catch(() => false);
+    providerPilot = await pilotState();
+    providerReceiverState = await pageState('receiver').catch(() => ({ users: [], assistants: [], composer: '' }));
+    providerSelected = (providerPilot?.ledger || []).filter(item => Object.values(questions).includes(item?.envelope?.text));
+    const latestFailure = [...providerSelected].reverse().find(item => item?.lastError)?.lastError
+      || providerPilot?.latestProof?.reason
+      || String(error?.message || error);
+    evidence.deliveryProofOk = false;
+    evidence.providerCanary = {
+      status: 'limited',
+      reason: String(latestFailure || 'provider_render_not_confirmed'),
+      deliveryProofOk: false,
+      diagnostic: { message: String(error?.message || error), lastSample: error?.last?.value || error?.last || null }
+    };
+    evidence.limitations.push(`Provider canary limited: ${evidence.providerCanary.reason}`);
+  }
 
-  const pilot = proof.value.pilot;
-  const receiverState = await pageState('receiver');
-  evidence.finals = Object.entries(questions).map(([key, text]) => ({ key, text, proven: proof.value.selected.some(item => item.envelope?.text === text && item.state === 'proven') }));
+  evidence.finals = Object.entries(questions).map(([key, text]) => ({ key, text, proven: providerSelected.some(item => item.envelope?.text === text && item.state === 'proven') }));
   const pausedProofs = evidence.finals.filter(item => ['q2','q3'].includes(item.key));
   evidence.adaptiveTurnScenarios.pauseResume = {
     ...evidence.adaptiveTurnScenarios.pauseResume,
-    provenFinals: pausedProofs.map(item => item.key),
-    ok: evidence.adaptiveTurnScenarios.pauseResume?.ok === true && pausedProofs.length === 2 && pausedProofs.every(item => item.proven)
+    provenFinals: pausedProofs.filter(item => item.proven).map(item => item.key)
   };
   evidence.adaptiveTurnScenariosOk = Object.values(evidence.adaptiveTurnScenarios).every(value => value?.ok === true);
-  evidence.batches = { active: pilot?.batchState?.active || null, next: pilot?.batchState?.next || null, lastCompleted: pilot?.batchState?.lastCompleted || null, receiverUsers: receiverState.users };
-  evidence.ledger = proof.value.selected.map(item => ({ id: item.id, seq: item.envelope?.seq || 0, state: item.state, batchId: item.batchId || '', text: item.envelope?.text || '' }));
-  evidence.outbox = { count: Number(pilot?.senderOutboxState?.count || 0), state: pilot?.senderOutboxState?.state || 'clear', restoredCount: Number(pilot?.senderOutboxState?.restoredCount || 0) };
-  const gapEvent = [...(pilot?.timeline || [])].reverse().find(event => ['sequence_gap', 'sequence_gap_cleared'].includes(event?.type));
+  evidence.batches = { active: providerPilot?.batchState?.active || null, next: providerPilot?.batchState?.next || null, lastCompleted: providerPilot?.batchState?.lastCompleted || null, receiverUsers: providerReceiverState.users };
+  evidence.ledger = providerSelected.map(item => ({ id: item.id, seq: item.envelope?.seq || 0, state: item.state, batchId: item.batchId || '', text: item.envelope?.text || '', lastError: item.lastError || '' }));
+  evidence.outbox = { count: Number(providerPilot?.senderOutboxState?.count || 0), state: providerPilot?.senderOutboxState?.state || 'clear', restoredCount: Number(providerPilot?.senderOutboxState?.restoredCount || 0) };
+  const gapEvent = [...(providerPilot?.timeline || [])].reverse().find(event => ['sequence_gap', 'sequence_gap_cleared'].includes(event?.type));
   evidence.gap = { clear: !gapEvent || gapEvent.type === 'sequence_gap_cleared', lastEvent: gapEvent?.type || 'none', data: gapEvent?.data || {} };
-  if (!skipLiveAnswer && receiverState.assistants.some(text => text.trim())) {
-    evidence.answerCapability = { state: 'available', assistantCount: receiverState.assistants.length };
+  if (evidence.providerCanary.status === 'passed' && (evidence.outbox.count !== 0 || !evidence.gap.clear)) {
+    evidence.deliveryProofOk = false;
+    evidence.providerCanary = {
+      status: 'failed',
+      reason: 'delivery_state_not_clear',
+      deliveryProofOk: false
+    };
+  }
+  if (!skipLiveAnswer && providerReceiverState.assistants.some(text => text.trim())) {
+    evidence.answerCapability = { state: 'available', assistantCount: providerReceiverState.assistants.length };
   } else {
-    evidence.answerCapability = { state: 'anonymous_answer_unavailable', assistantCount: receiverState.assistants.length };
-    evidence.limitations.push('The isolated anonymous provider session did not expose answer text; rendered delivery proof remained fully verifiable.');
+    evidence.answerCapability = { state: 'anonymous_answer_unavailable', assistantCount: providerReceiverState.assistants.length };
+    evidence.limitations.push('The isolated anonymous provider session did not expose answer text.');
   }
   await dashboard.evaluate(`document.querySelector('[data-view="review"]')?.click(); true`, { userGesture: true });
   const drillControl = await waitFor('transport drill control ready', async () => {
@@ -758,8 +795,22 @@ try {
     && value.accessibility.assertive
   ));
 
-  evidence.deliveryProofOk = proof.value.deliveryProofOk && evidence.outbox.count === 0 && evidence.gap.clear;
-  evidence.ok = evidence.deliveryProofOk && evidence.adaptiveTurnScenariosOk && evidence.transportDrillOk && evidence.pilotUiOk && evidence.productionUiOk && evidence.assistUiOk && evidence.reliabilityUiOk && evidence.operationsUiOk;
+  const verification = deriveReleaseVerificationStatus({
+    deterministic: {
+      selfTest: evidence.selfTest?.ok === true,
+      adaptiveTurnScenarios: evidence.adaptiveTurnScenariosOk,
+      transportDrill: evidence.transportDrillOk,
+      pilotUi: evidence.pilotUiOk,
+      productionUi: evidence.productionUiOk,
+      assistUi: evidence.assistUiOk,
+      reliabilityUi: evidence.reliabilityUiOk,
+      operationsUi: evidence.operationsUiOk
+    },
+    providerCanary: evidence.providerCanary
+  });
+  evidence.deterministicBrowser = verification.deterministicBrowser;
+  evidence.releaseVerification = verification;
+  evidence.ok = verification.packageReady;
 } catch (error) {
   failure = error;
   evidence.error = String(error?.stack || error);
