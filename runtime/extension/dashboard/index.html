@@ -204,6 +204,21 @@
             </div>
           </article>
 
+          <article id="turnCoordinationPanel" class="live-panel turn-coordination-panel" data-state="connecting" aria-live="polite" aria-label="Turn coordination status">
+            <div class="panel-title"><span class="eyebrow">Turn coordination</span><b id="turnCoordinationState">Connecting</b></div>
+            <strong id="turnCoordinationTitle">Waiting for coordination state</strong>
+            <p id="turnCoordinationDetail">Pause, carryover, and protected draft state will appear here.</p>
+            <div class="turn-coordination-counts" aria-label="Turn coordination counts">
+              <span id="turnCoordinationHeld">0 held</span>
+              <span id="turnCoordinationActive">0 active</span>
+              <span id="turnCoordinationLatency">No latency samples</span>
+            </div>
+            <div class="turn-coordination-actions">
+              <button id="turnCoordinationPrimary" data-command="pause">Pause forwarding</button>
+              <button id="turnCoordinationSecondary" data-command="resume_without_send" hidden>Resume without sending</button>
+            </div>
+          </article>
+
           <article class="live-panel current-answer-panel">
             <div class="panel-title"><span class="eyebrow">Current answer</span><b id="currentAnswerBadge">Idle</b></div>
             <strong id="currentBatchTitle">No active batch</strong>

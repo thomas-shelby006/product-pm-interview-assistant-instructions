@@ -27,6 +27,8 @@ import { deriveRecoverySchedule } from './recovery-schedule-model.js';
 import { deriveSessionEndView } from './session-end-model.js';
 import { deriveSelfTestView } from './self-test-model.js';
 import { renderTruthRail } from './render-live-status.js';
+import { renderTurnCoordination } from './render-turn-coordination.js';
+import { deriveTurnCoordinationCockpit } from './turn-coordination-model.js';
 import { renderRuntimeRole } from './render-runtime-health.js';
 import { ReconnectPolicy } from '../shared/reconnect-policy.js';
 import { buildTraceIndex, searchDeliveryTraces, inspectDeliveryTrace } from './trace-inspector-model.js';
@@ -699,6 +701,7 @@ function renderLiveCommandCenter(snapshot, now) {
       ? 'The lossless session state was cleared after managed shutdown.'
       : 'Waiting for the first authoritative ledger snapshot.');
     renderTruthRail({ document, snapshot: null, now, text, sessionEnded: state.sessionEnded });
+    renderTurnCoordination({ document, snapshot: null, now, sessionEnded: state.sessionEnded });
     for (const id of ['inboxPending', 'inboxInFlight', 'inboxProven']) text(id, '0');
     text('currentAnswerBadge', 'Idle');
     text('currentBatchTitle', 'No active batch');
@@ -753,6 +756,13 @@ function renderLiveCommandCenter(snapshot, now) {
     return;
   }
   const { inbox, answerStatus } = renderTruthRail({ document, snapshot, now, text, sessionEnded: state.sessionEnded });
+  renderTurnCoordination({
+    document,
+    snapshot,
+    model: deriveTurnCoordinationCockpit(snapshot, now),
+    now,
+    sessionEnded: state.sessionEnded
+  });
   const stateCard = document.querySelector('.live-state-card');
   if (stateCard) stateCard.dataset.catchUp = inbox.catchUpState;
   text('catchUpState', catchUpLabel(inbox.catchUpState));
