@@ -1084,6 +1084,9 @@ export class RuntimePilotState {
     const session = this.ensure(sessionId, now);
     const type = String(event.type || 'batch_event');
     const memberIds = Array.isArray(event.memberIds) ? event.memberIds.map(String) : [];
+    if (event.turnCoordination && typeof event.turnCoordination === 'object') {
+      session.batchState.turnCoordination = normalizeTurnCoordination(event.turnCoordination, now);
+    }
     if (type === 'batch_submitting' || type === 'batch_submitted') {
       session.batchState.active = {
         batchId: String(event.batchId || ''),

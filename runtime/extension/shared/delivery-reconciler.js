@@ -1,4 +1,5 @@
 import { composeBatchPrompt } from './batch-planner.js';
+import { normalizeTurnCoordination } from './turn-coordination-state.js';
 
 export const UNRESOLVED_LEDGER_STATES = new Set([
   'persisted',
@@ -33,8 +34,14 @@ export function buildReconciliationPayload(snapshot) {
       prompt: composeBatchPrompt({ entries })
     };
   });
+  const batchState = snapshot?.batchState && typeof snapshot.batchState === 'object'
+    ? snapshot.batchState
+    : {};
   return {
     batches,
-    pending: unresolved.map(item => item.envelope).filter(Boolean)
+    pending: unresolved.map(item => item.envelope).filter(Boolean),
+    turnCoordination: normalizeTurnCoordination(batchState.turnCoordination || {}),
+    hold: Boolean(batchState.hold),
+    autoSubmit: batchState.autoSubmit !== false
   };
 }

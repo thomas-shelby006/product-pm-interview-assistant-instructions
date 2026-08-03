@@ -66,11 +66,11 @@
 
 **Interfaces:** Produce `normalizeTurnCoordination(value)` with `mode`, `pausedAt`, `resumeAction`, `stagedMemberIds`, `activeCarryover`, `lastReason`, `revision`.
 
-- [ ] Write failing tests for pause persistence, restart restore, bounded metadata, and no raw transcript text.
-- [ ] Verify RED because current pause is only a mode Boolean.
-- [ ] Implement schema-v5 migration and state transitions through the existing per-session mutation lane.
-- [ ] Verify pause/reload/resume preserves ledger ownership and exact member IDs.
-- [ ] Update checkpoint and commit `feat: persist turn coordination state`.
+- [x] Write failing tests for pause persistence, restart restore, bounded metadata, and no raw transcript text.
+- [x] Verify RED because current pause is only a mode Boolean.
+- [x] Implement schema-v5 migration and state transitions through the existing per-session mutation lane.
+- [x] Verify pause/reload/resume preserves ledger ownership and exact member IDs.
+- [x] Update checkpoint and commit `feat: persist turn coordination state`.
 
 ### Task 3 — Cycles 261–265: Provider-free paused staging
 
@@ -78,11 +78,11 @@
 
 **Interfaces:** Add internal delivery metadata `coordinationMode: 'paused_stage'`; receiver accepts it only from the managed service-worker route, forces queue-only, and mirrors the next prompt without provider submission.
 
-- [ ] Write failing tests that a paused final is durable, delivered to receiver staging, visible in the draft, and never calls `submitBatch`.
-- [ ] Confirm RED because paused finals currently remain only in the service-worker ledger.
-- [ ] Implement staged delivery after persistence; duplicate reconcile remains idempotent.
-- [ ] Verify sender/receiver disconnect, missing receiver and storage failure keep unresolved ownership.
-- [ ] Update checkpoint and commit `feat: mirror paused finals without submission`.
+- [x] Write failing tests that a paused final is durable, delivered to receiver staging, visible in the draft, and never calls `submitBatch`.
+- [x] Confirm RED because paused finals currently remain only in the service-worker ledger.
+- [x] Implement staged delivery after persistence; duplicate reconcile remains idempotent.
+- [x] Verify sender/receiver disconnect, missing receiver and storage failure keep unresolved ownership.
+- [x] Update checkpoint and commit `feat: mirror paused finals without submission`.
 
 ### Task 4 — Cycles 266–270: Paused and combined prompt variants
 
@@ -90,11 +90,11 @@
 
 **Interfaces:** Produce `composeCoordinatedPrompt({ entries, mode })`; modes `ordinary`, `paused`, `carryover`; returned member IDs and member fingerprint remain entry-derived and exact.
 
-- [ ] Write failing tests for one/many paused questions, latest-focus copy, exact order, Unicode, size partitioning and no identity change.
-- [ ] Confirm RED because current prompts have no pause/carryover semantics.
-- [ ] Implement prompt modes as presentation metadata on planner batches, not new queue entries.
-- [ ] Verify rendered-proof fingerprints use the final submitted prompt, while the paused draft may carry a non-submitted banner.
-- [ ] Update checkpoint and commit `feat: add coordinated batch prompts`.
+- [x] Write failing tests for one/many paused questions, latest-focus copy, exact order, Unicode, size partitioning and no identity change.
+- [x] Confirm RED because current prompts have no pause/carryover semantics.
+- [x] Implement prompt modes as presentation metadata on planner batches, not new queue entries.
+- [x] Verify rendered-proof fingerprints use the final submitted prompt, while the paused draft may carry a non-submitted banner.
+- [x] Update checkpoint and commit `feat: add coordinated batch prompts`.
 
 ### Task 5 — Cycles 271–275: Atomic resume and latency budgets
 
@@ -102,9 +102,9 @@
 
 **Interfaces:** `resume_catch_up` clears pause staging and submits once; `resume_without_send` clears transport pause but retains hold/draft; operation returns exact staged/submitted member IDs and latency.
 
-- [ ] Write failing tests for repeated resume, resume during persistence, resume during generation, and service-worker replay.
-- [ ] Confirm RED on current command split and missing staged-draft submission contract.
-- [ ] Implement one idempotent resume transaction ordered by the session mutation coordinator.
+- [x] Write failing tests for repeated resume, resume during persistence, resume during generation, and service-worker replay.
+- [x] Confirm RED on current command split and missing staged-draft submission contract.
+- [x] Implement one idempotent resume transaction ordered by the session mutation coordinator.
 - [ ] Record observe→persist, persist→stage, resume→submit and stop→resubmit latency without transcript text.
 - [ ] Update checkpoint and commit `feat: resume paused batches atomically`.
 
@@ -117,11 +117,11 @@
 
 **Interfaces:** `classifyTurnRelation({ active, incoming, now, policy }) -> { relation, confidence, autoInterrupt, reasons }`; only `supersedes` or `continues_active` may auto-interrupt.
 
-- [ ] Write failing table tests using stable turn IDs, text extension, boundary strength, sequence and time window.
-- [ ] Verify RED because no relation classifier exists.
-- [ ] Implement deterministic evidence scoring with no semantic model or network dependency.
-- [ ] Verify independent later questions return `accumulate`, and ambiguous evidence fails closed.
-- [ ] Update checkpoint and commit `feat: classify interviewer turn relationships`.
+- [x] Write failing table tests using stable turn IDs, text extension, boundary strength, sequence and time window.
+- [x] Verify RED because no relation classifier exists.
+- [x] Implement deterministic evidence scoring with no semantic model or network dependency.
+- [x] Verify independent later questions return `accumulate`, and ambiguous evidence fails closed.
+- [x] Update checkpoint and commit `feat: classify interviewer turn relationships`.
 
 ### Task 7 — Cycles 281–285: Active-answer carryover transaction
 
@@ -129,11 +129,11 @@
 
 **Interfaces:** Add `planner.createCarryover(now, metadata)` that freezes active entries plus eligible next entries in sequence order and returns old/new batch identities; no member is removed from known ownership.
 
-- [ ] Write failing tests proving active + waiting members are retained, ordinary next entries remain when excluded, and failed stop restores original state.
-- [ ] Confirm RED because `interruptLatest` currently sends only the newest waiting final.
-- [ ] Implement prepare/stop/commit rollback semantics around the existing BatchTransaction.
-- [ ] Settle the old answer as `cancelled: superseded_turn` exactly once before observing the new batch.
-- [ ] Update checkpoint and commit `feat: carry interrupted answers into combined batch`.
+- [x] Write failing tests proving active + waiting members are retained, ordinary next entries remain when excluded, and failed stop restores original state.
+- [x] Confirm RED because `interruptLatest` currently sends only the newest waiting final.
+- [x] Implement prepare/stop/commit rollback semantics around the existing BatchTransaction.
+- [x] Settle the old answer as `cancelled: superseded_turn` exactly once before observing the new batch.
+- [x] Update checkpoint and commit `feat: carry interrupted answers into combined batch`.
 
 ### Task 8 — Cycles 286–290: Automatic evidence-gated interruption
 
@@ -141,11 +141,11 @@
 
 **Interfaces:** Incoming authoritative final calls the relation classifier against the active batch; automatic carryover requires policy enabled, active generation, no manual draft conflict, and exact relation evidence.
 
-- [ ] Write failing tests for same-turn continuation auto-stop, independent question no-stop, stop failure, stop timeout and duplicate incoming final.
-- [ ] Verify RED while current runtime only supports token-confirmed operator interruption.
-- [ ] Implement automatic internal command with reason-coded telemetry and no dashboard confirmation token.
-- [ ] Preserve manual `interrupt_latest` as an explicit latest-only operator action.
-- [ ] Update checkpoint and commit `feat: auto-interrupt superseded interviewer turns`.
+- [x] Write failing tests for same-turn continuation auto-stop, independent question no-stop, stop failure, stop timeout and duplicate incoming final.
+- [x] Verify RED while current runtime only supports token-confirmed operator interruption.
+- [x] Implement automatic internal command with reason-coded telemetry and no dashboard confirmation token.
+- [x] Preserve manual `interrupt_latest` as an explicit latest-only operator action.
+- [x] Update checkpoint and commit `feat: auto-interrupt superseded interviewer turns`.
 
 ### Task 9 — Cycles 291–295: Restart, hidden-page and deadline repair
 
@@ -153,11 +153,11 @@
 
 **Interfaces:** Persist only coordination metadata and rely on ledger/planner export for members; recovery reconstructs staged/carryover state and schedules the nearest semantic deadline.
 
-- [ ] Write failing tests for service-worker termination after persist, receiver reload while paused, hidden stop watchdog, and stale alarm generation.
-- [ ] Confirm RED where coordination state is not yet recoverable.
-- [ ] Rehydrate through existing schema/store and use MutationObserver/lifecycle pulses before timer watchdogs.
-- [ ] Verify no foreground activation, no repeated submit, and no global service-worker memory authority.
-- [ ] Update checkpoint and commit `fix: recover coordinated turns across lifecycle changes`.
+- [x] Write failing tests for service-worker termination after persist, receiver reload while paused, hidden stop watchdog, and stale alarm generation.
+- [x] Confirm RED where coordination state is not yet recoverable.
+- [x] Rehydrate through existing schema/store and use MutationObserver/lifecycle pulses before timer watchdogs.
+- [x] Verify no foreground activation, no repeated submit, and no global service-worker memory authority.
+- [x] Update checkpoint and commit `fix: recover coordinated turns across lifecycle changes`.
 
 ### Task 10 — Cycles 296–300: Proof, storage, draft and command races
 
@@ -165,11 +165,11 @@
 
 **Interfaces:** A carryover batch has exact member-set proof and its own prompt fingerprint; paused drafts remain PMIA-owned but manual edits trigger the existing conflict workspace.
 
-- [ ] Write failing tests for partial proof, old-batch late terminal event, manual edit during pause, compact/reload, repeated command and stale confirmation.
-- [ ] Confirm RED on each reproduced regression before implementation.
-- [ ] Fix the owning boundary; do not add compatibility whitelists or text-only duplicate suppression.
-- [ ] Run all coordination, batch, ledger, answer and state tests after each fix block.
-- [ ] Update checkpoint and commit `fix: harden coordinated turn races`.
+- [x] Write failing tests for partial proof, old-batch late terminal event, manual edit during pause, compact/reload, repeated command and stale confirmation.
+- [x] Confirm RED on each reproduced regression before implementation.
+- [x] Fix the owning boundary; do not add compatibility whitelists or text-only duplicate suppression.
+- [x] Run all coordination, batch, ledger, answer and state tests after each fix block.
+- [x] Update checkpoint and commit `fix: harden coordinated turn races`.
 
 ---
 
@@ -240,3 +240,14 @@
 ## Completion test
 
 The phase is complete only when the exact committed HEAD proves all of the following: no ChatGPT weak-tail submission; paused finals remain durable and visible as a combined Window 2 draft; default resume submits once; Resume Without Send retains the draft; same-turn continuation stops and carries the previous active question forward; independent questions do not auto-stop; restart/reload preserves ownership; support data is text-free; full validation and fresh isolated-browser evidence exit zero; original worktree and normal browser remain untouched.
+
+
+## Checkpoint — Cycles 256–300 core coordination and hardening
+
+- Schema v5 persists metadata-only turn coordination through the existing Pilot state envelope.
+- Pause keeps sender observation and durable admission active while receiver submission is held.
+- Paused prompts use the existing BatchPlanner and retain exact ordered member identity.
+- Evidence-gated same-turn revisions stop once, cancel the old answer as `superseded_turn`, and carry only eligible members.
+- Receiver reload restores pause before ledger replay; hidden Stop timeout and concurrent Resume preserve ownership.
+- Focused gates: 131/131 coordination tests, 23/23 lifecycle tests, and 48/48 proof/race/storage/end-session tests.
+- Remaining in Task 5: metadata-only coordination latency samples and thresholds, completed with Task 15 release evidence.

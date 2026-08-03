@@ -367,7 +367,22 @@ export function createReceiverBatchRuntime({
       return submitNext();
     },
 
-    async reconcile({ batches = [], pending = [] } = {}) {
+    async reconcile({
+      batches = [],
+      pending = [],
+      turnCoordination: restoredCoordination = null,
+      hold: restoredHold,
+      autoSubmit: restoredAutoSubmit
+    } = {}) {
+      if (restoredCoordination && typeof restoredCoordination === 'object') {
+        turnCoordination = normalizeTurnCoordination(restoredCoordination, nowFn());
+        planner.setPromptComposer?.(args => composeTurnCoordinatedPrompt(args, turnCoordination));
+        planner.setHold(forwardingPaused() || Boolean(restoredHold));
+        if (typeof restoredAutoSubmit === 'boolean') planner.setAutoSubmit(restoredAutoSubmit);
+        emit('turn_coordination_restored', {
+          turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot())
+        });
+      }
       const messages = adapter.getConversationMessages?.() || [];
       const proofIndex = buildRenderedProofIndex(messages);
       const proven = [];
