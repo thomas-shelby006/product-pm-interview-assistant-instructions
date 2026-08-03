@@ -72,6 +72,7 @@ import { deriveProductionDiagnostics } from './production-diagnostics.js';
 import { deriveReleaseHandoff } from './release-handoff.js';
 import { deriveSelectedRouteAssurance, auditProviderRouteMatrix } from './provider-route-matrix-assurance.js';
 import { deriveNavigatorBudget, compactNavigatorMetadata } from './session-navigator-budget.js';
+import { transitionTurnCoordination } from './turn-coordination-state.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -1707,13 +1708,47 @@ export function createRuntimePilotController({
         break;
       }
       case 'resume_catch_up': {
+        const resumeRequestedAt = Date.now();
+        const beforeResume = pilot.snapshot(sessionId, resumeRequestedAt)?.batchState?.turnCoordination || {};
+        const resumePending = transitionTurnCoordination(beforeResume, { type: 'resume_send', at: resumeRequestedAt });
+        pilot.setMode(sessionId, 'active');
+        if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'active', 'catch_up_requested');
+        pilot.updateBatchState(sessionId, {
+          type: 'forwarding_resume_pending',
+          turnCoordination: resumePending
+        }, resumeRequestedAt);
+        await commit(sessionId, pilot);
+
         const sender = await sendRuntimeCommand(registry, sessionId, 'sender', 'resume', {});
         const receiver = await sendRuntimeCommand(registry, sessionId, 'receiver', 'resume_forwarding', { submit: true });
         if (receiver?.ok !== false) {
+          const completedAt = Date.now();
           pilot.setMode(sessionId, 'active');
-          if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'active', 'catch_up');
+          pilot.updateBatchState(sessionId, {
+            type: 'forwarding_resumed',
+            turnCoordination: receiver?.turnCoordination
+              || transitionTurnCoordination(resumePending, { type: 'release_finished', at: completedAt })
+          }, completedAt);
+        } else {
+          const failedAt = Date.now();
+          const paused = transitionTurnCoordination(resumePending, { type: 'pause', at: failedAt });
+          pilot.setMode(sessionId, 'paused');
+          if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'paused', 'catch_up_failed');
+          pilot.updateBatchState(sessionId, {
+            type: 'forwarding_resume_failed',
+            turnCoordination: {
+              ...paused,
+              ...(receiver?.turnCoordination || {}),
+              mode: 'paused_accumulating',
+              releaseIntent: '',
+              pausedAt: Number(beforeResume.pausedAt || receiver?.turnCoordination?.pausedAt || paused.pausedAt || failedAt),
+              updatedAt: failedAt
+            }
+          }, failedAt);
         }
-        const catchUp = await reconcileSession(sessionId, { registry, pilot, commitResult: false });
+        const catchUp = receiver?.ok === false
+          ? { ok: false, reason: receiver?.reason || receiver?.error || 'resume_failed' }
+          : await reconcileSession(sessionId, { registry, pilot, commitResult: false });
         result = { ok: receiver?.ok !== false && catchUp?.ok !== false, reason: receiver?.reason || catchUp?.reason || 'catch_up_started', sender, receiver, catchUp };
         break;
       }

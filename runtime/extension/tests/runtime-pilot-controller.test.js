@@ -531,6 +531,70 @@ test('resume catch-up submits the held receiver batch and only resumes sender fo
   assert.equal(direct.some(([role, command]) => role === 'sender' && command === 'pause'), false);
 });
 
+test('resume catch-up durably commits resume pending before provider submission settles', async () => {
+  let releaseReceiver;
+  let receiverStarted;
+  const started = new Promise(resolve => { receiverStarted = resolve; });
+  const { controller, registry, storageArea } = setup({
+    async requestRole(frame) {
+      if (frame.command === 'resume_forwarding') {
+        receiverStarted();
+        return new Promise(resolve => { releaseReceiver = resolve; });
+      }
+      if (frame.command === 'reconcile_delivery') return { ok: true, replayed: [] };
+      return { ok: true };
+    }
+  });
+  await ready(controller, registry);
+  await controller.handleCommand({ sessionId: 's1', requestId: 'pause-before-pending', command: 'pause', payload: {} });
+
+  const pendingCommand = controller.handleCommand({
+    sessionId: 's1', requestId: 'resume-pending', command: 'resume_catch_up', payload: {}
+  });
+  await started;
+
+  const stored = (await storageArea.get('pmia_runtime_pilot_v1')).pmia_runtime_pilot_v1;
+  const session = stored.sessions.find(item => item.sessionId === 's1');
+  assert.equal(session.mode, 'active');
+  assert.equal(session.batchState.turnCoordination.mode, 'resume_pending');
+  assert.equal(session.batchState.turnCoordination.releaseIntent, 'send');
+
+  releaseReceiver({
+    ok: true,
+    reason: 'submitted',
+    turnCoordination: { mode: 'live', resumedAt: Date.now(), updatedAt: Date.now() }
+  });
+  const result = await pendingCommand;
+  assert.equal(result.ok, true);
+  assert.equal((await controller.snapshot('s1')).mode, 'active');
+});
+
+test('failed receiver resume rolls durable coordination back to protected pause', async () => {
+  const { controller, registry, storageArea } = setup({
+    async requestRole(frame) {
+      if (frame.command === 'resume_forwarding') {
+        return { ok: false, error: 'provider_submit_failed' };
+      }
+      return { ok: true };
+    }
+  });
+  await ready(controller, registry);
+  await controller.handleCommand({ sessionId: 's1', requestId: 'pause-before-failure', command: 'pause', payload: {} });
+  const result = await controller.handleCommand({
+    sessionId: 's1', requestId: 'resume-failure', command: 'resume_catch_up', payload: {}
+  });
+  assert.equal(result.ok, false);
+
+  const snapshot = await controller.snapshot('s1');
+  assert.equal(snapshot.mode, 'paused');
+  assert.equal(snapshot.batchState.turnCoordination.mode, 'paused_accumulating');
+  assert.equal(snapshot.batchState.turnCoordination.releaseIntent, '');
+
+  const stored = (await storageArea.get('pmia_runtime_pilot_v1')).pmia_runtime_pilot_v1;
+  const session = stored.sessions.find(item => item.sessionId === 's1');
+  assert.equal(session.mode, 'paused');
+  assert.equal(session.batchState.turnCoordination.mode, 'paused_accumulating');
+});
 
 test('duplicate coordination recovery requests execute the receiver command once', async () => {
   const { controller, registry, runtimeCommands } = setup();
