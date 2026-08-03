@@ -4,7 +4,7 @@ Date: 2026-08-03
 Admission worktree: `C:\Users\Sundar\Documents\product-pm-interview-assistant-improvement`
 Admission branch: `fix/pmia-admission-lane`
 Admission commit: `2cbec6ffe327b4ebd98bacfdb38194d86e533c2e`
-Integration branch before lane merges: `improvement/pmia-0.7.0` at `7b0e4bb`
+Integration lane-merge checkpoint: `improvement/pmia-0.7.0` at `4bf4851`
 Target after exact verification: `main`
 
 ## Scope
@@ -49,27 +49,24 @@ Commit `2cbec6f` fixes the owning boundary:
 
 Focused verification: **91/91 passed** across controller, store, background acceptance, end-session, state recovery/integrity, and Adaptive Turn suites.
 
-## Parallel lanes
+## Integrated lanes
 
-1. Admission: `fix/pmia-admission-lane` - committed at `2cbec6f`.
-2. Release Evidence: `release/pmia-final-evidence` - requires all five Adaptive Turn scenarios in deterministic release evidence; focused verification and commit pending.
-3. Main Integration: `test/pmia-main-integration` - deterministic registered-worktree/main-readiness manifest; focused verification and commit pending.
-4. Integration: `improvement/pmia-0.7.0` - clean merge target.
+- Admission: `2cbec6f` + `685c859`, merged at `8d32f66`; focused owning matrix **91/91**.
+- Release Evidence: `92e1d99`, merged at `613b2ea`; focused release matrix **58/58**.
+- Main Integration: `da1a5ad`, merged at `4bf4851`; focused manifest matrix **5/5**.
 
-Merge order: Admission -> Release Evidence -> Main Integration.
+The integration worktree is clean. The real v2 manifest recognizes the two dirty historical worktrees only through exact content-sensitive disposition records. It still blocks readiness until active task-temp cleanup and all final gates are complete.
 
 ## Remaining sequence
 
-1. Verify and commit Release Evidence.
-2. Verify and commit Main Integration.
-3. Merge all three lane commits into the integration worktree.
-4. Run `runtime\Validate_Extension_Runtime.ps1` on the exact combined HEAD.
-5. Commit any evidence-only corrections required by that gate, then rerun if the tree changes.
-6. Run fresh isolated Edge evidence from exact HEAD. Require all five Adaptive Turn scenarios, three rendered finals, empty outbox, clear sequence state, 12/12 transport drill, responsive/print UI evidence, no normal-profile access, and exact cleanup.
-7. Generate deterministic release, handoff, and worktree-integration manifests.
-8. Remove only assistant-created task temp files after evidence is retained. Do not delete worktrees.
-9. Merge the verified tree into `main` without push or tag and verify the merged result.
-10. Update the final technical atlas only after `main` and evidence are green.
+1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact combined integration HEAD and retain the complete gate log outside the repository.
+2. Fix only reproduced owning-boundary failures, commit, and rerun if the tree changes.
+3. Run fresh isolated Edge evidence from exact HEAD. Require all five Adaptive Turn scenarios, three rendered finals, empty outbox, clear sequence state, 12/12 transport drill, responsive/print UI evidence, no normal-profile access, and exact cleanup.
+4. Generate deterministic release, handoff, and worktree-integration manifests.
+5. Remove only assistant-created task temp files after evidence is retained. Do not delete worktrees.
+6. Regenerate the worktree readiness manifest and require every registered worktree to be included and accounted.
+7. Merge the verified tree into `main` without push or tag and verify the merged result.
+8. Update the final technical atlas only after `main` and evidence are green.
 
 ## Current restrictions
 

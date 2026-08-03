@@ -2,32 +2,45 @@
 
 Date: 2026-08-03
 Integration branch: `improvement/pmia-0.7.0`
+Lane-merge checkpoint: `4bf4851`
 Target branch: `main`
 
 ## Registered PMIA worktrees
 
-| Worktree | Branch / state | Inclusion decision |
+| Worktree | Branch / state | Reconciliation |
 |---|---|---|
-| `product-pm-interview-assistant-instructions` | `main` at `66ea17e` | Ancestor of the integration branch; fully included. |
-| `pmia-clean-smoke-e1203b4` | detached at `e1203b4` | Ancestor of both active completion branches; fully included. |
-| `product-pm-interview-assistant-improvement` | `improvement/pmia-0.7.0` | Authoritative integration worktree. |
-| `.worktrees/pmia-0.11-completion` | `improvement/pmia-0.11-completion` at `8290d0b` | Parallel branch; explicitly reconciled and merged. |
-| `.worktrees/runtime-0.6-session-review-loop` | `feature/runtime-0.6-session-review-loop` at `9bfae74` | Ancestor of `main`; fully included. |
+| `product-pm-interview-assistant-instructions` | `main` at `66ea17e`, clean | Ancestor of integration; target remains unchanged pending final verification. |
+| `pmia-clean-smoke-e1203b4` | detached `e1203b4`, clean | Historical clean smoke checkpoint; ancestor of integration. |
+| `.worktrees/pmia-final-evidence` | `release/pmia-final-evidence` at `92e1d99`, clean | Five-scenario release evidence contract merged at `613b2ea`. |
+| `.worktrees/pmia-final-integration` | `improvement/pmia-0.7.0` at `4bf4851`, clean | Authoritative combined verification worktree. |
+| `.worktrees/pmia-main-integration` | `test/pmia-main-integration` at `da1a5ad`, clean | Content-sensitive worktree readiness manifest merged at `4bf4851`. |
+| `product-pm-interview-assistant-improvement` | `fix/pmia-admission-lane` at `685c859`; assistant task temp remains | Admission repair merged at `8d32f66`; temp cleanup is deferred until evidence is retained. |
+| `.worktrees/pmia-0.11-completion` | `improvement/pmia-0.11-completion` at `8290d0b`; one untracked short design | Committed head is included. Dirty content is exactly fingerprinted and classified `superseded_preserved`; the fuller integrated design is authoritative. |
+| `.worktrees/runtime-0.6-session-review-loop` | `feature/runtime-0.6-session-review-loop` at `9bfae74`; historical dirty review-loop work | Committed head is included. Dirty content is exactly fingerprinted and classified `superseded_preserved`; current tracker/review files and later fixes are authoritative. |
 
-## Parallel PMIA 0.11 reconciliation
+## Machine-verifiable disposition rule
 
-The active and completion branches share `e1203b4` as their merge base. The completion branch has two unique commits; the active branch has the full PMIA 0.11 implementation plus twelve newer Adaptive Turn commits.
+`runtime/scripts/build-worktree-integration-manifest.mjs` emits `pmia-worktree-integration/v2`. A dirty worktree is accounted only when a disposition matches its branch, exact HEAD, tracked binary diff, and SHA-256 hashes of every untracked file. The disposition must identify integrated replacement commits and files, and those commits/files must exist in the integration branch. Stale or unused dispositions block readiness.
 
-Tree comparison showed no missing production subsystem. Differences were limited to checkpoint documentation and one platform-smoke fixture. The active branch retains its newer plans and completion records. The stronger focus-safe smoke detail—creating the unrelated synthetic window hidden atomically—was incorporated before the ancestry merge.
+The exact historical records are in `docs/evidence/2026-08-03-pmia-worktree-dispositions.json`. They preserve old work without backward-merging stale implementations or deleting host-owned worktrees.
 
-## Merge acceptance
+## Merge record
 
-The reconciliation is accepted only when:
+1. Admission lane merged at `8d32f66`.
+2. Release Evidence lane merged at `613b2ea`.
+3. Main Integration lane merged at `4bf4851`.
 
-1. Every registered PMIA worktree HEAD is an ancestor of the integration branch, or is documented as historical and already contained.
-2. The integration tree passes the complete Node, extension, AutoHotkey and isolated-browser gates.
-3. The merged `main` result passes the same repository gate.
-4. No unrelated repository, browser profile, normal Edge window, push or tag is changed.
-5. Assistant-created temporary audit scripts and task artifacts are removed after evidence is recorded.
+The lane file sets were non-overlapping and the integration worktree is clean.
 
-This audit records implementation inclusion, not permission to delete host-owned worktrees. Existing worktrees remain until the verified `main` integration is complete.
+## Final acceptance
+
+Readiness remains blocked until:
+
+1. the complete Node, extension, and AutoHotkey gate passes on exact committed integration HEAD;
+2. fresh isolated Edge evidence passes all Adaptive Turn, delivery, UI, profile-isolation, and cleanup conditions;
+3. assistant-created task temp is removed after evidence retention;
+4. the v2 manifest reports all eight worktrees included and accounted, clean target/integration, no tag at integration, and explicit no-push confirmation;
+5. the verified tree is integrated into `main` and reverified;
+6. the final technical atlas is updated last.
+
+This audit does not authorize deletion of any worktree.

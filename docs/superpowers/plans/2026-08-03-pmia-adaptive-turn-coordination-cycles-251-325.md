@@ -249,7 +249,7 @@
 ## Live execution and takeover status — 2026-08-03
 
 **Integration branch:** `improvement/pmia-0.7.0`
-**Current committed HEAD:** `7b0e4bb`
+**Lane-merge checkpoint:** `4bf4851` (Admission, Release Evidence, and Main Integration merged)
 **Target after exact verification:** `main`
 **Detailed takeover file:** `docs/superpowers/handoffs/2026-08-03-pmia-adaptive-turn-takeover.md`
 
@@ -293,15 +293,23 @@ The repair is committed at `2cbec6f` on `fix/pmia-admission-lane`:
 
 The focused owning matrix passed **91/91** tests across controller, store recovery, background durable acceptance, end-session guards, state journal/integrity/quarantine, and Adaptive Turn coordination, carryover, recovery, safety, and performance.
 
+
+### Parallel lane integration checkpoint
+
+- Admission lane commits `2cbec6f` and `685c859` merged at `8d32f66`.
+- Release Evidence commit `92e1d99` merged at `613b2ea`. Its focused release matrix passed **58/58**.
+- Main Integration commit `da1a5ad` merged at `4bf4851`. Its focused disposition/readiness matrix passed **5/5**.
+- The v2 worktree manifest accounts for dirty historical work only through exact branch, HEAD, tracked-diff, and untracked-content hashes plus verified integrated replacement commits/files.
+- The real pre-merge manifest correctly recognized both preserved historical worktrees while blocking on the still-unmerged or dirty active lanes.
+- Integration is clean. Full repository and fresh browser gates remain pending.
+
 ### Remaining in scope
 
-1. Finish focused verification and commit the Release Evidence lane.
-2. Finish focused verification and commit the Main Integration manifest lane.
-3. Merge Admission, Release Evidence, and Main Integration into the clean integration worktree in that order.
-4. Run the complete repository gate on the exact combined HEAD.
-5. Run fresh isolated Edge evidence and require all five Adaptive Turn scenarios, three exact rendered proofs, empty outbox, clear sequence state, 12/12 transport drill, all UI layouts, and exact cleanup.
-6. Generate release, handoff, and worktree-integration manifests; verify original checkout, normal Edge, tags, push state, and preserved historical worktrees.
-7. Merge the exact verified result into `main`, rerun the repository gate if the commit context changes, then update the technical atlas once at the end.
+1. Run the complete repository gate on the exact combined integration HEAD.
+2. Run fresh isolated Edge evidence and require all five Adaptive Turn scenarios, three exact rendered proofs, empty outbox, clear sequence state, 12/12 transport drill, all UI layouts, and exact cleanup.
+3. Generate release, handoff, and worktree-integration manifests; verify original checkout, normal Edge, tags, push state, and preserved historical worktrees.
+4. Remove only assistant-created task-temp files after their evidence is retained, then regenerate the readiness manifest.
+5. Merge the exact verified result into `main`, rerun the repository gate if the commit context changes, then update the technical atlas once at the end.
 
 ### Parallel execution map
 
