@@ -47,6 +47,8 @@ export function deriveNavigatorPrimaryAction(snapshot = {}, now = Date.now()) {
   const phase = workflowPhase(snapshot);
   const decision = snapshot.production?.decisionCenter?.primaryAction || snapshot.decisionCenter?.primaryAction;
   if (decision?.command || decision?.view) return { ...decision, source: 'decision_center' };
+  if (snapshot.sessionNavigatorIntegrity?.ok === false) return { id:'repair_session_navigator', label:'Repair Navigator metadata', command:'repair_session_navigator', available:true, source:'navigator_integrity' };
+  if (snapshot.sessionNavigatorBudget?.level === 'critical') return { id:'compact_session_navigator', label:'Compact Navigator metadata', command:'compact_session_navigator', available:true, source:'navigator_budget' };
   if (snapshot.deliveryPolicy?.active) return { id:'recheck_containment', label:'Recheck containment', command:'check_live', available:true, source:'delivery_policy' };
   if (snapshot.batchState?.pendingNoResponse) return { id:'choose_no_response', label:'Choose Wait, Retry or Continue', view:'queue', anchor:'receiverFlow', available:true, source:'receiver' };
   if (['unresolved','keep_manual'].includes(String(snapshot.batchState?.draftConflict?.state))) return { id:'resolve_draft', label:'Resolve manual draft conflict', view:'queue', anchor:'draftConflictCard', available:true, source:'receiver' };
@@ -69,6 +71,7 @@ export function deriveSessionNavigatorNow(snapshot = {}, local = {}, now = Date.
       { id:'phase', label:'Phase', value: phase, detail:String(snapshot.liveSession?.phase || 'setup'), tone:'info' },
       { id:'delivery', label:'Delivery', value:deliveryState(snapshot).label, detail:deliveryState(snapshot).detail, tone:deliveryState(snapshot).tone },
       { id:'answer', label:'Answer', value:answerState(snapshot).label, detail:answerState(snapshot).detail, tone:answerState(snapshot).tone },
+      { id:'route', label:'Route', value:snapshot.production?.routeMatrixAssurance?.state === 'ready' ? 'Ready' : 'Check route', detail:snapshot.production?.routeMatrixAssurance?.route ? `${snapshot.production.routeMatrixAssurance.route.senderProvider} → ${snapshot.production.routeMatrixAssurance.route.receiverProvider}` : 'Provider route evidence is unavailable.', tone:snapshot.production?.routeMatrixAssurance?.state === 'ready' ? 'ok' : 'warn' },
       { id:'runtime', label:'Runtime', value:snapshot.rootCause?.severity === 'error' ? 'Needs attention' : snapshot.mode || 'active', detail:snapshot.rootCause?.code || snapshot.consistencyAudit?.reason || 'No blocking runtime cause.', tone:snapshot.rootCause?.severity === 'error' ? 'error' : 'ok' }
     ],
     primaryAction: action,

@@ -60,6 +60,7 @@ import { buildPolicyImpactPreview, policySnapshotFingerprint, validatePolicyImpa
 import { renderLiveAssist } from './render-live-assist.js';
 import { createOperationsLabLocalState, moveOperationsLabTab, reconcileOperationsLabLocalState, selectOperationsLabScenario, selectOperationsLabView } from './operations-lab-controller.js';
 import { deriveSessionNavigator } from './session-navigator-model.js';
+import { createSessionNavigatorCache, navigatorDeltaAffectsSemantics } from './session-navigator-cache.js';
 import { createSessionNavigatorLocalState, openSessionNavigator, selectSessionNavigatorTab, navigatorQuickOpenFromKeyboard, navigatorTabFromKey } from './session-navigator-controller.js';
 import { renderSessionNavigator } from './render-session-navigator.js';
 import { validateNavigatorJumpIntent } from './session-navigator-search-model.js';
@@ -102,7 +103,8 @@ const state = {
   assistCommandQuery: '',
   assistWizardStage: 'start',
   operationsLab: createOperationsLabLocalState({ sessionId, view:'flow', scenario:'current' }),
-  sessionNavigator: createSessionNavigatorLocalState()
+  sessionNavigator: createSessionNavigatorLocalState(),
+  navigatorSemanticRevision: 0
 };
 
 const byId = id => document.getElementById(id);
@@ -115,6 +117,7 @@ const liveAnnouncer = createLiveAnnouncer({ politeNode: byId('screenReaderPolite
 let shortcutBindings = normalizeShortcutBindings();
 const idleWork = createIdleWorkCoordinator();
 const renderScheduler = createRenderScheduler();
+const sessionNavigatorCache = createSessionNavigatorCache(deriveSessionNavigator);
 
 function setConnection(label, tone = 'warn') {
   connectionState.dataset.tone = tone;
@@ -136,7 +139,7 @@ function requestId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function currentSessionNavigator(now = Date.now()) { return deriveSessionNavigator(state.snapshot || {}, state.sessionNavigator, now); }
+function currentSessionNavigator(now = Date.now()) { return sessionNavigatorCache.get(state.snapshot || {}, state.sessionNavigator, now, state.navigatorSemanticRevision); }
 function downloadNavigatorJson(name, value) { const blob = new Blob([`${JSON.stringify(value, null, 2)}
 `], { type:'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0); }
 
@@ -262,6 +265,7 @@ function handlePortMessage(message) {
     reconnectPolicy.succeed();
     state.sessionEnded = false;
     state.snapshot = synced.snapshot;
+    state.navigatorSemanticRevision += 1;
     state.operationsLab = reconcileOperationsLabLocalState(state.operationsLab, state.snapshot?.sessionId || sessionId);
     reconcilePolicyPreview(state.snapshot);
     state.efficiency.full += 1;
@@ -275,6 +279,7 @@ function handlePortMessage(message) {
     const synced = snapshotSync.applyDelta(message.delta);
     if (!synced.ok) { requestDashboardResync(synced.error); return; }
     state.snapshot = synced.snapshot;
+    if (navigatorDeltaAffectsSemantics(message.delta?.keys || [])) state.navigatorSemanticRevision += 1;
     reconcilePolicyPreview(state.snapshot);
     state.efficiency.delta += 1;
     state.efficiency.lastMode = 'Delta';
@@ -286,6 +291,8 @@ function handlePortMessage(message) {
   if (message?.type === 'PMIA_DASHBOARD_SESSION_ENDED') {
     state.sessionEnded = true;
     state.snapshot = null;
+    state.navigatorSemanticRevision = 0;
+    sessionNavigatorCache.invalidate();
     snapshotSync.reset();
     state.operationsLab = createOperationsLabLocalState({ sessionId });
     reconcilePolicyPreview(null);
@@ -1526,7 +1533,7 @@ function render(changedKeys = null) {
   renderPreflightAndCrash(state.snapshot, now);
   renderProduction(state.snapshot);
   renderLiveAssist({ document, snapshot: state.snapshot, state, now, workspace: state.activeView === 'assist' });
-  renderSessionNavigator({ document, model: deriveSessionNavigator(state.snapshot || {}, state.sessionNavigator, now), localState: state.sessionNavigator });
+  renderSessionNavigator({ document, model: sessionNavigatorCache.get(state.snapshot || {}, state.sessionNavigator, now, state.navigatorSemanticRevision), localState: state.sessionNavigator });
   renderCommandPalette();
   if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
@@ -1985,7 +1992,8 @@ byId('endSessionAction').addEventListener('click', async () => {
 
 byId('exportBeforeEnd').addEventListener('click', async () => {
   const result = await sendCommand('export_session');
-  showToast(result?.ok ? 'Export scheduled.' : result?.error || 'Export failed.', result?.ok ? 'ok' : 'error');
+  const count = Array.isArray(result?.exportedTabIds) ? result.exportedTabIds.length : 0;
+  showToast(result?.ok ? `Export completed for ${count} managed role${count === 1 ? '' : 's'}.` : result?.error || 'Export failed.', result?.ok ? 'ok' : 'error');
 });
 
 byId('archiveAndEnd').addEventListener('click', async () => {
@@ -2086,7 +2094,7 @@ function runKeyboardCommand(command) {
 
 document.addEventListener('keydown', event => {
   const nextNavigator = navigatorQuickOpenFromKeyboard(event, state.sessionNavigator);
-  if (nextNavigator.open && !state.sessionNavigator.open) { event.preventDefault(); state.sessionNavigator = nextNavigator; activateDashboardView('navigator'); void sendCommand('record_session_navigator_visit', { visit:{ tab:'now', reason:'keyboard_quick_open' } }); return; }
+  if (nextNavigator.open && !state.sessionNavigator.open) { event.preventDefault(); state.sessionNavigator = nextNavigator; activateDashboardView('navigator'); requestAnimationFrame(() => document.querySelector('[data-navigator-tab="now"]')?.focus()); void sendCommand('record_session_navigator_visit', { visit:{ tab:'now', reason:'keyboard_quick_open' } }); return; }
   if (event.target.closest?.('.session-navigator-tabs') && ['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); state.sessionNavigator = navigatorTabFromKey(event, state.sessionNavigator); scheduleRender(); document.querySelector(`[data-navigator-tab="${CSS.escape(state.sessionNavigator.activeTab)}"]`)?.focus(); return; }
   const paletteOpen = state.commandPalette.open;
   if (paletteOpen) {

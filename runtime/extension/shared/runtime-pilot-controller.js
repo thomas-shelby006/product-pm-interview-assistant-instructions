@@ -70,6 +70,8 @@ import { deriveUpgradeReadiness } from './upgrade-readiness.js';
 import { deriveLiveScorecard } from './live-scorecard.js';
 import { deriveProductionDiagnostics } from './production-diagnostics.js';
 import { deriveReleaseHandoff } from './release-handoff.js';
+import { deriveSelectedRouteAssurance, auditProviderRouteMatrix } from './provider-route-matrix-assurance.js';
+import { deriveNavigatorBudget, compactNavigatorMetadata } from './session-navigator-budget.js';
 
 function safeError(error) {
   return String(error?.message || error || 'unknown_error');
@@ -312,10 +314,12 @@ export function createRuntimePilotController({
       const transportAssurance = deriveTransportAssurance(productionBase, Date.now());
       const routeTransition = deriveProviderRouteTransition(productionBase, productionBase.routeTransition?.target || {});
       const routeReadiness = deriveProviderRouteReadiness({ ...productionBase, routeTransition });
+      const routeMatrixAssurance = deriveSelectedRouteAssurance({ ...productionBase, routeTransition });
+      const routeMatrixAudit = auditProviderRouteMatrix();
       const upgradeReadiness = deriveUpgradeReadiness(productionBase);
       const scorecard = deriveLiveScorecard(productionBase);
       const navigation = deriveContextualNavigation({ ...productionBase, production: { decisionCenter } });
-      const partial = { decisionCenter, operatingProfile, containment, transportAssurance, routeTransition, routeReadiness, upgradeReadiness, scorecard, navigation };
+      const partial = { decisionCenter, operatingProfile, containment, transportAssurance, routeTransition, routeReadiness, routeMatrixAssurance, routeMatrixAudit, upgradeReadiness, scorecard, navigation };
       const diagnostics = deriveProductionDiagnostics(productionBase, partial);
       const releaseHandoff = deriveReleaseHandoff(productionBase, { ...partial, diagnostics }, productionBase.releaseEvidence || {});
       production = { ...partial, diagnostics, releaseHandoff };
@@ -348,6 +352,7 @@ export function createRuntimePilotController({
         performanceHealth: derivePerformanceHealth(enrichedBase)
       },
       liveUxBudget: deriveLiveUxMemoryBudget(enrichedBase),
+      sessionNavigatorBudget: deriveNavigatorBudget(enrichedBase.sessionNavigator || {}),
       liveCommandIntegrity: auditLiveCommandIntegrity(enrichedBase, Date.now()),
       restartContinuity: buildRestartContinuity(enrichedBase, Date.now()),
       monotonicClock: {
@@ -1800,6 +1805,15 @@ export function createRuntimePilotController({
       case 'record_navigator_debrief_export':
         result = { ok: true, navigator: pilot.recordSessionNavigatorDebriefExport(sessionId, Date.now()) };
         break;
+      case 'repair_session_navigator':
+        result = pilot.repairSessionNavigatorMetadata(sessionId, Date.now());
+        break;
+      case 'compact_session_navigator': {
+        const current = pilot.snapshot(sessionId, Date.now());
+        const compacted = compactNavigatorMetadata(current?.sessionNavigator || {});
+        result = { ok: true, compacted: compacted.removed, beforeBytes: compacted.beforeBytes, afterBytes: compacted.afterBytes, navigator: pilot.setSessionNavigator(sessionId, compacted.value, Date.now()) };
+        break;
+      }
       case 'record_production_navigation':
         result = { ok: true, controls: pilot.setProductionNavigation(sessionId, payload.route || {}, Date.now()) };
         break;
@@ -1866,14 +1880,11 @@ export function createRuntimePilotController({
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'focus_composer');
         break;
       case 'export_session':
-        setTimeout(() => {
-          exportManagedSession({
-            registry,
-            sessionId,
-            sendToTab: (tabId, outgoing) => chromeApi.tabs.sendMessage(tabId, outgoing)
-          }).catch(() => {});
-        }, 0);
-        result = { ok: true, scheduled: true };
+        result = await exportManagedSession({
+          registry,
+          sessionId,
+          sendToTab: (tabId, outgoing) => chromeApi.tabs.sendMessage(tabId, outgoing)
+        });
         break;
       case 'export_support_bundle': {
         const currentSnapshot = await broadcast(sessionId, pilot) || pilot.snapshot(sessionId);

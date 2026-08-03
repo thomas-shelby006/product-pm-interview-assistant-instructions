@@ -10,12 +10,12 @@ test('legacy runtime arrays normalize as schema one envelopes', () => {
   assert.deepEqual(result.envelope.sessions, [{ sessionId: 's1' }]);
 });
 
-test('runtime state encodes an immutable schema three envelope', () => {
+test('runtime state encodes an immutable schema four envelope', () => {
   const sessions = [{ sessionId: 's1' }];
   const envelope = encodeRuntimeEnvelope(sessions, { writerVersion: '0.7.0', now: 200 });
   sessions[0].sessionId = 'changed';
   assert.deepEqual(envelope, {
-    schemaVersion: 3,
+    schemaVersion: 4,
     writerVersion: '0.7.0',
     committedAt: 200,
     sessions: [{ sessionId: 's1' }]

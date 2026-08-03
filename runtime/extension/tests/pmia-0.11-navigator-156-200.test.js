@@ -82,10 +82,11 @@ test('Cycles 176-200 persist workspaces, bookmarks, goals, coverage, scenarios a
 });
 
 test('Cycles 156-200 package all Navigator panels and safe metadata commands', async () => {
-  const [html,script,renderer,protocol,registry] = await Promise.all([
-    readFile(new URL('../dashboard/index.html',import.meta.url),'utf8'),readFile(new URL('../dashboard/dashboard.js',import.meta.url),'utf8'),readFile(new URL('../dashboard/render-session-navigator.js',import.meta.url),'utf8'),readFile(new URL('../shared/dashboard-protocol.js',import.meta.url),'utf8'),readFile(new URL('../shared/operator-command-registry.js',import.meta.url),'utf8')]);
+  const [html,script,renderer,protocol,registry,controller] = await Promise.all([
+    readFile(new URL('../dashboard/index.html',import.meta.url),'utf8'),readFile(new URL('../dashboard/dashboard.js',import.meta.url),'utf8'),readFile(new URL('../dashboard/render-session-navigator.js',import.meta.url),'utf8'),readFile(new URL('../shared/dashboard-protocol.js',import.meta.url),'utf8'),readFile(new URL('../shared/operator-command-registry.js',import.meta.url),'utf8'),readFile(new URL('../shared/runtime-pilot-controller.js',import.meta.url),'utf8')]);
   for(const id of ['search','threads','pace','handoff','workspaces','scenarios','bookmarks','goals','debrief']) assert.match(html,new RegExp(`data-navigator-panel="${id}"`));
   assert.match(script,/validateNavigatorJumpIntent[\s\S]*validateQuestionRelationship[\s\S]*buildMetadataDebriefExport/);
   assert.match(renderer,/renderSearch[\s\S]*renderThreads[\s\S]*renderDebrief/);
-  for(const command of ['save_navigator_workspace','add_navigator_bookmark','set_navigator_goal','tag_navigator_coverage','mark_navigator_scenario_complete','record_navigator_debrief_export']) { assert.match(protocol,new RegExp(command));assert.match(registry,new RegExp(command)); }
+  assert.match(protocol,/registeredCommandIds/);
+  for(const command of ['save_navigator_workspace','add_navigator_bookmark','set_navigator_goal','tag_navigator_coverage','mark_navigator_scenario_complete','record_navigator_debrief_export']) { assert.match(registry,new RegExp(command));assert.match(controller,new RegExp(`case '${command}'`)); }
 });

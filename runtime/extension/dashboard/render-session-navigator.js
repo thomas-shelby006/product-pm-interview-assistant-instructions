@@ -159,10 +159,14 @@ function renderGoals(document, model = {}) {
 }
 
 function renderDebrief(document, model = {}) {
-  const value=model.debrief||{};setText(document,'navigatorDebriefState',value.exportReady?'Ready to export':'Resolve blockers first');setText(document,'navigatorDebriefDetail',`${value.coverage?.percent||0}% goal coverage · ${value.phaseCoverage?.percent||0}% phase coverage · ${value.markers?.length||0} marker(s)`);
+  const value=model.debrief||{};const post=model.postInterview||{};
+  setText(document,'navigatorDebriefState',value.exportReady?'Ready to export':'Resolve blockers first');
+  setText(document,'navigatorDebriefDetail',`${value.coverage?.percent||0}% goal coverage · ${value.phaseCoverage?.percent||0}% phase coverage · ${value.markers?.length||0} marker(s)`);
+  setText(document,'navigatorRoleExportState',post.exportComplete?'Both managed role records were exported successfully.':'Export both managed role records before opening Review.');
   renderList(document,'navigatorDebriefDecisions',value.decisions?.items||[],item=>({label:item.code?.replaceAll('_',' ')||'Decision',detail:`Open ${item.view||'session'}`}));
   renderList(document,'navigatorPracticePlan',value.practice?.steps||[],item=>({label:item.label,detail:item.reason}));
   const exportButton=byId(document,'navigatorExportDebrief');if(exportButton)exportButton.disabled=!value.exportReady;
+  const reviewButton=byId(document,'navigatorOpenReview');if(reviewButton)reviewButton.disabled=!post.reviewReady;
 }
 
 function renderNavigatorDetails(document, model = {}) {

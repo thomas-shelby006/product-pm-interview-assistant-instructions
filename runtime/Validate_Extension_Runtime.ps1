@@ -1,15 +1,36 @@
 param(
-    [string]$AutoHotkeyExe = "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe",
+    [string]$AutoHotkeyExe = '',
     [string]$GateLog = '',
     [string]$SmokeEvidence = '',
     [string]$EvidenceManifest = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Resolve-AutoHotkeyV2([string]$Requested = '') {
+    if ($Requested) {
+        if (-not (Test-Path -LiteralPath $Requested)) { throw "AutoHotkey v2 not found: $Requested" }
+        return (Resolve-Path -LiteralPath $Requested).Path
+    }
+    $root = Join-Path $env:LOCALAPPDATA 'Programs\AutoHotkey'
+    $versioned = @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^v2\.\d+\.\d+$' } |
+        Sort-Object { try { [version]$_.Name.Substring(1) } catch { [version]'0.0.0' } } -Descending)
+    foreach ($directory in $versioned) {
+        $candidate = Join-Path $directory.FullName 'AutoHotkey64.exe'
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    $fallback = Join-Path $root 'v2\AutoHotkey64.exe'
+    if (Test-Path -LiteralPath $fallback) { return $fallback }
+    throw "AutoHotkey v2 not found under $root"
+}
+
+$AutoHotkeyExe = Resolve-AutoHotkeyV2 $AutoHotkeyExe
 $repo = Split-Path -Parent $PSScriptRoot
 $extension = Join-Path $PSScriptRoot 'extension'
 $launcher = Join-Path $PSScriptRoot 'Final_2_Window_Extension.ahk'
 $reviewCompanion = Join-Path $PSScriptRoot 'Session_Tracker_End_Session.ahk'
+$platformSmoke = Join-Path $PSScriptRoot 'PMIA_Runtime_Platform_Smoke.ahk'
 $isolatedSmoke = Join-Path $PSScriptRoot 'scripts\run-isolated-release-smoke.ps1'
 $isolatedRunner = Join-Path $PSScriptRoot 'scripts\isolated-release-smoke.mjs'
 $evidenceBuilder = Join-Path $PSScriptRoot 'scripts\build-release-evidence-manifest.mjs'
@@ -18,12 +39,13 @@ if (-not (Test-Path $AutoHotkeyExe)) { throw "AutoHotkey v2 not found: $AutoHotk
 if (-not (Test-Path (Join-Path $extension 'manifest.json'))) { throw 'Extension manifest missing.' }
 if (-not (Test-Path $launcher)) { throw 'Extension launcher missing.' }
 if (-not (Test-Path $reviewCompanion)) { throw 'Session review companion missing.' }
+if (-not (Test-Path $platformSmoke)) { throw 'Runtime platform smoke missing.' }
 if (-not (Test-Path $isolatedSmoke)) { throw 'Isolated release smoke PowerShell owner missing.' }
 if (-not (Test-Path $isolatedRunner)) { throw 'Isolated release smoke Node runner missing.' }
 if (-not (Test-Path $evidenceBuilder)) { throw 'Release evidence manifest builder missing.' }
 
 $launcherSource = Get-Content $launcher -Raw
-$requiredHotkeys = @('!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::', '!h::', '!+r::', '!+e::')
+$requiredHotkeys = @('!r::', '!Esc::', '!Delete::', '!Tab::', '!CapsLock::', '!q::', '!w::', '!e::', '!h::', '!+r::', '!+e::', '!+x::')
 foreach ($hotkey in $requiredHotkeys) {
     if (-not $launcherSource.Contains($hotkey)) { throw "Required PM hotkey missing: $hotkey" }
 }
@@ -70,7 +92,10 @@ function Test-AutoHotkeyScript(
         $details = ((Get-Content $stdout, $stderr -ErrorAction SilentlyContinue) -join [Environment]::NewLine)
         throw "$Label AutoHotkey validation failed ($($process.ExitCode)). $details"
     }
-    $signal = (Get-Content $stdout -ErrorAction SilentlyContinue) -join ''
+    $signal = (Get-Content $stdout -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+    if ($signal -match 'Warning:') {
+        throw "$Label AutoHotkey validation emitted a warning. $signal"
+    }
     if ($signal -notmatch 'AHK_VALID') {
         throw "$Label AutoHotkey validation did not emit AHK_VALID."
     }
@@ -85,8 +110,9 @@ try {
     & npm run validate
     if ($LASTEXITCODE -ne 0) { throw "Extension validation failed with exit code $LASTEXITCODE" }
 
-    Test-AutoHotkeyScript -Path $launcher -Label 'Main launcher'
+    Test-AutoHotkeyScript -Path $launcher -Label 'Main launcher' -UseEnvironmentValidation
     Test-AutoHotkeyScript -Path $reviewCompanion -Label 'Session review companion' -UseEnvironmentValidation
+    Test-AutoHotkeyScript -Path $platformSmoke -Label 'Runtime platform'
 
     $evidenceInputs = @($GateLog, $SmokeEvidence, $EvidenceManifest) | Where-Object { $_ }
     if ($evidenceInputs.Count -gt 0) {

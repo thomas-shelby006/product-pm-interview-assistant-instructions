@@ -13,6 +13,7 @@ import { normalizeSessionCheckpoint } from './session-checkpoint.js';
 import { normalizeLayoutHistory, popLayoutHistory, pushLayoutHistory } from './layout-history.js';
 import { defaultShortcutBindings, normalizeShortcutBindings, setShortcutBinding } from './shortcut-bindings.js';
 import { normalizeSessionNavigator, touchSessionNavigator, recordNavigatorHistory, upsertNavigatorBookmark, removeNavigatorBookmark, upsertNavigatorGoal, tagNavigatorCoverage, upsertNavigatorWorkspace, markNavigatorScenarioComplete, recordNavigatorDebriefExport } from './session-navigator-state.js';
+import { auditSessionNavigator, repairSessionNavigator } from './session-navigator-integrity.js';
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
@@ -379,6 +380,17 @@ export class RuntimePilotState {
   recordSessionNavigatorDebriefExport(sessionId, now = Date.now()) {
     const session = this.ensure(sessionId, now); session.sessionNavigator = recordNavigatorDebriefExport(session.sessionNavigator); session.updatedAt = now;
     this.record(sessionId, 'navigator_debrief_exported', { count: session.sessionNavigator.debriefExports }, now); return JSON.parse(JSON.stringify(session.sessionNavigator));
+  }
+
+  repairSessionNavigatorMetadata(sessionId, now = Date.now()) {
+    const session = this.ensure(sessionId, now);
+    const before = this.snapshot(sessionId, now);
+    const audit = auditSessionNavigator(before, now);
+    if (audit.ok) return { ok: true, changed: false, audit, navigator: JSON.parse(JSON.stringify(session.sessionNavigator)) };
+    session.sessionNavigator = normalizeSessionNavigator(repairSessionNavigator(before, now));
+    session.updatedAt = now;
+    this.record(sessionId, 'navigator_metadata_repaired', { issueCount: audit.count }, now);
+    return { ok: true, changed: true, audit, navigator: JSON.parse(JSON.stringify(session.sessionNavigator)) };
   }
 
   setOperatingProfile(sessionId, profile, now = Date.now(), source = 'operator') {
@@ -1395,7 +1407,8 @@ export class RuntimePilotState {
       crashResumeDismissedAt: Math.max(0, Number(session.crashResumeDismissedAt || 0)),
       uiPreferences: JSON.parse(JSON.stringify(session.uiPreferences || { shortcutBindings: defaultShortcutBindings(), accessibility: normalizeAccessibilityPreferences() })),
       productionControls: JSON.parse(JSON.stringify(session.productionControls || normalizeProductionControls())),
-      sessionNavigator: JSON.parse(JSON.stringify(session.sessionNavigator || normalizeSessionNavigator()))
+      sessionNavigator: JSON.parse(JSON.stringify(session.sessionNavigator || normalizeSessionNavigator())),
+      sessionNavigatorIntegrity: auditSessionNavigator({ sessionId: session.sessionId, sessionNavigator: session.sessionNavigator, ledger: session.ledger.snapshot(), operatorMarkers: session.operatorMarkers }, now)
     };
   }
 

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const launcherPath = resolve(extensionRoot, '..', 'Final_2_Window_Extension.ahk');
 const launcher = await readFile(launcherPath, 'utf8');
+const validator = await readFile(resolve(extensionRoot, '..', 'Validate_Extension_Runtime.ps1'), 'utf8');
 
 function block(start, end) {
   const startIndex = launcher.indexOf(start);
@@ -14,19 +15,41 @@ function block(start, end) {
   return startIndex >= 0 && endIndex > startIndex ? launcher.slice(startIndex, endIndex) : '';
 }
 
-test('launcher standardizes on Edge Stable and the selected profile', () => {
-  assert.match(launcher, /Microsoft\\Edge\\Application\\msedge\.exe/);
-  assert.match(launcher, /--profile-directory=\\?"' g_selectedProfileDirectory '\\?"/);
-  assert.match(launcher, /--new-window/);
-  assert.match(launcher, /--app=/);
-  assert.doesNotMatch(launcher, /Edge Beta|Canary|Chrome\\Application/i);
+test('launcher supports environment validation before normal runtime ownership', () => {
+  assert.match(launcher, /EnvGet\("PMIA_VALIDATE"\) = "1"/);
+  assert.match(validator, /Main launcher' -UseEnvironmentValidation/);
 });
 
-test('launcher closes only PMIA lifecycle windows', () => {
-  assert.match(launcher, /CloseManagedPmiaWindows\(/);
-  assert.match(launcher, /\^PMIA_\(\?:BOOT_\|REGISTERED_\)\?\(SENDER\|RECEIVER\)_\(CHATGPT\|CLAUDE\)_/);
-  assert.match(launcher, /WinGetList\("ahk_exe msedge\.exe"\)/);
-  assert.doesNotMatch(launcher, /taskkill|ProcessClose\("msedge\.exe"\)/i);
+test('launcher completes validation and startup before platform function declarations or hotkeys', () => {
+  const validation = launcher.indexOf('EnvGet("PMIA_VALIDATE") = "1"');
+  const monitor = launcher.indexOf('SetTimer MonitorManagedSession, 2000');
+  const firstHotkey = launcher.indexOf('~LAlt::return');
+  const platformInclude = launcher.indexOf('PMIA_Runtime_Platform.ahk');
+  assert.ok(validation >= 0);
+  assert.ok(monitor > validation);
+  assert.ok(firstHotkey > monitor);
+  assert.ok(platformInclude > monitor);
+  assert.ok(platformInclude < firstHotkey);
+});
+
+test('launcher uses a configurable Chromium-family platform with Edge as the safe default', async () => {
+  const platform = await readFile(resolve(extensionRoot, '..', 'PMIA_Runtime_Platform.ahk'), 'utf8');
+  assert.match(launcher, /LoadBrowserRuntimeConfig\(SETTINGS_FILE\)/);
+  assert.match(launcher, /LaunchPmiaBrowserWindow\(g_browserConfig/);
+  assert.match(platform, /NormalizeBrowserFamily/);
+  for (const family of ['edge','chrome','brave','vivaldi']) assert.match(platform, new RegExp(`"${family}"`));
+  assert.match(platform, /--profile-directory=/);
+  assert.match(platform, /--new-window --app=/);
+  assert.doesNotMatch(launcher, /Edge Beta|Canary/);
+});
+
+test('launcher closes only exact journal-owned PMIA windows', async () => {
+  const platform = await readFile(resolve(extensionRoot, '..', 'PMIA_Runtime_Platform.ahk'), 'utf8');
+  assert.match(launcher, /CloseOwnedManagedRuntime\(/);
+  assert.match(platform, /ManagedWindowMatchesOwnership/);
+  assert.match(platform, /window_ownership_mismatch/);
+  assert.match(platform, /WinGetProcessPath/);
+  assert.doesNotMatch(launcher, /taskkill|ProcessClose\([^)]*browser|CloseManagedPmiaWindows/i);
 });
 
 test('launcher retains final session-suffixed ready titles', () => {
@@ -62,7 +85,7 @@ test('preflight diagnoses the selected profile without silently switching profil
   assert.doesNotMatch(preflightBlock, /SelectRecommendedProfile\(/);
 });
 
-test('preflight waits for Edge to persist a path-matched extension version reload', () => {
+test('preflight waits for the configured browser to persist a path-matched extension version reload', () => {
   assert.match(launcher, /WaitForSelectedProfileReady\(timeoutMs := 15000\)/);
   const settleBlock = block('WaitForSelectedProfileReady(timeoutMs := 15000)', 'NormalizeProvider(value)');
   assert.match(settleBlock, /EXTENSION_VERSION_MISMATCH/);
@@ -70,22 +93,25 @@ test('preflight waits for Edge to persist a path-matched extension version reloa
   const preflightBlock = block('RunStudioPreflight(*)', 'FindLifecycleWindow(');
   assert.match(preflightBlock, /WaitForSelectedProfileReady\(\)/);
 });
-test('cleanup includes hidden PMIA lifecycle windows and restores the prior detection mode', () => {
-  const cleanup = block('CloseManagedPmiaWindows(sessionId := "")', 'AutoStartup()');
-  assert.match(cleanup, /previousDetectHidden := A_DetectHiddenWindows/);
-  assert.match(cleanup, /DetectHiddenWindows true/);
-  assert.match(cleanup, /DetectHiddenWindows previousDetectHidden/);
+test('managed-window discovery includes hidden windows and restores detection state', () => {
+  const findBlock = block('FindLifecycleWindow(role, provider, sessionId, minimumPhase := "boot")', 'WaitForLifecycleTitle(');
+  assert.match(findBlock, /previousDetectHidden := A_DetectHiddenWindows/);
+  assert.match(findBlock, /DetectHiddenWindows true/);
+  assert.match(findBlock, /DetectHiddenWindows previousDetectHidden/);
 });
-test('new launches close all PMIA windows while repair is scoped to the current session', () => {
+test('new launches use verified journal cleanup and never fall back to broad title scans', () => {
   const launchBlock = block('RunManagedLaunch(reuseSession := false)', 'ApplyConfiguredInitialLayout()');
-  assert.match(launchBlock, /if !reuseSession[\s\S]*CloseManagedPmiaWindows\(\)/);
-  assert.match(launchBlock, /else[\s\S]*CloseManagedPmiaWindows\(g_sessionId\)/);
+  assert.match(launchBlock, /CloseOwnedManagedRuntime\(reuseSession \? g_sessionId : ""\)/);
+  assert.match(launchBlock, /OWNERSHIP_MISMATCH/);
+  assert.match(launchBlock, /WriteManagedRuntimeJournal\(g_sessionId, g_browserConfig\)/);
+  assert.doesNotMatch(launchBlock, /CloseManagedPmiaWindows/);
 });
-test('session studio exposes browser health and operational actions', () => {
+test('session studio exposes configurable browser health and operational actions', () => {
   assert.match(launcher, /PM Interview Assistant — Session Studio/);
-  assert.match(launcher, /Microsoft Edge Stable/);
-  assert.match(launcher, /Run Preflight/);
-  assert.match(launcher, /Fast Repair/);
+  assert.match(launcher, /g_browserFamilyDdl/);
+  assert.match(launcher, /Browser settings/);
+  assert.match(launcher, /"Preflight"/);
+  assert.match(launcher, /"Repair"/);
   assert.match(launcher, /Swap route/);
   assert.match(launcher, /Launch Interview/);
   assert.match(launcher, /Show\("w960 h900"\)/);
@@ -122,9 +148,9 @@ test('launcher uses explicit lifecycle launch states and repair classifications'
   assert.doesNotMatch(launcher, /Win1 was not detected|Win2 was not detected/);
 });
 
-test('repair opens the selected profile extension page without editing browser preferences', () => {
-  assert.match(launcher, /edge:\/\/extensions\/\?id=/);
-  assert.match(launcher, /--profile-directory=\\?"' g_selectedProfileDirectory '\\?"/);
+test('repair opens the configured browser extension page without editing browser preferences', () => {
+  assert.match(launcher, /BrowserExtensionsUrl\(g_browserConfig/);
+  assert.match(launcher, /LaunchPmiaBrowserPage\(g_browserConfig, g_selectedProfileDirectory/);
   assert.doesNotMatch(launcher, /Secure Preferences|Preferences.*FileAppend|RegWrite/i);
 });
 
@@ -145,6 +171,7 @@ test('closing the session studio releases every operational control reference', 
   for (const control of [
     'g_launchGui', 'g_resumeEdit', 'g_jdEdit', 'g_metaEdit',
     'g_senderProviderDdl', 'g_receiverProviderDdl', 'g_profileDdl',
+    'g_browserFamilyDdl', 'g_browserSummary', 'g_browserSettingsGui',
     'g_routeSummary', 'g_contextStatus', 'g_launchStatus',
     'g_runtimeHealth', 'g_preflightButton', 'g_repairButton', 'g_liveCheckButton', 'g_launchButton'
   ]) assert.match(closeBlock, new RegExp(`${control}\\s*:=\\s*0`));
@@ -187,7 +214,7 @@ test('active session derives from exact lifecycle windows rather than a mutable 
   assert.ok(!refreshBlock.includes('!g_interviewActive'));
 });
 
-test('launcher foregrounds each registered provider before its composer readiness wait', () => {
+test('launcher waits for composer readiness without foregrounding provider windows', () => {
   const launch = launcher.slice(
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
     launcher.indexOf('ApplyConfiguredInitialLayout() {', launcher.indexOf('RunManagedLaunch(reuseSession := false)'))
@@ -196,8 +223,10 @@ test('launcher foregrounds each registered provider before its composer readines
   const senderReady = launch.indexOf('senderReady :=');
   const receiverRegistered = launch.indexOf('receiverRegistered :=');
   const receiverReady = launch.indexOf('receiverReady :=');
-  assert.ok(launch.slice(senderRegistered, senderReady).includes('WinActivate "ahk_id " senderRegistered["hwnd"]'));
-  assert.ok(launch.slice(receiverRegistered, receiverReady).includes('WinActivate "ahk_id " receiverRegistered["hwnd"]'));
+  assert.ok(senderRegistered >= 0 && senderReady > senderRegistered);
+  assert.ok(receiverRegistered > senderReady && receiverReady > receiverRegistered);
+  assert.doesNotMatch(launch.slice(senderRegistered, senderReady), /WinActivate/);
+  assert.doesNotMatch(launch.slice(receiverRegistered, receiverReady), /WinActivate/);
 });
 
 test('Alt+Delete requests extension safety approval without direct window cleanup', () => {
@@ -216,9 +245,9 @@ test('launcher confirms sender readiness before opening the receiver window', ()
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
     launcher.indexOf('ApplyConfiguredInitialLayout() {', launcher.indexOf('RunManagedLaunch(reuseSession := false)'))
   );
-  const senderRun = launch.indexOf("Run BrowserExe ' --new-window");
+  const senderRun = launch.indexOf('LaunchPmiaBrowserWindow(g_browserConfig, g_selectedProfileDirectory, senderUrl');
   const senderReady = launch.indexOf('WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "ready"');
-  const receiverRun = launch.indexOf("Run BrowserExe ' --new-window", senderRun + 1);
+  const receiverRun = launch.indexOf('LaunchPmiaBrowserWindow(g_browserConfig, g_selectedProfileDirectory, receiverUrl');
   assert.ok(senderRun >= 0);
   assert.ok(senderReady > senderRun);
   assert.ok(receiverRun > senderReady);
@@ -312,7 +341,8 @@ test('operational session recovery binds one unambiguous READY lifecycle pair wh
   const recoverStart = launcher.indexOf('RecoverUnambiguousManagedSession() {');
   const recoverEnd = launcher.indexOf('\n}\n\nIsAlive(', recoverStart);
   const recoverBlock = launcher.slice(recoverStart, recoverEnd);
-  assert.match(recoverBlock, /WinGetList\("ahk_exe msedge\.exe"\)/);
+  assert.match(recoverBlock, /browserExeName := RegExReplace\(g_browserConfig\["executable"\]/);
+  assert.match(recoverBlock, /WinGetList\("ahk_exe " browserExeName\)/);
   assert.match(recoverBlock, /\^PMIA_\(SENDER\|RECEIVER\)_\(CHATGPT\|CLAUDE\)_\(PMIA_/);
   assert.match(recoverBlock, /completeSessions\.Length != 1/);
   assert.match(recoverBlock, /g_sessionId\s*:=\s*StrLower/);
@@ -320,6 +350,7 @@ test('operational session recovery binds one unambiguous READY lifecycle pair wh
   assert.match(recoverBlock, /g_receiverProvider\s*:=\s*StrLower/);
   assert.match(recoverBlock, /g_hWin1\s*:=/);
   assert.match(recoverBlock, /g_hWin2\s*:=/);
+  assert.match(recoverBlock, /UpdateManagedRuntimeJournal/);
 });
 
 test('handle refresh falls back to unambiguous lifecycle recovery after cached lookup fails', () => {
@@ -413,7 +444,7 @@ test('launcher opens the Runtime Pilot Dashboard only after both provider roles 
   );
   const senderReady = launch.indexOf('senderReady :=');
   const receiverReady = launch.indexOf('receiverReady :=');
-  const dashboardUrl = launch.indexOf('dashboardUrl := DashboardUrl');
+  const dashboardUrl = launch.indexOf('dashboardPageUrl := DashboardUrl');
   const dashboardWait = launch.indexOf('WaitForDashboardWindow');
   const bootSend = launch.indexOf('SendToWindow(BuildBootPrompt()');
   assert.ok(senderReady >= 0 && receiverReady > senderReady);
@@ -424,16 +455,19 @@ test('launcher opens the Runtime Pilot Dashboard only after both provider roles 
   assert.match(launch, /DASHBOARD_NOT_READY/);
 });
 
-test('dashboard lifecycle is session-scoped and uses the selected profile extension id', () => {
+test('dashboard lifecycle is session-scoped and uses the selected profile extension id', async () => {
+  const platform = await readFile(resolve(extensionRoot, '..', 'PMIA_Runtime_Platform.ahk'), 'utf8');
   assert.match(launcher, /RuntimeDashboardTitle\(sessionId\)/);
   assert.match(launcher, /PMIA_DASHBOARD_/);
-  assert.match(launcher, /chrome-extension:\/\//);
+  assert.match(launcher, /DashboardUrl\(extensionId, g_sessionId\)/);
   assert.match(launcher, /g_selectedProfileRecord\["extensionId"\]/);
-  assert.match(launcher, /--profile-directory=\\?"' g_selectedProfileDirectory '\\?"/);
-  assert.match(launcher, /--app=\\?"' dashboardUrl/);
+  assert.match(launcher, /LaunchPmiaBrowserWindow\(g_browserConfig, g_selectedProfileDirectory, dashboardPageUrl/);
+  assert.match(platform, /--profile-directory=/);
+  assert.match(platform, /--new-window --app=/);
 });
 
-test('launcher manages dashboard layout, hide, restore and exact cleanup', () => {
+test('launcher manages dashboard layout, hide, restore and exact journal cleanup', async () => {
+  const platform = await readFile(resolve(extensionRoot, '..', 'PMIA_Runtime_Platform.ahk'), 'utf8');
   assert.match(launcher, /global g_hDashboard/);
   assert.match(launcher, /ApplyDashboardOnlyLayout\(\)/);
   assert.match(launcher, /DockDashboard\(\)/);
@@ -441,14 +475,13 @@ test('launcher manages dashboard layout, hide, restore and exact cleanup', () =>
   const hide = block('HideAllManaged() {', 'DockDashboard() {');
   assert.match(hide, /g_hDashboard/);
   assert.match(hide, /WinMove OFF_X/);
-  const cleanup = block('CloseManagedPmiaWindows(sessionId := "")', 'AutoStartup()');
-  assert.match(cleanup, /isDashboardWindow/);
-  assert.match(cleanup, /\^PMIA_DASHBOARD_/);
+  assert.match(platform, /dashboardHwnd/);
+  assert.match(platform, /CloseOwnedManagedRuntime/);
 });
 
 test('Alt+D focuses or reopens the current session dashboard without relaunching providers', () => {
   assert.match(launcher, /!d::FocusRuntimeDashboard\(\)/);
-  const focus = block('FocusRuntimeDashboard(*) {', 'CloseManagedPmiaWindows(');
+  const focus = block('FocusRuntimeDashboard(*) {', 'AutoStartup() {');
   assert.match(focus, /IsActiveSession\(\)/);
   assert.match(focus, /DashboardUrl/);
   assert.match(focus, /WaitForDashboardWindow/);

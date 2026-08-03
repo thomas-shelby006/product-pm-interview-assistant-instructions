@@ -1223,3 +1223,25 @@ Each cycle was constrained to **Bug fixes**, **New features**, and **Implementat
 **Implementation:** release evidence and merge handoff remain separate, hash-bound artifacts.
 
 **Source-complete status:** Cycles 196–245 are implemented. The deferred consolidated automated and isolated-browser gates are now required before cleanup, handoff, and the final HTML update.
+
+## PMIA 0.11 Session Navigator cycles 151–200
+
+- **151–155:** persisted Navigator state, phase rail, workflow breadcrumbs, one safe action and keyboard quick-open.
+- **156–175:** universal search, question threads, pace guidance and current-to-next handoff readiness.
+- **176–200:** workspaces, Scenario Coach, bookmarks, competency goals/coverage and metadata-only debrief.
+
+**Bug fixes:** Navigator references validate against live identities and cannot reorder delivery ownership.
+**New features:** one stage-aware cockpit from pre-launch through shutdown.
+**Implementation:** bounded operator metadata and read-only projections over existing runtime owners.
+
+## PMIA 0.11 hardening cycles 201–250
+
+- **201–210:** schema v4 migration, Navigator integrity repair and semantic search/thread caching.
+- **211–230:** verified two-role export, four-route assurance, bounded storage compaction and Review gating.
+- **231–250:** accessible Navigator semantics, focus-safe browser-neutral launch, exact HWND ownership journal, platform smoke and graceful shutdown.
+
+**Bug fixes:** single-instance replacement, broad window cleanup, hard-coded browser assumptions and partial-export review are removed.
+**New features:** configurable Chromium-family runtime, exact owned-window cleanup and staged Export → Review → Shutdown workflow.
+**Implementation:** Edge remains the safe default; browser/platform ownership is isolated from transport and provider adapters.
+
+**Verified 2026-08-03:** 122/122 focused tests, 1,237/1,237 complete tests, 494 JavaScript files, 18 required surfaces, 280 production modules and all three AutoHotkey validations passed. HTML remains deferred.

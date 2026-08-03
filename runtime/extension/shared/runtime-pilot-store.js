@@ -56,20 +56,23 @@ export function createRuntimePilotStore({
     const prepare = raw => {
       const normalized = normalizeRuntimeEnvelope(raw, { writerVersion });
       if (!normalized.ok) return { ok: false, reason: normalized.reason, raw };
+      const integrity = verifyRuntimeEnvelope(normalized.envelope);
+      if (!integrity.ok && integrity.reason !== 'digest_missing') {
+        return { ok: false, reason: integrity.reason, normalized, integrity, envelope: normalized.envelope, raw };
+      }
       const migration = migrateRuntimeEnvelope(normalized.envelope, RUNTIME_STATE_SCHEMA_VERSION, {
         writerVersion,
         now: Date.now()
       });
-      if (!migration.ok) return { ok: false, reason: migration.reason, normalized, migration, raw };
-      const integrity = verifyRuntimeEnvelope(migration.envelope);
+      if (!migration.ok) return { ok: false, reason: migration.reason, normalized, migration, integrity, raw };
       return {
-        ok: integrity.ok || integrity.reason === 'digest_missing',
+        ok: true,
         reason: integrity.reason,
         normalized,
         migration,
         integrity,
         envelope: migration.envelope,
-        unsigned: integrity.reason === 'digest_missing'
+        unsigned: integrity.reason === 'digest_missing' || migration.applied.length > 0
       };
     };
     let prepared = prepare(recovered.state);

@@ -1,5 +1,6 @@
 #Requires AutoHotkey v2.0
-#SingleInstance Force
+#SingleInstance Off
+#Warn All, StdOut
 
 ; ============================================================
 ;  PM INTERVIEW ASSISTANT — ChatGPT + Claude (Edge Default Profile)
@@ -24,6 +25,7 @@
 ; ============================================================
 
 global BrowserExe := "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+global g_browserConfig := Map("family", "edge", "executable", BrowserExe, "userDataRoot", EnvGet("LOCALAPPDATA") "\Microsoft\Edge\User Data", "extraFlags", "")
 global COMPOSER_READY_TIMEOUT_MS := 60000
 global RUNTIME_LIFECYCLE_TIMEOUT_MS := 60000
 
@@ -37,7 +39,7 @@ global CLAUDE_URL := "https://claude.ai/new"
 ; Microphone control is handled by the extension provider adapter.
 ; No provider-specific screen coordinates are used.
 
-if (A_Args.Length >= 1 && A_Args[1] = "--validate") {
+if (EnvGet("PMIA_VALIDATE") = "1" || (A_Args.Length >= 1 && A_Args[1] = "--validate")) {
     FileAppend "AHK_VALID`n", "*"
     ExitApp 0
 }
@@ -299,6 +301,9 @@ global OFF_Y := 0
 global g_hWin1               := 0
 global g_hWin2               := 0
 global g_hDashboard          := 0
+global g_senderPid           := 0
+global g_receiverPid         := 0
+global g_dashboardPid        := 0
 global g_mode                := 1
 global g_pos2Win             := 1
 global g_posWin1             := 1
@@ -346,6 +351,7 @@ global g_interviewActive     := false
 global SETTINGS_DIR          := EnvGet("LOCALAPPDATA") "\PMInterviewAssistant"
 global SETTINGS_FILE         := SETTINGS_DIR "\settings.ini"
 global EDGE_USER_DATA_ROOT   := EnvGet("LOCALAPPDATA") "\Microsoft\Edge\User Data"
+global BROWSER_USER_DATA_ROOT := EDGE_USER_DATA_ROOT
 global PROFILE_DOCTOR_SCRIPT := A_ScriptDir "\Browser_Profile_Doctor.ps1"
 global REVIEW_STUDIO_SCRIPT := A_ScriptDir "\Session_Tracker_End_Session.ahk"
 global EXPECTED_EXTENSION_PATH := A_ScriptDir "\extension"
@@ -358,6 +364,9 @@ global g_profileRecords      := []
 global g_profileChoiceMap    := Map()
 global g_selectedProfileRecord := Map()
 global g_profileDdl          := 0
+global g_browserFamilyDdl    := 0
+global g_browserSummary      := 0
+global g_browserSettingsGui  := 0
 global g_layoutDdl           := 0
 global g_runtimeHealth       := 0
 global g_preflightButton     := 0
@@ -370,16 +379,21 @@ global RUNTIME_CONTROL_MESSAGE_NAME := "PMIA_RUNTIME_CONTROL_V1"
 global RUNTIME_CONTROL_WINDOW_TITLE := "PMIA_RUNTIME_CONTROL"
 global RUNTIME_CONTROL_EXPORT := 1
 global RUNTIME_CONTROL_END := 2
+global RUNTIME_CONTROL_ACTIVATE := 3
+global RUNTIME_CONTROL_POST_INTERVIEW := 4
 global g_runtimeControlGui := 0
 global g_runtimeControlMessageId := 0
 
+if !g_controlSmokeMode
+    EnsurePmiaRuntimeOwnership(RUNTIME_CONTROL_MESSAGE_NAME, RUNTIME_CONTROL_WINDOW_TITLE, RUNTIME_CONTROL_ACTIVATE)
 InitializeRuntimeControlBridge()
 if !g_controlSmokeMode {
     LoadStudioPreferences()
     ShowSessionLaunchGui()
 }
-~LAlt::return
 SetTimer MonitorManagedSession, 2000
+#Include %A_ScriptDir%\PMIA_Runtime_Platform.ahk
+~LAlt::return
 
 
 ; ============================================================
@@ -398,6 +412,7 @@ SetTimer MonitorManagedSession, 2000
 !+r::FastRepairActiveSession()
 
 !+e::OpenSessionReviewStudio()
+!+x::RunPostInterviewWorkflow()
 
 OpenSessionReviewStudio() {
     global REVIEW_STUDIO_SCRIPT
@@ -421,6 +436,20 @@ OpenSessionReviewStudio() {
     return true
 }
 
+RunPostInterviewWorkflow(*) {
+    if !IsActiveSession() {
+        LogEvent("Post-interview workflow ignored: no active session")
+        return false
+    }
+    if !ExportActiveSession() {
+        LogEvent("Post-interview workflow blocked: export request failed")
+        return false
+    }
+    LogEvent("Post-interview export requested; opening Review Studio")
+    SetTimer(() => OpenSessionReviewStudio(), -900)
+    return true
+}
+
 InitializeRuntimeControlBridge() {
     global RUNTIME_CONTROL_MESSAGE_NAME, RUNTIME_CONTROL_WINDOW_TITLE
     global g_runtimeControlGui, g_runtimeControlMessageId
@@ -435,7 +464,7 @@ InitializeRuntimeControlBridge() {
 }
 
 HandleRuntimeControlMessage(wParam, lParam, msg, hwnd) {
-    global RUNTIME_CONTROL_EXPORT, RUNTIME_CONTROL_END
+    global RUNTIME_CONTROL_EXPORT, RUNTIME_CONTROL_END, RUNTIME_CONTROL_ACTIVATE, RUNTIME_CONTROL_POST_INTERVIEW
     if (wParam = RUNTIME_CONTROL_EXPORT) {
         SetTimer(() => ExportActiveSession(), -1)
         return 1
@@ -444,43 +473,169 @@ HandleRuntimeControlMessage(wParam, lParam, msg, hwnd) {
         SetTimer(() => EndActiveSession(), -1)
         return 1
     }
+    if (wParam = RUNTIME_CONTROL_ACTIVATE) {
+        SetTimer(() => ActivatePmiaRuntime(), -1)
+        return 1
+    }
+    if (wParam = RUNTIME_CONTROL_POST_INTERVIEW) {
+        SetTimer(() => RunPostInterviewWorkflow(), -1)
+        return 1
+    }
     return 0
+}
+
+ActivatePmiaRuntime(*) {
+    if IsActiveSession()
+        return FocusRuntimeDashboard()
+    ShowSessionLaunchGui()
+    return true
 }
 
 LoadStudioPreferences() {
     global SETTINGS_DIR, SETTINGS_FILE
     global g_selectedProfileDirectory, g_senderProvider, g_receiverProvider, g_layoutMode
+    global g_browserConfig, BrowserExe, BROWSER_USER_DATA_ROOT, EDGE_USER_DATA_ROOT
     DirCreate SETTINGS_DIR
     try {
         g_selectedProfileDirectory := IniRead(SETTINGS_FILE, "Studio", "ProfileDirectory", "Default")
         g_senderProvider := NormalizeProvider(IniRead(SETTINGS_FILE, "Studio", "SenderProvider", "chatgpt"))
         g_receiverProvider := NormalizeProvider(IniRead(SETTINGS_FILE, "Studio", "ReceiverProvider", "chatgpt"))
         g_layoutMode := NormalizeLayoutMode(IniRead(SETTINGS_FILE, "Studio", "LayoutMode", "ThreeWindow"))
+        g_browserConfig := LoadBrowserRuntimeConfig(SETTINGS_FILE)
+        BrowserExe := g_browserConfig["executable"]
+        BROWSER_USER_DATA_ROOT := g_browserConfig["userDataRoot"]
+        EDGE_USER_DATA_ROOT := BROWSER_USER_DATA_ROOT
     } catch {
         g_selectedProfileDirectory := "Default"
         g_senderProvider := "chatgpt"
         g_receiverProvider := "chatgpt"
         g_layoutMode := "ThreeWindow"
+        g_browserConfig := LoadBrowserRuntimeConfig(SETTINGS_FILE)
+        BrowserExe := g_browserConfig["executable"]
+        BROWSER_USER_DATA_ROOT := g_browserConfig["userDataRoot"]
+        EDGE_USER_DATA_ROOT := BROWSER_USER_DATA_ROOT
     }
 }
 
 SaveStudioPreferences() {
     global SETTINGS_DIR, SETTINGS_FILE
-    global g_selectedProfileDirectory, g_senderProvider, g_receiverProvider, g_layoutMode
+    global g_selectedProfileDirectory, g_senderProvider, g_receiverProvider, g_layoutMode, g_browserConfig
     DirCreate SETTINGS_DIR
     IniWrite g_selectedProfileDirectory, SETTINGS_FILE, "Studio", "ProfileDirectory"
     IniWrite g_senderProvider, SETTINGS_FILE, "Studio", "SenderProvider"
     IniWrite g_receiverProvider, SETTINGS_FILE, "Studio", "ReceiverProvider"
     IniWrite g_layoutMode, SETTINGS_FILE, "Studio", "LayoutMode"
+    SaveBrowserRuntimeConfig(SETTINGS_FILE, g_browserConfig)
+}
+
+HandleBrowserFamilyChange(*) {
+    global g_browserFamilyDdl, g_browserConfig, BrowserExe, BROWSER_USER_DATA_ROOT, EDGE_USER_DATA_ROOT
+    options := ["edge", "chrome", "brave", "vivaldi"]
+    selected := options[Max(1, g_browserFamilyDdl.Value)]
+    if (selected != g_browserConfig["family"]) {
+        g_browserConfig["family"] := selected
+        g_browserConfig["executable"] := DefaultBrowserExecutable(selected)
+        g_browserConfig["userDataRoot"] := DefaultBrowserUserDataRoot(selected)
+        BrowserExe := g_browserConfig["executable"]
+        BROWSER_USER_DATA_ROOT := g_browserConfig["userDataRoot"]
+        EDGE_USER_DATA_ROOT := BROWSER_USER_DATA_ROOT
+        RefreshRuntimeDoctor(false)
+        RefreshBrowserProfileChoices()
+        UpdateBrowserSummary()
+    }
+}
+
+UpdateBrowserSummary(*) {
+    global g_browserSummary, g_browserConfig
+    if IsObject(g_browserSummary)
+        g_browserSummary.Text := StrUpper(g_browserConfig["family"]) " • " g_browserConfig["executable"] " • flags " (g_browserConfig["extraFlags"] = "" ? "default" : "custom")
+}
+
+RefreshBrowserProfileChoices() {
+    global g_profileDdl
+    if !IsObject(g_profileDdl)
+        return
+    choices := BuildProfileChoices()
+    g_profileDdl.Delete()
+    g_profileDdl.Add(choices.labels)
+    if choices.selectedIndex > 0
+        g_profileDdl.Choose(choices.selectedIndex)
+    RenderDoctorStatus()
+}
+
+ShowBrowserSettingsGui(*) {
+    global g_browserSettingsGui, g_browserConfig, BrowserExe, BROWSER_USER_DATA_ROOT, EDGE_USER_DATA_ROOT
+    if IsObject(g_browserSettingsGui) {
+        try g_browserSettingsGui.Destroy()
+    }
+    settingsGui := Gui("+Owner", "PMIA Browser Settings")
+    settingsGui.SetFont("s10", "Segoe UI")
+    settingsGui.Add("Text", "x20 y20 w500 h20", "Browser executable")
+    exeEdit := settingsGui.Add("Edit", "x20 y43 w440 h28", g_browserConfig["executable"])
+    exeBrowse := settingsGui.Add("Button", "x470 y43 w80 h28", "Browse")
+    settingsGui.Add("Text", "x20 y84 w500 h20", "User data root")
+    rootEdit := settingsGui.Add("Edit", "x20 y107 w440 h28", g_browserConfig["userDataRoot"])
+    rootBrowse := settingsGui.Add("Button", "x470 y107 w80 h28", "Browse")
+    settingsGui.Add("Text", "x20 y148 w500 h20", "Optional safe Chromium flags")
+    flagsEdit := settingsGui.Add("Edit", "x20 y171 w530 h56 -Wrap", g_browserConfig["extraFlags"])
+    settingsGui.Add("Text", "x20 y232 w530 h36", "Unsafe flags such as --no-sandbox, --disable-web-security, remote debugging, profile overrides and extension overrides are rejected.")
+    cancel := settingsGui.Add("Button", "x370 y282 w80 h32", "Cancel")
+    save := settingsGui.Add("Button", "x460 y282 w90 h32 Default", "Save")
+    exeBrowse.OnEvent("Click", (*) => SelectBrowserExecutable(exeEdit))
+    rootBrowse.OnEvent("Click", (*) => SelectBrowserUserDataRoot(rootEdit))
+    cancel.OnEvent("Click", (*) => settingsGui.Destroy())
+    save.OnEvent("Click", (*) => SaveBrowserSettingsDialog(settingsGui, exeEdit, rootEdit, flagsEdit))
+    settingsGui.OnEvent("Close", (*) => settingsGui.Destroy())
+    g_browserSettingsGui := settingsGui
+    settingsGui.Show("w570 h334")
+}
+
+SelectBrowserExecutable(edit) {
+    selected := FileSelect(1, edit.Value, "Select Chromium browser executable", "Programs (*.exe)")
+    if selected != ""
+        edit.Value := selected
+}
+
+SelectBrowserUserDataRoot(edit) {
+    selected := DirSelect(edit.Value, 1, "Select browser user-data root")
+    if selected != ""
+        edit.Value := selected
+}
+
+SaveBrowserSettingsDialog(settingsGui, exeEdit, rootEdit, flagsEdit) {
+    global g_browserConfig, BrowserExe, BROWSER_USER_DATA_ROOT, EDGE_USER_DATA_ROOT
+    executable := Trim(exeEdit.Value)
+    root := Trim(rootEdit.Value)
+    if !FileExist(executable) {
+        MsgBox "The selected browser executable does not exist.", "PMIA Browser Settings", "Icon!"
+        return false
+    }
+    if !DirExist(root) {
+        MsgBox "The selected user-data root does not exist.", "PMIA Browser Settings", "Icon!"
+        return false
+    }
+    g_browserConfig["executable"] := executable
+    g_browserConfig["userDataRoot"] := root
+    g_browserConfig["extraFlags"] := NormalizeBrowserExtraFlags(flagsEdit.Value)
+    BrowserExe := executable
+    BROWSER_USER_DATA_ROOT := root
+    EDGE_USER_DATA_ROOT := root
+    SaveStudioPreferences()
+    RefreshRuntimeDoctor(false)
+    RefreshBrowserProfileChoices()
+    UpdateBrowserSummary()
+    settingsGui.Destroy()
+    return true
 }
 
 RunProfileDoctor(profileDirectory := "") {
-    global PROFILE_DOCTOR_SCRIPT, EDGE_USER_DATA_ROOT, EXPECTED_EXTENSION_PATH
+    global PROFILE_DOCTOR_SCRIPT, EDGE_USER_DATA_ROOT, EXPECTED_EXTENSION_PATH, g_browserConfig
     if !FileExist(PROFILE_DOCTOR_SCRIPT)
         return []
     command := 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' PROFILE_DOCTOR_SCRIPT '"'
         . ' -UserDataRoot "' EDGE_USER_DATA_ROOT '"'
         . ' -ExpectedExtensionPath "' EXPECTED_EXTENSION_PATH '"'
+        . ' -BrowserName "' StrUpper(g_browserConfig["family"]) '"'
     if (profileDirectory != "")
         command .= ' -ProfileDirectory "' profileDirectory '"'
     try {
@@ -608,7 +763,7 @@ ShowSessionLaunchGui() {
     global g_sessionCompany, g_sessionRole, g_sessionRound
     global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode
     global g_senderProviderDdl, g_receiverProviderDdl, g_senderProvider, g_receiverProvider
-    global g_profileDdl, g_layoutDdl, g_layoutMode
+    global g_profileDdl, g_browserFamilyDdl, g_browserSummary, g_layoutDdl, g_layoutMode, g_browserConfig
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
     global g_runtimeHealth, g_preflightButton, g_repairButton, g_liveCheckButton
 
@@ -634,16 +789,22 @@ ShowSessionLaunchGui() {
     subtitle.SetFont("s10 c64748B", "Segoe UI")
     healthBox := g_launchGui.Add("GroupBox", "x30 y91 w900 h112", "Browser and runtime health")
     healthBox.SetFont("s10 w600 c334155", "Segoe UI")
-    edgeLabel := g_launchGui.Add("Text", "x52 y121 w215 h20", "Microsoft Edge Stable")
-    edgeLabel.SetFont("s10 w600 c0F172A", "Segoe UI")
-    g_profileDdl := g_launchGui.Add("DropDownList", "x270 y116 w280", choices.labels)
+    browserLabel := g_launchGui.Add("Text", "x52 y121 w68 h20", "Browser")
+    browserLabel.SetFont("s10 w600 c0F172A", "Segoe UI")
+    g_browserFamilyDdl := g_launchGui.Add("DropDownList", "x122 y116 w120", ["Edge", "Chrome", "Brave", "Vivaldi"])
+    g_browserFamilyDdl.Choose(ChooseOptionIndex(g_browserConfig["family"], ["edge", "chrome", "brave", "vivaldi"], 1))
+    browserSettingsBtn := g_launchGui.Add("Button", "x250 y118 w112 h32", "Browser settings")
+    g_launchGui.Add("Text", "x377 y121 w54 h20", "Profile")
+    g_profileDdl := g_launchGui.Add("DropDownList", "x432 y116 w170", choices.labels)
     if (choices.selectedIndex > 0)
         g_profileDdl.Choose(choices.selectedIndex)
     g_runtimeHealth := g_launchGui.Add("Text", "x52 y154 w836 h28", "Checking PMIA runtime registration...")
     g_runtimeHealth.SetFont("s9 c64748B", "Segoe UI")
-    g_liveCheckButton := g_launchGui.Add("Button", "x586 y118 w100 h32", "Check Live")
-    g_preflightButton := g_launchGui.Add("Button", "x694 y118 w100 h32", "Run Preflight")
-    g_repairButton := g_launchGui.Add("Button", "x802 y118 w102 h32", "Fast Repair")
+    g_liveCheckButton := g_launchGui.Add("Button", "x614 y118 w88 h32", "Check Live")
+    g_preflightButton := g_launchGui.Add("Button", "x710 y118 w96 h32", "Preflight")
+    g_repairButton := g_launchGui.Add("Button", "x814 y118 w90 h32", "Repair")
+    g_browserSummary := g_launchGui.Add("Text", "x52 y180 w836 h18", "")
+    g_browserSummary.SetFont("s8 c64748B", "Segoe UI")
 
     routeBox := g_launchGui.Add("GroupBox", "x30 y216 w900 h138", "Conversation route")
     routeBox.SetFont("s10 w600 c334155", "Segoe UI")
@@ -701,6 +862,8 @@ ShowSessionLaunchGui() {
     g_launchButton := g_launchGui.Add("Button", "x750 y840 w180 h38 Default", "Launch Interview")
     g_launchButton.SetFont("s10 w600", "Segoe UI")
     g_profileDdl.OnEvent("Change", HandleProfileChange)
+    g_browserFamilyDdl.OnEvent("Change", HandleBrowserFamilyChange)
+    browserSettingsBtn.OnEvent("Click", ShowBrowserSettingsGui)
     g_senderProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
     g_receiverProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
     g_layoutDdl.OnEvent("Change", UpdateLaunchLayoutMode)
@@ -716,6 +879,7 @@ ShowSessionLaunchGui() {
     g_launchGui.OnEvent("Escape", CloseSessionLaunchGui)
 
     RenderDoctorStatus()
+    UpdateBrowserSummary()
     UpdateLaunchRouteSummary()
     UpdateLaunchContextStatus()
     g_launchGui.Show("w960 h900")
@@ -879,6 +1043,7 @@ CloseSessionLaunchGui(*) {
     global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit
     global g_companyEdit, g_roleEdit, g_roundDdl, g_emphasisDdl, g_avoidEdit, g_answerModeDdl
     global g_senderProviderDdl, g_receiverProviderDdl, g_profileDdl, g_layoutDdl
+    global g_browserFamilyDdl, g_browserSummary, g_browserSettingsGui
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
     global g_runtimeHealth, g_preflightButton, g_repairButton, g_liveCheckButton
     try {
@@ -898,6 +1063,9 @@ CloseSessionLaunchGui(*) {
     g_senderProviderDdl := 0
     g_receiverProviderDdl := 0
     g_profileDdl := 0
+    g_browserFamilyDdl := 0
+    g_browserSummary := 0
+    g_browserSettingsGui := 0
     g_layoutDdl := 0
     g_routeSummary := 0
     g_contextStatus := 0
@@ -921,14 +1089,15 @@ SetLaunchState(code, message, tone := "info") {
     g_launchStatus.SetFont("s9 w600 c" color, "Segoe UI")
 }
 RunStudioPreflight(*) {
-    global g_preflightButton, g_selectedProfileRecord
+    global g_preflightButton, g_selectedProfileRecord, g_browserConfig
+    browserName := StrTitle(g_browserConfig["family"])
     if IsObject(g_preflightButton)
         g_preflightButton.Enabled := false
-    SetLaunchState("PREFLIGHT", "Checking Edge profile and PMIA extension registration...", "info")
+    SetLaunchState("PREFLIGHT", "Checking " browserName " profile and PMIA extension registration...", "info")
     WaitForSelectedProfileReady()
     RenderDoctorStatus()
     if (g_selectedProfileRecord.Count && g_selectedProfileRecord["issueCode"] = "OK") {
-        SetLaunchState("PREFLIGHT", "Selected Edge profile and PMIA runtime path verified.", "ok")
+        SetLaunchState("PREFLIGHT", "Selected " browserName " profile and PMIA runtime path verified.", "ok")
         result := true
     } else {
         code := g_selectedProfileRecord.Count ? g_selectedProfileRecord["issueCode"] : "PROFILE_DOCTOR_FAILED"
@@ -1004,10 +1173,10 @@ DashboardUrl(extensionId, sessionId) {
     return "chrome-extension://" extensionId "/dashboard/index.html?session=" sessionId
 }
 DiagnoseLaunchFailure(stage, role := "") {
-    global g_selectedProfileRecord, g_lastLaunchFailure
+    global g_selectedProfileRecord, g_lastLaunchFailure, g_browserConfig
     RefreshSelectedProfileDoctor()
     if !g_selectedProfileRecord.Count {
-        result := Map("code", "PROFILE_DOCTOR_FAILED", "message", "Could not inspect Edge profile registration.")
+        result := Map("code", "PROFILE_DOCTOR_FAILED", "message", "Could not inspect " StrTitle(g_browserConfig["family"]) " profile registration.")
     } else if (g_selectedProfileRecord["issueCode"] != "OK") {
         result := Map("code", g_selectedProfileRecord["issueCode"], "message", g_selectedProfileRecord["issueMessage"])
     } else if (stage = "boot") {
@@ -1037,6 +1206,7 @@ WaitForLifecyclePair(phase, timeoutMs) {
 
 RunManagedLaunch(reuseSession := false) {
     global g_hWin1, g_hWin2, g_hDashboard, BrowserExe, g_interviewActive
+    global g_senderPid, g_receiverPid, g_dashboardPid, g_browserConfig
     global g_mode, g_pos2Win, g_posWin1, g_posWin2
     global g_layoutEnteredAt, g_currentLayout, g_lastStableLayout
     global g_senderProvider, g_receiverProvider, g_sessionId
@@ -1045,26 +1215,40 @@ RunManagedLaunch(reuseSession := false) {
     if !RunStudioPreflight()
         return false
     if !FileExist(BrowserExe) {
-        SetLaunchState("ERROR", "Microsoft Edge Stable was not found at the configured path.", "error")
+        SetLaunchState("ERROR", "Configured browser executable was not found: " BrowserExe, "error")
         return false
     }
     if IsObject(g_launchButton)
         g_launchButton.Enabled := false
     g_interviewActive := false
-    if !reuseSession || (g_sessionId = "") {
-        CloseManagedPmiaWindows()
-        g_sessionId := CreateSessionId()
-    } else {
-        CloseManagedPmiaWindows(g_sessionId)
+    if !FileExist(ManagedRuntimeJournalPath()) && g_sessionId != "" && (IsAlive(g_hWin1) || IsAlive(g_hWin2) || IsAlive(g_hDashboard))
+        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    cleanup := CloseOwnedManagedRuntime(reuseSession ? g_sessionId : "")
+    if !cleanup["ok"] {
+        SetLaunchState("ERROR", "OWNERSHIP_MISMATCH: Existing managed windows could not be verified for safe cleanup.", "error")
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
     }
-    SetLaunchState("LAUNCHING", "Opening managed Edge windows in profile " g_selectedProfileDirectory "...", "info")
-    flags := " --disable-background-timer-throttling"
-        . " --disable-backgrounding-occluded-windows"
-        . " --disable-renderer-backgrounding"
-        . " --disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling"
+    if !reuseSession || (g_sessionId = "")
+        g_sessionId := CreateSessionId()
+    g_hWin1 := 0
+    g_hWin2 := 0
+    g_hDashboard := 0
+    g_senderPid := 0
+    g_receiverPid := 0
+    g_dashboardPid := 0
+    WriteManagedRuntimeJournal(g_sessionId, g_browserConfig)
+    SetLaunchState("LAUNCHING", "Opening managed " g_browserConfig["family"] " windows in profile " g_selectedProfileDirectory "...", "info")
     senderUrl := UrlWithRuntime(ProviderUrl(g_senderProvider), g_sessionId, "sender", g_senderProvider)
     receiverUrl := UrlWithRuntime(ProviderUrl(g_receiverProvider), g_sessionId, "receiver", g_receiverProvider)
-    Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' senderUrl '"' . flags
+    senderWindowsBefore := SnapshotBrowserWindows(g_browserConfig)
+    LaunchPmiaBrowserWindow(g_browserConfig, g_selectedProfileDirectory, senderUrl, &g_senderPid)
+    senderCreated := WaitForNewBrowserWindow(g_browserConfig, senderWindowsBefore, 1500)
+    if senderCreated {
+        g_hWin1 := senderCreated
+        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    }
     SetLaunchState("WAITING_BOOT", "Waiting for PMIA sender runtime...", "info")
     senderBoot := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "boot", RUNTIME_LIFECYCLE_TIMEOUT_MS)
     if !senderBoot.Count {
@@ -1073,6 +1257,8 @@ RunManagedLaunch(reuseSession := false) {
             g_launchButton.Enabled := true
         return false
     }
+    g_hWin1 := senderBoot["hwnd"]
+    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
 
     SetLaunchState("WAITING_REGISTRATION", "Sender started; waiting for sender registration...", "info")
     senderRegistered := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "registered", RUNTIME_LIFECYCLE_TIMEOUT_MS)
@@ -1082,9 +1268,6 @@ RunManagedLaunch(reuseSession := false) {
             g_launchButton.Enabled := true
         return false
     }
-    try WinActivate "ahk_id " senderRegistered["hwnd"]
-    Sleep 250
-
     SetLaunchState("WAITING_COMPOSER", "Sender registered; waiting for sender composer...", "info")
     senderReady := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "ready", COMPOSER_READY_TIMEOUT_MS)
     if !senderReady.Count {
@@ -1093,8 +1276,16 @@ RunManagedLaunch(reuseSession := false) {
             g_launchButton.Enabled := true
         return false
     }
+    g_hWin1 := senderReady["hwnd"]
+    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
 
-    Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' receiverUrl '"' . flags
+    receiverWindowsBefore := SnapshotBrowserWindows(g_browserConfig)
+    LaunchPmiaBrowserWindow(g_browserConfig, g_selectedProfileDirectory, receiverUrl, &g_receiverPid)
+    receiverCreated := WaitForNewBrowserWindow(g_browserConfig, receiverWindowsBefore, 1500)
+    if receiverCreated {
+        g_hWin2 := receiverCreated
+        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    }
     SetLaunchState("WAITING_BOOT", "Sender ready; waiting for PMIA receiver runtime...", "info")
     receiverBoot := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "boot", RUNTIME_LIFECYCLE_TIMEOUT_MS)
     if !receiverBoot.Count {
@@ -1103,6 +1294,8 @@ RunManagedLaunch(reuseSession := false) {
             g_launchButton.Enabled := true
         return false
     }
+    g_hWin2 := receiverBoot["hwnd"]
+    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
 
     SetLaunchState("WAITING_REGISTRATION", "Receiver started; waiting for receiver registration...", "info")
     receiverRegistered := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "registered", RUNTIME_LIFECYCLE_TIMEOUT_MS)
@@ -1112,9 +1305,6 @@ RunManagedLaunch(reuseSession := false) {
             g_launchButton.Enabled := true
         return false
     }
-    try WinActivate "ahk_id " receiverRegistered["hwnd"]
-    Sleep 250
-
     SetLaunchState("WAITING_COMPOSER", "Receiver registered; waiting for receiver composer...", "info")
     receiverReady := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "ready", COMPOSER_READY_TIMEOUT_MS)
     if !receiverReady.Count {
@@ -1123,6 +1313,8 @@ RunManagedLaunch(reuseSession := false) {
             g_launchButton.Enabled := true
         return false
     }
+    g_hWin2 := receiverReady["hwnd"]
+    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
     extensionId := g_selectedProfileRecord.Count ? g_selectedProfileRecord["extensionId"] : ""
     if (extensionId = "") {
         SetLaunchState("ERROR", "DASHBOARD_EXTENSION_ID_MISSING: Profile Doctor did not return the active PMIA extension ID.", "error")
@@ -1130,8 +1322,14 @@ RunManagedLaunch(reuseSession := false) {
             g_launchButton.Enabled := true
         return false
     }
-    dashboardUrl := DashboardUrl(extensionId, g_sessionId)
-    Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' dashboardUrl '"' . flags
+    dashboardPageUrl := DashboardUrl(extensionId, g_sessionId)
+    dashboardWindowsBefore := SnapshotBrowserWindows(g_browserConfig)
+    LaunchPmiaBrowserWindow(g_browserConfig, g_selectedProfileDirectory, dashboardPageUrl, &g_dashboardPid)
+    dashboardCreated := WaitForNewBrowserWindow(g_browserConfig, dashboardWindowsBefore, 1500)
+    if dashboardCreated {
+        g_hDashboard := dashboardCreated
+        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    }
     SetLaunchState("WAITING_DASHBOARD", "Sender and receiver ready; waiting for Runtime Pilot Dashboard...", "info")
     dashboardReady := WaitForDashboardWindow(g_sessionId, RUNTIME_LIFECYCLE_TIMEOUT_MS)
     if !dashboardReady.Count {
@@ -1145,6 +1343,7 @@ RunManagedLaunch(reuseSession := false) {
     g_hWin1 := readyPair["sender"]["hwnd"]
     g_hWin2 := readyPair["receiver"]["hwnd"]
     g_hDashboard := dashboardReady["hwnd"]
+    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
     EnsureAlwaysOnTop(g_hWin1)
     EnsureAlwaysOnTop(g_hWin2)
     EnsureAlwaysOnTop(g_hDashboard)
@@ -1158,7 +1357,6 @@ RunManagedLaunch(reuseSession := false) {
     Sleep 500
     if IsObject(g_launchGui)
         g_launchGui.Hide()
-    WinActivate "ahk_id " g_hWin2
     return true
 }
 ApplyConfiguredInitialLayout() {
@@ -1191,16 +1389,16 @@ ApplyConfiguredInitialLayout() {
 }
 
 RepairLaunch(*) {
-    global g_selectedProfileRecord, g_lastLaunchFailure, BrowserExe, g_selectedProfileDirectory
+    global g_selectedProfileRecord, g_lastLaunchFailure, BrowserExe, g_selectedProfileDirectory, g_browserConfig
     RefreshSelectedProfileDoctor()
     RenderDoctorStatus()
     issue := g_selectedProfileRecord.Count ? g_selectedProfileRecord["issueCode"] : "PROFILE_DOCTOR_FAILED"
     lastCode := g_lastLaunchFailure.Count ? g_lastLaunchFailure["code"] : ""
     if (issue != "OK" || InStr(lastCode, "EXTENSION_") || lastCode = "PROFILE_DOCTOR_FAILED") {
         extensionId := g_selectedProfileRecord.Count ? g_selectedProfileRecord["extensionId"] : ""
-        repairUrl := extensionId != "" ? "edge://extensions/?id=" extensionId : "edge://extensions/"
-        Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" "' repairUrl '"'
-        SetLaunchState("ERROR", "Opened Edge extension settings for the selected profile. Reload or correct PMIA, then run Preflight.", "warn")
+        repairUrl := BrowserExtensionsUrl(g_browserConfig, extensionId)
+        LaunchPmiaBrowserPage(g_browserConfig, g_selectedProfileDirectory, repairUrl)
+        SetLaunchState("ERROR", "Opened browser extension settings for the selected profile. Reload or correct PMIA, then run Preflight.", "warn")
         return false
     }
     SetLaunchState("LAUNCHING", "Retrying the current route with the same session context...", "info")
@@ -1264,8 +1462,9 @@ FastRepairActiveSession(*) {
 }
 
 FocusRuntimeDashboard(*) {
-    global g_hDashboard, g_sessionId, g_selectedProfileRecord
-    global BrowserExe, g_selectedProfileDirectory, g_mode, g_hidden
+    global g_hDashboard, g_sessionId, g_selectedProfileRecord, g_dashboardPid
+    global BrowserExe, g_selectedProfileDirectory, g_mode, g_hidden, g_browserConfig
+    global g_hWin1, g_hWin2, g_senderPid, g_receiverPid
 
     if GetKeyState("Alt", "P")
         KeyWait "Alt"
@@ -1280,14 +1479,15 @@ FocusRuntimeDashboard(*) {
             LogEvent("Alt+D failed: extension ID unavailable")
             return false
         }
-        dashboardUrl := DashboardUrl(extensionId, g_sessionId)
-        Run BrowserExe ' --new-window --profile-directory="' g_selectedProfileDirectory '" --app="' dashboardUrl '"'
+        dashboardPageUrl := DashboardUrl(extensionId, g_sessionId)
+        LaunchPmiaBrowserWindow(g_browserConfig, g_selectedProfileDirectory, dashboardPageUrl, &g_dashboardPid)
         dashboard := WaitForDashboardWindow(g_sessionId, RUNTIME_LIFECYCLE_TIMEOUT_MS)
         if !dashboard.Count {
             LogEvent("Alt+D failed: dashboard did not reach lifecycle title")
             return false
         }
         g_hDashboard := dashboard["hwnd"]
+        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
         EnsureAlwaysOnTop(g_hDashboard)
     }
     if g_hidden {
@@ -1306,37 +1506,6 @@ FocusRuntimeDashboard(*) {
     return true
 }
 
-CloseManagedPmiaWindows(sessionId := "") {
-    managed := []
-    previousDetectHidden := A_DetectHiddenWindows
-    DetectHiddenWindows true
-    try {
-        suffix := sessionId = "" ? "" : StrUpper(RegExReplace(sessionId, "[^A-Za-z0-9]+", "_"))
-        for hwnd in WinGetList("ahk_exe msedge.exe") {
-            title := ""
-            try title := WinGetTitle("ahk_id " hwnd)
-            catch
-                continue
-            isRoleWindow := RegExMatch(title, "^PMIA_(?:BOOT_|REGISTERED_)?(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_")
-            isDashboardWindow := RegExMatch(title, "^PMIA_DASHBOARD_")
-            if (!isRoleWindow && !isDashboardWindow)
-                continue
-            if (suffix != "" && !InStr(title, suffix))
-                continue
-            managed.Push(hwnd)
-            try WinClose "ahk_id " hwnd
-        }
-        deadline := A_TickCount + 3000
-        for hwnd in managed {
-            while IsAlive(hwnd) && A_TickCount < deadline
-                Sleep 50
-            if IsAlive(hwnd)
-                try WinKill "ahk_id " hwnd
-        }
-    } finally {
-        DetectHiddenWindows previousDetectHidden
-    }
-}
 AutoStartup() {
     return RunManagedLaunch(false)
 }
@@ -1771,13 +1940,19 @@ EndActiveSession() {
 }
 
 ObserveManagedShutdown(attempt) {
-    global g_hWin1, g_hWin2, g_interviewActive
+    global g_hWin1, g_hWin2, g_hDashboard, g_interviewActive, g_sessionId, g_browserConfig
     if !IsAlive(g_hWin1) && !IsAlive(g_hWin2) {
+        if !CloseExactManagedWindow(g_hDashboard, g_sessionId, g_browserConfig["executable"]) {
+            LogEvent("Session end blocked: dashboard ownership could not be verified")
+            return
+        }
+        try FileDelete ManagedRuntimeJournalPath()
         g_interviewActive := false
-        LogEvent("Managed session ended after extension safety confirmation")
+        LogEvent("Managed session ended after extension safety confirmation; dashboard and ownership journal closed")
+        ClearSessionMemory("graceful shutdown")
         ExitApp
     }
-    if attempt >= 20 {
+    if attempt >= 40 {
         LogEvent("Session end blocked or cancelled; managed windows remain open")
         return
     }
@@ -1880,6 +2055,7 @@ ClearSessionMemory(reason := "session ended") {
     global g_sessionCompany, g_sessionRole, g_sessionRound
     global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode
     global g_sessionId, g_interviewActive, g_hWin1, g_hWin2, g_hDashboard
+    global g_senderPid, g_receiverPid, g_dashboardPid
     global g_hidden, g_hiddenLayout, g_hiddenActive, g_hiddenGeometry, g_providerMissingSince
 
     g_sessionResume := ""
@@ -1896,6 +2072,9 @@ ClearSessionMemory(reason := "session ended") {
     g_hWin1 := 0
     g_hWin2 := 0
     g_hDashboard := 0
+    g_senderPid := 0
+    g_receiverPid := 0
+    g_dashboardPid := 0
     g_hidden := false
     g_hiddenLayout := 0
     g_hiddenActive := 0
@@ -1922,8 +2101,10 @@ MonitorManagedSession() {
         LogEvent("Both provider lifecycle titles temporarily missing; context cleanup grace started")
         return
     }
-    if (A_TickCount - g_providerMissingSince >= 10000)
+    if (A_TickCount - g_providerMissingSince >= 10000) {
+        try FileDelete ManagedRuntimeJournalPath()
         ClearSessionMemory("both managed provider windows absent for 10 seconds")
+    }
 }
 
 IsActiveSession() {
@@ -1931,7 +2112,7 @@ IsActiveSession() {
 }
 
 RefreshManagedWindowHandles() {
-    global g_sessionId, g_senderProvider, g_receiverProvider
+    global g_sessionId, g_senderProvider, g_receiverProvider, g_browserConfig
     global g_hWin1, g_hWin2, g_hDashboard
     if (g_sessionId != "") {
         g_hWin1 := 0
@@ -1952,8 +2133,10 @@ RefreshManagedWindowHandles() {
         } finally {
             DetectHiddenWindows previousDetectHidden
         }
-        if IsAlive(g_hWin1) && IsAlive(g_hWin2)
+        if IsAlive(g_hWin1) && IsAlive(g_hWin2) {
+            UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard)
             return true
+        }
     }
     if RecoverUnambiguousManagedSession()
         return true
@@ -1961,13 +2144,16 @@ RefreshManagedWindowHandles() {
 }
 
 RecoverUnambiguousManagedSession() {
-    global g_sessionId, g_senderProvider, g_receiverProvider
+    global g_sessionId, g_senderProvider, g_receiverProvider, g_browserConfig
     global g_hWin1, g_hWin2, g_hDashboard, g_interviewActive
     sessions := Map()
+    browserExeName := RegExReplace(g_browserConfig["executable"], "^.*\\", "")
+    if (browserExeName = "")
+        browserExeName := "msedge.exe"
     previousDetectHidden := A_DetectHiddenWindows
     DetectHiddenWindows true
     try {
-        for hwnd in WinGetList("ahk_exe msedge.exe") {
+        for hwnd in WinGetList("ahk_exe " browserExeName) {
             title := WinGetTitle("ahk_id " hwnd)
             if !RegExMatch(title, "^PMIA_(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_(PMIA_[A-Z0-9_]+)$", &match)
                 continue
@@ -2011,6 +2197,7 @@ RecoverUnambiguousManagedSession() {
     g_interviewActive := true
     if !IsAlive(g_hWin1) || !IsAlive(g_hWin2)
         return false
+    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard)
     LogEvent("Recovered active PMIA session from READY lifecycle pair: " g_sessionId)
     return true
 }

@@ -233,3 +233,16 @@ test('isolated smoke never routes provider writes through read retry recovery', 
   assert.match(q1, /button\.click\(\)/);
   assert.doesNotMatch(q1, /evaluateRead\([^)]*button\.click/);
 });
+
+
+test('isolated smoke admits each manual-copy final before injecting the next one', () => {
+  assert.match(runner, /async function manualCopyAndAwaitOwnership\(label, text\)/);
+  assert.match(runner, /manualCopyAdmissions:\s*\[\]/);
+  assert.match(runner, /waitFor\(`\$\{label\} admitted to durable ownership`/);
+  const q2At = runner.indexOf("await manualCopyAndAwaitOwnership('Q2', questions.q2)");
+  const q3At = runner.indexOf("await manualCopyAndAwaitOwnership('Q3', questions.q3)");
+  const proofAt = runner.indexOf("waitFor('three exact rendered proofs'");
+  assert.ok(q2At >= 0);
+  assert.ok(q3At > q2At);
+  assert.ok(proofAt > q3At);
+});
