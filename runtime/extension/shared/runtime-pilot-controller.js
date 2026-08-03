@@ -109,6 +109,7 @@ export function createRuntimePilotController({
   const incidentStateCache = new Map();
   const consumedFocusGestures = new Set();
   const mutationCoordinator = createSessionMutationCoordinator();
+  const acceptanceCoordinator = createSessionMutationCoordinator();
   const coalescedCommitLane = createCoalescedCommitLane({
     delayMs: 60,
     commit: (sessionId, reasons) => mutationCoordinator.run(sessionId, async () => {
@@ -453,6 +454,14 @@ export function createRuntimePilotController({
     return broadcast(sessionId, current);
   }
 
+  async function commitDurableAdmission(pilot) {
+    await store.save(pilot);
+  }
+
+  function scheduleAdmissionMaintenance(sessionId) {
+    return coalescedCommitLane.schedule(sessionId, 'final_admission');
+  }
+
   function broadcastHeartbeat(sessionId, role, roleState) {
     const patch = heartbeatPatch(roleState);
     for (const entry of sessionPorts(sessionId)) {
@@ -658,6 +667,25 @@ export function createRuntimePilotController({
       await commit(envelope.sessionId, pilot);
       return { paused: false, persisted: true, duplicate: false, response: null };
     }
+    let registry;
+    try {
+      registry = await registryProvider();
+    } catch {
+      return {
+        paused: true,
+        persisted: false,
+        duplicate: false,
+        response: { ok: false, persisted: false, error: 'registry_unavailable' }
+      };
+    }
+    if (!registry?.getSession?.(envelope.sessionId)?.sender) {
+      return {
+        paused: true,
+        persisted: false,
+        duplicate: false,
+        response: { ok: false, persisted: false, error: 'session_not_owned' }
+      };
+    }
     const snapshot = pilot.snapshot(envelope.sessionId);
     const quota = Number(storageArea?.QUOTA_BYTES || DEFAULT_SESSION_QUOTA_BYTES);
     const bytes = await store.bytesInUse().catch(() => 0);
@@ -675,7 +703,7 @@ export function createRuntimePilotController({
     const priorState = pilot.exportState();
     const persisted = pilot.persistFinal(envelope.sessionId, envelope);
     try {
-      await commit(envelope.sessionId, pilot);
+      await commitDurableAdmission(pilot);
     } catch (error) {
       store.resetCache();
       pilot = null;
@@ -723,7 +751,7 @@ export function createRuntimePilotController({
       memberCount: 1,
       sequence: Number(envelope.seq || 0)
     }, persistedCompletedAt);
-    scheduleBatchCheckpoint(envelope.sessionId);
+    scheduleAdmissionMaintenance(envelope.sessionId);
     const persistedSnapshot = pilot.snapshot(envelope.sessionId, persistedCompletedAt);
     const forwardingHold = persistedSnapshot?.batchState?.turnCoordination?.mode === 'paused_accumulating';
     if (persistedSnapshot?.mode === 'paused' && !forwardingHold) {
@@ -2181,7 +2209,9 @@ export function createRuntimePilotController({
   return {
     connectPort,
     handlePreview: input => mutationCoordinator.run(input?.preview?.sessionId, () => handlePreview(input)),
-    beforeForward: envelope => mutationCoordinator.run(envelope?.sessionId, () => beforeForward(envelope)),
+    beforeForward: envelope => envelope?.kind === 'boot'
+      ? mutationCoordinator.run(envelope?.sessionId, () => beforeForward(envelope))
+      : acceptanceCoordinator.run(envelope?.sessionId, () => beforeForward(envelope)),
     afterForward: (envelope, outcome) => mutationCoordinator.run(
       envelope?.sessionId,
       () => afterForward(envelope, outcome)
@@ -2210,7 +2240,10 @@ export function createRuntimePilotController({
       () => auditConsistency(sessionId, options)
     ),
     disconnectTab,
-    removeSession: sessionId => mutationCoordinator.run(sessionId, () => removeSession(sessionId)),
+    removeSession: sessionId => acceptanceCoordinator.run(
+      sessionId,
+      () => mutationCoordinator.run(sessionId, () => removeSession(sessionId))
+    ),
     snapshot,
     handleAlarm: alarm => {
       const identity = recoveryCoordinator.alarmIdentity(alarm);
@@ -2220,9 +2253,13 @@ export function createRuntimePilotController({
     handleCommand: raw => {
       const command = normalizeDashboardCommand(raw);
       if (!command) return Promise.resolve({ ok: false, error: 'invalid_dashboard_command' });
-      return mutationCoordinator.run(command.sessionId, () => handleCommand(raw));
+      const execute = () => mutationCoordinator.run(command.sessionId, () => handleCommand(raw));
+      if (['prepare_end_session', 'end_session'].includes(command.command)) {
+        return acceptanceCoordinator.run(command.sessionId, execute);
+      }
+      return execute();
     },
     commit: (sessionId, pilot) => mutationCoordinator.run(sessionId, () => commit(sessionId, pilot)),
-    pendingMutation: sessionId => mutationCoordinator.pending(sessionId)
+    pendingMutation: sessionId => mutationCoordinator.pending(sessionId) + acceptanceCoordinator.pending(sessionId)
   };
 }

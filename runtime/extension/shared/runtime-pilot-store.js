@@ -28,6 +28,7 @@ export function createRuntimePilotStore({
   const previousKey = `${key}_previous_applied`;
   const quarantineKey = `${key}_quarantine`;
   let statePromise = null;
+  let writePromise = Promise.resolve();
   let commitJournal = createStateCommitJournal();
   let lastAudit = { recovered: false, repaired: 0, blocked: 0, findings: [], quarantine: quarantineAudit(null) };
 
@@ -138,6 +139,12 @@ export function createRuntimePilotStore({
     return new RuntimePilotState(invariant.state);
   }
 
+  function enqueueWrite(task) {
+    const run = writePromise.then(task, task);
+    writePromise = run.catch(() => {});
+    return run;
+  }
+
   return {
     async load() {
       if (!statePromise) {
@@ -153,16 +160,18 @@ export function createRuntimePilotStore({
       if (!(state instanceof RuntimePilotState)) {
         throw new TypeError('Invalid PMIA runtime pilot state');
       }
-      const nextEnvelope = sealRuntimeEnvelope(encodeRuntimeEnvelope(state.exportState(), { writerVersion }));
-      const current = await storageArea.get(key);
-      const prepared = commitJournal.prepare({ stateHash: stateHash(nextEnvelope) });
-      await storageArea.set({
-        [previousKey]: current[key] ?? sealRuntimeEnvelope(encodeRuntimeEnvelope([], { writerVersion })),
-        [journalKey]: prepared
+      return enqueueWrite(async () => {
+        const nextEnvelope = sealRuntimeEnvelope(encodeRuntimeEnvelope(state.exportState(), { writerVersion }));
+        const current = await storageArea.get(key);
+        const prepared = commitJournal.prepare({ stateHash: stateHash(nextEnvelope) });
+        await storageArea.set({
+          [previousKey]: current[key] ?? sealRuntimeEnvelope(encodeRuntimeEnvelope([], { writerVersion })),
+          [journalKey]: prepared
+        });
+        await storageArea.set({ [key]: nextEnvelope });
+        const applied = commitJournal.apply(prepared.generation);
+        await storageArea.set({ [journalKey]: applied });
       });
-      await storageArea.set({ [key]: nextEnvelope });
-      const applied = commitJournal.apply(prepared.generation);
-      await storageArea.set({ [journalKey]: applied });
     },
 
     estimate(state) {
@@ -184,10 +193,12 @@ export function createRuntimePilotStore({
     },
 
     async clear() {
-      statePromise = Promise.resolve(new RuntimePilotState());
-      commitJournal = createStateCommitJournal();
-      lastAudit = { recovered: false, repaired: 0, blocked: 0, findings: [], quarantine: quarantineAudit(null) };
-      await storageArea.remove([key, journalKey, previousKey, quarantineKey]);
+      return enqueueWrite(async () => {
+        statePromise = Promise.resolve(new RuntimePilotState());
+        commitJournal = createStateCommitJournal();
+        lastAudit = { recovered: false, repaired: 0, blocked: 0, findings: [], quarantine: quarantineAudit(null) };
+        await storageArea.remove([key, journalKey, previousKey, quarantineKey]);
+      });
     },
 
     resetCache() {

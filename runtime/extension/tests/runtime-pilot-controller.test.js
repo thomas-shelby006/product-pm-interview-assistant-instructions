@@ -7,7 +7,10 @@ import { senderOutboxStorageKey } from '../shared/session-end-guard.js';
 function memoryArea() {
   const data = {};
   return {
-    async get(key) { return key ? { [key]: data[key] } : { ...data }; },
+    async get(key) {
+      if (Array.isArray(key)) return Object.fromEntries(key.map(item => [item, data[item]]));
+      return key ? { [key]: data[key] } : { ...data };
+    },
     async set(values) { Object.assign(data, values); },
     async remove(key) { for (const item of Array.isArray(key) ? key : [key]) delete data[item]; }
   };
@@ -26,7 +29,7 @@ function envelope(id, seq) {
   };
 }
 
-function setup({ requestRole = null } = {}) {
+function setup({ requestRole = null, storageArea: providedStorageArea = null } = {}) {
   const registry = new SessionRegistry();
   registry.register({ sessionId: 's1', role: 'sender', provider: 'chatgpt', tabId: 1 }, { now: 1 });
   registry.register({ sessionId: 's1', role: 'receiver', provider: 'claude', tabId: 2 }, { now: 1 });
@@ -69,7 +72,7 @@ function setup({ requestRole = null } = {}) {
     windows: { async update() {}, async create() { return { id: 99 }; } },
     alarms: { async create() {}, async clear() { return true; } }
   };
-  const storageArea = memoryArea();
+  const storageArea = providedStorageArea || memoryArea();
   const controller = createRuntimePilotController({
     chromeApi,
     storageArea,
@@ -335,19 +338,27 @@ test('controller serializes external mutations by session without a global state
 });
 
 
-test('failed durable persistence resets the mutated Pilot cache before sender retry', async () => {
-  const { readFile } = await import('node:fs/promises');
-  const { dirname, resolve } = await import('node:path');
-  const { fileURLToPath } = await import('node:url');
-  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-  const source = await readFile(resolve(extensionRoot, 'shared/runtime-pilot-controller.js'), 'utf8');
-  const beforeForward = source.slice(
-    source.indexOf('async function beforeForward'),
-    source.indexOf('function applyDeliveryOutcome')
-  );
-  assert.match(beforeForward, /try \{[\s\S]*await commit\(envelope\.sessionId, pilot\)/);
-  assert.match(beforeForward, /catch \(error\) \{[\s\S]*store\.resetCache\(\)/);
-  assert.match(beforeForward, /persisted:\s*false[\s\S]*storage_pressure/);
+test('failed durable persistence discards the mutated cache before sender retry', async () => {
+  const storageArea = memoryArea();
+  const originalSet = storageArea.set.bind(storageArea);
+  let failNextStateWrite = false;
+  storageArea.set = async values => {
+    if (failNextStateWrite && Object.hasOwn(values, 'pmia_runtime_pilot_v1')) {
+      failNextStateWrite = false;
+      throw new Error('synthetic write failure');
+    }
+    return originalSet(values);
+  };
+  const { controller, registry } = setup({ storageArea });
+  await ready(controller, registry);
+  failNextStateWrite = true;
+  const failed = await controller.beforeForward(envelope('retry-q1', 1));
+  assert.equal(failed.persisted, false);
+  assert.equal(failed.response.error, 'persist_failed');
+  assert.equal((await controller.snapshot('s1')).ledger.some(item => item.id === 'retry-q1'), false);
+  const retried = await controller.beforeForward(envelope('retry-q1', 1));
+  assert.equal(retried.persisted, true);
+  assert.deepEqual((await controller.snapshot('s1')).ledger.map(item => item.id), ['retry-q1']);
 });
 
 
@@ -555,4 +566,94 @@ test('controller records final persistence and first receiver staging latency', 
   assert.equal(samples.filter(item => item.stage === 'persist_stage').length, 1);
   assert.equal(samples.every(item => item.correlationId === 'metric-q1'), true);
   assert.doesNotMatch(JSON.stringify(samples), /Question 1/);
+});
+
+
+test('durable final admission bypasses a blocked operational session mutation', async () => {
+  let releaseProbe;
+  let markProbeStarted;
+  const probeStarted = new Promise(resolve => { markProbeStarted = resolve; });
+  const blockedProbe = new Promise(resolve => { releaseProbe = resolve; });
+  const requestRole = async ({ command, role, fallback }) => {
+    if (command !== 'self_test_probe') return fallback();
+    markProbeStarted();
+    return blockedProbe.then(() => ({
+      ok: true, probe: 'pmia_self_test', role,
+      composerReady: true, visibilityState: 'hidden'
+    }));
+  };
+  const { controller, registry } = setup({ requestRole });
+  await ready(controller, registry);
+  const operation = controller.handleCommand({
+    sessionId: 's1', requestId: 'blocked-self-test', command: 'run_self_test', payload: {}
+  });
+  await probeStarted;
+  const admission = controller.beforeForward(envelope('urgent-q1', 1));
+  const result = await Promise.race([
+    admission,
+    new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), 250))
+  ]);
+  assert.equal(result.timedOut, undefined);
+  assert.equal(result.persisted, true);
+  assert.equal((await controller.snapshot('s1')).ledger.some(item => item.id === 'urgent-q1'), true);
+  releaseProbe();
+  await operation;
+  const final = await controller.snapshot('s1');
+  assert.ok(final.selfTest.completedAt > 0);
+  assert.equal(final.selfTest.roles.sender.ok, true);
+  assert.equal(final.selfTest.roles.receiver.ok, true);
+  assert.equal(final.ledger.some(item => item.id === 'urgent-q1'), true);
+});
+
+
+test('end preparation waits for an in-flight durable admission', async () => {
+  let releaseBytes;
+  let markBytesStarted;
+  let blockNextBytes = false;
+  const bytesStarted = new Promise(resolve => { markBytesStarted = resolve; });
+  const bytesGate = new Promise(resolve => { releaseBytes = resolve; });
+  const storageArea = memoryArea();
+  storageArea.getBytesInUse = async () => {
+    if (blockNextBytes) {
+      blockNextBytes = false;
+      markBytesStarted();
+      await bytesGate;
+    }
+    return 0;
+  };
+  const { controller, registry } = setup({ storageArea });
+  await ready(controller, registry);
+  blockNextBytes = true;
+  const admission = controller.beforeForward(envelope('ending-q1', 1));
+  await bytesStarted;
+  const preparation = controller.handleCommand({
+    sessionId: 's1', requestId: 'end-race-prepare', command: 'prepare_end_session', payload: {}
+  });
+  const early = await Promise.race([
+    preparation.then(() => 'resolved'),
+    new Promise(resolve => setTimeout(() => resolve('waiting'), 25))
+  ]);
+  assert.equal(early, 'waiting');
+  releaseBytes();
+  assert.equal((await admission).persisted, true);
+  const prepared = await preparation;
+  assert.equal(prepared.canEnd, false);
+  assert.equal(prepared.counts.actionable, 1);
+});
+
+test('a final queued after exact session end is rejected without recreating state', async () => {
+  const { controller, registry } = setup();
+  await ready(controller, registry);
+  const prepared = await controller.handleCommand({
+    sessionId: 's1', requestId: 'clean-end-prepare', command: 'prepare_end_session', payload: {}
+  });
+  const ended = await controller.handleCommand({
+    sessionId: 's1', requestId: 'clean-end', command: 'end_session',
+    payload: { confirmToken: prepared.token, mode: 'clean' }
+  });
+  assert.equal(ended.ok, true);
+  const late = await controller.beforeForward(envelope('late-after-end', 1));
+  assert.equal(late.persisted, false);
+  assert.equal(late.response.error, 'session_not_owned');
+  assert.equal(await controller.snapshot('s1'), null);
 });
