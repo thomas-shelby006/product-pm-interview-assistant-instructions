@@ -21,14 +21,14 @@ const activeDocuments = [
   'docs/CURRENT_STATUS_DASHBOARD.md'
 ];
 
-test('active release surfaces identify PMIA 0.10.2', async () => {
+test('active release surfaces identify PMIA 0.10.3', async () => {
   const manifest = JSON.parse(await readFile(resolve(extensionRoot, 'manifest.json'), 'utf8'));
-  assert.equal(manifest.version, '0.10.2');
+  assert.equal(manifest.version, '0.10.3');
   for (const relative of activeDocuments) {
-    assert.match(await read(relative), /0\.10\.2/, `${relative} must identify 0.10.2`);
+    assert.match(await read(relative), /0\.10\.3/, `${relative} must identify 0.10.3`);
   }
-  assert.equal(buildReleaseIdentity().version, '0.10.2');
-  assert.equal(buildHandoffManifest().version, '0.10.2');
+  assert.equal(buildReleaseIdentity().version, '0.10.3');
+  assert.equal(buildHandoffManifest().version, '0.10.3');
 });
 
 test('deployment guide uses Reload before Load unpacked', async () => {

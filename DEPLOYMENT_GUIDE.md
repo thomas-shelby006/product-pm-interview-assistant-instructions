@@ -41,13 +41,39 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 
 The command must return JSON with `"ok": true`.
 
+## Recommended readiness and Edge workflow
+
+Run the generated readiness report first:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  "C:\Users\Sundar\Documents\PMIA Deployment\current\runtime\scripts\Get-PMIADeploymentReadiness.ps1" `
+  -DeploymentRoot "C:\Users\Sundar\Documents\PMIA Deployment" `
+  -SourceRoot "C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions" `
+  -ProfileDirectory "Default"
+```
+
+Required package fields are `current.ok=true`, `archive.ok=true`, and all prerequisites available. A path-matched card that still reports the older cached version should produce only `EXTENSION_VERSION_MISMATCH` and `readyForManualEdgeReload=true`. Any checksum, source, path, prerequisite, or archive issue is a hard stop.
+
+Then use the reload-first helper:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  "C:\Users\Sundar\Documents\PMIA Deployment\current\runtime\scripts\Open-PMIAEdgeDeployment.ps1" `
+  -DeploymentRoot "C:\Users\Sundar\Documents\PMIA Deployment" `
+  -ProfileDirectory "Default" `
+  -OpenEdge
+```
+
+The helper verifies both packages and prerequisites, copies the exact current extension path, opens `edge://extensions`, and returns either `action=reload` or `action=load_unpacked`. It never edits Edge `Preferences`, `Secure Preferences`, registry policy, cookies, or session data.
+
 ## Activate the current extension in Microsoft Edge
 
 1. In the Edge profile used for interviews, open `edge://extensions`.
 2. Turn on **Developer mode**.
 3. Find the existing **PM Interview Dual-Provider Runtime** entry.
 4. Select **Reload** first. The retained compatibility path resolves to the stable `PMIA Deployment\current` package.
-5. Confirm the card says **PM Interview Dual-Provider Runtime** and version **0.10.2**.
+5. Confirm the card says **PM Interview Dual-Provider Runtime** and version **0.10.3**.
 6. If the card is missing, Reload fails, or Edge remains on an older version, select **Load unpacked** and choose this exact directory:
 
 ```text
@@ -56,7 +82,7 @@ C:\Users\Sundar\Documents\PMIA Deployment\current\runtime\extension
 
 7. If Edge shows two PMIA cards, keep both temporarily until the current card passes Preflight, then remove only the old card.
 
-Before Reload, Profile Doctor may report `pathMatches=True` with `EXTENSION_VERSION_MISMATCH`; that means the path is correct but Edge still caches the old manifest. After Reload it must report version 0.10.2 and `issueCode=OK`.
+Before Reload, Profile Doctor may report `pathMatches=True` with `EXTENSION_VERSION_MISMATCH`; that means the path is correct but Edge still caches the old manifest. After Reload it must report version 0.10.3 and `issueCode=OK`.
 
 Do not manually edit `Preferences` or `Secure Preferences`. Do not use command-line `--load-extension` with the normal profile.
 
@@ -75,7 +101,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 
 The selected row must report:
 
-- `version` = `0.10.2`
+- `version` = `0.10.3`
 - `pathMatches` = `True`
 - `issueCode` = `OK`
 
@@ -90,7 +116,7 @@ In Session Studio:
 1. Select the same Edge profile.
 2. Select the required sender and receiver providers.
 3. Select **Preflight**.
-4. Confirm the health line says PMIA 0.10.2 is registered from the expected path.
+4. Confirm the health line says PMIA 0.10.3 is registered from the expected path.
 5. Launch a disposable session without sensitive Resume/JD content.
 6. Confirm sender, receiver, and Runtime Pilot Dashboard all reach READY.
 7. Run **Check Live** or press `Alt+H`.
@@ -173,3 +199,13 @@ Verify rollback archive:
 ```
 
 Any checksum mismatch is a hard stop. Rebuild the package from the verified source instead of editing packaged files in place.
+
+Regenerate the authoritative inventory after final package verification, browser diagnosis, and cleanup:
+
+```powershell
+& "C:\Users\Sundar\Documents\PMIA Deployment\current\runtime\scripts\New-PMIADeploymentInventory.ps1" `
+  -DeploymentRoot "C:\Users\Sundar\Documents\PMIA Deployment" `
+  -SourceRoot "C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions" `
+  -ProfileDirectory "Default" `
+  -EvidenceDirectory "<final evidence directory>"
+```

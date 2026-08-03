@@ -1,14 +1,14 @@
 # Current Status Dashboard
 
-Last updated: 2026-08-04 (PMIA 0.10.2 production hardening and deployment campaign active)
+Last updated: 2026-08-04 (PMIA 0.10.3 integrated release candidate)
 
 ## Active candidate system
 
 | Area | Status | Notes |
 |---|---|---|
-| Runtime release | PMIA 0.10.2 worktree candidate | Verified lossless delivery, explicit operator choices, canonical command routing, Pilot/Production evidence closure, and the approved live-interview feature and bug-hardening program. |
-| Worktree | Isolated | `C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\.worktrees\pmia-0102-hardening`, branch `hardening/pmia-0.10.2`. |
-| Canonical checkout | Awaiting verified promotion | Clean local `main` remains at the prior 0.10.1 checkpoint until the exact 0.10.2 candidate passes full gate and browser evidence. |
+| Runtime release | PMIA 0.10.3 integrated candidate | Verified lossless delivery, explicit operator choices, canonical command routing, Pilot/Production evidence closure, and the approved live-interview feature and bug-hardening program. |
+| Source topology | Canonical main | Four isolated 0.10.3 workstreams were integrated into local `main`; deployment promotion occurs only after the exact final gate and browser evidence. |
+| Canonical checkout | Integrated, verification pending | Local `main` contains the bugfix, LLD, HLD and deployment-polish commits. No push, tag, publication or cloud deployment is authorized. |
 | Browser | Microsoft Edge Stable | Selected profile verified by Profile Doctor. |
 | Launcher | Active candidate | Session Studio launches sender, receiver and session-scoped dashboard; five initial layouts, Check Live, Alt+D recovery, Fast Repair, memory cleanup and PM-only hotkeys. |
 | Transport | Active candidate | Disposable preview plus sender outbox, persisted delivery ledger, direct role ports, non-preemptive active/next batching, full catch-up and rendered batch proof through the Manifest V3 service worker. |
@@ -75,4 +75,4 @@ Cycles 46–70 are verified on committed HEAD `6682f03`. The complete gate passe
 
 ## Current authorized phase
 
-PMIA 0.10.2 is undergoing 50 evidence-driven bug-fix cycles and 50 deployment-polish cycles. Local `main` promotion, current-package replacement, and cleanup occur only after the exact final commit passes the complete automated gate and isolated-browser evidence. No push, tag, publication, or cloud deployment is authorized.
+PMIA 0.10.3 has completed 50 bug-fix cycles, 50 deployment-polish cycles, 50 high-level-design cycles and 50 low-level-design cycles in four isolated worktrees. The exact integrated `main` commit must pass the complete automated gate and isolated-browser evidence before atomic replacement of `PMIA Deployment\current`, Edge Reload, and final worktree cleanup. No push, tag, publication, policy installation, or cloud deployment is authorized.
