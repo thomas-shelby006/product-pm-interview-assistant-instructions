@@ -205,11 +205,11 @@
 
 **Interfaces:** Paused composer shows a clear non-submitted banner, protected-question count, latest-focus statement, and whether resume sends or retains the draft.
 
-- [ ] Write failing tests for banner replacement, no duplicate banner, manual conflict, one-question and partitioned drafts.
-- [ ] Implement banner as prompt presentation, never as an extra ledger member.
-- [ ] Add a metadata-only resume preview listing counts, IDs and expected partitions.
-- [ ] Verify resume replaces the UI-only banner with the final combined-turn instruction before proof.
-- [ ] Update checkpoint and commit `feat: preview paused resume behavior`.
+- [x] Write failing tests for banner replacement, no duplicate banner, manual conflict, one-question and partitioned drafts.
+- [x] Implement banner as prompt presentation, never as an extra ledger member.
+- [x] Add a metadata-only resume preview listing counts, IDs and expected partitions.
+- [x] Verify resume replaces the UI-only banner with the final combined-turn instruction before proof.
+- [x] Update checkpoint and commit `feat: preview paused resume behavior` (`80122f0`, plus dashboard preview follow-up `ded5fe4`).
 
 ### Task 14 Ã¢â‚¬â€ Cycles 316Ã¢â‚¬â€œ320: Interruption explanation and recovery controls
 
@@ -217,8 +217,8 @@
 
 **Interfaces:** Expose reason codes, relation evidence, old/new batch IDs, preserved count, stop latency and recovery action; never expose question or answer text.
 
-- [ ] Write failing tests for successful carryover, blocked ambiguity, stop failure, late old-answer event and restart recovery.
-- [ ] Implement explanation model and safe Retry Carryover / Keep Accumulating actions.
+- [x] Write failing tests for successful carryover, blocked ambiguity, stop failure, late old-answer event and restart recovery.
+- [x] Implement explanation model and safe Retry Carryover / Keep Accumulating actions.
 - [ ] Record a bookmarkable evidence event for review without transcript content.
 - [ ] Verify support-bundle redaction and command replay idempotency.
 - [ ] Update checkpoint and commit `feat: explain turn interruptions and recovery`.
@@ -234,6 +234,39 @@
 - [ ] Run focused suites, full Node suite, extension validator, three AutoHotkey checks, fresh isolated Edge smoke and exact cleanup.
 - [ ] Update release/handoff evidence from exact HEAD; remove only assistant-created task-temp files.
 - [ ] Mark every task checkpoint complete and commit `feat: complete adaptive turn coordination`.
+
+
+---
+
+## Current status at requested pause ? 2026-08-03
+
+**Feature implementation HEAD:** `ded5fe4` on `improvement/pmia-0.7.0`. This status update intentionally pauses implementation; it does not claim Tasks 14?15 are complete.
+
+### Original requirement reconciliation
+
+**Completed**
+- ChatGPT now admits only authoritative finalized DOM turns; weak stable-tail submission is disabled while Claude protocol finals remain unchanged.
+- Pause blocks Window 2 provider submission but keeps sender observation, durable admission, exact sequence ownership, and Window 2 draft mirroring active.
+- One or many paused questions remain one ordered BatchPlanner-owned draft with exact member IDs, partition safety, a clear non-submitted banner, and explicit latest-question priority.
+- Default Resume submits the accumulated batch exactly once; Resume Without Send retains the protected draft; Send Held Now is available without silently losing pause state.
+- Same-turn authoritative continuations can automatically stop the active answer, cancel the superseded answer once, and resubmit active plus continuation members. Independent or ambiguous later questions accumulate without automatic Stop.
+- Stop failure, timeout, reload, hidden-page recovery, duplicate commands, late old-answer terminals, draft conflicts, storage pressure, session end, provider-route change, and release handoff retain safe ownership.
+- The Turn Coordination cockpit shows live, paused, carryover, blocked, and recovered states; policy presets are `adaptive`, `conservative`, and `manual` with preview confirmation.
+- Paused banner replacement and metadata-only resume preview are complete and committed. Focused Task 13 gate passed 7/7; extension validation passed with 508 JavaScript files, 18 required runtime surfaces, and 285 reachable production modules.
+
+**Still pending from the original requirement**
+1. Finish metadata-only latency instrumentation for `observe?persist`, `persist?stage`, `resume?submit`, and `stop?resubmit`; add bounded/stale-sample scorecard thresholds. This is the remaining Task 5 work and closes with Task 15.
+2. Finish Task 14 evidence export: add a bookmarkable interruption evidence locator and coordination summary to the safe support bundle, then prove coordination-specific redaction and duplicate Retry/Keep command replay. Recovery behavior itself is already implemented.
+3. Complete Task 15 release evidence: five isolated scenarios (authoritative ChatGPT final; pause two finals and resume; same-turn carryover; independent-question accumulation; restart recovery).
+4. Run the exact final gates from committed HEAD: focused suites, full Node suite, extension validator, all three AutoHotkey checks, fresh isolated Edge smoke, and exact process/profile cleanup.
+5. Update release/handoff evidence, remove only assistant-created task-temp files, mark all remaining checkpoints complete, and create the final coordination completion commit.
+
+### Paused worktree state
+
+- No tracked production change is intentionally left pending at this pause point.
+- Untracked `runtime/extension/tests/adaptive-turn-evidence.test.js` is a started RED test for Task 14 evidence export; production support-bundle implementation has not been added.
+- Untracked `.pmia-task-temp/` contains assistant-created task files and must be removed only during final verified cleanup.
+- Normal Edge, the original checkout, and unrelated files remain out of scope and must not be changed.
 
 ---
 
