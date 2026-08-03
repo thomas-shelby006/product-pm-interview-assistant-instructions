@@ -250,7 +250,7 @@
 
 **Integration branch:** `improvement/pmia-0.7.0`
 **Lane-merge checkpoint:** `4bf4851` (Admission, Release Evidence, and Main Integration merged)
-**Current integration checkpoint:** `2a2a0fc`
+**Current implementation checkpoint:** `73554cb`
 **Target after exact verification:** `main`
 **Detailed takeover file:** `docs/superpowers/handoffs/2026-08-03-pmia-adaptive-turn-takeover.md`
 
@@ -327,10 +327,14 @@ The focused owning matrix passed **91/91** tests across controller, store recove
 - The owning cause was a stale receiver telemetry snapshot captured before Q2 staging and processed after the newer `next_batch_draft` event. Batch checkpoints had no causal capture-time guard, so the older empty `next` state overwrote the newer semantic event even though final ownership was safe.
 - Commit `2a2a0fc` adds durable batch-state freshness, stamps receiver checkpoints from their telemetry `heartbeatAt`, and rejects checkpoints that are not newer than the latest semantic batch event. A genuinely newer checkpoint can still clear `next`, preserving restart recovery and explicit state transitions.
 - The regression was observed red at both state and controller boundaries, then passed **47/47** owning tests and **212/212** widened Adaptive Turn, receiver batching, telemetry, sequencing, durability, and validation tests.
+- Exact documentation checkpoint `41fbbc9` passed the complete gate: **1,328/1,328 tests**, **513 JavaScript files**, **18 runtime surfaces**, **287 reachable modules**, and all three AutoHotkey validations.
+- Eighth isolated browser evidence again reached Q2 staged ownership, durable Q3, empty outbox, and stable Pause. The freshness guard worked: no newer draft was rolled back. Instead, `batchState.updatedAt` never advanced beyond the pre-Pause checkpoint, proving `next_batch_draft` itself had not reached Pilot before the smoke deadline.
+- Root cause: `PMIA_BATCH_EVENT` and `PMIA_RUNTIME_TELEMETRY` still entered the generic per-session background operation queue before the controller's existing per-session mutation lane. A slow operational command could therefore delay receiver staging projection even after durable receiver ownership succeeded.
+- Commit `73554cb` moves only those two messages ahead of generic operation serialization. Existing authorization, receiver-only enforcement, controller ordering, checkpoint freshness, and persistence policy remain unchanged. The regression failed before the fix and the widened background/controller/batching/telemetry/sequence/validation matrix passed **144/144**.
 
 ### Remaining in scope
 
-1. Run the complete repository gate on exact committed integration HEAD `2a2a0fc`.
+1. Run the complete repository gate on the exact committed checkpoint containing `73554cb`.
 2. Run fresh isolated Edge evidence and require all five Adaptive Turn scenarios, three exact rendered proofs, empty outbox, clear sequence state, 12/12 transport drill, all UI layouts, and exact cleanup.
 3. Generate release, handoff, and worktree-integration manifests; verify original checkout, normal Edge, tags, push state, and preserved historical worktrees.
 4. Remove only assistant-created task-temp files after their evidence is retained, then regenerate the readiness manifest.

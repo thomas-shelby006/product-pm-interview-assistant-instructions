@@ -5,7 +5,7 @@ Admission worktree: `C:\Users\Sundar\Documents\product-pm-interview-assistant-im
 Admission branch: `fix/pmia-admission-lane`
 Admission commit: `2cbec6ffe327b4ebd98bacfdb38194d86e533c2e`
 Integration lane-merge checkpoint: `improvement/pmia-0.7.0` at `4bf4851`
-Current integration checkpoint: `2a2a0fc`
+Current implementation checkpoint: `73554cb`
 Target after exact verification: `main`
 
 ## Scope
@@ -112,9 +112,15 @@ The receiver had emitted the newer `next_batch_draft`, but an older telemetry sn
 
 Commit `2a2a0fc` records the latest semantic batch-event time in durable Pilot state, stamps receiver checkpoints with their telemetry capture time, and rejects checkpoints that are not newer. A later checkpoint can still explicitly clear the staged batch. The new state/controller regression failed before the fix, then passed **47/47**; the widened owning matrix passed **212/212**.
 
+## Eighth browser attempt and batch-event fast path
+
+Exact `41fbbc9` passed the complete gate with **1,328/1,328** tests and all validators. The next isolated browser run again staged Q2 and preserved Q3/outbox/Pause, but Pilot's batch freshness remained older than Q2. This proves the stale checkpoint no longer erased the draft; the newer `next_batch_draft` message itself was delayed before reaching Pilot.
+
+`PMIA_BATCH_EVENT` and `PMIA_RUNTIME_TELEMETRY` were still wrapped by the generic per-session background operation coordinator before entering the controller's own ordered mutation lane. Commit `73554cb` removes only that redundant outer queue. Authorization, role ownership, receiver-only event enforcement, and controller serialization remain intact. The owning regression failed first; the adjacent matrix passed **144/144**.
+
 ## Remaining sequence
 
-1. Run `runtime\Validate_Extension_Runtime.ps1` on exact committed integration HEAD `2a2a0fc` and retain the complete gate log outside the repository.
+1. Run `runtime\Validate_Extension_Runtime.ps1` on the exact committed checkpoint containing `73554cb` and retain the complete gate log outside the repository.
 2. Fix only reproduced owning-boundary failures, commit, and rerun if the tree changes.
 3. Run fresh isolated Edge evidence from exact HEAD. Require all five Adaptive Turn scenarios, three rendered finals, empty outbox, clear sequence state, 12/12 transport drill, responsive/print UI evidence, no normal-profile access, and exact cleanup.
 4. Generate deterministic release, handoff, and worktree-integration manifests.
