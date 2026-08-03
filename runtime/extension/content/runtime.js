@@ -99,6 +99,7 @@ export async function submitComposerWhenReady({
   getVisibilityState = () => String(globalThis.document?.visibilityState || 'unknown'),
   nowFn = Date.now,
   retryAfterMs = 12000,
+  retryAfterEmptyComposerMs = 12000,
   maxConfirmWaitMs = 45000
 }) {
   const normalized = String(text ?? '').trim();
@@ -142,9 +143,20 @@ export async function submitComposerWhenReady({
         return true;
       }
       const elapsedMs = Math.max(0, Number(nowFn()) - confirmationStartedAt);
+      const composerMatches = adapter.composerContains?.(normalized) ?? false;
+      const composerText = typeof adapter.getComposerText === 'function'
+        ? String(adapter.getComposerText() ?? '').trim()
+        : null;
+      const composerEmpty = composerText === null
+        ? (adapter.isComposerEmpty?.() ?? false)
+        : composerText.length === 0;
+      const emptyRetryDelay = Math.max(0, Number(retryAfterEmptyComposerMs) || retryDelay);
+      const retryThresholdReached = composerEmpty
+        ? elapsedMs >= emptyRetryDelay
+        : (check >= 48 || elapsedMs >= retryDelay);
       retryAllowed = attempt + 1 < attempts
-        && (check >= 48 || elapsedMs >= retryDelay)
-        && (adapter.composerContains?.(normalized) ?? false)
+        && retryThresholdReached
+        && (composerMatches || composerEmpty)
         && !(adapter.isGenerating?.() ?? false);
       if (retryAllowed) break;
       if (elapsedMs >= confirmLimit) return false;
