@@ -241,8 +241,9 @@ async function manualCopyAndAwaitOwnership(label, text) {
   return admitted.value;
 }
 
-async function runAdaptiveModuleScenarios() {
-  const raw = await worker.evaluate(`(async()=>{
+async function runAdaptiveModuleScenarios(client) {
+  if (!client) throw new Error('Adaptive scenario extension-page client missing');
+  const raw = await client.evaluate(`(async()=>{
     const [{createReceiverBatchRuntime},{BatchPlanner},{RuntimePilotState}]=await Promise.all([
       import(chrome.runtime.getURL('content/receiver-batch-runtime.js')),
       import(chrome.runtime.getURL('shared/batch-planner.js')),
@@ -305,13 +306,6 @@ try {
   if (!candidate) throw new Error('Exact PMIA extension identity not found');
   const workerTarget = (await targets()).find(value => value.id === candidate.id);
   worker = await new CDP(workerTarget.webSocketDebuggerUrl).open();
-  const moduleScenarios = await runAdaptiveModuleScenarios();
-  evidence.adaptiveTurnScenarios.carryover = moduleScenarios.carryover;
-  evidence.adaptiveTurnScenarios.independentAccumulation = moduleScenarios.independentAccumulation;
-  evidence.adaptiveTurnScenarios.restartRecovery = moduleScenarios.restartRecovery;
-  if (!moduleScenarios.carryover?.ok || !moduleScenarios.independentAccumulation?.ok || !moduleScenarios.restartRecovery?.ok) {
-    throw new Error(`Adaptive module scenarios failed: ${JSON.stringify(moduleScenarios)}`);
-  }
 
   const senderUrl = `https://chatgpt.com/?pmia_session=${encodeURIComponent(session)}&pmia_role=sender&pmia_provider=chatgpt`;
   const receiverUrl = `https://chatgpt.com/?pmia_session=${encodeURIComponent(session)}&pmia_role=receiver&pmia_provider=chatgpt`;
@@ -376,6 +370,14 @@ try {
   sender = await targetClient(senderTarget);
   receiver = await targetClient(receiverTarget);
   dashboard = await targetClient(dashboardTarget);
+
+  const moduleScenarios = await runAdaptiveModuleScenarios(dashboard);
+  evidence.adaptiveTurnScenarios.carryover = moduleScenarios.carryover;
+  evidence.adaptiveTurnScenarios.independentAccumulation = moduleScenarios.independentAccumulation;
+  evidence.adaptiveTurnScenarios.restartRecovery = moduleScenarios.restartRecovery;
+  if (!moduleScenarios.carryover?.ok || !moduleScenarios.independentAccumulation?.ok || !moduleScenarios.restartRecovery?.ok) {
+    throw new Error(`Adaptive module scenarios failed: ${JSON.stringify(moduleScenarios)}`);
+  }
 
   await dashboard.evaluate(`document.querySelector('[data-command="run_self_test"]')?.click(); true`, { userGesture: true });
   const selfTest = await waitFor('active no-content self-test', async () => {

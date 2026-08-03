@@ -270,3 +270,15 @@ test('isolated smoke final gate and cleanup retain Adaptive Turn evidence', () =
   assert.match(runner, /evidence\.ok = evidence\.deliveryProofOk && evidence\.adaptiveTurnScenariosOk/);
   assert.match(powershell, /-and \$evidence\.adaptiveTurnScenariosOk/);
 });
+
+
+test('adaptive module scenarios run in the packaged dashboard page not the service worker', () => {
+  assert.match(runner, /async function runAdaptiveModuleScenarios\(client\)/);
+  assert.match(runner, /const raw = await client\.evaluate/);
+  assert.match(runner, /dashboard = await targetClient\(dashboardTarget\);[\s\S]*runAdaptiveModuleScenarios\(dashboard\)/);
+  const scenarioBody = runner.slice(
+    runner.indexOf('async function runAdaptiveModuleScenarios'),
+    runner.indexOf('\ntry {', runner.indexOf('async function runAdaptiveModuleScenarios'))
+  );
+  assert.doesNotMatch(scenarioBody, /worker\.evaluate/);
+});
