@@ -1,13 +1,13 @@
 # Current Status Dashboard
 
-Last updated: 2026-08-04 (PMIA 0.10.3 integrated release candidate)
+Last updated: 2026-08-04 (PMIA 0.10.4 integrated release candidate)
 
 ## Active candidate system
 
 | Area | Status | Notes |
 |---|---|---|
-| Runtime release | PMIA 0.10.3 integrated candidate | Verified lossless delivery, explicit operator choices, canonical command routing, Pilot/Production evidence closure, and the approved live-interview feature and bug-hardening program. |
-| Source topology | Canonical main | Four isolated 0.10.3 workstreams were integrated into local `main`; deployment promotion occurs only after the exact final gate and browser evidence. |
+| Runtime release | PMIA 0.10.4 integrated candidate | Verified lossless delivery, explicit operator choices, canonical command routing, Pilot/Production evidence closure, and the approved live-interview feature and bug-hardening program. |
+| Source topology | Canonical main | Four isolated 0.10.4 workstreams were integrated into local `main`; deployment promotion occurs only after the exact final gate and browser evidence. |
 | Canonical checkout | Integrated, verification pending | Local `main` contains the bugfix, LLD, HLD and deployment-polish commits. No push, tag, publication or cloud deployment is authorized. |
 | Browser | Microsoft Edge Stable | Selected profile verified by Profile Doctor. |
 | Launcher | Active candidate | Session Studio launches sender, receiver and session-scoped dashboard; five initial layouts, Check Live, Alt+D recovery, Fast Repair, memory cleanup and PM-only hotkeys. |
@@ -75,4 +75,4 @@ Cycles 46–70 are verified on committed HEAD `6682f03`. The complete gate passe
 
 ## Current authorized phase
 
-PMIA 0.10.3 has completed 50 bug-fix cycles, 50 deployment-polish cycles, 50 high-level-design cycles and 50 low-level-design cycles in four isolated worktrees. The exact integrated `main` commit must pass the complete automated gate and isolated-browser evidence before atomic replacement of `PMIA Deployment\current`, Edge Reload, and final worktree cleanup. No push, tag, publication, policy installation, or cloud deployment is authorized.
+PMIA 0.10.4 has completed 50 bug-fix cycles, 50 deployment-polish cycles, 50 high-level-design cycles and 50 low-level-design cycles in four isolated worktrees. The exact integrated `main` commit must pass the complete automated gate and isolated-browser evidence before atomic replacement of `PMIA Deployment\current`, Edge Reload, and final worktree cleanup. No push, tag, publication, policy installation, or cloud deployment is authorized.

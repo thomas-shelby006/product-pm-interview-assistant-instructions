@@ -34,12 +34,12 @@ test('Cycle 194: architecture budget reports line and import violations by owner
 });
 
 test('Cycle 195: release identity requires 0.9 commit manifest and evidence hashes', async () => {
-  const identity = buildReleaseIdentity({ version: '0.10.3', commit: 'abc', manifestHash: 'm', evidenceHash: 'e', builtAt: 10 });
+  const identity = buildReleaseIdentity({ version: '0.10.4', commit: 'abc', manifestHash: 'm', evidenceHash: 'e', builtAt: 10 });
   assert.equal(validateReleaseIdentity(identity).ok, true);
   assert.equal(validateReleaseIdentity({ ...identity, version: '0.7.0' }).ok, false);
   const { readFile } = await import('node:fs/promises');
   const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.version, '0.10.3');
+  assert.equal(manifest.version, '0.10.4');
 });
 
 test('mechanics hardening report imports every Cycle 171-195 owner', async () => {

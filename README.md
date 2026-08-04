@@ -2,7 +2,7 @@
 
 This repository contains Sundar's live Product Management mock-interview system: Session Studio, two managed provider windows, a third Runtime Pilot Dashboard, a Manifest V3 control plane, and an optional post-session review loop.
 
-**Current release: PMIA runtime 0.10.3 candidate.**
+**Current release: PMIA runtime 0.10.4 candidate.**
 
 ## Active architecture
 

@@ -10,7 +10,7 @@ Operate a low-latency, exactly-once Product Management mock-interview assistant 
 
 - **Browser:** Microsoft Edge Stable, one selected profile verified by Profile Doctor.
 - **Launcher:** `runtime/Final_2_Window_Extension.ahk`.
-- **Provider/dashboard runtime:** `runtime/extension/`, Manifest V3 version 0.10.3 candidate.
+- **Provider/dashboard runtime:** `runtime/extension/`, Manifest V3 version 0.10.4 candidate.
 - **Transport:** disposable preview plus sender outbox, durable lossless final ledger, session-level pause, direct role ports and active/next receiver batching through the extension service worker.
 - **Dashboard:** `runtime/extension/dashboard/`, a session-scoped third Edge app window connected by a long-lived runtime port.
 - **Providers:** ChatGPT and Claude independently selectable as sender or receiver.
@@ -83,7 +83,7 @@ Review Studio detects one exact READY pair, exports both roles through `PMIA_RUN
 - Canonical source: `C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions`, branch `main`.
 - Stable deployment: `C:\Users\Sundar\Documents\PMIA Deployment\current`.
 - Immutable rollback: `C:\Users\Sundar\Documents\PMIA Deployment\archive\pmia-0.6.1-installed`.
-- Four temporary 0.10.3 worktrees exist only until exact final verification and cleanup.
+- Four temporary 0.10.4 worktrees exist only until exact final verification and cleanup.
 - Private tracker: `thomas-shelby006/pm-interview-session-tracker`.
 - Local tracker: `C:\Users\Sundar\Documents\pm-interview-session-tracker`.
 
