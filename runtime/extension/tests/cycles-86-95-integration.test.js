@@ -19,7 +19,9 @@ test('cycles 86 through 95 are integrated at their owning runtime boundaries', (
   assert.match(dashboard, /exportSupportBundle/);
   assert.match(html, /Safe support bundle/);
   assert.match(validator, /path\.startsWith\('testing'\)/);
-  assert.match(releaseBuilder, /pmia-release-evidence-v1/);
+  assert.match(releaseBuilder, /pmia-release-evidence-v2/);
+  assert.match(releaseBuilder, /deterministicBrowser/);
+  assert.match(releaseBuilder, /providerCanary/);
   assert.match(releaseBuilder, /sourceHashes/);
   assert.match(releaseBuilder, /processTreeClosed/);
 });
