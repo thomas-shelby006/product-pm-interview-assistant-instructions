@@ -12,6 +12,17 @@ $script:PmiaRootFiles = @(
     'CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md',
     'DEPLOYMENT_GUIDE.md', 'package.json'
 )
+$script:PmiaValidationFiles = @(
+    'AHK_PHASE_2_IMPLEMENTATION_PLAN.md',
+    'ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md',
+    'docs\CURRENT_SETUP_HANDOFF_AND_REQUIREMENTS.md',
+    'docs\CURRENT_STATUS_DASHBOARD.md',
+    'docs\LEGACY_FEATURE_PARITY.md',
+    'docs\SESSION_TRACKER_SETUP.md',
+    'docs\evidence\2026-07-30-pmia-runtime-v0.6.1-verification.md',
+    'docs\superpowers\specs\2026-07-30-pmia-final-architecture-design.md',
+    'project_source_files\PM_BOOT_PROMPT_FOR_AHK.md'
+)
 
 function Resolve-PmiaCanonicalPath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -62,6 +73,10 @@ function Get-PmiaRelativePath {
 
 function Test-PmiaForbiddenRelativePath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
+    $normalizedRelative = ($RelativePath -replace '/', '\').TrimStart('\').ToLowerInvariant()
+    foreach ($allowedPath in $script:PmiaValidationFiles) {
+        if ($normalizedRelative -eq $allowedPath.ToLowerInvariant()) { return $false }
+    }
     $segments = @(($RelativePath -replace '/', '\').Split('\') |
         Where-Object { $_ -ne '' } |
         ForEach-Object { $_.ToLowerInvariant() })
@@ -106,6 +121,26 @@ function Copy-PmiaAllowlistedSource {
             throw "Reparse point is not allowed in a PMIA package boundary: $source"
         }
         Copy-Item -LiteralPath $source -Destination (Join-Path $DestinationRoot $fileName) -Force
+    }
+    $requiresValidationDependencies = Test-Path -LiteralPath (
+        Join-Path $SourceRoot 'runtime\extension\tests\release-0.7.0.test.js'
+    ) -PathType Leaf
+    foreach ($relativePath in $script:PmiaValidationFiles) {
+        $source = Join-Path $SourceRoot $relativePath
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+            if ($requiresValidationDependencies) {
+                throw "Required PMIA validation dependency is missing: $relativePath"
+            }
+            continue
+        }
+        $sourceItem = Get-Item -LiteralPath $source -Force
+        if (($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Reparse point is not allowed in a PMIA package boundary: $source"
+        }
+        $destination = Join-Path $DestinationRoot $relativePath
+        $destinationParent = Split-Path -Parent $destination
+        if ($destinationParent) { New-Item -ItemType Directory -Force $destinationParent | Out-Null }
+        Copy-Item -LiteralPath $source -Destination $destination -Force
     }
 }
 

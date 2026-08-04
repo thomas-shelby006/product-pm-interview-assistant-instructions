@@ -13,6 +13,17 @@ const currentScript = resolve(scriptsRoot, 'New-PMIACurrentDeployment.ps1');
 const archiveScript = resolve(scriptsRoot, 'New-PMIAInstalledArchive.ps1');
 const verifyScript = resolve(scriptsRoot, 'Test-PMIADeployment.ps1');
 const commonScript = resolve(scriptsRoot, 'PMIA-Deployment.Common.ps1');
+const validationDependencies = [
+  'AHK_PHASE_2_IMPLEMENTATION_PLAN.md',
+  'ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md',
+  'docs/CURRENT_SETUP_HANDOFF_AND_REQUIREMENTS.md',
+  'docs/CURRENT_STATUS_DASHBOARD.md',
+  'docs/LEGACY_FEATURE_PARITY.md',
+  'docs/SESSION_TRACKER_SETUP.md',
+  'docs/evidence/2026-07-30-pmia-runtime-v0.6.1-verification.md',
+  'docs/superpowers/specs/2026-07-30-pmia-final-architecture-design.md',
+  'project_source_files/PM_BOOT_PROMPT_FOR_AHK.md'
+];
 
 function run(command, args, cwd = undefined) {
   return spawnSync(command, args, { cwd, encoding: 'utf8', windowsHide: true });
@@ -49,12 +60,14 @@ async function createFixture(version = '9.9.9') {
     'FILE_MAP.md',
     'CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md',
     'DEPLOYMENT_GUIDE.md',
-    'package.json'
+    'package.json',
+    ...validationDependencies
   ]) await write(root, relative);
   await write(root, 'archive/old.txt');
   await write(root, 'drafts/private.txt');
   await write(root, '.pmia-task-temp/trace.txt');
   await write(root, 'runtime/logs/session.log');
+  await write(root, 'docs/evidence/unapproved.txt');
   for (const args of [
     ['init'],
     ['config', 'user.name', 'PMIA Test'],
@@ -127,6 +140,10 @@ test('current deployment is atomic, source-bound, excluded, and tamper-evident',
   assert.equal(await exists(join(currentRoot, '.git')), false);
   assert.equal(await exists(join(currentRoot, '.pmia-task-temp')), false);
   assert.equal(await exists(join(currentRoot, 'runtime/logs')), false);
+  assert.equal(await exists(join(currentRoot, 'docs/evidence/unapproved.txt')), false);
+  for (const relative of validationDependencies) {
+    assert.equal(await exists(join(currentRoot, relative)), true);
+  }
   const verify = runPowerShell(verifyScript, ['-PackageRoot', currentRoot, '-ExpectedKind', 'current']);
   assert.equal(verify.status, 0, verify.stderr || verify.stdout);
 
