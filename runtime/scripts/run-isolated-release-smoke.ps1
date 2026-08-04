@@ -117,6 +117,13 @@ finally {
             }
             $evidence.ok = [bool](
                 $evidence.deterministicBrowser.ok `
+                -and $evidence.adaptiveTurnScenariosOk `
+                -and $evidence.transportDrillOk `
+                -and $evidence.pilotUiOk `
+                -and $evidence.productionUiOk `
+                -and $evidence.assistUiOk `
+                -and $evidence.reliabilityUiOk `
+                -and $evidence.operationsUiOk `
                 -and $processClosed `
                 -and $profileRemoved
             )
