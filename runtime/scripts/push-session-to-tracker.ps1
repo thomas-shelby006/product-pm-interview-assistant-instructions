@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)]
     [ValidateSet('practice','real')]
     [string]$SessionType,
@@ -98,7 +98,7 @@ function Validate-ExportPair([string]$SenderPath, [string]$ReceiverPath) {
     $sender = Read-PmiaExportHeader $SenderPath
     $receiver = Read-PmiaExportHeader $ReceiverPath
     if (-not $sender.valid -or -not $receiver.valid) {
-        throw 'Malformed PMIA export pair. Both files must use the v0.6 Markdown headers.'
+        throw 'Malformed PMIA export pair. Both files must use the extension-native PMIA Markdown headers.'
     }
     if ($sender.role -ne 'sender') {
         throw "Win1 file declares role '$($sender.role)' instead of sender."
@@ -153,7 +153,7 @@ Role: $Role
 Round: $Round
 Mode: $Mode
 Created: $(Get-Date -Format o)
-Source format: pmia-v0.6
+Source format: pmia-schema-2.1
 Source PMIA session: $($Pair.sourceSessionId)
 Sender provider: $($Pair.senderProvider)
 Receiver provider: $($Pair.receiverProvider)

@@ -1,4 +1,4 @@
-# PM Interview Session Setup Template — Source File
+﻿# PM Interview Session Setup Template â€” Source File
 
 Purpose: define how Resume/JD session context is consumed.
 
@@ -6,16 +6,16 @@ Purpose: define how Resume/JD session context is consumed.
 
 The system has four layers (see `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`):
 
-1. **Permanent brain** — Project custom instructions + uploaded source files (canonical PM profile, story bank, metrics, router, delivery rules). Stable across sessions.
-2. **Session context** — per-interview Resume + JD + optional metadata. Re-weights emphasis; never adds new facts or claims.
-3. **Live transcript state** — the latest actionable question plus a short prior-context tail.
-4. **Spoken-answer contract** — front-loaded, length-capped, follow-ups shorter.
+1. **Permanent brain** â€” Project custom instructions + uploaded source files (canonical PM profile, story bank, metrics, router, delivery rules). Stable across sessions.
+2. **Session context** â€” per-interview Resume + JD + optional metadata. Re-weights emphasis; never adds new facts or claims.
+3. **Live transcript state** â€” the latest actionable question plus a short prior-context tail.
+4. **Spoken-answer contract** â€” front-loaded, length-capped, follow-ups shorter.
 
 Do not bake a single resume into the Project as the only truth. Bake the canonical profile and story bank; paste the role-specific resume per session. Precedence between sources is defined in `PM_INTERVIEW_TRUTH_CONSTRAINTS.md` (Context precedence rules).
 
 ## Actual AHK flow
 
-1. User double-clicks `Final_2_Window_Fixed.ahk`.
+1. User runs `runtime/Final_2_Window_Extension.ahk`.
 2. User presses `Alt+R`.
 3. AHK opens two fields: Resume and Job Description.
 4. User clicks Start/Launch.
@@ -40,9 +40,9 @@ Resume/JD are valid only while the current AHK process is running.
 Companies, titles, dates, product domains, users, workflows, stakeholders, explicit metrics, safe claims, claims to avoid.
 
 Expected arc if present:
-- TPI Composites → manufacturing operations and quality systems
-- Pemo → SME onboarding and expense automation
-- DataCaliper → B2B SaaS, dashboards, ERP-adjacent workflows, enterprise workflow products
+- TPI Composites â†’ manufacturing operations and quality systems
+- Pemo â†’ SME onboarding and expense automation
+- DataCaliper â†’ B2B SaaS, dashboards, ERP-adjacent workflows, enterprise workflow products
 
 Prioritize the pasted Resume over default assumptions.
 
@@ -60,7 +60,7 @@ Silently extract:
 - AI/data requirements
 - stakeholder expectations
 
-Use JD vocabulary in answers. If the JD says “activation,” use activation. If it says “enterprise workflow,” use that framing.
+Use JD vocabulary in answers. If the JD says â€œactivation,â€ use activation. If it says â€œenterprise workflow,â€ use that framing.
 
 ## Company selection
 
@@ -72,7 +72,7 @@ Use TPI first for manufacturing, operations, quality, internal tools, production
 
 ## DataCaliper safe framing
 
-> “At DataCaliper, I work on B2B SaaS and custom enterprise software products where the PM challenge is turning ambiguous client business processes into clear workflows, dashboards, permissions, acceptance criteria, and release-ready product modules.”
+> â€œAt DataCaliper, I work on B2B SaaS and custom enterprise software products where the PM challenge is turning ambiguous client business processes into clear workflows, dashboards, permissions, acceptance criteria, and release-ready product modules.â€
 
 Use DataCaliper for current-role answers without overclaiming. Emphasize:
 - client discovery
@@ -89,7 +89,7 @@ Use DataCaliper for current-role answers without overclaiming. Emphasize:
 
 - Answer as Sundar.
 - Use first person.
-- First 1–2 sentences must be complete and standalone.
+- First 1â€“2 sentences must be complete and standalone.
 - Do not restate the question.
 - Do not show route labels.
 - Do not show coaching notes unless asked.
@@ -100,18 +100,18 @@ Use DataCaliper for current-role answers without overclaiming. Emphasize:
 
 ## Live answer word limits
 
-- Follow-up / clarification: 30–55 words
-- Simple conceptual PM answer: 55–75 words
-- Comparison / tradeoff: 75–100 words
-- Standard PM execution / metrics / prioritization answer: 90–130 words
-- Product sense / strategy setup: 130–180 words
-- Estimation / market sizing: 130–160 words
-- Behavioral story: 120–150 words
-- Full case / deeper walkthrough: 150–180 words hard cap
+- Follow-up / clarification: 30â€“55 words
+- Simple conceptual PM answer: 55â€“75 words
+- Comparison / tradeoff: 75â€“100 words
+- Standard PM execution / metrics / prioritization answer: 90â€“130 words
+- Product sense / strategy setup: 130â€“180 words
+- Estimation / market sizing: 130â€“160 words
+- Behavioral story: 120â€“150 words
+- Full case / deeper walkthrough: 150â€“180 words hard cap
 
 ## AHK boot prompt (canonical source)
 
-The full AHK boot prompt is maintained in **`PM_BOOT_PROMPT_FOR_AHK.md`** and embedded verbatim in **`runtime/Final_2_Window_Fixed.ahk`**. Those two are the single source of truth.
+The full AHK boot prompt is maintained in **`PM_BOOT_PROMPT_FOR_AHK.md`** and embedded in **`runtime/Final_2_Window_Extension.ahk`**. Those two are the single source of truth.
 
 Do not maintain a second boot prompt here. This file only describes how the Resume/JD session context is consumed once the boot prompt has been sent. If the boot prompt needs to change, edit `PM_BOOT_PROMPT_FOR_AHK.md` and the embedded copy in the AHK script together, and leave this file as a pointer.
 
@@ -119,26 +119,26 @@ Do not maintain a second boot prompt here. This file only describes how the Resu
 
 Beyond Resume + JD, a session may include lightweight optional metadata. When present, honor it; when absent, infer from the JD and never block the session.
 
-- **Company** — target company name.
-- **Target role** — e.g., Product Manager, Technical PM, Product Owner.
-- **Interview round** — recruiter / hiring manager / product sense / metrics / behavioral / technical PM / product owner. Calibrate depth and tone to the round.
-- **Emphasis** — fintech / AI / analytics / enterprise / ops-internal-tools / product owner. Biases which company story leads.
-- **Avoid mentioning** — topics to keep out of answers this session. Treat as a hard exclusion.
-- **Answer mode** — concise / normal / deep. `concise` = bottom of the length band; `normal` = current policy; `deep` = top of the band plus an offer to expand, still under the 180-word hard cap. `deep` never means a long monologue.
+- **Company** â€” target company name.
+- **Target role** â€” e.g., Product Manager, Technical PM, Product Owner.
+- **Interview round** â€” recruiter / hiring manager / product sense / metrics / behavioral / technical PM / product owner. Calibrate depth and tone to the round.
+- **Emphasis** â€” fintech / AI / analytics / enterprise / ops-internal-tools / product owner. Biases which company story leads.
+- **Avoid mentioning** â€” topics to keep out of answers this session. Treat as a hard exclusion.
+- **Answer mode** â€” concise / normal / deep. `concise` = bottom of the length band; `normal` = current policy; `deep` = top of the band plus an offer to expand, still under the 180-word hard cap. `deep` never means a long monologue.
 
 These fields are emitted in the boot prompt under a `Session context:` block using the exact labels above, and the bridge captures them into the session log. Metadata only re-weights emphasis and depth; it never authorizes a new claim.
 
 Today these are entered in the optional **Session setup** box in the AHK launch window (one `Label: value` per line, e.g. `Emphasis: fintech`). A structured dropdown version is planned (see `AHK_PHASE_2_IMPLEMENTATION_PLAN.md`).
 
-Note on enforcement: `Avoid mentioning` and `Answer mode` are **prompt-level behaviors** — the assistant follows them via instructions in the boot prompt and Project files. The bridge logs the metadata into the session log, but it does **not** apply a deterministic runtime redaction filter (`Avoid mentioning`) or a hard runtime length cap (`Answer mode`). Treat them as strong guidance, not guarantees.
+Note on enforcement: `Avoid mentioning` and `Answer mode` are **prompt-level behaviors** â€” the assistant follows them via instructions in the boot prompt and Project files. The bridge logs the metadata into the session log, but it does **not** apply a deterministic runtime redaction filter (`Avoid mentioning`) or a hard runtime length cap (`Answer mode`). Treat them as strong guidance, not guarantees.
 
 ## Resume/JD edge cases
 
-- **Missing resume** — fall back to the canonical PM profile and story bank; do not invent role-specific detail.
-- **Too short / thin resume** — use it for emphasis only; lean on the canonical story bank for substance.
-- **Too long / noisy JD** — extract company, domain, user, top skills, and metrics vocabulary; ignore boilerplate. Treat the JD as framing, never as work history.
-- **Resume/JD mismatch** — let the emphasis field (or JD domain) pick the lead company story; note the mismatch once if it matters, then proceed without asking live.
-- **Conflicting claim in resume/JD** — keep to safe, confirmed claims per the truth constraints; flag once at session start.
+- **Missing resume** â€” fall back to the canonical PM profile and story bank; do not invent role-specific detail.
+- **Too short / thin resume** â€” use it for emphasis only; lean on the canonical story bank for substance.
+- **Too long / noisy JD** â€” extract company, domain, user, top skills, and metrics vocabulary; ignore boilerplate. Treat the JD as framing, never as work history.
+- **Resume/JD mismatch** â€” let the emphasis field (or JD domain) pick the lead company story; note the mismatch once if it matters, then proceed without asking live.
+- **Conflicting claim in resume/JD** â€” keep to safe, confirmed claims per the truth constraints; flag once at session start.
 
 ## Final session check
 
@@ -161,4 +161,4 @@ Use Pemo for fintech workflow automation and expense intelligence.
 Use DataCaliper for enterprise SaaS, dashboards, analytics, ERP-adjacent workflows, and AI-assisted decision support.
 Use TPI for internal manufacturing technology, operational analytics, and industrial workflow systems.
 
-Do not change the role title. Use “Product Manager” only.
+Do not change the role title. Use â€œProduct Managerâ€ only.

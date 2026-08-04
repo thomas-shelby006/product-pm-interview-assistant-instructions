@@ -67,7 +67,7 @@ test('tracker Git runner is explicit and Windows PowerShell 5.1 compatible', () 
   assert.doesNotMatch(pushScript, /\.ArgumentList/);
 });
 
-test('tracker validates one v0.6 sender and receiver before writing state', () => {
+test('tracker validates one extension-native sender and receiver before writing state', () => {
   assert.match(pushScript, /Validate-ExportPair/);
   assert.match(pushScript, /Malformed PMIA export pair/);
   assert.match(pushScript, /PMIA session mismatch/);

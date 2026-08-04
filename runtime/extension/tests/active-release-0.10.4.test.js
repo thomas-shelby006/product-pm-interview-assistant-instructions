@@ -17,8 +17,7 @@ const activeDocuments = [
   'DEPLOYMENT_GUIDE.md',
   'runtime/README_INSTALL_TEST.md',
   'runtime/extension/README.md',
-  'docs/CURRENT_SETUP_HANDOFF_AND_REQUIREMENTS.md',
-  'docs/CURRENT_STATUS_DASHBOARD.md'
+  'docs/SESSION_TRACKER_SETUP.md'
 ];
 
 test('active release surfaces identify PMIA 0.10.4', async () => {
@@ -38,7 +37,7 @@ test('deployment guide uses Reload before Load unpacked', async () => {
   assert.ok(reloadIndex >= 0, 'Reload instruction is required');
   assert.ok(loadIndex >= 0, 'Load unpacked fallback is required');
   assert.ok(reloadIndex < loadIndex, 'Reload must be the primary path');
-  assert.match(guide, /PMIA Deployment\\current\\runtime\\extension/);
+  assert.match(guide, /product-pm-interview-assistant-instructions\\runtime\\extension/);
   assert.match(guide, /EXTENSION_VERSION_MISMATCH/);
   assert.match(guide, /pathMatches.*True/i);
 });

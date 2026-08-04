@@ -1,40 +1,36 @@
-# File Map
+﻿# PMIA 0.10.4 File Map
 
-## Active system
+## Current application
 
-- `runtime/Final_2_Window_Extension.ahk` — active AutoHotkey v2 Session Studio, managed-window launcher, layout controller, live health check, fast repair, and PM shortcut host.
-- `runtime/extension/` — authoritative Manifest V3 runtime for ChatGPT and Claude.
-  - `background.js` — registration, delivery, recovery, ephemeral session logs, cleanup, preflight, and browser-command export.
-  - `content/entry.js` — provider runtime orchestration, sender/receiver behavior, health UI, answer capture, and export.
-  - `content/adapters/` — provider-specific DOM behavior.
-  - `content/signals/` — Claude native-voice signal bridge.
-  - `content/senders/` — authoritative sender-turn tracking.
-  - `shared/` — protocol, sequencing, preview, delivery, session registry/status/control, safe context parsing, log storage, summaries, and cleanup.
-  - `tests/` — Node regression and integration tests.
-- `runtime/Browser_Profile_Doctor.ps1` — verifies the selected Edge Stable profile, extension path, and version.
-- `runtime/Validate_Extension_Runtime.ps1` — complete silent verification gate.
-- `runtime/Session_Tracker_End_Session.ahk` — optional post-session Review Studio.
-- `runtime/scripts/` — exact export pairing and private tracker push scripts.
+- `runtime/extension/manifest.json` — Manifest V3 entry point, permissions, content scripts, service worker, and command declaration.
+- `runtime/extension/background.js` — service-worker composition root and central event owner.
+- `runtime/extension/content/` — provider observation, sender ownership, receiver batching, proof, recovery, and status UI.
+- `runtime/extension/shared/` — schemas, policies, state machines, ledgers, transport contracts, and reusable models.
+- `runtime/extension/dashboard/` — Runtime Pilot Dashboard UI and view models.
+- `runtime/extension/tests/` — current behavior and regression tests.
+- `runtime/Final_2_Window_Extension.ahk` — Session Studio, browser launch, window layout, lifecycle control, and hotkeys.
+- `runtime/PMIA_Runtime_Platform.ahk` — safe browser/process/window primitives.
+- `runtime/Browser_Profile_Doctor.ps1` — read-only Edge profile and unpacked-extension verification.
+- `runtime/Validate_Extension_Runtime.ps1` — complete local verification entry point.
+- `runtime/Session_Tracker_End_Session.ahk` — Review Studio and private tracker workflow.
+- `runtime/scripts/` — current export, tracker, release-evidence, isolated-smoke, and worktree-verification helpers.
 
-## ChatGPT Project material
+## Knowledge and review sources
 
-- `CUSTOM_INSTRUCTIONS_TO_PASTE_IN_CHATGPT_PROJECT.md` — compact always-on Project contract.
-- `project_upload_bundle/` — recommended five-file Project upload set.
-- `project_source_files/` — detailed editable source/reference material; do not upload beside the condensed bundle.
-- `drafts/` — unconfirmed story and claim-safety work; never upload until reviewed and promoted.
+- `project_source_files/` — canonical interview behavior and truth sources.
+- `project_upload_bundle/` — curated upload bundle for the ChatGPT Project.
+- `review_lab_project/` — current post-session review project instructions.
+- `templates/` — session and export templates.
 
-## Operational documentation
+## Local private state
 
-- `README.md` — current system overview.
-- `AI_SYSTEM_CONTEXT.md` — complete active-system context for an AI reviewer.
-- `docs/CURRENT_STATUS_DASHBOARD.md` — current release status.
-- `docs/CURRENT_SETUP_HANDOFF_AND_REQUIREMENTS.md` — binding setup and safety ledger.
-- `runtime/README_INSTALL_TEST.md` — installation, shortcuts, recovery, and release verification.
-- `docs/SESSION_TRACKER_SETUP.md` — review-loop setup.
-- `docs/evidence/` — historical verified release records.
-- `docs/superpowers/specs/` and `docs/superpowers/plans/` — design and implementation records.
+- `.local/session-tracker/` — private practice and real-session exports. Ignored by Git.
 
-## Preserved inactive material
+## Documentation
 
-- `runtime/Final_2_Window_Fixed.ahk`, `runtime/tm_scripts/`, `runtime/tm_update_support/`, and `archive/` are rollback/history assets only.
-- Do not enable or modify them as part of the active Edge Stable/Manifest V3 setup unless a rollback is explicitly requested.
+- `README.md` — current operating summary.
+- `DEPLOYMENT_GUIDE.md` — direct-source installation and update process.
+- `docs/SESSION_TRACKER_SETUP.md` — tracker and Review Studio setup.
+- `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md` — review workflow.
+- `docs/PMIA_CURRENT_SYSTEM_TECHNICAL_GUIDE.html` — full current-system technical manual.
+- `docs/PMIA_CURRENT_SYSTEM_INVENTORY.json` — final machine state and cleanup findings.

@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 #SingleInstance Force
 #Warn All, StdOut
 
@@ -43,7 +43,7 @@ global g_senderFileEdit := 0
 global g_receiverFileEdit := 0
 global g_endAfterPush := 0
 
-global g_trackerPath := A_MyDocuments "\pm-interview-session-tracker"
+global g_trackerPath := A_ScriptDir "\..\.local\session-tracker"
 global g_downloadDirectory := EnvGet("USERPROFILE") "\Downloads"
 global g_reviewLabUrl := ReviewLabDefaultUrl
 

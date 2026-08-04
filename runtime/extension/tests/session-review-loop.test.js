@@ -43,7 +43,7 @@ test('hotkeys and control messages share exact export and shutdown functions', (
   assert.match(control, /EndActiveSession/);
 });
 
-test('new companion is v0.6-native and never uses legacy bridge titles or export hotkeys', () => {
+test('new companion is extension-native and never uses legacy bridge titles or export hotkeys', () => {
   assert.notEqual(companion, '');
   assert.match(companion, /PMIA_RUNTIME_CONTROL_V1/);
   assert.match(companion, /PMIA_(?:BOOT_|REGISTERED_)?/);
@@ -69,7 +69,7 @@ function runResolver(directory, sessionId, sinceUtc, waitSeconds = 0) {
   return { process: result, resultPath };
 }
 
-test('resolver pairs one fresh v0.6 sender and receiver export', async t => {
+test('resolver pairs one fresh extension-native sender and receiver export', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'pmia-review-pair-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const sessionId = 'pmia_20260730_193300_1234';
@@ -123,7 +123,7 @@ function runPush({ tracker, sender, receiver, resultPath, extra = [] }) {
   ], { encoding: 'utf8' });
 }
 
-test('push script dry-run validates v0.6 pair and creates tracker session without Git', async t => {
+test('push script dry-run validates extension-native pair and creates tracker session without Git', async t => {
   const root = await mkdtemp(join(tmpdir(), 'pmia-review-push-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const tracker = join(root, 'tracker');
@@ -145,7 +145,7 @@ test('push script dry-run validates v0.6 pair and creates tracker session withou
   assert.equal(await readFile(join(result.sessionFolder, 'win2_receiver.md'), 'utf8'), markdown(sessionId, 'receiver', 'chatgpt'));
 });
 
-test('push script rejects mixed or mismatched v0.6 export pairs before writing tracker state', async t => {
+test('push script rejects mixed or mismatched extension-native export pairs before writing tracker state', async t => {
   const root = await mkdtemp(join(tmpdir(), 'pmia-review-push-invalid-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const tracker = join(root, 'tracker');

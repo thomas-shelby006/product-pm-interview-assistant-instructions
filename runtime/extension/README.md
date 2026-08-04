@@ -177,7 +177,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_R
 
 Manual release checks should cover applicable provider combinations, dashboard connect/reconnect, one-at-a-time delivery, accumulation during generation, latest-focused multi-question submission, duplicate suppression, pause/catch-up, selected submission, hold, submit-now, explicit interrupt, context resend, repair, layouts, export, full three-window shutdown, receiver reload and a long-session soak.
 
-The older fixed launcher, Tampermonkey transport, historical archives, and rollback assets are intentionally retained and are not modified by the 0.10.4 runtime.
+The repository contains only the active Manifest V3 runtime. Historical implementations remain recoverable through Git history rather than as working-tree copies.
 
 
 ## New live safety surfaces
