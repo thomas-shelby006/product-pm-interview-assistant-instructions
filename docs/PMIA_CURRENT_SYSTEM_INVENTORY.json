@@ -1,0 +1,204 @@
+{
+    "schemaVersion":  "1.0",
+    "generatedAt":  "2026-08-04T14:01:59.9769980+05:30",
+    "product":  {
+                    "name":  "PM Interview Dual-Provider Runtime",
+                    "version":  "0.10.4",
+                    "manifestVersion":  3,
+                    "canonicalRoot":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions",
+                    "operatingModel":  "direct-source unpacked Microsoft Edge extension with AutoHotkey v2 launcher"
+                },
+    "repository":  {
+                       "branch":  "main",
+                       "verifiedApplicationCommit":  "438b850f651d0d66203de1a0002ecb0cb71beb87",
+                       "statusCleanBeforeInventory":  true,
+                       "registeredWorktrees":  1,
+                       "localBranches":  1,
+                       "localTags":  0,
+                       "trackedFiles":  570,
+                       "applicationBytesExcludingGitAndPrivateTracker":  2845988,
+                       "pushPerformed":  false,
+                       "tagCreated":  false,
+                       "cloudDeploymentPerformed":  false
+                   },
+    "runtime":  {
+                    "extensionPath":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions\\runtime\\extension",
+                    "launcherPath":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions\\runtime\\Final_2_Window_Extension.ahk",
+                    "reviewStudioPath":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions\\runtime\\Session_Tracker_End_Session.ahk",
+                    "validatorPath":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions\\runtime\\Validate_Extension_Runtime.ps1",
+                    "edgeProfile":  "Default / Profile 1",
+                    "registrations":  [
+                                          {
+                                              "extensionId":  "cgjddhagnfjdoncphajinaacjfodhpen",
+                                              "registeredPath":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions\\runtime\\extension",
+                                              "resolvedPath":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions\\runtime\\extension",
+                                              "version":  "0.10.4",
+                                              "manifestVersion":  3,
+                                              "location":  4
+                                          }
+                                      ],
+                    "registrationCount":  1,
+                    "profileDoctor":  {
+                                          "passed":  true,
+                                          "pathMatches":  true,
+                                          "issueCode":  "OK"
+                                      },
+                    "sessionStudioPreflight":  {
+                                                   "passed":  true,
+                                                   "evidence":  "Selected Edge profile and PMIA runtime path verified."
+                                               }
+                },
+    "validation":  {
+                       "completedAt":  "2026-08-04T13:55:27.7984902+05:30",
+                       "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File runtime\\Validate_Extension_Runtime.ps1",
+                       "exitCode":  0,
+                       "tests":  {
+                                     "total":  1354,
+                                     "passed":  1354,
+                                     "failed":  0,
+                                     "cancelled":  0,
+                                     "skipped":  0
+                                 },
+                       "javascriptFiles":  517,
+                       "requiredRuntimeSurfaces":  18,
+                       "reachableProductionModules":  288,
+                       "mainLauncherValidation":  "passed",
+                       "reviewStudioValidation":  "passed",
+                       "runtimePlatformValidation":  "passed"
+                   },
+    "technicalGuide":  {
+                           "path":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions\\docs\\PMIA_CURRENT_SYSTEM_TECHNICAL_GUIDE.html",
+                           "bytes":  48221,
+                           "sha256":  "3524666d8ac2ec2d9b94bedd74c1667776ab955eee065059a387c6206915939f",
+                           "title":  "PMIA 0.10.4 â€” Current System Technical Atlas",
+                           "auditPassed":  true,
+                           "viewports":  {
+                                             "desktop":  {
+                                                             "width":  1280,
+                                                             "horizontalOverflow":  false
+                                                         },
+                                             "tablet":  {
+                                                            "width":  768,
+                                                            "horizontalOverflow":  false
+                                                        },
+                                             "mobile":  {
+                                                            "width":  320,
+                                                            "horizontalOverflow":  false
+                                                        },
+                                             "print":  {
+                                                           "width":  1200,
+                                                           "horizontalOverflow":  false
+                                                       }
+                                         },
+                           "h1":  1,
+                           "h2":  13,
+                           "sections":  13,
+                           "accessibleSvgTitles":  1,
+                           "duplicateIds":  [
+
+                                            ],
+                           "missingAnchors":  [
+
+                                              ],
+                           "externalAssets":  [
+
+                                              ],
+                           "mojibake":  false,
+                           "placeholders":  false
+                       },
+    "privateTracker":  {
+                           "path":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions\\.local\\session-tracker",
+                           "exists":  true,
+                           "ignoredByApplicationRepository":  true,
+                           "separateGitRepository":  true,
+                           "branch":  "main",
+                           "head":  "0dc537bf684c6dc2bdf0c70c1b562117fc03f730",
+                           "clean":  true,
+                           "remoteConfigured":  true,
+                           "folders":  {
+                                           "practice":  true,
+                                           "real":  true,
+                                           "reviews":  true,
+                                           "patterns":  true
+                                       }
+                       },
+    "cleanup":  {
+                    "completedAt":  "2026-08-04T13:58:59.3521303+05:30",
+                    "removedGeneratedDeploymentRoot":  "C:\\Users\\Sundar\\Documents\\PMIA Deployment",
+                    "removedRollbackArchive":  true,
+                    "removedRepositoryArchivesAndDrafts":  true,
+                    "removedTampermonkeyRuntime":  true,
+                    "removedFixedLegacyLauncher":  true,
+                    "removedDeploymentPackagingTools":  true,
+                    "removedReleaseSpecificTestsAndStaleEvidence":  true,
+                    "removedOldEdgeRegistrationId":  "cggnlmoklajjmphoffcoabhflcdkphka",
+                    "removedCompatibilityPath":  "C:\\Users\\Sundar\\Documents\\product-pm-interview-assistant-instructions\\.worktrees\\dual-provider-extension",
+                    "removedTemporaryWorktree":  true,
+                    "remainingWorktrees":  1,
+                    "remainingBranches":  1,
+                    "remainingTags":  0,
+                    "documentsTemp":  {
+                                          "topLevelItemsRemoved":  90,
+                                          "filesRemoved":  18299,
+                                          "bytesRemoved":  6027797131,
+                                          "remainingPmiaNamedItems":  0
+                                      },
+                    "documentsWideSearch":  {
+                                                "pmiaNamedItemsOutsideCanonicalRepository":  0,
+                                                "uniqueProductNameMatchesOutsideCanonicalRepository":  0
+                                            },
+                    "browserEvidenceCaptureModified":  false
+                },
+    "retainedStructure":  [
+                              ".git",
+                              ".local/session-tracker",
+                              "docs",
+                              "project_source_files",
+                              "project_upload_bundle",
+                              "review_lab_project",
+                              "runtime",
+                              "templates",
+                              "README.md",
+                              "DEPLOYMENT_GUIDE.md",
+                              "FILE_MAP.md",
+                              "AI_SYSTEM_CONTEXT.md",
+                              "package.json"
+                          ],
+    "normalOperation":  {
+                            "buildRequired":  false,
+                            "packagingRequired":  false,
+                            "deploymentScriptRequired":  false,
+                            "startCommand":  "runtime\\Final_2_Window_Extension.ahk",
+                            "preflightRequired":  true,
+                            "automaticAfterLaunch":  [
+                                                         "role registration",
+                                                         "preview transport",
+                                                         "durable final persistence",
+                                                         "sequence feedback",
+                                                         "lossless ledger ownership",
+                                                         "batching",
+                                                         "provider-rendered proof",
+                                                         "answer lifecycle",
+                                                         "dashboard updates",
+                                                         "bounded recovery",
+                                                         "session cleanup"
+                                                     ],
+                            "afterSourceChange":  [
+                                                      "run runtime\\Validate_Extension_Runtime.ps1",
+                                                      "select Reload on the PMIA Edge extension card",
+                                                      "start fresh managed provider tabs",
+                                                      "run Session Studio Preflight"
+                                                  ],
+                            "ongoingRequirements":  [
+                                                        "keep Microsoft Edge Developer mode enabled",
+                                                        "remain signed in to the selected provider pages",
+                                                        "keep application code and private tracker evidence in their separate Git repositories"
+                                                    ]
+                        },
+    "pendingUserActions":  {
+                               "pmiaRequiredActions":  [
+
+                                                       ],
+                               "separateDecision":  "The two Browser Evidence Capture registrations were intentionally not modified and remain a separate maintenance decision."
+                           }
+}
