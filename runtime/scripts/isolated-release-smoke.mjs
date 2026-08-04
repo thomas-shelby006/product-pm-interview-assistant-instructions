@@ -750,6 +750,7 @@ try {
       .map(item => ({ command:String(item?.command || ''), requestId:String(item?.requestId || ''), startedAt:Number(item?.startedAt || 0), completedAt:Number(item?.completedAt || 0) }));
     value.commandJournalDelta=concurrentCommands.length;
     value.concurrentCommands=concurrentCommands;
+    value.keyboardMoved=interaction.keyboardMoved;
     value.localInteractionEvidence={ keyboardMoved:interaction.keyboardMoved, scenarioChanged:value.scenario==='network_loss', commandFreeSourceContract:operationsCommandIsolation.ok };
     const screenshot=await dashboard.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
     const screenshotPath=path.join(path.dirname(evidencePath),`operations-${label}.png`);
