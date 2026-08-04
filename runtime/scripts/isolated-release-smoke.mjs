@@ -30,6 +30,17 @@ const [dashboardMarkup, dashboardSource, controllerSource] = await Promise.all([
 const commandReachability = reachabilityModule.auditCommandReachability({ html:dashboardMarkup, dashboardSource, controllerSource });
 const commandRegistryDigest = registryModule.commandRegistryDigestSource();
 if (!commandReachability.ok) throw new Error(`Command reachability failed: ${JSON.stringify(commandReachability.errors)}`);
+const operationsHandlerStart = dashboardSource.indexOf("byId('operationsLabScenario').addEventListener");
+const operationsHandlerEnd = dashboardSource.indexOf("byId('assistCommandSearch').addEventListener", operationsHandlerStart);
+const operationsHandlerSource = operationsHandlerStart >= 0 && operationsHandlerEnd > operationsHandlerStart
+  ? dashboardSource.slice(operationsHandlerStart, operationsHandlerEnd)
+  : '';
+const operationsCommandIsolation = {
+  ok: Boolean(operationsHandlerSource) && !/\b(?:sendCommand|runCommand)\s*\(/.test(operationsHandlerSource),
+  handlerStart: operationsHandlerStart,
+  handlerEnd: operationsHandlerEnd
+};
+if (!operationsCommandIsolation.ok) throw new Error('Operations Lab handlers are not command-isolated');
 const questions = Object.freeze({
   q1: 'Synthetic PMIA release Q1: Give a 30-point numbered checklist for measuring onboarding activation. Each point must be one short sentence.',
   q2: 'Synthetic PMIA release Q2: Explain activation versus engagement in exactly three bullets.',
@@ -146,6 +157,7 @@ const evidence = {
   session: { id: session, senderTarget: '', receiverTarget: '', dashboardTarget: '' },
   commandReachability,
   commandRegistryDigest,
+  operationsCommandIsolation,
   selfTest: { ok: false },
   sourceSubmission: { attempts: 0, rendered: false },
   manualCopyAdmissions: [],
@@ -721,6 +733,8 @@ try {
       return { ok:value.assistActive&&value.viewCount===10&&value.itemCount===4&&value.privacy==='safe'&&Boolean(value.summary), value };
     },10000,100);
     const before=await pilotState();
+    const commandKey = item => String(item?.requestId || `${item?.command || ''}:${item?.startedAt || item?.completedAt || 0}`);
+    const beforeCommandKeys = new Set((before?.commandJournal || []).map(commandKey));
     const interactionRaw=await dashboard.evaluate(`(()=>{const first=document.querySelector('[data-operations-lab-view="flow"]');first?.focus();first?.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));const keyboardMoved=document.querySelector('[data-operations-lab-view="transport"]')?.getAttribute('aria-selected')==='true';const scenario=document.getElementById('operationsLabScenario');if(scenario){scenario.value='network_loss';scenario.dispatchEvent(new Event('change',{bubbles:true}));}return JSON.stringify({keyboardMoved,scenario:String(document.getElementById('operationsLab')?.dataset?.scenario||''),itemCount:document.querySelectorAll('#operationsLabPanel [data-operations-lab-item]').length})})()`,{userGesture:true});
     const interaction=JSON.parse(interactionRaw);
     await waitFor(`Operations Lab scenario rendered (${label})`,async()=>{
@@ -731,8 +745,12 @@ try {
     const raw=await dashboard.evaluate(`(()=>{const required=['operationsLab','operationsLabSummary','operationsLabPrivacy','operationsLabTabs','operationsLabScenario','operationsLabScenarioDetail','operationsLabPanel'];const lab=document.getElementById('operationsLab');return JSON.stringify({viewport:{width:innerWidth,height:innerHeight},scrollWidth:document.documentElement.scrollWidth,horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1,required:Object.fromEntries(required.map(id=>[id,Boolean(document.getElementById(id))])),viewCount:document.querySelectorAll('#operationsLabTabs [role="tab"]').length,scenarioCount:document.querySelectorAll('#operationsLabScenario option').length,itemCount:document.querySelectorAll('#operationsLabPanel [data-operations-lab-item]').length,privacy:String(lab?.dataset?.privacy||''),view:String(lab?.dataset?.view||''),scenario:String(lab?.dataset?.scenario||''),aria:{tablist:document.getElementById('operationsLabTabs')?.getAttribute('role')||'',tabpanel:document.getElementById('operationsLabPanel')?.getAttribute('role')||'',selected:document.querySelectorAll('#operationsLabTabs [aria-selected="true"]').length}})})()`);
     const value=JSON.parse(raw);
     const after=await pilotState();
-    value.commandJournalDelta=Math.max(0,(after?.commandJournal?.length||0)-(before?.commandJournal?.length||0));
-    value.keyboardMoved=interaction.keyboardMoved;
+    const concurrentCommands = (after?.commandJournal || [])
+      .filter(item => !beforeCommandKeys.has(commandKey(item)))
+      .map(item => ({ command:String(item?.command || ''), requestId:String(item?.requestId || ''), startedAt:Number(item?.startedAt || 0), completedAt:Number(item?.completedAt || 0) }));
+    value.commandJournalDelta=concurrentCommands.length;
+    value.concurrentCommands=concurrentCommands;
+    value.localInteractionEvidence={ keyboardMoved:interaction.keyboardMoved, scenarioChanged:value.scenario==='network_loss', commandFreeSourceContract:operationsCommandIsolation.ok };
     const screenshot=await dashboard.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
     const screenshotPath=path.join(path.dirname(evidencePath),`operations-${label}.png`);
     await fs.writeFile(screenshotPath,Buffer.from(screenshot.data,'base64'));
@@ -778,7 +796,9 @@ try {
     !value.horizontalOverflow
     && Object.values(value.required).every(Boolean)
     && value.viewCount===10 && value.scenarioCount===5 && value.itemCount===4
-    && value.privacy==='safe' && value.keyboardMoved===true && value.commandJournalDelta===0
+    && value.privacy==='safe' && value.keyboardMoved===true
+    && value.localInteractionEvidence?.scenarioChanged===true
+    && value.localInteractionEvidence?.commandFreeSourceContract===true
     && value.aria.tablist==='tablist' && value.aria.tabpanel==='tabpanel' && value.aria.selected===1
   ));
   evidence.productionUi = { desktop: productionDesktop, mobile: productionMobile, tiny: productionTiny, print: productionPrint };

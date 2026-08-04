@@ -29,12 +29,13 @@ async function fixture({ cleanup = true, normalProfileTouched = false, smokeComm
     transportDrillOk: true, pilotUiOk: true, productionUiOk: true, assistUiOk: true, reliabilityUiOk: true, operationsUiOk: true,
     commandReachability: { ok: true, duplicateDomIds: [], visibleWithoutRegistry: [], visibleWithoutOwner: [] },
     commandRegistryDigest: 'registry-v1',
+    operationsCommandIsolation: { ok: true, handlerStart: 10, handlerEnd: 20 },
     commit: smokeCommit || commit,
     finals: [{ id: 'q1' }], gap: { clear: true }, outbox: { count: 0 },
     pilotUi: Object.fromEntries(['desktop','mobile','tiny','print'].map(key => [key, { viewport: { width: key === 'mobile' ? 320 : key === 'tiny' ? 280 : 1200 }, horizontalOverflow: false, accessibility: { polite: true, assertive: true, shortcutDialog: true } }])),
     productionUi: Object.fromEntries(['desktop','mobile','tiny','print'].map(key => [key, { viewport: { width: key === 'mobile' ? 320 : key === 'tiny' ? 280 : 1200 }, horizontalOverflow: false, controlCount: 8 }])),
     assistUi: Object.fromEntries(['desktop','mobile','tiny','print'].map(key => [key, { viewport: { width: key === 'mobile' ? 320 : key === 'tiny' ? 280 : 1200 }, horizontalOverflow: false, controlCount: 8, actionDock: true }])),
-    operationsUi: Object.fromEntries(['desktop','mobile','tiny','print'].map(key => [key, { viewport: { width: key === 'mobile' ? 320 : key === 'tiny' ? 280 : 1200 }, horizontalOverflow: false, viewCount: 10, scenarioCount: 5, itemCount: 4, privacy: 'safe', commandJournalDelta: 0 }])),
+    operationsUi: Object.fromEntries(['desktop','mobile','tiny','print'].map(key => [key, { viewport: { width: key === 'mobile' ? 320 : key === 'tiny' ? 280 : 1200 }, horizontalOverflow: false, viewCount: 10, scenarioCount: 5, itemCount: 4, privacy: 'safe', commandJournalDelta: 1, localInteractionEvidence: { keyboardMoved: true, scenarioChanged: true, commandFreeSourceContract: true } }])),
     cleanup: { processTreeClosed: cleanup, profileRemoved: cleanup },
     isolatedProfile: { normalProfileTouched }
   }));

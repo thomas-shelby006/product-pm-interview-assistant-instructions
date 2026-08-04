@@ -186,8 +186,11 @@ test('isolated smoke proves Operations Lab views scenarios keyboard privacy and 
   assert.match(runner, /viewCount===10/);
   assert.match(runner, /scenarioCount===5/);
   assert.match(runner, /itemCount===4/);
-  assert.match(runner, /commandJournalDelta===0/);
+  assert.match(runner, /operationsCommandIsolation/);
+  assert.match(runner, /concurrentCommands/);
+  assert.match(runner, /commandFreeSourceContract/);
   assert.match(runner, /keyboardMoved===true/);
+  assert.doesNotMatch(runner, /commandJournalDelta===0/);
   assert.match(runner, /operationsUiOk/);
 });
 
