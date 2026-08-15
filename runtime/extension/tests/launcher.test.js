@@ -116,7 +116,7 @@ test('session studio exposes configurable browser health and operational actions
   assert.match(launcher, /"Repair"/);
   assert.match(launcher, /Swap route/);
   assert.match(launcher, /Launch Interview/);
-  assert.match(launcher, /Show\("w960 h900"\)/);
+  assert.match(launcher, /Show\("w900 h650"\)/);
 });
 
 test('session studio provides route and context feedback', () => {
@@ -260,7 +260,7 @@ test('launcher sends boot context through the sender transport without local sen
     launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
     launcher.indexOf('RepairLaunch(*)')
   );
-  assert.match(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F5\}", g_hWin1\)/);
+  assert.match(launch, /SendBootContext\(BuildBootPrompt\(\), g_hWin1\)/);
   assert.doesNotMatch(launch, /SendToWindow\(BuildBootPrompt\(\), "\^\+\{F7\}", g_hWin2\)/);
 });
 
@@ -335,7 +335,7 @@ test('structured metadata controls are read for launch and released on close', (
     assert.match(launchBlock, new RegExp(control));
     assert.match(closeBlock, new RegExp(`${control}\\s*:=\\s*0`));
   }
-  assert.match(launcher, /Show\("w960 h900"\)/);
+  assert.match(launcher, /Show\("w900 h650"\)/);
 });
 
 test('operational session recovery binds one unambiguous READY lifecycle pair when cached state is stale', () => {
@@ -345,7 +345,7 @@ test('operational session recovery binds one unambiguous READY lifecycle pair wh
   const recoverBlock = launcher.slice(recoverStart, recoverEnd);
   assert.match(recoverBlock, /browserExeName := RegExReplace\(g_browserConfig\["executable"\]/);
   assert.match(recoverBlock, /WinGetList\("ahk_exe " browserExeName\)/);
-  assert.match(recoverBlock, /\^PMIA_\(SENDER\|RECEIVER\)_\(CHATGPT\|CLAUDE\)_\(PMIA_/);
+  assert.match(recoverBlock, /\^PMIA_\(\?:ARMED_\)\?\(SENDER\|RECEIVER\|COMPARISON\)_\(CHATGPT\|CLAUDE\)_\(PMIA_/);
   assert.match(recoverBlock, /completeSessions\.Length != 1/);
   assert.match(recoverBlock, /g_sessionId\s*:=\s*StrLower/);
   assert.match(recoverBlock, /g_senderProvider\s*:=\s*StrLower/);
@@ -448,7 +448,7 @@ test('launcher opens the Runtime Pilot Dashboard only after both provider roles 
   const receiverReady = launch.indexOf('receiverReady :=');
   const dashboardUrl = launch.indexOf('dashboardPageUrl := DashboardUrl');
   const dashboardWait = launch.indexOf('WaitForDashboardWindow');
-  const bootSend = launch.indexOf('SendToWindow(BuildBootPrompt()');
+  const bootSend = launch.indexOf('SendBootContext(BuildBootPrompt()');
   assert.ok(senderReady >= 0 && receiverReady > senderReady);
   assert.ok(dashboardUrl > receiverReady);
   assert.ok(dashboardWait > dashboardUrl);
@@ -529,4 +529,79 @@ test('persistent AutoHotkey debug logging is opt-in and session-redacted', () =>
   assert.match(log, /OutputDebug/);
   assert.match(log, /if !DEBUG_LOG_ENABLED\s*\n\s*return/);
   assert.ok(log.indexOf('if !DEBUG_LOG_ENABLED') < log.indexOf('FileAppend'));
+});
+
+test('comparison lifecycle is restored opportunistically without becoming a required production role', () => {
+  const recoverStart = launcher.indexOf('RecoverUnambiguousManagedSession() {');
+  const recoverEnd = launcher.indexOf('\n}\n\nIsAlive(', recoverStart);
+  const recoverBlock = launcher.slice(recoverStart, recoverEnd);
+  assert.match(recoverBlock, /comparisonCount/);
+  assert.match(recoverBlock, /g_comparisonEnabled\s*:=\s*recovered\["comparisonCount"\]\s*=\s*1/);
+  assert.match(recoverBlock, /g_comparisonProvider\s*:=\s*StrLower/);
+  assert.match(recoverBlock, /g_hWin3\s*:=/);
+  assert.match(recoverBlock, /senderCount"\]\s*=\s*1\s*&&\s*entry\["receiverCount"\]\s*=\s*1\s*&&\s*entry\["comparisonCount"\]\s*<=\s*1/);
+  const refreshStart = launcher.indexOf('RefreshManagedWindowHandles() {');
+  const refreshEnd = launcher.indexOf('\n}\n\nRecoverUnambiguousManagedSession() {', refreshStart);
+  const refreshBlock = launcher.slice(refreshStart, refreshEnd);
+  assert.match(refreshBlock, /FindLifecycleWindow\("comparison", g_comparisonProvider/);
+  assert.match(refreshBlock, /g_hWin3\s*:=\s*comparison\["hwnd"\]/);
+});
+
+test('launcher fails launch instead of reporting READY when boot dispatch cannot reach Window 1', () => {
+  const launch = launcher.slice(
+    launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
+    launcher.indexOf('ApplyConfiguredInitialLayout() {', launcher.indexOf('RunManagedLaunch(reuseSession := false)'))
+  );
+  assert.match(launch, /bootSent\s*:=\s*SendBootContext\(BuildBootPrompt\(\), g_hWin1\)/);
+  assert.match(launch, /if\s*!bootSent\s*\{[\s\S]*SetLaunchState\("ERROR",\s*"BOOT_CONTEXT_DISPATCH_FAILED/);
+  assert.ok(launch.indexOf('if !bootSent') < launch.indexOf('SetLaunchState("READY"'));
+});
+test('Session Studio opens a compact core surface with advanced setup hidden behind More options', () => {
+  const studio = block('ShowSessionLaunchGui() {', 'BuildProfileChoices() {');
+  assert.match(studio, /More options/);
+  assert.match(studio, /Show\("w900 h650"\)/);
+  assert.match(studio, /g_advancedSetupControls/);
+  assert.match(studio, /ToggleAdvancedLaunchOptions/);
+  assert.doesNotMatch(studio, /GroupBox",\s*"x30 y91 w900 h112",\s*"Browser and runtime health"/);
+  assert.doesNotMatch(studio, /GroupBox",\s*"x30 y367 w900 h145",\s*"Session setup \(optional\)"/);
+});
+test('initial provider layouts restore the fixed legacy geometry and split only the optional comparison pane', () => {
+  const initial = block('ApplyConfiguredInitialLayout() {', 'RepairLaunch(*)');
+  assert.match(initial, /Apply2WinLayout\(1, false\)/);
+  assert.match(initial, /Apply2WinLayout\(1, true\)/);
+  assert.doesNotMatch(initial, /ApplyAdaptiveWorkspaceLayout/);
+  const pair = block('Apply2WinLayout(idx, showDashboard := true) {', 'ApplyWin1OnlyLayout(idx) {');
+  assert.match(pair, /p\s*:=\s*layout2Win\[idx\]/);
+  assert.match(pair, /comparisonActive\s*:=\s*g_comparisonEnabled\s*&&\s*IsAlive\(g_hWin3\)/);
+  assert.match(pair, /answerW\s*:=\s*Floor\(\(p\[7\]\s*-\s*gap\)\s*\/\s*2\)/);
+});
+test('boot launch waits for extension-level sender ARMED acknowledgement before READY', () => {
+  const launch = launcher.slice(
+    launcher.indexOf('RunManagedLaunch(reuseSession := false)'),
+    launcher.indexOf('ApplyConfiguredInitialLayout() {', launcher.indexOf('RunManagedLaunch(reuseSession := false)'))
+  );
+  assert.match(launch, /bootSent\s*:=\s*SendBootContext\(BuildBootPrompt\(\), g_hWin1\)/);
+  const helper = launcher.slice(launcher.indexOf('SendBootContext(msg, hTarget) {'));
+  assert.match(helper, /WaitForLifecycleTitle\("sender", g_senderProvider, g_sessionId, "armed"/);
+  assert.match(helper, /ClipboardAll\(\)/);
+  assert.match(helper, /A_Clipboard := savedClip/);
+  assert.ok(launch.indexOf('SendBootContext') < launch.indexOf('SetLaunchState("READY"'));
+});
+test('boot acknowledgement uses the lifecycle watchdog and never resends an in-flight boot prompt', () => {
+  const helper = launcher.slice(
+    launcher.indexOf('SendBootContext(msg, hTarget) {'),
+    launcher.indexOf('SendToWindow(msg, shortcut, hTarget) {')
+  );
+  assert.match(helper, /global g_suppressClipMonitor, g_senderProvider, g_sessionId, RUNTIME_LIFECYCLE_TIMEOUT_MS/);
+  assert.match(helper, /WaitForLifecycleTitle\("sender", g_senderProvider, g_sessionId, "armed", RUNTIME_LIFECYCLE_TIMEOUT_MS\)/);
+  assert.doesNotMatch(helper, /Loop 2/);
+});
+test('Session Studio default surface keeps profile, comparison, layout and preflight controls under More options', () => {
+  const studio = block('ShowSessionLaunchGui() {', 'BuildProfileChoices() {');
+  assert.match(studio, /g_profileDdl\s*:=\s*g_launchGui\.Add\("DropDownList",\s*"[^"]*Hidden/);
+  assert.match(studio, /g_preflightButton\s*:=\s*g_launchGui\.Add\("Button",\s*"[^"]*Hidden/);
+  assert.match(studio, /g_comparisonEnabledCheck\s*:=\s*g_launchGui\.Add\("CheckBox",\s*"[^"]*Hidden/);
+  assert.match(studio, /g_comparisonProviderDdl\s*:=\s*g_launchGui\.Add\("DropDownList",\s*"[^"]*Hidden/);
+  assert.match(studio, /g_layoutDdl\s*:=\s*g_launchGui\.Add\("DropDownList",\s*"[^"]*Hidden/);
+  assert.match(studio, /g_runtimeHealth\s*:=\s*g_launchGui\.Add\("Text",\s*"[^"]*",\s*"Checking PMIA runtime registration/);
 });

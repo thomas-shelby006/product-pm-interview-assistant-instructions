@@ -123,6 +123,9 @@ function New-PmiaProfileRow {
         $registeredPath = [string]$Candidate.RegisteredPath
         $resolvedPath = [string]$Candidate.ResolvedPath
         $version = [string]$Candidate.Entry.service_worker_registration_info.version
+        if ([string]::IsNullOrWhiteSpace($version)) {
+            $version = Get-PmiaExpectedVersion $Candidate.RegisteredPath
+        }
         $pathMatches = [bool]($ExpectedResolvedPath -and $resolvedPath -eq $ExpectedResolvedPath)
         if (-not $pathMatches) {
             $issueCode = 'EXTENSION_PATH_MISMATCH'

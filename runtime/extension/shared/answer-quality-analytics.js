@@ -14,12 +14,12 @@ const BANDS = Object.freeze({
 
 function text(value) { return String(value || '').trim(); }
 function average(values) {
-  const list = values.map(Number).filter(Number.isFinite);
-  return list.length ? Math.round(list.reduce((sum, value) => sum + value, 0) / list.length) : 0;
+  const list = values.filter(value => value !== null && value !== undefined && value !== '').map(Number).filter(Number.isFinite);
+  return list.length ? Math.round(list.reduce((sum, value) => sum + value, 0) / list.length) : null;
 }
 function percentile(values, ratio) {
-  const list = values.map(Number).filter(Number.isFinite).sort((a,b)=>a-b);
-  if (!list.length) return 0;
+  const list = values.filter(value => value !== null && value !== undefined && value !== '').map(Number).filter(Number.isFinite).sort((a,b)=>a-b);
+  if (!list.length) return null;
   return Math.round(list[Math.min(list.length - 1, Math.max(0, Math.ceil(list.length * ratio) - 1))]);
 }
 
@@ -46,10 +46,10 @@ export function deriveAnswerAnalytics({
   const start = Math.max(0, Number(startedAt) || 0);
   const first = Math.max(0, Number(firstTokenAt) || 0);
   const complete = Math.max(0, Number(completedAt) || 0);
-  const firstTokenLatencyMs = first >= start && first > 0 ? first - start : 0;
-  const generationMs = first && complete >= first ? complete - first : 0;
-  const totalResponseMs = complete >= start && complete > 0 ? complete - start : 0;
-  const outputWpm = words && generationMs > 0 ? Math.round((words * 60000) / generationMs) : 0;
+  const firstTokenLatencyMs = first >= start && first > 0 ? first - start : null;
+  const generationMs = first && complete >= first ? complete - first : null;
+  const totalResponseMs = complete >= start && complete > 0 ? complete - start : null;
+  const outputWpm = words && generationMs > 0 ? Math.round((words * 60000) / generationMs) : null;
   const bandFit = words < band.min ? 'too_brief' : words > band.max ? 'too_long' : 'on_target';
   const depthProxy = bandFit === 'too_brief' ? 'below_target_band' : bandFit === 'too_long' ? 'above_target_band' : 'within_target_band';
   return {

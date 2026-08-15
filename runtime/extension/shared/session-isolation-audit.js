@@ -4,7 +4,7 @@ export function auditSessionIsolation(sessions = []) {
   const runtimeInstances = new Map();
   for (const session of Array.isArray(sessions) ? sessions : []) {
     const sessionId = String(session.sessionId || '');
-    for (const role of ['sender','receiver']) {
+    for (const role of ['sender','receiver','comparison']) {
       const value = session[role] || {};
       if (value.tabId) {
         const key = String(value.tabId);

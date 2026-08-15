@@ -374,13 +374,13 @@ test('content runtime exposes an exact managed-session end command', async () =>
   assert.match(controller, /clearSessionLogs\(sessionId\)/);
 });
 
-test('production ChatGPT sender requires authoritative DOM finals', async () => {
+test('production ChatGPT text uses bounded stable-tail handoff while voice keeps the stronger tail guard', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content/entry.js'), 'utf8');
-  assert.match(entry, /allowFallbackFinalization:\s*runtimeConfig\.provider\s*!==\s*'chatgpt'/);
+  assert.match(entry, /allowFallbackFinalization:\s*true/);
   assert.match(entry, /allowPreview:\s*runtimeConfig\.provider\s*!==\s*'chatgpt'/);
-  assert.match(entry, /allowVoiceFallback:\s*false/);
+  assert.match(entry, /allowVoiceFallback:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
   assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 180 \}\)/);
 });
 
@@ -459,13 +459,13 @@ test('service worker handles browser-level export commands without content focus
 });
 
 
-test('ChatGPT transport disables weak-tail finalization while Claude keeps protocol authority', async () => {
+test('ChatGPT text uses bounded stable-tail handoff while ChatGPT voice still requires strong-tail recovery', async () => {
   const { readFile } = await import('node:fs/promises');
   const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const entry = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
-  assert.match(entry, /allowFallbackFinalization: runtimeConfig\.provider !== 'chatgpt'/);
+  assert.match(entry, /allowFallbackFinalization: true/);
   assert.match(entry, /allowPreview: runtimeConfig\.provider !== 'chatgpt'/);
-  assert.match(entry, /allowVoiceFallback: false/);
+  assert.match(entry, /allowVoiceFallback: runtimeConfig\.provider === 'chatgpt'/);
   assert.match(entry, /createChatGptTurnTracker\(\{ fallbackMs: 180 \}\)/);
 });
 
@@ -675,4 +675,31 @@ test('launcher session end requests extension approval without foreground activa
   assert.match(launcher, /ControlSend shortcut/);
   assert.doesNotMatch(block, /CloseManagedPmiaWindows/);
   assert.doesNotMatch(block, /WinActivate/);
+});
+
+test('production ChatGPT enables bounded text fallback and strong-tail voice recovery', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
+  assert.match(entry, /allowFallbackFinalization:\s*true/);
+  assert.match(entry, /allowVoiceFallback:\s*runtimeConfig\.provider\s*===\s*'chatgpt'/);
+});
+test('successful boot forwarding promotes the sender lifecycle to ARMED', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
+  assert.match(entry, /let bootArmed = false/);
+  assert.match(entry, /if \(forwarded\) \{\s*bootArmed = true;\s*restoreTitle\.setTarget\(runtimeLifecycleTitle\(runtimeConfig, 'armed'\)\)/);
+});
+test('sender ARMED boot acknowledgement returns to normal READY lifecycle after launch handshake', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const entry = await readFile(resolve(extensionRoot, 'content', 'entry.js'), 'utf8');
+  assert.match(entry, /setTimeout\(\(\) => \{\s*bootArmed = false;\s*refreshLifecycleTitle\(\);\s*\}, 2500\)/);
+});
+test('manifest exposes the extracted flow trace recorder to provider content modules', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
+  const resources = manifest.web_accessible_resources?.flatMap(item => item.resources || []) || [];
+  assert.ok(resources.includes('content/flow-trace-recorder.js'));
 });

@@ -23,9 +23,9 @@
       <div><span>Session</span><strong id="sessionId">--</strong></div>
       <div><span>Route</span><strong id="route">--</strong></div>
       <div><span>Mode</span><strong id="transportMode">--</strong></div>
-      <div><span>Uptime</span><strong id="uptime">--</strong></div>
-      <div id="operationGuard"><span>Operation</span><strong id="operationActivity">Idle</strong></div>
-      <div><span>Updates</span><strong id="runtimeEfficiency">Waiting</strong></div>
+      <div class="cockpit-advanced"><span>Uptime</span><strong id="uptime">--</strong></div>
+      <div id="operationGuard" class="cockpit-advanced"><span>Operation</span><strong id="operationActivity">Idle</strong></div>
+      <div class="cockpit-advanced"><span>Updates</span><strong id="runtimeEfficiency">Waiting</strong></div>
     </section>
 
     <section id="readinessGate" class="readiness-gate" data-readiness="not_ready" aria-live="polite" aria-atomic="true">
@@ -38,7 +38,7 @@
       <div class="readiness-actions">
         <button data-command="check_live">Check live</button>
         <button data-command="repair_runtime">Repair</button>
-        <button data-command="run_self_test">Run self-test</button><button data-command="run_preflight">Run preflight</button>
+        <button class="cockpit-advanced" data-command="run_self_test">Run self-test</button><button class="cockpit-advanced" data-command="run_preflight">Run preflight</button>
       </div>
     </section>
 
@@ -58,12 +58,12 @@
 
     <nav class="tabs" aria-label="Dashboard views" role="tablist">
       <button class="tab active" data-view="overview" role="tab" aria-selected="true" aria-controls="panelOverview">Live</button>
-      <button class="tab" data-view="navigator" role="tab" aria-selected="false" aria-controls="panelNavigator">Navigator</button>
+      <button class="tab cockpit-advanced" data-view="navigator" role="tab" aria-selected="false" aria-controls="panelNavigator">Navigator</button>
       <button class="tab" data-view="queue" role="tab" aria-selected="false" aria-controls="panelQueue">Inbox <span id="queueBadge">0</span></button>
       <button class="tab" data-view="timeline" role="tab" aria-selected="false" aria-controls="panelTimeline">Timeline</button>
       <button class="tab" data-view="review" role="tab" aria-selected="false" aria-controls="panelReview">Review</button>
-      <button class="tab" data-view="assist" role="tab" aria-selected="false" aria-controls="panelAssist">Assist</button>
-      <button class="tab" data-view="production" role="tab" aria-selected="false" aria-controls="panelProduction">Production</button>
+      <button class="tab cockpit-advanced" data-view="assist" role="tab" aria-selected="false" aria-controls="panelAssist">Assist</button>
+      <button class="tab cockpit-advanced" data-view="production" role="tab" aria-selected="false" aria-controls="panelProduction">Production</button>
     </nav>
 
     <main>
@@ -93,7 +93,8 @@
       </section>
 
       <section class="view active" id="panelOverview" data-view-panel="overview" role="tabpanel">
-        <section class="live-session-console" aria-label="Mock interview navigator">
+        <div class="live-detail-toggle"><button id="toggleLiveDetails" type="button" aria-pressed="false">Show details</button></div>
+        <section class="live-session-console cockpit-advanced" aria-label="Mock interview navigator">
           <div class="session-phase-block">
             <div class="panel-title"><span class="eyebrow">Mock interview</span><b id="liveSessionPhase">Setup</b></div>
             <strong id="liveSessionClock">00:00</strong>
@@ -156,22 +157,22 @@
           </section>
         </section>
 
-        <div class="control-grid" aria-label="Runtime controls">
+        <div class="control-grid essential-controls" aria-label="Runtime controls">
           <button class="primary" id="primaryTransportAction" data-command="pause">Pause forwarding</button>
           <button data-command="resume_catch_up">Resume &amp; catch up</button>
-          <button data-command="resume_without_send">Resume only</button>
+          <button class="cockpit-advanced" data-command="resume_without_send">Resume only</button>
           <button data-command="check_live">Check live</button>
           <button data-command="repair_runtime">Repair runtime</button>
-          <button data-command="resend_context">Resend context</button>
+          <button class="cockpit-advanced" data-command="resend_context">Resend context</button>
           <button data-command="toggle_mic">Toggle sender mic</button>
-          <button data-command="toggle_scroll">Toggle scroll</button>
-          <button data-command="focus_composer">Focus receiver</button>
-          <button data-command="export_session">Export session</button>
+          <button class="cockpit-advanced" data-command="toggle_scroll">Toggle scroll</button>
+          <button class="cockpit-advanced" data-command="focus_composer">Focus receiver</button>
+          <button class="cockpit-advanced" data-command="export_session">Export session</button>
           <button id="autoSubmitAction" data-command="set_auto_submit">Auto-submit: On</button>
-          <button id="holdAction" data-command="set_hold">Hold after answer: Off</button>
-          <button id="submitNow" data-command="submit_now">Submit next draft now</button>
-          <button id="interruptLatest" class="danger" data-command="interrupt_latest" data-confirm="Stop the current Window 2 answer and submit only the latest waiting question now? Earlier waiting questions will remain protected.">Interrupt for latest</button>
-          <button id="copyLatest">Copy latest question</button>
+          <button class="cockpit-advanced" id="holdAction" data-command="set_hold">Hold after answer: Off</button>
+          <button id="submitNow" class="cockpit-advanced" data-command="submit_now">Submit next draft now</button>
+          <button id="interruptLatest" class="danger cockpit-advanced" data-command="interrupt_latest" data-confirm="Stop the current Window 2 answer and submit only the latest waiting question now? Earlier waiting questions will remain protected.">Interrupt for latest</button>
+          <button class="cockpit-advanced" id="copyLatest">Copy latest question</button>
         </div>
 
         <section class="truth-rail" aria-label="Runtime truth summary" aria-live="polite">
@@ -192,6 +193,15 @@
           </article>
         </section>
 
+        <section class="question-path-card" aria-label="Question path" aria-live="polite">
+          <div class="question-path-head">
+            <div><span class="eyebrow">Question path</span><strong id="questionPathTitle">Waiting for a question</strong></div>
+            <button class="cockpit-advanced" data-view-target="timeline">Open timeline</button>
+          </div>
+          <ol id="questionPathStages" class="question-path-stages"></ol>
+          <p id="questionPathDetail">The next finalized question will show each delivery step here.</p>
+        </section>
+
         <section class="live-command-center" aria-label="Live delivery command center">
           <article class="live-state-card" data-catch-up="live">
             <span class="eyebrow">Delivery state</span>
@@ -204,7 +214,7 @@
             </div>
           </article>
 
-          <article id="turnCoordinationPanel" class="live-panel turn-coordination-panel" data-state="connecting" aria-live="polite" aria-label="Turn coordination status">
+          <article id="turnCoordinationPanel" class="live-panel turn-coordination-panel cockpit-advanced" data-state="connecting" aria-live="polite" aria-label="Turn coordination status">
             <div class="panel-title"><span class="eyebrow">Turn coordination</span><b id="turnCoordinationState">Connecting</b></div>
             <strong id="turnCoordinationTitle">Waiting for coordination state</strong>
             <p id="turnCoordinationDetail">Pause, carryover, and protected draft state will appear here.</p>
@@ -254,13 +264,13 @@
             <p id="nextDraftText">New questions will accumulate here while Window 2 is answering.</p>
           </article>
 
-          <article class="live-panel pace-panel" data-pace="caught_up">
+          <article class="live-panel pace-panel cockpit-advanced" data-pace="caught_up">
             <div class="panel-title"><span class="eyebrow">Pace guard</span><b id="paceState">Caught up</b></div>
             <strong id="paceRates">0 in / 0 proven per min</strong>
             <p id="paceForecast">No unresolved finals.</p>
           </article>
 
-          <article class="live-panel recovery-panel" data-recovery="idle">
+          <article class="live-panel recovery-panel cockpit-advanced" data-recovery="idle">
             <div class="panel-title"><span class="eyebrow">Recovery progress</span><b id="recoveryPhase">Idle</b></div>
             <strong id="recoveryTitle">No repair running</strong>
             <div id="recoveryChecks" class="recovery-checks"></div>
@@ -268,26 +278,26 @@
             <div class="recovery-schedule"><b id="recoveryScheduleState">No durable check scheduled</b><span id="recoveryScheduleDetail">Recovery alarms appear here.</span></div>
           </article>
 
-          <article class="live-panel proof-panel" data-proof="empty">
+          <article class="live-panel proof-panel cockpit-advanced" data-proof="empty">
             <div class="panel-title"><span class="eyebrow">Batch proof</span><b id="proofState">No proof</b></div>
             <strong id="proofTitle">No batch evaluated</strong>
             <p id="proofDetail">Rendered proof will be checked against exact batch membership.</p>
           </article>
 
-          <article class="live-panel outbox-panel" data-outbox="clear">
+          <article class="live-panel outbox-panel cockpit-advanced" data-outbox="clear">
             <div class="panel-title"><span class="eyebrow">Sender outbox</span><b id="outboxState">Clear</b></div>
             <strong id="outboxTitle">No unpersisted finals</strong>
             <p id="outboxDetail">Window 1 has no pending persistence acknowledgement.</p>
             <button id="retryOutbox" data-command="retry_outbox">Retry outbox now</button>
           </article>
 
-          <article class="live-panel gap-panel" data-gap="clear">
+          <article class="live-panel gap-panel cockpit-advanced" data-gap="clear">
             <div class="panel-title"><span class="eyebrow">Gap watch</span><b id="gapState">No gap</b></div>
             <strong id="gapTitle">Sequences are contiguous</strong>
             <p id="gapDetail">No out-of-order finals are waiting.</p>
           </article>
 
-          <article class="live-panel storage-panel">
+          <article class="live-panel storage-panel cockpit-advanced">
             <div class="panel-title"><span class="eyebrow">Session memory</span><b id="storagePressureBadge">Normal</b></div>
             <strong id="storagePressureValue">0%</strong>
             <p id="storagePressureDetail">Lossless ledger storage is healthy.</p>
@@ -295,19 +305,19 @@
             <button id="compactProven" data-command="compact_proven">Compact proven history</button>
           </article>
 
-          <article class="live-panel hidden-runtime-panel" data-visibility="unknown">
+          <article class="live-panel hidden-runtime-panel cockpit-advanced" data-visibility="unknown">
             <div class="panel-title"><span class="eyebrow">Hidden runtime guard</span><b id="hiddenRuntimeState">Waiting</b></div>
             <strong id="hiddenRuntimeTitle">No receiver scheduler evidence</strong>
             <p id="hiddenRuntimeDetail">Window 2 visibility and provider wake source will appear here.</p>
           </article>
 
-          <article class="live-panel command-journal-panel">
+          <article class="live-panel command-journal-panel cockpit-advanced">
             <div class="panel-title"><span class="eyebrow">Operator commands</span><b id="commandJournalState">No history</b></div>
             <strong id="commandJournalTitle">No command completed</strong>
             <div id="commandJournalList" class="command-journal-list" aria-label="Recent operator commands"></div>
           </article>
 
-          <article class="live-panel transport-lane-panel">
+          <article class="live-panel transport-lane-panel cockpit-advanced">
             <div class="panel-title"><span class="eyebrow">Transport lanes</span><b id="transportLaneState">Waiting</b></div>
             <div class="transport-lane-list">
               <span><b>Window 1</b><strong id="senderTransportLane">Unknown</strong><small id="senderTransportDetail">No direct-port evidence.</small></span>
@@ -315,26 +325,26 @@
             </div>
           </article>
 
-          <article class="live-panel batch-plan-panel">
+          <article class="live-panel batch-plan-panel cockpit-advanced">
             <div class="panel-title"><span class="eyebrow">Batch plan</span><b id="batchPlanState">No batches</b></div>
             <strong id="batchPlanTitle">Nothing waiting</strong>
             <p id="batchPlanDetail">Accumulated finals will be partitioned only when provider limits require it.</p>
           </article>
 
-          <article class="live-panel self-test-panel" data-state="missing">
+          <article class="live-panel self-test-panel cockpit-advanced" data-state="missing">
             <div class="panel-title"><span class="eyebrow">Active self-test</span><b id="selfTestState">Not run</b></div>
             <strong id="selfTestTitle">Control plane not actively verified</strong>
             <p id="selfTestDetail">Run the no-content pulse before relying on Ready.</p>
-            <button data-command="run_self_test">Run self-test</button><button data-command="run_preflight">Run preflight</button>
+            <button class="cockpit-advanced" data-command="run_self_test">Run self-test</button><button class="cockpit-advanced" data-command="run_preflight">Run preflight</button>
           </article>
 
-          <article class="live-panel delivery-sla-panel">
+          <article class="live-panel delivery-sla-panel cockpit-advanced">
             <div class="panel-title"><span class="eyebrow">Delivery SLA</span><b id="deliverySlaState">Caught up</b></div>
             <strong id="deliverySlaTitle">No unresolved final</strong>
             <p id="deliverySlaDetail">Automatic escalation begins only when a protected final exceeds its delivery window.</p>
           </article>
 
-          <article class="live-panel draft-conflict-panel" hidden>
+          <article class="live-panel draft-conflict-panel cockpit-advanced" hidden>
             <div class="panel-title"><span class="eyebrow">Draft conflict</span><b id="draftConflictState">Action required</b></div>
             <strong id="draftConflictTitle">Manual text differs from the PMIA draft</strong>
             <p id="draftConflictDetail">Choose how Window 2 should preserve the manual text and protected PMIA batch.</p>
@@ -346,7 +356,7 @@
           </article>
         </section>
 
-        <section class="latency-section" aria-labelledby="latencyTitle">
+        <section class="latency-section cockpit-advanced" aria-labelledby="latencyTitle">
           <div class="section-heading">
             <div><h2 id="latencyTitle">Latency rail</h2><p>Latest final from persistence through answer completion.</p></div>
             <span id="oldestInboxAge">Caught up</span>
@@ -354,7 +364,7 @@
           <div class="latency-rail" id="latencyRail"></div>
         </section>
 
-        <div class="role-grid">
+        <div class="role-grid cockpit-advanced">
           <article class="role-card" id="senderCard">
             <div class="card-head"><span>Window 1</span><b>Sender</b></div>
             <div class="health" id="senderHealth" data-tone="warn">Waiting</div>
@@ -383,13 +393,13 @@
           </article>
         </div>
 
-        <section class="warnings" aria-labelledby="warningsTitle">
+        <section class="warnings cockpit-advanced" aria-labelledby="warningsTitle">
           <div class="section-heading"><h2 id="warningsTitle">Health markers</h2><span id="healthScore">--</span></div>
           <div id="diagnosticGroups" class="diagnostic-groups" aria-label="Diagnostic categories"></div>
           <div id="warningList" class="warning-list"><p class="empty">No live snapshot yet.</p></div>
         </section>
 
-        <section class="metrics" aria-label="Runtime metrics">
+        <section class="metrics cockpit-advanced" aria-label="Runtime metrics">
           <article><span>Delivery success</span><strong id="deliverySuccess">--</strong></article>
           <article><span>Average proof</span><strong id="averageProof">--</strong></article>
           <article><span>Queued finals</span><strong id="queuedFinals">0</strong></article>

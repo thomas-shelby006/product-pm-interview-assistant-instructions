@@ -274,3 +274,85 @@ test('ChatGPT defaults to final-only DOM admission with no provisional preview o
   assert.deepEqual(finals, [{ id: 'chatgpt-u2', text: 'How would you prioritize this launch?', boundary: 'rendered_user_turn' }]);
   sender.disconnect();
 });
+
+test('ChatGPT voice can finalize a strongly punctuated stable tail without enabling non-voice fallback', () => {
+  let messages = [];
+  let voiceActive = true;
+  let now = 0;
+  const timers = [];
+  const finals = [];
+  const adapter = {
+    provider: 'chatgpt',
+    getConversationMessages: () => messages,
+    isVoiceActive: () => voiceActive,
+    isComposerEmpty: () => true,
+    isGenerating: () => false
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    allowFallbackFinalization: false,
+    allowVoiceFallback: true,
+    onFinal: value => finals.push(value),
+    nowFn: () => now,
+    setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeoutFn: () => {}
+  });
+  messages = [message('voice-chatgpt-1', 'user', 'How would you improve onboarding activation?')];
+  sender.observe(now);
+  assert.equal(timers.at(-1)?.delay, 180);
+  now = 180;
+  timers.at(-1).callback();
+  assert.deepEqual(finals, [{
+    id: 'voice-chatgpt-1',
+    text: 'How would you improve onboarding activation?',
+    boundary: 'stable_tail_fallback'
+  }]);
+
+  voiceActive = false;
+  messages = [...messages, message('typed-chatgpt-2', 'user', 'What should remain provisional?')];
+  sender.observe(300);
+  assert.equal(timers.length, 1);
+  sender.disconnect();
+});
+test('stable-tail deadline survives unrelated assistant-stream DOM churn', () => {
+  let messages = [];
+  let now = 0;
+  let nextTimerId = 0;
+  const scheduled = new Map();
+  const clears = [];
+  const finals = [];
+  const adapter = {
+    provider: 'chatgpt',
+    getConversationMessages: () => messages,
+    isVoiceActive: () => false,
+    isComposerEmpty: () => true,
+    isGenerating: () => false
+  };
+  const sender = senderModule.createProviderSender({
+    adapter,
+    allowFallbackFinalization: true,
+    onFinal: value => finals.push(value),
+    nowFn: () => now,
+    setTimeoutFn: (callback, delay) => {
+      const id = ++nextTimerId;
+      scheduled.set(id, { callback, delay });
+      return id;
+    },
+    clearTimeoutFn: id => { clears.push(id); scheduled.delete(id); }
+  });
+  messages = [message('fast-chatgpt-1', 'user', 'What metric would you use for activation?')];
+  sender.observe(now);
+  assert.equal(scheduled.size, 1);
+  const [originalTimerId, originalTimer] = [...scheduled.entries()][0];
+  now = 170;
+  sender.observe(now);
+  now = 175;
+  sender.observe(now);
+  assert.equal(clears.includes(originalTimerId), false);
+  assert.equal(scheduled.size, 1);
+  now = 180;
+  originalTimer.callback();
+  assert.equal(finals.length, 1);
+  assert.equal(finals[0].id, 'fast-chatgpt-1');
+  sender.disconnect();
+});

@@ -22,6 +22,25 @@ test('Cycle 188: session isolation detects shared tabs and runtime instances', (
   assert.equal(result.ok, false); assert.equal(result.issues.length, 2);
 });
 
+test('Cycle 188b: session isolation includes the optional comparison role', () => {
+  const result = auditSessionIsolation([
+    { sessionId: 'a', comparison: { tabId: 9, instanceId: 'cmp-shared' } },
+    { sessionId: 'b', receiver: { tabId: 9, instanceId: 'cmp-shared' } }
+  ]);
+  assert.equal(result.ok, false);
+  assert.equal(result.issues.length, 2);
+  assert.equal(result.tabCount, 1);
+  assert.equal(result.runtimeCount, 1);
+});
+test('Cycle 190b: orphan collection recognizes comparison windows and preserves owned comparison windows', () => {
+  const result = collectOrphanManagedWindows({ now: 1000, staleAfterMs: 100, sessions: [
+    { sessionId: 's1', comparison: { windowId: 4 } }
+  ], windows: [
+    { id: 4, title: 'PMIA_COMPARISON_CLAUDE_S1', lastSeenAt: 0 },
+    { id: 5, title: 'PMIA_COMPARISON_CHATGPT_OLD', lastSeenAt: 0 }
+  ] });
+  assert.deepEqual(result.orphans.map(item => item.windowId), [5]);
+});
 test('Cycle 189: cleanup transaction is resumable after a failed step', () => {
   let transaction = beginCleanupTransaction({ sessionId: 's1', now: 10, id: 'c' });
   transaction = recordCleanupStep(transaction, 'freeze_commands', { ok: true }, 20).transaction;

@@ -41,3 +41,11 @@ test('deployment guide uses Reload before Load unpacked', async () => {
   assert.match(guide, /EXTENSION_VERSION_MISMATCH/);
   assert.match(guide, /pathMatches.*True/i);
 });
+
+test('active extension architecture documentation matches the optional comparison topology', async () => {
+  const guide = await read('runtime/extension/README.md');
+  assert.doesNotMatch(guide, /## PMIA 0\.10 state/);
+  assert.match(guide, /optional comparison/i);
+  assert.match(guide, /all managed role logs/i);
+  assert.doesNotMatch(guide, /and both role logs/i);
+});

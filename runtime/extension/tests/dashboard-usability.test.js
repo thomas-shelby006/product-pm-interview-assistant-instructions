@@ -123,21 +123,21 @@ test('Pilot exposes an operation guard for in-flight commands', () => {
 
 
 test('Pilot exposes Gap Watch for protected out-of-order finals', () => {
-  assert.match(markup, /class="live-panel gap-panel"/);
+  assert.match(markup, /class="[^"]*live-panel[^"]*gap-panel[^"]*"/);
   assert.match(markup, /id="gapState"/);
   assert.match(markup, /id="gapDetail"/);
 });
 
 
 test('Pilot exposes sender outbox status and a safe retry control', () => {
-  assert.match(markup, /class="live-panel outbox-panel"/);
+  assert.match(markup, /class="[^"]*live-panel[^"]*outbox-panel[^"]*"/);
   assert.match(markup, /data-command="retry_outbox"/);
   assert.match(markup, /id="outboxDetail"/);
 });
 
 
 test('Pilot exposes exact batch proof inspection', () => {
-  assert.match(markup, /class="live-panel proof-panel"/);
+  assert.match(markup, /class="[^"]*live-panel[^"]*proof-panel[^"]*"/);
   assert.match(markup, /id="proofState"/);
   assert.match(markup, /id="proofDetail"/);
 });
@@ -173,7 +173,7 @@ test('heartbeat updates use the lightweight role-only render path', () => {
 
 
 test('Pilot exposes semantic Recovery Progress rather than a binary repair flag', () => {
-  assert.match(markup, /class="live-panel recovery-panel"/);
+  assert.match(markup, /class="[^"]*live-panel[^"]*recovery-panel[^"]*"/);
   assert.match(markup, /id="recoveryChecks"/);
 });
 

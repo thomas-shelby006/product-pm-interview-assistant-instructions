@@ -130,11 +130,15 @@ function contextLines(context = {}) {
   return lines;
 }
 
+function analysisMetric(value, suffix = '') {
+  return value === null || value === undefined || value === '' ? 'pending' : `${value}${suffix}`;
+}
+
 function providerAnalyticsLines(answerAnalytics = {}) {
   const lines = [];
   for (const [provider, value] of Object.entries(answerAnalytics.providers || {})) {
     const label = provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown';
-    lines.push(`- ${label}: ${value.answerCount || 0} answers; avg ${value.averageWords || 0} words; first token ${value.averageFirstTokenMs || 0} ms; total ${value.averageTotalResponseMs || 0} ms; output ${value.averageOutputWpm || 0} WPM; on target ${value.onTargetCount || 0}`);
+    lines.push(`- ${label}: ${value.answerCount || 0} answers; avg ${value.averageWords || 0} words; first token ${analysisMetric(value.averageFirstTokenMs, ' ms')}; total ${analysisMetric(value.averageTotalResponseMs, ' ms')}; output ${analysisMetric(value.averageOutputWpm, ' WPM')}; on target ${value.onTargetCount || 0}`);
   }
   return lines.length ? lines : ['- No answer analytics captured.'];
 }
@@ -158,7 +162,7 @@ export function renderSessionMarkdown({ session, events, summary, sessionContext
     '',
     '- Word-band fit is a deterministic depth/conciseness proxy, not a semantic quality score.',
     `- Answers on target: ${answerAnalytics?.onTargetCount || 0}; too brief: ${answerAnalytics?.tooBriefCount || 0}; too long: ${answerAnalytics?.tooLongCount || 0}`,
-    `- Average first token: ${answerAnalytics?.averageFirstTokenMs || 0} ms; average total response: ${answerAnalytics?.averageTotalResponseMs || 0} ms; average output pace: ${answerAnalytics?.averageOutputWpm || 0} WPM`,
+    `- Average first token: ${analysisMetric(answerAnalytics?.averageFirstTokenMs, ' ms')}; average total response: ${analysisMetric(answerAnalytics?.averageTotalResponseMs, ' ms')}; average output pace: ${analysisMetric(answerAnalytics?.averageOutputWpm, ' WPM')}`,
     ...providerAnalyticsLines(answerAnalytics),
     '',
     '## Events',

@@ -127,3 +127,14 @@ test('combined session analysis compares all active answer agents without transc
   assert.equal(JSON.stringify(analysis).includes('private primary answer'), false);
   assert.equal(JSON.stringify(analysis).includes('private comparison answer'), false);
 });
+
+test('session Markdown reports missing timing as pending instead of zero-latency performance', async () => {
+  const { summarizeAnswerAnalytics } = await import('../shared/answer-quality-analytics.js');
+  const answerAnalytics = summarizeAnswerAnalytics([
+    { provider:'chatgpt', role:'receiver', questionType:'simple_concept', questionTypeLabel:'Simple conceptual PM answer', targetMinWords:55, targetMaxWords:75, wordCount:65, bandFit:'on_target', firstTokenLatencyMs:null, generationMs:null, totalResponseMs:null, outputWpm:null, estimatedSpeakingMs:30233 }
+  ]);
+  const markdown = renderSessionMarkdown({ session:{ sessionId:'s1', role:'receiver', provider:'chatgpt' }, events:[], summary:{}, sessionContext:{}, answerAnalytics });
+  assert.match(markdown, /Average first token: pending/);
+  assert.match(markdown, /first token pending/);
+  assert.doesNotMatch(markdown, /first token 0 ms/);
+});

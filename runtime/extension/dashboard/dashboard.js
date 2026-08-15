@@ -54,6 +54,7 @@ import { virtualItems } from './virtual-list-model.js';
 import { createRenderScheduler } from './render-scheduler.js';
 import { createIdleWorkCoordinator } from './idle-work-coordinator.js';
 import { explainTrace } from '../shared/trace-explanation.js';
+import { renderQuestionPath } from './render-question-path.js';
 import { auditShortcutConflicts } from '../shared/shortcut-conflict-model.js';
 import { auditDashboardAccessibility } from './accessibility-audit.js';
 import { buildVisualPreferenceProof } from './visual-preference-proof.js';
@@ -160,12 +161,20 @@ function downloadTextFile(name, content, type = 'text/plain') {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function analysisMetric(value, suffix = '') {
+  return value === null || value === undefined || value === '' ? 'pending' : `${value}${suffix}`;
+}
+
+function analysisDuration(value) {
+  return value === null || value === undefined || value === '' ? 'pending' : formatDuration(value);
+}
+
 function sessionAnalysisHtml(analysis = {}) {
   const overall = analysis.answerAnalytics || {};
   const roleRows = Object.entries(analysis.roles || {}).map(([role, value]) => `<tr><td>${escapeHtml(role)}</td><td>${value.eventCount || 0}</td><td>${value.questionCount || 0}</td><td>${value.answerCount || 0}</td><td>${value.averageAnswerWords || 0}</td><td>${value.averageDeliveryMs || 0} ms</td><td>${value.queuedFinalCount || 0}</td><td>${value.answerTimeoutCount || 0}</td></tr>`).join('');
-  const providerRows = Object.entries(overall.providers || {}).map(([provider, value]) => `<tr><td>${escapeHtml(provider)}</td><td>${value.answerCount || 0}</td><td>${value.averageWords || 0}</td><td>${value.averageFirstTokenMs || 0} ms</td><td>${value.p95FirstTokenMs || 0} ms</td><td>${value.averageGenerationMs || 0} ms</td><td>${value.averageTotalResponseMs || 0} ms</td><td>${value.p95TotalResponseMs || 0} ms</td><td>${value.averageOutputWpm || 0}</td><td>${formatDuration(value.averageSpeakingMs || 0)}</td><td>${value.onTargetRatePct || 0}%</td><td>${value.tooBriefCount || 0}</td><td>${value.tooLongCount || 0}</td></tr>`).join('');
-  const typeRows = Object.entries(overall.questionTypes || {}).map(([type, value]) => `<tr><td>${escapeHtml(value.questionTypeLabel || type.replaceAll('_',' '))}</td><td>${value.targetMinWords || 0}–${value.targetMaxWords || 0}</td><td>${value.answerCount || 0}</td><td>${value.averageWords || 0}</td><td>${value.averageFirstTokenMs || 0} ms</td><td>${value.p95FirstTokenMs || 0} ms</td><td>${value.averageTotalResponseMs || 0} ms</td><td>${value.onTargetRatePct || 0}%</td><td>${value.tooBriefCount || 0}</td><td>${value.tooLongCount || 0}</td></tr>`).join('');
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PMIA Session Analysis</title><style>body{font:15px/1.5 system-ui,sans-serif;margin:32px;max-width:1400px;color:#18202a}h1,h2{line-height:1.15}table{border-collapse:collapse;width:100%;margin:12px 0 28px}th,td{border:1px solid #ccd3dc;padding:8px;text-align:left;white-space:nowrap}th{background:#f3f5f8}.note{padding:12px 16px;background:#f6f7f9;border-left:4px solid #65758b}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:16px 0 26px}.kpi{border:1px solid #d8dee7;border-radius:8px;padding:10px}.kpi strong{display:block;font-size:1.25rem}@media(max-width:640px){body{margin:16px}.scroll{overflow:auto}table{font-size:12px}}</style></head><body><h1>PMIA Session Analysis</h1><p>Session ${escapeHtml(analysis.sessionId || '')} · ${escapeHtml(analysis.generatedAt || '')}</p><p class="note">Word-band fit is a deterministic depth/conciseness proxy against the interview policy. It does not claim to score semantic answer quality.</p><h2>Overall answer performance</h2><div class="kpis"><div class="kpi"><span>Answers</span><strong>${overall.totalAnswers || 0}</strong></div><div class="kpi"><span>Avg words</span><strong>${overall.averageWords || 0}</strong></div><div class="kpi"><span>Avg first token</span><strong>${overall.averageFirstTokenMs || 0} ms</strong></div><div class="kpi"><span>P95 first token</span><strong>${overall.p95FirstTokenMs || 0} ms</strong></div><div class="kpi"><span>Generation</span><strong>${overall.averageGenerationMs || 0} ms</strong></div><div class="kpi"><span>Total response</span><strong>${overall.averageTotalResponseMs || 0} ms</strong></div><div class="kpi"><span>Output WPM</span><strong>${overall.averageOutputWpm || 0}</strong></div><div class="kpi"><span>Speaking estimate</span><strong>${formatDuration(overall.averageSpeakingMs || 0)}</strong></div><div class="kpi"><span>On target</span><strong>${overall.onTargetRatePct || 0}%</strong></div></div><h2>Runtime context</h2><p>Sender: ${escapeHtml(analysis.runtime?.activeProviders?.sender || "not captured")} · Primary: ${escapeHtml(analysis.runtime?.activeProviders?.primary || "not captured")} · Comparison: ${escapeHtml(analysis.runtime?.activeProviders?.comparison || "disabled")} · Forwarding: ${escapeHtml(analysis.runtime?.forwardingMode || "unknown")} · Delivery success: ${analysis.runtime?.deliverySuccessRate ?? "--"}% · Unresolved at export: ${analysis.runtime?.unresolvedCount ?? 0}</p><p>Markers: ${escapeHtml(JSON.stringify(analysis.runtime?.markerCounts || {}))}</p><h2>Role activity</h2><div class="scroll"><table><thead><tr><th>Role</th><th>Events</th><th>Questions</th><th>Answers</th><th>Avg words</th><th>Avg delivery</th><th>Queued finals</th><th>Timeouts</th></tr></thead><tbody>${roleRows || '<tr><td colspan="8">No role activity captured.</td></tr>'}</tbody></table></div><h2>Provider comparison</h2><div class="scroll"><table><thead><tr><th>Provider</th><th>Answers</th><th>Avg words</th><th>First token</th><th>P95 first token</th><th>Generation</th><th>Total response</th><th>P95 total</th><th>Output WPM</th><th>Speaking estimate</th><th>On target</th><th>Brief</th><th>Long</th></tr></thead><tbody>${providerRows || '<tr><td colspan="13">No provider answers captured.</td></tr>'}</tbody></table></div><h2>Question-type response</h2><div class="scroll"><table><thead><tr><th>Type</th><th>Target word band</th><th>Answers</th><th>Avg words</th><th>First token</th><th>P95 first token</th><th>Total response</th><th>On target</th><th>Brief</th><th>Long</th></tr></thead><tbody>${typeRows || '<tr><td colspan="10">No question-type analytics captured.</td></tr>'}</tbody></table></div></body></html>`;
+  const providerRows = Object.entries(overall.providers || {}).map(([provider, value]) => `<tr><td>${escapeHtml(provider)}</td><td>${value.answerCount || 0}</td><td>${value.averageWords || 0}</td><td>${analysisMetric(value.averageFirstTokenMs, ' ms')}</td><td>${analysisMetric(value.p95FirstTokenMs, ' ms')}</td><td>${analysisMetric(value.averageGenerationMs, ' ms')}</td><td>${analysisMetric(value.averageTotalResponseMs, ' ms')}</td><td>${analysisMetric(value.p95TotalResponseMs, ' ms')}</td><td>${analysisMetric(value.averageOutputWpm)}</td><td>${analysisDuration(value.averageSpeakingMs)}</td><td>${value.onTargetRatePct || 0}%</td><td>${value.tooBriefCount || 0}</td><td>${value.tooLongCount || 0}</td></tr>`).join('');
+  const typeRows = Object.entries(overall.questionTypes || {}).map(([type, value]) => `<tr><td>${escapeHtml(value.questionTypeLabel || type.replaceAll('_',' '))}</td><td>${value.targetMinWords || 0}–${value.targetMaxWords || 0}</td><td>${value.answerCount || 0}</td><td>${value.averageWords || 0}</td><td>${analysisMetric(value.averageFirstTokenMs, ' ms')}</td><td>${analysisMetric(value.p95FirstTokenMs, ' ms')}</td><td>${analysisMetric(value.averageTotalResponseMs, ' ms')}</td><td>${value.onTargetRatePct || 0}%</td><td>${value.tooBriefCount || 0}</td><td>${value.tooLongCount || 0}</td></tr>`).join('');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PMIA Session Analysis</title><style>body{font:15px/1.5 system-ui,sans-serif;margin:32px;max-width:1400px;color:#18202a}h1,h2{line-height:1.15}table{border-collapse:collapse;width:100%;margin:12px 0 28px}th,td{border:1px solid #ccd3dc;padding:8px;text-align:left;white-space:nowrap}th{background:#f3f5f8}.note{padding:12px 16px;background:#f6f7f9;border-left:4px solid #65758b}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:16px 0 26px}.kpi{border:1px solid #d8dee7;border-radius:8px;padding:10px}.kpi strong{display:block;font-size:1.25rem}@media(max-width:640px){body{margin:16px}.scroll{overflow:auto}table{font-size:12px}}</style></head><body><h1>PMIA Session Analysis</h1><p>Session ${escapeHtml(analysis.sessionId || '')} · ${escapeHtml(analysis.generatedAt || '')}</p><p class="note">Word-band fit is a deterministic depth/conciseness proxy against the interview policy. It does not claim to score semantic answer quality.</p><h2>Overall answer performance</h2><div class="kpis"><div class="kpi"><span>Answers</span><strong>${overall.totalAnswers || 0}</strong></div><div class="kpi"><span>Avg words</span><strong>${overall.averageWords || 0}</strong></div><div class="kpi"><span>Avg first token</span><strong>${analysisMetric(overall.averageFirstTokenMs, ' ms')}</strong></div><div class="kpi"><span>P95 first token</span><strong>${analysisMetric(overall.p95FirstTokenMs, ' ms')}</strong></div><div class="kpi"><span>Generation</span><strong>${analysisMetric(overall.averageGenerationMs, ' ms')}</strong></div><div class="kpi"><span>Total response</span><strong>${analysisMetric(overall.averageTotalResponseMs, ' ms')}</strong></div><div class="kpi"><span>Output WPM</span><strong>${analysisMetric(overall.averageOutputWpm)}</strong></div><div class="kpi"><span>Speaking estimate</span><strong>${analysisDuration(overall.averageSpeakingMs)}</strong></div><div class="kpi"><span>On target</span><strong>${overall.onTargetRatePct || 0}%</strong></div></div><h2>Runtime context</h2><p>Sender: ${escapeHtml(analysis.runtime?.activeProviders?.sender || "not captured")} · Primary: ${escapeHtml(analysis.runtime?.activeProviders?.primary || "not captured")} · Comparison: ${escapeHtml(analysis.runtime?.activeProviders?.comparison || "disabled")} · Forwarding: ${escapeHtml(analysis.runtime?.forwardingMode || "unknown")} · Delivery success: ${analysis.runtime?.deliverySuccessRate ?? "--"}% · Unresolved at export: ${analysis.runtime?.unresolvedCount ?? 0}</p><p>Markers: ${escapeHtml(JSON.stringify(analysis.runtime?.markerCounts || {}))}</p><h2>Role activity</h2><div class="scroll"><table><thead><tr><th>Role</th><th>Events</th><th>Questions</th><th>Answers</th><th>Avg words</th><th>Avg delivery</th><th>Queued finals</th><th>Timeouts</th></tr></thead><tbody>${roleRows || '<tr><td colspan="8">No role activity captured.</td></tr>'}</tbody></table></div><h2>Provider comparison</h2><div class="scroll"><table><thead><tr><th>Provider</th><th>Answers</th><th>Avg words</th><th>First token</th><th>P95 first token</th><th>Generation</th><th>Total response</th><th>P95 total</th><th>Output WPM</th><th>Speaking estimate</th><th>On target</th><th>Brief</th><th>Long</th></tr></thead><tbody>${providerRows || '<tr><td colspan="13">No provider answers captured.</td></tr>'}</tbody></table></div><h2>Question-type response</h2><div class="scroll"><table><thead><tr><th>Type</th><th>Target word band</th><th>Answers</th><th>Avg words</th><th>First token</th><th>P95 first token</th><th>Total response</th><th>On target</th><th>Brief</th><th>Long</th></tr></thead><tbody>${typeRows || '<tr><td colspan="10">No question-type analytics captured.</td></tr>'}</tbody></table></div></body></html>`;
 }
 
 function downloadSessionAnalysis(analysis) {
@@ -1092,9 +1101,13 @@ function renderLiveAnswerAnalytics(snapshot) {
   const formatRole = value => value?.enabled
     ? `${value.provider || 'provider'} · ${value.wordCount || 0} words · ${value.bandFit ? humanizeCode(value.bandFit) : 'waiting'}`
     : 'Not enabled';
-  const timing = value => value?.enabled
-    ? `First token ${formatDuration(value.firstTokenMs || 0)} · total ${formatDuration(value.totalResponseMs || 0)} · output ${value.outputWpm || 0} WPM · speak ${formatDuration(value.estimatedSpeakingMs || 0)}`
-    : 'No comparison runtime registered.';
+  const timing = value => {
+    if (!value?.enabled) return 'No comparison runtime registered.';
+    if (value.firstTokenMs === null && value.totalResponseMs === null) {
+      return `Timing pending · output ${value.outputWpm === null ? 'pending' : `${value.outputWpm} WPM`} · speak ${formatDuration(value.estimatedSpeakingMs || 0)}`;
+    }
+    return `First token ${value.firstTokenMs === null ? 'pending' : formatDuration(value.firstTokenMs)} · total ${value.totalResponseMs === null ? 'pending' : formatDuration(value.totalResponseMs)} · output ${value.outputWpm === null ? 'pending' : `${value.outputWpm} WPM`} · speak ${formatDuration(value.estimatedSpeakingMs || 0)}`;
+  };
   text('liveAnalyticsMode', model.forwardingMode === 'manual_gather' ? `Manual gather · ${model.waitingCount} protected` : 'Automatic forwarding');
   text('primaryAnalyticsSummary', formatRole(model.primary));
   text('primaryAnalyticsTiming', timing(model.primary));
@@ -1109,6 +1122,7 @@ function renderOverview(snapshot, now) {
   renderOperationActivity();
   renderEfficiency();
   renderReadiness(snapshot, now);
+  renderQuestionPath({ document, snapshot });
   renderLiveCommandCenter(snapshot, now);
   renderRuntimeRole({ roleName: 'sender', role: snapshot?.sender, now, text, healthNode: byId('senderHealth') });
   renderRuntimeRole({ roleName: 'receiver', role: snapshot?.receiver, now, text, healthNode: byId('receiverHealth') });
@@ -1623,7 +1637,7 @@ function render(changedKeys = null) {
   renderLiveAssist({ document, snapshot: state.snapshot, state, now, workspace: state.activeView === 'assist' });
   renderSessionNavigator({ document, model: sessionNavigatorCache.get(state.snapshot || {}, state.sessionNavigator, now, state.navigatorSemanticRevision), localState: state.sessionNavigator });
   renderCommandPalette();
-  if (changed('ledger', 'ledgerCounts', 'batchState', 'mode')) renderQueue(state.snapshot, now);
+  if (changed('ledger', 'ledgerCounts', 'batchState', 'mode', 'clock')) renderQueue(state.snapshot, now);
   if (changed('timeline')) renderTimeline(state.snapshot);
   if (changed('metrics', 'lastRepair', 'timeline', 'sender', 'receiver', 'ledger', 'deliveryForecast', 'recoveryBudget', 'lastTransportDrill')) renderReview(state.snapshot);
   updateControlAvailability();
@@ -2221,6 +2235,16 @@ function runKeyboardCommand(command) {
   return runCommand(commandButton(command), command, payload);
 }
 
+const toggleLiveDetails = byId('toggleLiveDetails');
+if (toggleLiveDetails) {
+  toggleLiveDetails.addEventListener('click', () => {
+    const expanded = document.body.dataset.liveDetails !== 'true';
+    document.body.dataset.liveDetails = String(expanded);
+    toggleLiveDetails.setAttribute('aria-pressed', String(expanded));
+    toggleLiveDetails.textContent = expanded ? 'Hide details' : 'Show details';
+  });
+}
+
 document.addEventListener('keydown', event => {
   const nextNavigator = navigatorQuickOpenFromKeyboard(event, state.sessionNavigator);
   if (nextNavigator.open && !state.sessionNavigator.open) { event.preventDefault(); state.sessionNavigator = nextNavigator; activateDashboardView('navigator'); requestAnimationFrame(() => document.querySelector('[data-navigator-tab="now"]')?.focus()); void sendCommand('record_session_navigator_visit', { visit:{ tab:'now', reason:'keyboard_quick_open' } }); return; }
@@ -2254,7 +2278,7 @@ document.addEventListener('keydown', event => {
 });
 
 setInterval(() => {
-  if (state.snapshot) render();
+  if (state.snapshot) scheduleRender(['clock']);
 }, 1000);
 
 connect();

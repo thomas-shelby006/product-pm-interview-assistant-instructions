@@ -528,53 +528,51 @@ test('receiver default readiness window survives slow provider send-button activ
   assert.ok(yields >= 150);
 });
 
-test('receiver stages boot context without touching the provider composer', async () => {
-  let writes = 0;
+test('receiver submits boot context immediately and never stages it for the first question', async () => {
+  const writes = [];
+  const messages = [];
+  let composer = '';
   let submits = 0;
   const adapter = {
     isGenerating: () => false,
-    setComposerText() { writes += 1; return true; },
-    composerContains: () => true,
+    setComposerText(text) { composer = text; writes.push(text); return true; },
+    composerContains: text => composer.includes(text),
     canSubmit: () => true,
-    submit() { submits += 1; return true; },
-    getConversationMessages: () => [],
-    findComposer: () => ({})
-  };
-  const controller = runtimeModule.createReceiverController({ adapter, sleep: async () => {} });
-  const accepted = await controller.deliver({ id: 'boot-1', kind: 'boot', text: 'SESSION CONTEXT' });
-  assert.equal(accepted, true);
-  assert.equal(writes, 0);
-  assert.equal(submits, 0);
-  assert.equal(controller.hasStagedContext(), true);
-});
-
-test('receiver prepends staged context to the first question exactly once', async () => {
-  const writes = [];
-  const messages = [];
-  const adapter = {
-    isGenerating: () => false,
-    setComposerText(text) { writes.push(text); return true; },
-    composerContains: () => true,
-    canSubmit: () => true,
-    submit() {
-      messages.push({ id: `user-${messages.length + 1}`, role: 'user', text: writes.at(-1) });
-      return true;
-    },
+    submit() { submits += 1; messages.push({ id:`boot-${submits}`, role:'user', text:composer }); return true; },
     getConversationMessages: () => messages,
     findComposer: () => ({}),
     clearComposer: () => true
   };
   const controller = runtimeModule.createReceiverController({ adapter, sleep: async () => {} });
-  await controller.deliver({ id: 'boot-1', kind: 'boot', text: 'SESSION CONTEXT' });
-  assert.equal(await controller.deliver({ id: 'q1', kind: 'question', text: 'First question?' }), true);
-  assert.match(writes[0], /SESSION CONTEXT/);
-  assert.match(writes[0], /LIVE INTERVIEWER QUESTION:\nFirst question\?/);
+  const accepted = await controller.deliver({ id: 'boot-1', kind: 'boot', text: 'SESSION CONTEXT' });
+  assert.equal(accepted, true);
+  assert.equal(writes.filter(Boolean)[0], 'SESSION CONTEXT');
+  assert.equal(submits, 1);
   assert.equal(controller.hasStagedContext(), false);
-  assert.equal(await controller.deliver({ id: 'q2', kind: 'question', text: 'Second question?' }), true);
-  assert.equal(writes.filter(Boolean).at(-1), 'Second question?');
 });
 
-test('receiver retains staged context when first-question submission fails', async () => {
+test('receiver sends boot and first interviewer question as separate provider turns', async () => {
+  const writes = [];
+  const messages = [];
+  let composer = '';
+  const adapter = {
+    isGenerating: () => false,
+    setComposerText(text) { composer = text; writes.push(text); return true; },
+    composerContains: text => composer.includes(text),
+    canSubmit: () => true,
+    submit() { messages.push({ id:`user-${messages.length + 1}`, role:'user', text:composer }); return true; },
+    getConversationMessages: () => messages,
+    findComposer: () => ({}),
+    clearComposer: () => true
+  };
+  const controller = runtimeModule.createReceiverController({ adapter, sleep: async () => {} });
+  assert.equal(await controller.deliver({ id:'boot-1', kind:'boot', text:'SESSION CONTEXT' }), true);
+  assert.equal(await controller.deliver({ id:'q1', kind:'question', text:'First question?' }), true);
+  assert.deepEqual(writes.filter(Boolean).slice(0, 2), ['SESSION CONTEXT', 'First question?']);
+  assert.equal(controller.hasStagedContext(), false);
+});
+
+test('receiver reports boot failure instead of silently staging an unsent prompt', async () => {
   const adapter = {
     isGenerating: () => false,
     setComposerText: () => true,
@@ -587,14 +585,12 @@ test('receiver retains staged context when first-question submission fails', asy
   const controller = runtimeModule.createReceiverController({
     adapter, sleep: async () => {}, maxSubmitChecks: 1, maxConfirmChecks: 1
   });
-  await controller.deliver({ id: 'boot-1', kind: 'boot', text: 'SESSION CONTEXT' });
-  assert.equal(await controller.deliver({ id: 'q1', kind: 'question', text: 'Question?' }), false);
-  assert.equal(controller.hasStagedContext(), true);
+  assert.equal(await controller.deliver({ id:'boot-1', kind:'boot', text:'SESSION CONTEXT' }), false);
+  assert.equal(controller.hasStagedContext(), false);
 });
 
-test('staged first-question confirmation tolerates provider normalization without resubmission', async () => {
-  const question = 'PMIA staged question?';
-  const submitted = `Context with → arrows and smart “quotes”.\n\n---\n\nLIVE INTERVIEWER QUESTION:\n${question}`;
+test('boot rendered-turn confirmation tolerates provider normalization without resubmission', async () => {
+  const boot = 'Context with smart “quotes”.';
   const messages = [];
   let submitCalls = 0;
   const adapter = {
@@ -610,17 +606,12 @@ test('staged first-question confirmation tolerates provider normalization withou
     adapter,
     sleep: async () => {},
     yieldFn: async () => {
-      if (!messages.length) messages.push({
-        id: 'rendered-staged-turn',
-        role: 'user',
-        text: `Context with -> arrows and smart "quotes".\n\n---\n\nLIVE INTERVIEWER QUESTION:\n${question}`
-      });
+      if (!messages.length) messages.push({ id:'rendered-boot', role:'user', text:'Context with smart "quotes".' });
     },
     maxSubmitChecks: 1,
     maxConfirmChecks: 2
   });
-  assert.equal(await controller.deliver({ id: 'boot', kind: 'boot', text: submitted.split('\n\n---')[0] }), true);
-  assert.equal(await controller.deliver({ id: 'q1', kind: 'question', text: question }), true);
+  assert.equal(await controller.deliver({ id:'boot', kind:'boot', text:boot }), true);
   assert.equal(submitCalls, 1);
 });
 
@@ -943,4 +934,7 @@ test('receiver stops empty-composer recovery after delivery supersession', async
   });
   assert.equal(result, false);
   assert.equal(submitCalls, 1);
+});
+test('runtime lifecycle exposes ARMED after boot context is admitted', () => {
+  assert.equal(runtimeModule.runtimeLifecycleTitle({ role:'sender', provider:'chatgpt', sessionId:'s1' }, 'armed'), 'PMIA_ARMED_SENDER_CHATGPT_S1');
 });

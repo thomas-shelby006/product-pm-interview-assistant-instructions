@@ -378,6 +378,9 @@ global g_runtimeHealth       := 0
 global g_preflightButton     := 0
 global g_repairButton        := 0
 global g_liveCheckButton     := 0
+global g_moreOptionsButton   := 0
+global g_advancedSetupControls := []
+global g_advancedSetupVisible := false
 global g_shortContextArmedUntil := 0
 global g_launchStateCode     := "PREFLIGHT"
 global g_lastLaunchFailure   := Map()
@@ -778,10 +781,11 @@ ShowSessionLaunchGui() {
     global g_profileDdl, g_browserFamilyDdl, g_browserSummary, g_layoutDdl, g_layoutMode, g_browserConfig
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
     global g_runtimeHealth, g_preflightButton, g_repairButton, g_liveCheckButton
+    global g_moreOptionsButton, g_advancedSetupControls, g_advancedSetupVisible
 
     try {
         if IsObject(g_launchGui) {
-            g_launchGui.Show()
+            g_launchGui.Show(g_advancedSetupVisible ? "w900 h850" : "w900 h650")
             RefreshRuntimeDoctor()
             UpdateLaunchRouteSummary()
             UpdateLaunchContextStatus()
@@ -791,92 +795,122 @@ ShowSessionLaunchGui() {
 
     RefreshRuntimeDoctor(false)
     choices := BuildProfileChoices()
-    g_launchGui := Gui("+AlwaysOnTop -MaximizeBox +MinSize960x900", "PM Interview Assistant — Session Studio")
+    g_advancedSetupVisible := false
+    g_advancedSetupControls := []
+    g_launchGui := Gui("+AlwaysOnTop -MaximizeBox +MinSize900x650", "PM Interview Assistant — Session Studio")
     g_launchGui.BackColor := "F4F7FB"
     g_launchGui.SetFont("s10 c334155", "Segoe UI")
 
-    title := g_launchGui.Add("Text", "x30 y20 w600 h34", "PM Interview Assistant")
-    title.SetFont("s22 w700 c0F172A", "Segoe UI")
-    subtitle := g_launchGui.Add("Text", "x30 y57 w600 h22", "Build and verify your live interview workspace")
-    subtitle.SetFont("s10 c64748B", "Segoe UI")
-    healthBox := g_launchGui.Add("GroupBox", "x30 y91 w900 h112", "Browser and runtime health")
-    healthBox.SetFont("s10 w600 c334155", "Segoe UI")
-    browserLabel := g_launchGui.Add("Text", "x52 y121 w68 h20", "Browser")
-    browserLabel.SetFont("s10 w600 c0F172A", "Segoe UI")
-    g_browserFamilyDdl := g_launchGui.Add("DropDownList", "x122 y116 w120", ["Edge", "Chrome", "Brave", "Vivaldi"])
-    g_browserFamilyDdl.Choose(ChooseOptionIndex(g_browserConfig["family"], ["edge", "chrome", "brave", "vivaldi"], 1))
-    browserSettingsBtn := g_launchGui.Add("Button", "x250 y118 w112 h32", "Browser settings")
-    g_launchGui.Add("Text", "x377 y121 w54 h20", "Profile")
-    g_profileDdl := g_launchGui.Add("DropDownList", "x432 y116 w170", choices.labels)
+    title := g_launchGui.Add("Text", "x24 y18 w600 h32", "PM Interview Assistant")
+    title.SetFont("s20 w700 c0F172A", "Segoe UI")
+    subtitle := g_launchGui.Add("Text", "x24 y53 w600 h20", "Choose the route, add interview context, then launch.")
+    subtitle.SetFont("s9 c64748B", "Segoe UI")
+
+    profileLabel := g_launchGui.Add("Text", "x24 y90 w54 h20 Hidden", "Profile")
+    g_advancedSetupControls.Push(profileLabel)
+    g_profileDdl := g_launchGui.Add("DropDownList", "x80 y84 w220 Hidden", choices.labels)
+    g_advancedSetupControls.Push(g_profileDdl)
     if (choices.selectedIndex > 0)
         g_profileDdl.Choose(choices.selectedIndex)
-    g_runtimeHealth := g_launchGui.Add("Text", "x52 y154 w836 h28", "Checking PMIA runtime registration...")
+    g_runtimeHealth := g_launchGui.Add("Text", "x24 y86 w852 h34", "Checking PMIA runtime registration...")
     g_runtimeHealth.SetFont("s9 c64748B", "Segoe UI")
-    g_liveCheckButton := g_launchGui.Add("Button", "x614 y118 w88 h32", "Check Live")
-    g_preflightButton := g_launchGui.Add("Button", "x710 y118 w96 h32", "Preflight")
-    g_repairButton := g_launchGui.Add("Button", "x814 y118 w90 h32", "Repair")
-    g_browserSummary := g_launchGui.Add("Text", "x52 y180 w836 h18", "")
-    g_browserSummary.SetFont("s8 c64748B", "Segoe UI")
+    g_preflightButton := g_launchGui.Add("Button", "x762 y82 w114 h34 Hidden", "Preflight")
+    g_advancedSetupControls.Push(g_preflightButton)
 
-    routeBox := g_launchGui.Add("GroupBox", "x30 y216 w900 h150", "Conversation route")
-    routeBox.SetFont("s10 w600 c334155", "Segoe UI")
-    g_launchGui.Add("Text", "x52 y246 w200 h20", "Question source")
-    g_senderProviderDdl := g_launchGui.Add("DropDownList", "x52 y269 w205", ["ChatGPT", "Claude"])
+    routeTitle := g_launchGui.Add("Text", "x24 y132 w220 h24", "Interview route")
+    routeTitle.SetFont("s10 w700 c0F172A", "Segoe UI")
+    g_launchGui.Add("Text", "x24 y160 w170 h18", "Question source")
+    g_senderProviderDdl := g_launchGui.Add("DropDownList", "x24 y181 w180", ["ChatGPT", "Claude"])
     g_senderProviderDdl.Choose(g_senderProvider = "claude" ? 2 : 1)
-    swapBtn := g_launchGui.Add("Button", "x423 y267 w114 h32", "Swap route")
-    swapBtn.SetFont("s9 w600", "Segoe UI")
-    g_launchGui.Add("Text", "x678 y246 w200 h20", "Answer workspace")
-    g_receiverProviderDdl := g_launchGui.Add("DropDownList", "x678 y269 w205", ["ChatGPT", "Claude"])
+    swapBtn := g_launchGui.Add("Button", "x216 y181 w82 h30", "Swap route")
+    g_launchGui.Add("Text", "x310 y160 w170 h18", "Answer window")
+    g_receiverProviderDdl := g_launchGui.Add("DropDownList", "x310 y181 w180", ["ChatGPT", "Claude"])
     g_receiverProviderDdl.Choose(g_receiverProvider = "claude" ? 2 : 1)
-    g_comparisonEnabledCheck := g_launchGui.Add("CheckBox", "x305 y311 w142 h24", "Compare answers")
+    g_comparisonEnabledCheck := g_launchGui.Add("CheckBox", "x500 y183 w136 h24 Hidden", "Compare answers")
+    g_advancedSetupControls.Push(g_comparisonEnabledCheck)
     g_comparisonEnabledCheck.Value := g_comparisonEnabled ? 1 : 0
-    g_comparisonProviderDdl := g_launchGui.Add("DropDownList", "x452 y307 w150", ["ChatGPT", "Claude"])
+    g_comparisonProviderDdl := g_launchGui.Add("DropDownList", "x638 y181 w120 Hidden", ["ChatGPT", "Claude"])
+    g_advancedSetupControls.Push(g_comparisonProviderDdl)
     g_comparisonProviderDdl.Choose(g_comparisonProvider = "claude" ? 2 : 1)
-    g_routeSummary := g_launchGui.Add("Text", "x52 y336 w830 h24", "")
-    g_routeSummary.SetFont("s9 w600 c0F766E", "Segoe UI")
-    setupBox := g_launchGui.Add("GroupBox", "x30 y367 w900 h145", "Session setup (optional)")
-    setupBox.SetFont("s10 w600 c334155", "Segoe UI")
-    g_launchGui.Add("Text", "x52 y393 w238 h20", "Target company")
-    g_companyEdit := g_launchGui.Add("Edit", "x52 y415 w238 h28", g_sessionCompany)
-    g_launchGui.Add("Text", "x306 y393 w238 h20", "Target role")
-    g_roleEdit := g_launchGui.Add("Edit", "x306 y415 w238 h28", g_sessionRole)
-    roundOptions := ["Infer from JD", "Recruiter", "Hiring manager", "Product sense", "Metrics", "Behavioral", "Technical PM", "Product owner"]
-    g_launchGui.Add("Text", "x560 y393 w156 h20", "Interview round")
-    g_roundDdl := g_launchGui.Add("DropDownList", "x560 y415 w156", roundOptions)
-    g_roundDdl.Choose(ChooseOptionIndex(g_sessionRound, roundOptions, 1))
-    answerModeOptions := ["Concise", "Normal", "Deep"]
-    g_launchGui.Add("Text", "x732 y393 w156 h20", "Answer mode")
-    g_answerModeDdl := g_launchGui.Add("DropDownList", "x732 y415 w156", answerModeOptions)
-    g_answerModeDdl.Choose(ChooseOptionIndex(g_sessionAnswerMode, answerModeOptions, 2))
-
-    emphasisOptions := ["Infer from JD", "Fintech", "AI", "Analytics", "Enterprise", "Operations / internal tools", "Product owner"]
-    g_launchGui.Add("Text", "x52 y451 w238 h20", "Emphasis")
-    g_emphasisDdl := g_launchGui.Add("DropDownList", "x52 y473 w238", emphasisOptions)
-    g_emphasisDdl.Choose(ChooseOptionIndex(g_sessionEmphasis, emphasisOptions, 1))
-    g_launchGui.Add("Text", "x306 y451 w582 h20", "Avoid mentioning")
-    g_avoidEdit := g_launchGui.Add("Edit", "x306 y473 w582 h28", g_sessionAvoid)
-
-    contextBox := g_launchGui.Add("GroupBox", "x30 y525 w900 h260", "Interview context")
-    contextBox.SetFont("s10 w600 c334155", "Segoe UI")
-    g_launchGui.Add("Text", "x52 y552 w410 h20", "Resume")
-    g_resumeEdit := g_launchGui.Add("Edit", "x52 y575 w412 h116 -Wrap WantTab", g_sessionResume)
-    g_launchGui.Add("Text", "x478 y552 w410 h20", "Job description")
-    g_jdEdit := g_launchGui.Add("Edit", "x478 y575 w412 h116 -Wrap WantTab", g_sessionJD)
-    g_launchGui.Add("Text", "x52 y704 w610 h20", "Additional notes (optional)")
-    g_metaEdit := g_launchGui.Add("Edit", "x52 y727 w610 h38 -Wrap WantTab", g_sessionMeta)
-    g_launchGui.Add("Text", "x678 y704 w210 h20", "Initial layout")
-    g_layoutDdl := g_launchGui.Add("DropDownList", "x678 y727 w212", ["Providers + cockpit", "Providers only", "Sender + cockpit", "Receiver + cockpit", "Cockpit only"])
+    layoutLabel := g_launchGui.Add("Text", "x770 y160 w106 h18 Hidden", "Layout")
+    g_advancedSetupControls.Push(layoutLabel)
+    g_layoutDdl := g_launchGui.Add("DropDownList", "x770 y181 w106 Hidden", ["Providers + cockpit", "Providers only", "Sender + cockpit", "Receiver + cockpit", "Cockpit only"])
+    g_advancedSetupControls.Push(g_layoutDdl)
     g_layoutDdl.Choose(LayoutModeIndex(g_layoutMode))
-    g_contextStatus := g_launchGui.Add("Text", "x52 y768 w838 h18", "")
+    g_routeSummary := g_launchGui.Add("Text", "x24 y218 w852 h24", "")
+    g_routeSummary.SetFont("s9 w600 c0F766E", "Segoe UI")
+
+    contextTitle := g_launchGui.Add("Text", "x24 y252 w220 h24", "Interview context")
+    contextTitle.SetFont("s10 w700 c0F172A", "Segoe UI")
+    g_launchGui.Add("Text", "x24 y281 w416 h18", "Resume")
+    g_resumeEdit := g_launchGui.Add("Edit", "x24 y302 w416 h168 -Wrap WantTab", g_sessionResume)
+    g_launchGui.Add("Text", "x460 y281 w416 h18", "Job description")
+    g_jdEdit := g_launchGui.Add("Edit", "x460 y302 w416 h168 -Wrap WantTab", g_sessionJD)
+    g_contextStatus := g_launchGui.Add("Text", "x24 y477 w852 h18", "")
     g_contextStatus.SetFont("s9 c475569", "Segoe UI")
 
-    privacy := g_launchGui.Add("Text", "x30 y802 w500 h22", "Resume, JD, and notes stay in memory. Structured metadata is not saved.")
+    privacy := g_launchGui.Add("Text", "x24 y505 w560 h20", "Resume, JD, and notes stay in memory. Structured metadata is not saved.")
     privacy.SetFont("s9 c64748B", "Segoe UI")
-    g_launchStatus := g_launchGui.Add("Text", "x30 y831 w555 h34", "PREFLIGHT  •  Ready to verify the selected browser profile")
+    g_launchStatus := g_launchGui.Add("Text", "x24 y532 w852 h34", "PREFLIGHT  •  Ready to verify the selected browser profile")
     g_launchStatus.SetFont("s9 w600 c0F766E", "Segoe UI")
-    closeBtn := g_launchGui.Add("Button", "x648 y840 w92 h38", "Close")
-    g_launchButton := g_launchGui.Add("Button", "x750 y840 w180 h38 Default", "Launch Interview")
+    g_moreOptionsButton := g_launchGui.Add("Button", "x24 y576 w118 h36", "More options")
+    closeBtn := g_launchGui.Add("Button", "x616 y576 w92 h36", "Close")
+    g_launchButton := g_launchGui.Add("Button", "x720 y576 w156 h36 Default", "Launch Interview")
     g_launchButton.SetFont("s10 w600", "Segoe UI")
+
+    advancedBox := g_launchGui.Add("GroupBox", "x24 y628 w852 h188 Hidden", "More options")
+    g_advancedSetupControls.Push(advancedBox)
+    browserLabel := g_launchGui.Add("Text", "x44 y654 w62 h20 Hidden", "Browser")
+    g_advancedSetupControls.Push(browserLabel)
+    g_browserFamilyDdl := g_launchGui.Add("DropDownList", "x108 y650 w118 Hidden", ["Edge", "Chrome", "Brave", "Vivaldi"])
+    g_browserFamilyDdl.Choose(ChooseOptionIndex(g_browserConfig["family"], ["edge", "chrome", "brave", "vivaldi"], 1))
+    g_advancedSetupControls.Push(g_browserFamilyDdl)
+    browserSettingsBtn := g_launchGui.Add("Button", "x236 y650 w122 h30 Hidden", "Browser settings")
+    g_advancedSetupControls.Push(browserSettingsBtn)
+    g_liveCheckButton := g_launchGui.Add("Button", "x370 y650 w92 h30 Hidden", "Check Live")
+    g_advancedSetupControls.Push(g_liveCheckButton)
+    g_repairButton := g_launchGui.Add("Button", "x472 y650 w82 h30 Hidden", "Repair")
+    g_advancedSetupControls.Push(g_repairButton)
+    g_browserSummary := g_launchGui.Add("Text", "x566 y654 w290 h22 Hidden", "")
+    g_browserSummary.SetFont("s8 c64748B", "Segoe UI")
+    g_advancedSetupControls.Push(g_browserSummary)
+
+    companyLabel := g_launchGui.Add("Text", "x44 y692 w156 h18 Hidden", "Target company")
+    g_advancedSetupControls.Push(companyLabel)
+    g_companyEdit := g_launchGui.Add("Edit", "x44 y712 w190 h27 Hidden", g_sessionCompany)
+    g_advancedSetupControls.Push(g_companyEdit)
+    roleLabel := g_launchGui.Add("Text", "x246 y692 w156 h18 Hidden", "Target role")
+    g_advancedSetupControls.Push(roleLabel)
+    g_roleEdit := g_launchGui.Add("Edit", "x246 y712 w190 h27 Hidden", g_sessionRole)
+    g_advancedSetupControls.Push(g_roleEdit)
+    roundOptions := ["Infer from JD", "Recruiter", "Hiring manager", "Product sense", "Metrics", "Behavioral", "Technical PM", "Product owner"]
+    roundLabel := g_launchGui.Add("Text", "x448 y692 w132 h18 Hidden", "Interview round")
+    g_advancedSetupControls.Push(roundLabel)
+    g_roundDdl := g_launchGui.Add("DropDownList", "x448 y712 w150 Hidden", roundOptions)
+    g_roundDdl.Choose(ChooseOptionIndex(g_sessionRound, roundOptions, 1))
+    g_advancedSetupControls.Push(g_roundDdl)
+    answerModeOptions := ["Concise", "Normal", "Deep"]
+    answerLabel := g_launchGui.Add("Text", "x610 y692 w118 h18 Hidden", "Answer mode")
+    g_advancedSetupControls.Push(answerLabel)
+    g_answerModeDdl := g_launchGui.Add("DropDownList", "x610 y712 w118 Hidden", answerModeOptions)
+    g_answerModeDdl.Choose(ChooseOptionIndex(g_sessionAnswerMode, answerModeOptions, 2))
+    g_advancedSetupControls.Push(g_answerModeDdl)
+    emphasisOptions := ["Infer from JD", "Fintech", "AI", "Analytics", "Enterprise", "Operations / internal tools", "Product owner"]
+    emphasisLabel := g_launchGui.Add("Text", "x740 y692 w116 h18 Hidden", "Emphasis")
+    g_advancedSetupControls.Push(emphasisLabel)
+    g_emphasisDdl := g_launchGui.Add("DropDownList", "x740 y712 w116 Hidden", emphasisOptions)
+    g_emphasisDdl.Choose(ChooseOptionIndex(g_sessionEmphasis, emphasisOptions, 1))
+    g_advancedSetupControls.Push(g_emphasisDdl)
+
+    avoidLabel := g_launchGui.Add("Text", "x44 y748 w190 h18 Hidden", "Avoid mentioning")
+    g_advancedSetupControls.Push(avoidLabel)
+    g_avoidEdit := g_launchGui.Add("Edit", "x44 y768 w390 h27 Hidden", g_sessionAvoid)
+    g_advancedSetupControls.Push(g_avoidEdit)
+    notesLabel := g_launchGui.Add("Text", "x448 y748 w190 h18 Hidden", "Additional notes")
+    g_advancedSetupControls.Push(notesLabel)
+    g_metaEdit := g_launchGui.Add("Edit", "x448 y768 w408 h27 -Wrap WantTab Hidden", g_sessionMeta)
+    g_advancedSetupControls.Push(g_metaEdit)
+
     g_profileDdl.OnEvent("Change", HandleProfileChange)
     g_browserFamilyDdl.OnEvent("Change", HandleBrowserFamilyChange)
     browserSettingsBtn.OnEvent("Click", ShowBrowserSettingsGui)
@@ -891,6 +925,7 @@ ShowSessionLaunchGui() {
     g_liveCheckButton.OnEvent("Click", CheckLiveSessionHealth)
     g_preflightButton.OnEvent("Click", RunStudioPreflight)
     g_repairButton.OnEvent("Click", RepairLaunch)
+    g_moreOptionsButton.OnEvent("Click", ToggleAdvancedLaunchOptions)
     g_launchButton.OnEvent("Click", StartLaunchFromGui)
     closeBtn.OnEvent("Click", CloseSessionLaunchGui)
     g_launchGui.OnEvent("Close", CloseSessionLaunchGui)
@@ -900,7 +935,20 @@ ShowSessionLaunchGui() {
     UpdateBrowserSummary()
     UpdateLaunchRouteSummary()
     UpdateLaunchContextStatus()
-    g_launchGui.Show("w960 h900")
+    g_launchGui.Show("w900 h650")
+}
+
+ToggleAdvancedLaunchOptions(*) {
+    global g_launchGui, g_advancedSetupControls, g_advancedSetupVisible, g_moreOptionsButton
+    g_advancedSetupVisible := !g_advancedSetupVisible
+    for control in g_advancedSetupControls {
+        if IsObject(control)
+            control.Visible := g_advancedSetupVisible
+    }
+    if IsObject(g_moreOptionsButton)
+        g_moreOptionsButton.Text := g_advancedSetupVisible ? "Fewer options" : "More options"
+    if IsObject(g_launchGui)
+        g_launchGui.Show(g_advancedSetupVisible ? "w900 h850" : "w900 h650")
 }
 
 BuildProfileChoices() {
@@ -1075,6 +1123,7 @@ CloseSessionLaunchGui(*) {
     global g_browserFamilyDdl, g_browserSummary, g_browserSettingsGui
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
     global g_runtimeHealth, g_preflightButton, g_repairButton, g_liveCheckButton
+    global g_moreOptionsButton, g_advancedSetupControls, g_advancedSetupVisible
     try {
         if IsObject(g_launchGui)
             g_launchGui.Destroy()
@@ -1106,6 +1155,9 @@ CloseSessionLaunchGui(*) {
     g_repairButton := 0
     g_liveCheckButton := 0
     g_launchButton := 0
+    g_moreOptionsButton := 0
+    g_advancedSetupControls := []
+    g_advancedSetupVisible := false
     ResetShortContextConfirmation()
 }
 
@@ -1142,9 +1194,10 @@ RunStudioPreflight(*) {
 }
 
 FindLifecycleWindow(role, provider, sessionId, minimumPhase := "boot") {
-    phases := minimumPhase = "ready" ? ["ready"]
-        : minimumPhase = "registered" ? ["ready", "registered"]
-        : ["ready", "registered", "boot"]
+    phases := minimumPhase = "armed" ? ["armed"]
+        : minimumPhase = "ready" ? ["armed", "ready"]
+        : minimumPhase = "registered" ? ["armed", "ready", "registered"]
+        : ["armed", "ready", "registered", "boot"]
     previousDetectHidden := A_DetectHiddenWindows
     DetectHiddenWindows true
     try {
@@ -1425,7 +1478,13 @@ RunManagedLaunch(reuseSession := false) {
         EnsureAlwaysOnTop(g_hWin3)
     EnsureAlwaysOnTop(g_hDashboard)
     ApplyConfiguredInitialLayout()
-    SendToWindow(BuildBootPrompt(), "^+{F5}", g_hWin1)
+    bootSent := SendBootContext(BuildBootPrompt(), g_hWin1)
+    if !bootSent {
+        SetLaunchState("ERROR", "BOOT_CONTEXT_DISPATCH_FAILED: Window 1 did not accept the boot context command.", "error")
+        if IsObject(g_launchButton)
+            g_launchButton.Enabled := true
+        return false
+    }
     g_interviewActive := true
     SaveStudioPreferences()
     SetLaunchState("READY", "Sender, receiver, and Runtime Pilot Dashboard linked; boot context delivered.", "ok")
@@ -1456,11 +1515,11 @@ ApplyConfiguredInitialLayout() {
         RecordLayoutChange(4, 1, 1, 1)
     } else if (g_layoutMode = "TwoWindow") {
         g_mode := 1
-        ApplyAdaptiveWorkspaceLayout(false)
+        Apply2WinLayout(1, false)
         RecordLayoutChange(1, 1, 1, 1)
     } else {
         g_mode := 1
-        ApplyAdaptiveWorkspaceLayout(true)
+        Apply2WinLayout(1, true)
         RecordLayoutChange(1, 1, 1, 1)
     }
 }
@@ -1613,6 +1672,8 @@ RuntimeLifecycleTitle(role, provider, sessionId, phase := "ready") {
         return "PMIA_BOOT_" SubStr(base, 6)
     if (phase = "registered")
         return "PMIA_REGISTERED_" SubStr(base, 6)
+    if (phase = "armed")
+        return "PMIA_ARMED_" SubStr(base, 6)
     return base
 }
 
@@ -1922,15 +1983,28 @@ HideDashboard() {
 }
 
 Apply2WinLayout(idx, showDashboard := true) {
-    global layout2Win, g_pos2Win, g_hWin1, g_hWin2, g_dashboardVisible
+    global layout2Win, g_pos2Win, g_hWin1, g_hWin2, g_hWin3
+    global g_comparisonEnabled, g_dashboardVisible, OFF_X, OFF_Y
     g_pos2Win := idx
     g_dashboardVisible := showDashboard
     p := layout2Win[idx]
+    comparisonActive := g_comparisonEnabled && IsAlive(g_hWin3)
     RestoreWin1Visibility()
     if IsAlive(g_hWin1)
         WinMove p[1], p[2], p[3], p[4], "ahk_id " g_hWin1
-    if IsAlive(g_hWin2)
-        WinMove p[5], p[6], p[7], p[8], "ahk_id " g_hWin2
+    if comparisonActive {
+        gap := 6
+        answerW := Floor((p[7] - gap) / 2)
+        compareW := p[7] - answerW - gap
+        if IsAlive(g_hWin2)
+            WinMove p[5], p[6], answerW, p[8], "ahk_id " g_hWin2
+        WinMove p[5] + answerW + gap, p[6], compareW, p[8], "ahk_id " g_hWin3
+    } else {
+        if IsAlive(g_hWin2)
+            WinMove p[5], p[6], p[7], p[8], "ahk_id " g_hWin2
+        if IsAlive(g_hWin3)
+            WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin3
+    }
     if showDashboard
         DockDashboard()
     else
@@ -2259,21 +2333,25 @@ IsActiveSession() {
 }
 
 RefreshManagedWindowHandles() {
-    global g_sessionId, g_senderProvider, g_receiverProvider, g_browserConfig
-    global g_hWin1, g_hWin2, g_hDashboard
+    global g_sessionId, g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled, g_browserConfig
+    global g_hWin1, g_hWin2, g_hWin3, g_hDashboard
     if (g_sessionId != "") {
         g_hWin1 := 0
         g_hWin2 := 0
+        g_hWin3 := 0
         g_hDashboard := 0
         previousDetectHidden := A_DetectHiddenWindows
         DetectHiddenWindows true
         try {
             sender := FindLifecycleWindow("sender", g_senderProvider, g_sessionId, "boot")
             receiver := FindLifecycleWindow("receiver", g_receiverProvider, g_sessionId, "boot")
+            comparison := g_comparisonEnabled ? FindLifecycleWindow("comparison", g_comparisonProvider, g_sessionId, "boot") : Map()
             if sender.Count
                 g_hWin1 := sender["hwnd"]
             if receiver.Count
                 g_hWin2 := receiver["hwnd"]
+            if comparison.Count
+                g_hWin3 := comparison["hwnd"]
             dashboard := FindDashboardWindow(g_sessionId)
             if dashboard.Count
                 g_hDashboard := dashboard["hwnd"]
@@ -2291,8 +2369,8 @@ RefreshManagedWindowHandles() {
 }
 
 RecoverUnambiguousManagedSession() {
-    global g_sessionId, g_senderProvider, g_receiverProvider, g_browserConfig
-    global g_hWin1, g_hWin2, g_hDashboard, g_interviewActive
+    global g_sessionId, g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled, g_browserConfig
+    global g_hWin1, g_hWin2, g_hWin3, g_hDashboard, g_interviewActive
     sessions := Map()
     browserExeName := RegExReplace(g_browserConfig["executable"], "^.*\\", "")
     if (browserExeName = "")
@@ -2302,7 +2380,7 @@ RecoverUnambiguousManagedSession() {
     try {
         for hwnd in WinGetList("ahk_exe " browserExeName) {
             title := WinGetTitle("ahk_id " hwnd)
-            if !RegExMatch(title, "^PMIA_(SENDER|RECEIVER)_(CHATGPT|CLAUDE)_(PMIA_[A-Z0-9_]+)$", &match)
+            if !RegExMatch(title, "^PMIA_(?:ARMED_)?(SENDER|RECEIVER|COMPARISON)_(CHATGPT|CLAUDE)_(PMIA_[A-Z0-9_]+)$", &match)
                 continue
             role := StrLower(match[1])
             provider := StrLower(match[2])
@@ -2310,9 +2388,9 @@ RecoverUnambiguousManagedSession() {
             if !sessions.Has(sessionId) {
                 sessions[sessionId] := Map(
                     "sessionId", sessionId,
-                    "senderCount", 0, "receiverCount", 0,
-                    "senderHwnd", 0, "receiverHwnd", 0,
-                    "senderProvider", "", "receiverProvider", "")
+                    "senderCount", 0, "receiverCount", 0, "comparisonCount", 0,
+                    "senderHwnd", 0, "receiverHwnd", 0, "comparisonHwnd", 0,
+                    "senderProvider", "", "receiverProvider", "", "comparisonProvider", "")
             }
             entry := sessions[sessionId]
             entry[role "Count"] += 1
@@ -2325,7 +2403,7 @@ RecoverUnambiguousManagedSession() {
 
     completeSessions := []
     for sessionId, entry in sessions {
-        if entry["senderCount"] = 1 && entry["receiverCount"] = 1
+        if entry["senderCount"] = 1 && entry["receiverCount"] = 1 && entry["comparisonCount"] <= 1
             completeSessions.Push(entry)
     }
     if completeSessions.Length != 1 {
@@ -2337,8 +2415,12 @@ RecoverUnambiguousManagedSession() {
     g_sessionId := StrLower(recovered["sessionId"])
     g_senderProvider := StrLower(recovered["senderProvider"])
     g_receiverProvider := StrLower(recovered["receiverProvider"])
+    g_comparisonEnabled := recovered["comparisonCount"] = 1
+    if g_comparisonEnabled
+        g_comparisonProvider := StrLower(recovered["comparisonProvider"])
     g_hWin1 := recovered["senderHwnd"]
     g_hWin2 := recovered["receiverHwnd"]
+    g_hWin3 := g_comparisonEnabled ? recovered["comparisonHwnd"] : 0
     dashboard := FindDashboardWindow(g_sessionId)
     g_hDashboard := dashboard.Count ? dashboard["hwnd"] : 0
     g_interviewActive := true
@@ -2384,6 +2466,41 @@ SendBrowserCommand(shortcut, hTarget) {
         LogEvent("Browser command failed: " err.Message)
         return false
     } finally {
+        DetectHiddenWindows previousDetectHidden
+    }
+}
+
+SendBootContext(msg, hTarget) {
+    global g_suppressClipMonitor, g_senderProvider, g_sessionId, RUNTIME_LIFECYCLE_TIMEOUT_MS
+    if !IsAlive(hTarget) || (msg = "")
+        return false
+    g_suppressClipMonitor := true
+    savedClip := ""
+    clipSaved := false
+    previousDetectHidden := A_DetectHiddenWindows
+    DetectHiddenWindows true
+    try {
+        savedClip := ClipboardAll()
+        clipSaved := true
+        A_Clipboard := msg
+        Sleep 120
+        WinActivate "ahk_id " hTarget
+        if !WinWaitActive("ahk_id " hTarget, , 2)
+            return false
+        Send "^+{F5}"
+        armed := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "armed", RUNTIME_LIFECYCLE_TIMEOUT_MS)
+        return armed.Count > 0
+    } catch as err {
+        LogEvent("Boot context dispatch failed: " err.Message)
+        return false
+    } finally {
+        if clipSaved {
+            try
+                A_Clipboard := savedClip
+            catch
+                LogEvent("Boot context warning: failed to restore clipboard")
+        }
+        g_suppressClipMonitor := false
         DetectHiddenWindows previousDetectHidden
     }
 }

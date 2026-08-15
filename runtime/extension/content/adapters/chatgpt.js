@@ -51,11 +51,15 @@ const OBSERVATION_ROOT_SELECTORS = [
   'main',
   '[role="main"]'
 ];
+const CURRENT_USER_SELECTOR = 'section[data-turn="user"][data-turn-id]';
+const CURRENT_ASSISTANT_SELECTOR = 'section[data-turn="assistant"][data-turn-id]';
 const LEGACY_USER_SELECTOR = '[data-message-author-role="user"]';
 const LEGACY_ASSISTANT_SELECTOR = '[data-message-author-role="assistant"]';
 const COMPACT_USER_SELECTOR = '[data-conversation-transcript] [data-message-role="user"]';
 const COMPACT_ASSISTANT_SELECTOR = '[data-conversation-transcript] [data-message-role="assistant"]';
 const MESSAGE_SELECTOR = [
+  CURRENT_USER_SELECTOR,
+  CURRENT_ASSISTANT_SELECTOR,
   LEGACY_USER_SELECTOR,
   LEGACY_ASSISTANT_SELECTOR,
   COMPACT_USER_SELECTOR,
@@ -64,7 +68,8 @@ const MESSAGE_SELECTOR = [
 
 function messageRole(element) {
   return String(
-    element?.getAttribute?.('data-message-author-role')
+    element?.getAttribute?.('data-turn')
+    || element?.getAttribute?.('data-message-author-role')
     || element?.getAttribute?.('data-message-role')
     || ''
   ).trim().toLowerCase();
@@ -99,7 +104,16 @@ function compactMessageText(element) {
   return candidates[0] || composerText(element);
 }
 
+function currentTurnText(element) {
+  const role = messageRole(element);
+  const value = composerText(element);
+  if (role === 'user') return value.replace(/^\s*You said:\s*/i, '').trim();
+  if (role === 'assistant') return value.replace(/^\s*ChatGPT said:\s*/i, '').trim();
+  return value;
+}
+
 function messageText(element) {
+  if (element?.getAttribute?.('data-turn')) return currentTurnText(element);
   if (element?.getAttribute?.('data-message-role')) return compactMessageText(element);
   return composerText(element);
 }
@@ -119,8 +133,8 @@ export function createChatGptAdapter(doc = document) {
       .find(message => message.role === role)?.text || '';
     if (fromConversation) return fromConversation;
     return latestText(doc, role === 'user'
-      ? [LEGACY_USER_SELECTOR, COMPACT_USER_SELECTOR]
-      : [LEGACY_ASSISTANT_SELECTOR, COMPACT_ASSISTANT_SELECTOR]);
+      ? [CURRENT_USER_SELECTOR, LEGACY_USER_SELECTOR, COMPACT_USER_SELECTOR]
+      : [CURRENT_ASSISTANT_SELECTOR, LEGACY_ASSISTANT_SELECTOR, COMPACT_ASSISTANT_SELECTOR]);
   };
   const getLatestUserText = () => latestRoleText('user');
 

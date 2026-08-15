@@ -1,3 +1,7 @@
+function observedMetric(value) {
+  return value === null || value === undefined || value === '' ? null : Math.max(0, Number(value) || 0);
+}
+
 function roleAnalytics(role = {}, enabled = true) {
   const analytics = role?.latestAnswer?.analytics || {};
   return {
@@ -6,9 +10,9 @@ function roleAnalytics(role = {}, enabled = true) {
     questionType:String(analytics.questionType || ''),
     wordCount:Math.max(0, Number(analytics.wordCount || role?.latestAnswer?.wordCount || 0)),
     bandFit:String(analytics.bandFit || ''),
-    firstTokenMs:Math.max(0, Number(analytics.firstTokenLatencyMs || 0)),
-    totalResponseMs:Math.max(0, Number(analytics.totalResponseMs || role?.latestAnswer?.elapsedMs || 0)),
-    outputWpm:Math.max(0, Number(analytics.outputWpm || 0)),
+    firstTokenMs:observedMetric(analytics.firstTokenLatencyMs),
+    totalResponseMs:observedMetric(analytics.totalResponseMs ?? role?.latestAnswer?.elapsedMs),
+    outputWpm:observedMetric(analytics.outputWpm),
     estimatedSpeakingMs:Math.max(0, Number(analytics.estimatedSpeakingMs || 0))
   };
 }

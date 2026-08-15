@@ -60,3 +60,28 @@ test('session analytics summarize providers question types timing and word-band 
   assert.equal(summary.questionTypes.implementation.answerCount, 1);
   assert.equal(summary.questionTypes.implementation.questionTypeLabel, 'Implementation / how-would-you');
 });
+
+
+test('missing timing evidence does not count as zero-latency performance', () => {
+  const summary = summarizeAnswerAnalytics([
+    deriveAnswerAnalytics({ questionText: 'What is product-market fit?', wordCount: 65, startedAt: 1000, firstTokenAt: 1400, completedAt: 31400, provider: 'chatgpt', role: 'receiver' }),
+    deriveAnswerAnalytics({ questionText: 'What is product-market fit?', wordCount: 70, provider: 'chatgpt', role: 'receiver' })
+  ]);
+  assert.equal(summary.averageFirstTokenMs, 400);
+  assert.equal(summary.p95FirstTokenMs, 400);
+  assert.equal(summary.providers.chatgpt.averageFirstTokenMs, 400);
+  assert.equal(summary.providers.chatgpt.averageTotalResponseMs, 30400);
+});
+
+test('aggregate analytics preserve missing timing when no answer has timing evidence', () => {
+  const summary = summarizeAnswerAnalytics([
+    deriveAnswerAnalytics({ questionText: 'What is product-market fit?', wordCount: 65, provider: 'chatgpt', role: 'receiver' })
+  ]);
+  assert.equal(summary.averageFirstTokenMs, null);
+  assert.equal(summary.p95FirstTokenMs, null);
+  assert.equal(summary.averageGenerationMs, null);
+  assert.equal(summary.averageTotalResponseMs, null);
+  assert.equal(summary.averageOutputWpm, null);
+  assert.equal(summary.providers.chatgpt.averageFirstTokenMs, null);
+  assert.equal(summary.providers.chatgpt.averageTotalResponseMs, null);
+});

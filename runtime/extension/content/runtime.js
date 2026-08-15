@@ -260,13 +260,9 @@ ${normalizedQuestion}`;
         ? sanitizeTranscriptCandidate(envelope?.text)
         : String(envelope?.text ?? '').trim();
       if (!text) return false;
-      if (kind === 'boot') {
-        stagedContext = text;
-        clearCommittedPreview(envelope);
-        onStatus('ARMED');
-        return true;
-      }
-      const deliveryText = questionWithStagedContext(text);
+      const deliveryText = kind === 'boot'
+        ? text
+        : questionWithStagedContext(text);
       latestDeliveryId = envelope.id || `${Date.now()}`;
       const deliveryId = latestDeliveryId;
 
@@ -350,7 +346,9 @@ export function runtimeTitle({ role, provider, sessionId = '' }) {
 export function runtimeLifecycleTitle(config, phase = 'ready') {
   const normalized = String(phase || 'ready').toLowerCase();
   if (normalized === 'ready') return runtimeTitle(config);
-  const prefix = normalized === 'registered' ? 'PMIA_REGISTERED' : 'PMIA_BOOT';
+  const prefix = normalized === 'armed'
+    ? 'PMIA_ARMED'
+    : normalized === 'registered' ? 'PMIA_REGISTERED' : 'PMIA_BOOT';
   const base = `${prefix}_${String(config.role).toUpperCase()}_${String(config.provider).toUpperCase()}`;
   const suffix = runtimeTitleSuffix(config.sessionId);
   return suffix ? `${base}_${suffix}` : base;

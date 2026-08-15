@@ -250,3 +250,22 @@ test('duplicate terminal answer event never advances twice', async () => {
   assert.equal(result.reason, 'no_active_batch');
   assert.equal(submitted.length, 1);
 });
+
+test('reconciliation restores Manual Gather even when turn coordination metadata is absent', async () => {
+  const provider = adapter();
+  provider.getConversationMessages = () => [];
+  const submitted = [];
+  const runtime = createReceiverBatchRuntime({
+    adapter: provider,
+    async submitBatch(batch) { submitted.push(batch); return { ok: true }; }
+  });
+  const result = await runtime.reconcile({
+    pending: [envelope('q1', 1)],
+    autoSubmit: false,
+    hold: false
+  });
+  assert.equal(result.replayed.length, 1);
+  assert.equal(runtime.snapshot().autoSubmit, false);
+  assert.equal(submitted.length, 0);
+  assert.deepEqual(runtime.snapshot().next.prompt.memberIds, ['q1']);
+});

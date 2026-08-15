@@ -76,3 +76,18 @@ test('doctor distinguishes path and version mismatches', async t => {
   assert.equal(version.issueCode, 'EXTENSION_VERSION_MISMATCH');
   assert.match(version.issueMessage, /expected 0\.6\.0/);
 });
+
+test('doctor reads the unpacked manifest version when Edge omits service worker version metadata', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'pmia-profile-doctor-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const extension = join(root, 'product-pm-interview-assistant-instructions', 'runtime', 'extension');
+  await mkdir(extension, { recursive: true });
+  await writeJson(join(extension, 'manifest.json'), { version: '0.11.0' });
+  await createProfile(root, 'Default', 'Profile 1', {
+    pmia: { path: extension, location: 4, has_started_service_worker: true }
+  });
+  const [profile] = runDoctor(root, extension, 'Default');
+  assert.equal(profile.version, '0.11.0');
+  assert.equal(profile.pathMatches, 'True');
+  assert.equal(profile.issueCode, 'OK');
+});

@@ -24,6 +24,7 @@ import { createReceiverAnswerSettlement } from './receiver-answer-settlement.js'
 import { createLatestPreviewScheduler } from './preview-scheduler.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
 import { nextSequence } from '../shared/sequence.js';
+import { sequenceForEnvelope } from '../shared/envelope-sequence.js';
 import { ContiguousSequenceBuffer } from '../shared/contiguous-sequence-buffer.js';
 import { deriveSequenceFeedback } from '../shared/sequence-feedback.js';
 import { deriveReceiverCredits } from '../shared/receiver-flow-control.js';
@@ -45,6 +46,7 @@ import { createRuntimeRolePort } from './runtime-role-port.js';
 import { createComposerArbiter } from './composer-arbiter.js';
 import { safeBatchTelemetry } from '../shared/batch-event-policy.js';
 import { acquireRuntimeInstanceFence } from './runtime-instance-fence.js';
+import { createFlowTraceRecorder, traceBatchFlowEvent } from './flow-trace-recorder.js';
 
 const CONFIG_KEY = 'pmia_runtime_config_v1';
 
@@ -121,10 +123,11 @@ async function startRuntime(runtimeConfig) {
   const removeOverflowSafety = installOverflowSafety(document);
   const restoreTitle = defendTitle(document, runtimeLifecycleTitle(runtimeConfig, 'boot'));
   let runtimeRegistered = false;
+  let bootArmed = false;
   let rolePort = null;
   const refreshLifecycleTitle = () => {
     const phase = runtimeRegistered
-      ? (adapter.findComposer() ? 'ready' : 'registered')
+      ? (bootArmed ? 'armed' : adapter.findComposer() ? 'ready' : 'registered')
       : 'boot';
     restoreTitle.setTarget(runtimeLifecycleTitle(runtimeConfig, phase));
     return phase;
@@ -312,6 +315,8 @@ async function startRuntime(runtimeConfig) {
     getLifecycleState: () => runtimeRecovery?.snapshot?.() || { phase: document.visibilityState || 'unknown' }
   });
 
+  const traceFlow = createFlowTraceRecorder({ telemetry, logEvent, runtimeConfig });
+
   async function register() {
     const response = await message({
       type: 'PMIA_REGISTER',
@@ -421,16 +426,18 @@ async function startRuntime(runtimeConfig) {
     const transcriptIdentity = String(metadata.turnKey || metadata.messageId || '').trim();
     if (transcriptPhase && !outboundTranscriptCache.accept(normalized, transcriptPhase, transcriptIdentity)) return true;
     let envelope;
-    const nextSenderSequence = nextSequence(senderSequence);
-    senderSequence = nextSenderSequence;
-    sessionStorage.setItem(senderSequenceKey, String(senderSequence));
+    const sequence = sequenceForEnvelope(senderSequence, kind);
+    if (sequence.advanced) {
+      senderSequence = sequence.next;
+      sessionStorage.setItem(senderSequenceKey, String(senderSequence));
+    }
     try {
       envelope = makeEnvelope({
         sessionId: runtimeConfig.sessionId,
         sourceProvider: runtimeConfig.provider,
         text: normalized,
         kind,
-        seq: nextSenderSequence,
+        seq: sequence.seq,
         metadata: { ...metadata, previewStreamId }
       });
     } catch {
@@ -443,7 +450,16 @@ async function startRuntime(runtimeConfig) {
       return false;
     }
     telemetry.final(envelope);
+    if (kind === 'question') traceFlow('finalized', { envelopeId: envelope.id, seq: envelope.seq });
     const response = await persistEnvelope(envelope);
+    if (kind === 'question') {
+      traceFlow('persisted', {
+        envelopeId: envelope.id,
+        seq: envelope.seq,
+        status: response?.persisted ? 'ok' : (response?.terminal ? 'failed' : 'waiting'),
+        reason: response?.reason || response?.error || ''
+      });
+    }
     if (!response?.persisted && response?.terminal && transcriptPhase) {
       outboundTranscriptCache.forget(normalized, transcriptPhase, transcriptIdentity);
     }
@@ -483,9 +499,9 @@ async function startRuntime(runtimeConfig) {
         : undefined,
       isVoiceActive: isCombinedVoiceActive,
       isComposerEmpty: () => adapter.isComposerEmpty?.() ?? true,
-      allowFallbackFinalization: runtimeConfig.provider !== 'chatgpt',
+      allowFallbackFinalization: true,
       allowPreview: runtimeConfig.provider !== 'chatgpt',
-      allowVoiceFallback: false,
+      allowVoiceFallback: runtimeConfig.provider === 'chatgpt',
       onPreview(preview) {
         if (runtimeConfig.provider === 'claude' && isCombinedVoiceActive()) return false;
         return previewScheduler.push(preview);
@@ -645,6 +661,7 @@ async function startRuntime(runtimeConfig) {
         return { ok: true, proof };
       },
       onEvent(event) {
+        traceBatchFlowEvent(traceFlow, event);
         if (runtimeConfig.role === 'receiver') {
           void message({ type: 'PMIA_BATCH_EVENT', sessionId: runtimeConfig.sessionId, event });
           return;
@@ -779,6 +796,8 @@ async function startRuntime(runtimeConfig) {
       return { ok: true, reason: 'accepted', duplicate: false };
     }
 
+    traceFlow(runtimeConfig.role === 'comparison' ? 'routed_comparison' : 'routed_primary', { envelopeId: envelope.id, seq: envelope.seq, status: 'ok', reason: 'arrived' });
+    traceFlow('receiver_accepted', { envelopeId: envelope.id, seq: envelope.seq, status: 'waiting', reason: 'received' });
     const currentSequenceStatus = receiverSequenceBuffer.status();
     const currentBatchState = receiverBatchRuntime.snapshot();
     const receiverCredits = deriveSmoothedReceiverCredits({
@@ -807,6 +826,7 @@ async function startRuntime(runtimeConfig) {
 
     const sequenceDecision = receiverSequenceBuffer.offer(envelope);
     if (sequenceDecision.duplicate) {
+      traceFlow('receiver_accepted', { envelopeId: envelope.id, seq: envelope.seq, status: 'ok', reason: sequenceDecision.reason });
       overlay.setStatus('DUPLICATE ACK', 'warn', 1400);
       return {
         ok: true,
@@ -819,6 +839,7 @@ async function startRuntime(runtimeConfig) {
       };
     }
     if (!sequenceDecision.accepted) {
+      traceFlow('receiver_accepted', { envelopeId: envelope.id, seq: envelope.seq, status: 'failed', reason: sequenceDecision.reason });
       overlay.setStatus('SEQUENCE BUFFER FULL', 'error', 1800);
       return {
         ok: false,
@@ -831,6 +852,7 @@ async function startRuntime(runtimeConfig) {
     }
 
     if (sequenceDecision.unsequenced) {
+      traceFlow('receiver_accepted', { envelopeId: envelope.id, seq: envelope.seq, status: 'ok', reason: 'unsequenced' });
       const result = await receiverBatchRuntime.accept(envelope);
       return result?.ok ? { ...result, reason: result.staged ? 'staged' : 'accepted' } : result;
     }
@@ -841,6 +863,7 @@ async function startRuntime(runtimeConfig) {
     scrollToLatest();
 
     if (drain.failure?.envelope?.id === envelope.id) {
+      traceFlow('receiver_accepted', { envelopeId: envelope.id, seq: envelope.seq, status: 'failed', reason: drain.failure.result?.error || 'batch_rejected' });
       return {
         ...(drain.failure.result || { ok: false, error: 'batch_rejected' }),
         sequenceFeedback: drain.sequenceFeedback,
@@ -849,7 +872,8 @@ async function startRuntime(runtimeConfig) {
     }
 
     if (originalResult) {
-      return {
+      traceFlow('receiver_accepted', { envelopeId: envelope.id, seq: envelope.seq, status: 'ok', reason: originalResult.staged ? 'staged' : 'accepted', batchId: originalResult.batchId || '' });
+    return {
         ok: true,
         reason: originalResult.staged ? 'staged' : 'accepted',
         duplicate: Boolean(originalResult.duplicate),
@@ -864,6 +888,7 @@ async function startRuntime(runtimeConfig) {
         receiverCredits: deriveSmoothedReceiverCredits({ bufferedCount: gap.bufferedCount, maxBuffered: gap.capacity, activeMembers: receiverBatchRuntime.snapshot()?.active?.memberIds?.length || 0, hold: Boolean(receiverBatchRuntime.snapshot()?.hold), draftConflict: Boolean(receiverBatchRuntime.snapshot()?.draftConflict) })
       };
     }
+    traceFlow('receiver_accepted', { envelopeId: envelope.id, seq: envelope.seq, status: 'waiting', reason: 'buffered_gap' });
     return {
       ok: true,
       buffered: true,
@@ -1218,6 +1243,14 @@ async function startRuntime(runtimeConfig) {
       if (!text) return;
       senderController?.markExternalFinal({ text });
       const forwarded = await forwardText(text, 'boot', { source: 'ahk_boot' });
+      if (forwarded) {
+        bootArmed = true;
+        restoreTitle.setTarget(runtimeLifecycleTitle(runtimeConfig, 'armed'));
+        setTimeout(() => {
+          bootArmed = false;
+          refreshLifecycleTitle();
+        }, 2500);
+      }
       clearSubmittedComposer(adapter, text);
       overlay.setStatus(
         forwarded ? 'BOOT FORWARDED' : 'BOOT QUEUED',

@@ -14,6 +14,7 @@ import { createRuntimePortHub } from './shared/runtime-port-hub.js';
 import { createSessionMutationCoordinator } from './shared/session-mutation-coordinator.js';
 import { senderOutboxStorageKey } from './shared/session-end-guard.js';
 import { auditAndRehydrateAlarms, outboxAlarmName } from './shared/alarm-rehydration.js';
+import { recoverInvalidatedManagedTabs } from './shared/managed-tab-recovery.js';
 
 const REGISTRY_KEY = 'pmia_session_registry_v2';
 const deliveryAlarmName = sessionId => `pmia-delivery:${String(sessionId || '')}`;
@@ -26,6 +27,24 @@ const logStore = createSessionLogStore({
   maxEvents: MAX_LOG_EVENTS
 });
 void logStore.purgeLegacyLocalLogs().catch(() => {});
+let managedTabRecoveryPromise = null;
+function scheduleManagedTabRecovery(source = 'worker_start') {
+  if (managedTabRecoveryPromise) return managedTabRecoveryPromise;
+  managedTabRecoveryPromise = recoverInvalidatedManagedTabs({
+    chromeApi: chrome,
+    onTrace(value) {
+      void logStore.append(value.sessionId, value.role, {
+        type: 'runtime_recovery',
+        stage: value.stage,
+        status: value.status,
+        provider: value.provider,
+        reason: value.reason,
+        source
+      }).catch(() => {});
+    }
+  }).finally(() => { managedTabRecoveryPromise = null; });
+  return managedTabRecoveryPromise;
+}
 const operationCoordinator = createSessionMutationCoordinator();
 const acceptanceCoordinator = createSessionMutationCoordinator();
 const deliveryCoordinator = createSessionMutationCoordinator();
@@ -190,15 +209,19 @@ function mirrorToComparison(envelope, registry) {
   const route = registry.comparisonRoute?.(envelope.sessionId, envelope);
   if (!route) return false;
   void deliverToRole(route, registry, 'comparison')
-    .then(outcome => appendLog(envelope.sessionId, 'comparison', {
-      type:'comparison_delivery', envelopeId:envelope.id, seq:Number(envelope.seq || 0), kind:envelope.kind,
-      delivered:Boolean(outcome?.delivered), queued:Boolean(outcome?.queued), reason:outcome?.reason || outcome?.error || '',
-      attempts:Number(outcome?.attempts || 0), deliveryElapsedMs:Number(outcome?.deliveryProofMs || 0)
-    }))
-    .catch(error => appendLog(envelope.sessionId, 'comparison', {
-      type:'comparison_delivery', envelopeId:envelope.id, seq:Number(envelope.seq || 0), kind:envelope.kind,
-      delivered:false, queued:true, reason:String(error?.message || error || 'comparison_delivery_failed')
-    }).catch(() => {}));
+    .then(outcome => {
+      void appendLog(envelope.sessionId, 'comparison', {
+        type:'comparison_delivery', envelopeId:envelope.id, seq:Number(envelope.seq || 0), kind:envelope.kind,
+        delivered:Boolean(outcome?.delivered), queued:Boolean(outcome?.queued), reason:outcome?.reason || outcome?.error || '',
+        attempts:Number(outcome?.attempts || 0), deliveryElapsedMs:Number(outcome?.deliveryProofMs || 0)
+      }).catch(() => {});
+    })
+    .catch(error => {
+      void appendLog(envelope.sessionId, 'comparison', {
+        type:'comparison_delivery', envelopeId:envelope.id, seq:Number(envelope.seq || 0), kind:envelope.kind,
+        delivered:false, queued:true, reason:String(error?.message || error || 'comparison_delivery_failed')
+      }).catch(() => {});
+    });
   return true;
 }
 async function handleRegistration(message, incomingTab, registry) {
@@ -483,8 +506,9 @@ chrome.alarms.onAlarm.addListener(alarm => {
 });
 
 void rehydrateManagedAlarms().catch(() => {});
-chrome.runtime.onStartup?.addListener?.(() => { void rehydrateManagedAlarms().catch(() => {}); });
-chrome.runtime.onInstalled?.addListener?.(() => { void rehydrateManagedAlarms().catch(() => {}); });
+void scheduleManagedTabRecovery('worker_start').catch(() => {});
+chrome.runtime.onStartup?.addListener?.(() => { void rehydrateManagedAlarms().catch(() => {}); void scheduleManagedTabRecovery('browser_startup').catch(() => {}); });
+chrome.runtime.onInstalled?.addListener?.(() => { void rehydrateManagedAlarms().catch(() => {}); void scheduleManagedTabRecovery('extension_installed').catch(() => {}); });
 
 chrome.runtime.onConnect.addListener(port => {
   if (rolePortHub.connect(port)) return;

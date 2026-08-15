@@ -4,7 +4,7 @@ Manifest V3 provider and Runtime Pilot Dashboard extension used by `runtime/Fina
 
 ## Architecture
 
-- AutoHotkey owns provider selection, exact sender/receiver/dashboard windows, initial layout, full-route repair, and PM-only global hotkeys.
+- AutoHotkey owns provider selection, exact sender/receiver/optional comparison/dashboard windows, initial layout, full-route repair, and PM-only global hotkeys.
 - The service worker owns role registration, sender authorization, durable final ordering, transport pause, the lossless delivery ledger and live inbox, dashboard state, acknowledgements, recovery, and session cleanup.
 - Content scripts own provisional transcript previews, provider-specific finalization, receiver prefill/submission/proof, answer capture, semantic commands, telemetry, compact status UI, and export.
 - `dashboard/` is a trusted extension page connected by a long-lived port. It receives snapshots and sends validated commands; it never writes provider DOM directly.
@@ -13,10 +13,10 @@ Manifest V3 provider and Runtime Pilot Dashboard extension used by `runtime/Fina
 
 Normal ChatGPT and Claude tabs without PMIA runtime configuration are untouched.
 
-## PMIA 0.10 state, recovery, and operator controls
+## PMIA 0.11.0 state, recovery, and operator controls
 
 - Registry and role-scoped transcript logs use `chrome.storage.session`. Transcript and answer events are never written to disk-backed extension local storage.
-- Startup removes legacy `pmia_log_*` local-storage records. Explicit end-session and final-tab closure remove the complete session registry, sender outbox, lossless ledger, batch state, receiver sequence state, Pilot state and both role logs.
+- Startup removes legacy `pmia_log_*` local-storage records. Explicit end-session and final-tab closure remove the complete session registry, sender outbox, lossless ledger, batch state, receiver sequence state, Pilot state and all managed role logs.
 - A fresh registration probes a conflicting owner. Missing or non-responsive owners are replaced immediately; healthy duplicate roles remain blocked.
 - Receiver wake recovery is background-safe: it disables discard and reloads only a discarded tab without activating the tab or focusing Edge.
 - Session Studio exposes **Check Live** (`Alt+H`) and **Fast Repair** (`Alt+Shift+R`). Check Live uses the authorized counterpart preflight in both managed windows; Fast Repair reuses the current in-memory route and context.
@@ -25,7 +25,7 @@ Normal ChatGPT and Claude tabs without PMIA runtime configuration are untouched.
 
 ## Runtime Pilot Dashboard
 
-Session Studio opens `dashboard/index.html?session=<SESSION>` as the third managed Edge app window after both provider roles are ready. Its defended title is `PMIA_DASHBOARD_<SESSION>`.
+Session Studio opens `dashboard/index.html?session=<SESSION>` after the required sender/primary-receiver pair is ready; an optional comparison provider window may also be present. Its defended title is `PMIA_DASHBOARD_<SESSION>`.
 
 - Live shows catch-up state, Current Answer, Next Draft, Pace Guard, latency rail, storage pressure, route, role health, heartbeat, source silence, composer/generation/microphone/scroll state, warnings and delivery metrics.
 - Lossless Inbox shows every session final with age, sequence, ledger state, batch ID and text. Previews never enter the ledger.
@@ -99,7 +99,7 @@ Binary microphone and playback frames are ignored.
 
 ## Session Studio
 
-`runtime/Final_2_Window_Extension.ahk` opens a 960-by-900 operational Session Studio before launching the two provider tabs and the dashboard.
+`runtime/Final_2_Window_Extension.ahk` opens a 960-by-900 operational Session Studio before launching the required sender and primary receiver, the optional comparison provider when enabled, and the dashboard.
 
 - Microsoft Edge Stable is the only supported browser executable.
 - The profile doctor reads Edge profile metadata and unpacked-extension registration without reading cookies, account data, or provider conversation content.

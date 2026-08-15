@@ -437,11 +437,16 @@ export function createReceiverBatchRuntime({
       hold: restoredHold,
       autoSubmit: restoredAutoSubmit
     } = {}) {
-      if (restoredCoordination && typeof restoredCoordination === 'object') {
+      const hasRestoredCoordination = restoredCoordination && typeof restoredCoordination === 'object';
+      if (hasRestoredCoordination) {
         turnCoordination = normalizeTurnCoordination(restoredCoordination, nowFn());
         planner.setPromptComposer?.(args => composeTurnCoordinatedPrompt(args, turnCoordination));
+      }
+      if (hasRestoredCoordination || typeof restoredHold === 'boolean') {
         planner.setHold(forwardingPaused() || Boolean(restoredHold));
-        if (typeof restoredAutoSubmit === 'boolean') planner.setAutoSubmit(restoredAutoSubmit);
+      }
+      if (typeof restoredAutoSubmit === 'boolean') planner.setAutoSubmit(restoredAutoSubmit);
+      if (hasRestoredCoordination) {
         emit('turn_coordination_restored', {
           turnCoordination: deriveTurnCoordinationSnapshot(turnCoordination, planner.snapshot())
         });

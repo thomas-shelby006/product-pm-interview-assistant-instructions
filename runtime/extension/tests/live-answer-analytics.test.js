@@ -22,3 +22,13 @@ test('live analytics handles production sessions without comparison', () => {
   assert.equal(model.comparison.enabled, false);
   assert.equal(model.forwardingMode, 'automatic');
 });
+
+test('live analytics distinguish missing timing evidence from observed zero latency', () => {
+  const model = deriveLiveAnswerAnalytics({
+    receiver:{ provider:'chatgpt', latestAnswer:{ wordCount:68, analytics:{ questionType:'simple_concept', wordCount:68, bandFit:'on_target' } } },
+    batchState:{ autoSubmit:true }
+  });
+  assert.equal(model.primary.firstTokenMs, null);
+  assert.equal(model.primary.totalResponseMs, null);
+  assert.equal(model.primary.outputWpm, null);
+});

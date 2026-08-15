@@ -57,3 +57,10 @@ test('live performance source uses indexed search, scheduling, virtualization, a
   assert.match(dashboard, /createIdleWorkCoordinator/);
   assert.match(controller, /liveUxBudget/);
 });
+
+test('dashboard clock ticks use the render scheduler instead of racing a direct full render', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const dashboard = await readFile(new URL('../dashboard/dashboard.js', import.meta.url), 'utf8');
+  assert.match(dashboard, /setInterval\(\(\) => \{\s*if \(state\.snapshot\) scheduleRender\(\['clock'\]\);\s*\}, 1000\)/);
+  assert.match(dashboard, /changed\('ledger', 'ledgerCounts', 'batchState', 'mode', 'clock'\)/);
+});

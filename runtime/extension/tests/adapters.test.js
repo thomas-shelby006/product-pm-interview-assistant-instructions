@@ -267,7 +267,7 @@ function roleMessage({ id, role, text, turnId = '' }) {
 test('ChatGPT adapter returns ordered messages with captured stable identities', () => {
   const user = roleMessage({ id: 'u-1', role: 'user', text: 'Full question', turnId: 'turn-1' });
   const assistant = roleMessage({ id: 'a-1', role: 'assistant', text: 'Answer', turnId: 'turn-2' });
-  const selector = '[data-message-author-role="user"],[data-message-author-role="assistant"],[data-conversation-transcript] [data-message-role="user"],[data-conversation-transcript] [data-message-role="assistant"]';
+  const selector = 'section[data-turn="user"][data-turn-id],section[data-turn="assistant"][data-turn-id],[data-message-author-role="user"],[data-message-author-role="assistant"],[data-conversation-transcript] [data-message-role="user"],[data-conversation-transcript] [data-message-role="assistant"]';
   const adapter = chatgptModule.createChatGptAdapter(fakeDocument({}, { [selector]: [user, assistant] }));
   assert.deepEqual(adapter.getConversationMessages().map(({ id, turnId, role, text }) => ({ id, turnId, role, text })), [
     { id: 'u-1', turnId: 'turn-1', role: 'user', text: 'Full question' },
@@ -312,7 +312,7 @@ test('ChatGPT adapter reads compact semantic transcript turns without attributio
   const assistant = compactChatGptTurn({
     id: 'compact-a-1', role: 'assistant', text: 'Use first-value completion rate.'
   });
-  const selector = '[data-message-author-role="user"],[data-message-author-role="assistant"],[data-conversation-transcript] [data-message-role="user"],[data-conversation-transcript] [data-message-role="assistant"]';
+  const selector = 'section[data-turn="user"][data-turn-id],section[data-turn="assistant"][data-turn-id],[data-message-author-role="user"],[data-message-author-role="assistant"],[data-conversation-transcript] [data-message-role="user"],[data-conversation-transcript] [data-message-role="assistant"]';
   const transcript = fakeElement();
   const doc = fakeDocument({ '[data-conversation-transcript]': transcript }, {
     [selector]: [user, assistant]
@@ -524,4 +524,33 @@ test('ChatGPT receiver ignores hidden stale composer and send controls after nav
   assert.equal(adapter.submit(), true);
   assert.equal(hiddenSend.clicked, false);
   assert.equal(activeSend.clicked, true);
+});
+
+test('ChatGPT adapter reads current semantic data-turn sections before legacy message markup exists', () => {
+  const currentSelector = [
+    'section[data-turn="user"][data-turn-id]',
+    'section[data-turn="assistant"][data-turn-id]',
+    '[data-message-author-role="user"]',
+    '[data-message-author-role="assistant"]',
+    '[data-conversation-transcript] [data-message-role="user"]',
+    '[data-conversation-transcript] [data-message-role="assistant"]'
+  ].join(',');
+  const turn = (role, id, text) => fakeElement({
+    innerText: role === 'user' ? `You said:${text}` : `ChatGPT said:${text}`,
+    textContent: role === 'user' ? `You said:${text}` : `ChatGPT said:${text}`,
+    getAttribute(name) {
+      if (name === 'data-turn') return role;
+      if (name === 'data-turn-id') return id;
+      if (name === 'data-testid') return role === 'user' ? 'conversation-turn-7' : 'conversation-turn-8';
+      return '';
+    },
+    closest(selector) { return selector === '[data-turn-id]' ? this : null; }
+  });
+  const user = turn('user', 'turn-user-live', 'What metric would show poor onboarding quality?');
+  const assistant = turn('assistant', 'turn-assistant-live', 'Use the stuck-step rate.');
+  const adapter = chatgptModule.createChatGptAdapter(fakeDocument({}, { [currentSelector]: [user, assistant] }));
+  assert.deepEqual(adapter.getConversationMessages().map(({ id, turnId, role, text }) => ({ id, turnId, role, text })), [
+    { id: 'turn-user-live', turnId: 'turn-user-live', role: 'user', text: 'What metric would show poor onboarding quality?' },
+    { id: 'turn-assistant-live', turnId: 'turn-assistant-live', role: 'assistant', text: 'Use the stuck-step rate.' }
+  ]);
 });

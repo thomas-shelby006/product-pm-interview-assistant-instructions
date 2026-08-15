@@ -77,7 +77,8 @@
         "content/adapter-capability-drift.js",
         "content/capability-probation.js",
         "content/page-lifecycle-coordinator.js",
-        "content/runtime-instance-fence.js"
+        "content/runtime-instance-fence.js",
+        "content/flow-trace-recorder.js"
       ],
       "matches": [
         "https://chatgpt.com/*",

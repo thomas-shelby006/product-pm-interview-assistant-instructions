@@ -102,7 +102,7 @@ test('Cycles 96-105 dashboard packages the navigator and accessible command dial
     readFile(new URL('../dashboard/dashboard.css', import.meta.url), 'utf8'),
     readFile(new URL('../shared/dashboard-protocol.js', import.meta.url), 'utf8')
   ]);
-  assert.match(html, /class="live-session-console"/);
+  assert.match(html, /class="[^"]*live-session-console[^"]*"/);
   assert.match(html, /id="commandPalette"[\s\S]*role="dialog"[\s\S]*aria-modal="true"/);
   assert.match(script, /resolveShortcutCommand|command_palette/);
   assert.match(script, /handleToolbarKey/);

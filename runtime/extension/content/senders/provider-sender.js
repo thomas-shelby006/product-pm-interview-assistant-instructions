@@ -16,6 +16,7 @@ export function createProviderSender({
   allowPreview = String(adapter?.provider || '').toLowerCase() !== 'chatgpt'
 }) {
   let timer = null;
+  let timerKey = '';
   let stopped = false;
 
   const invoke = (callback, value, label) => {
@@ -30,21 +31,34 @@ export function createProviderSender({
   const clearTimer = () => {
     if (timer !== null) clearTimeoutFn(timer);
     timer = null;
+    timerKey = '';
   };
 
   const scheduleFallback = now => {
-    clearTimer();
-    if (!allowFallbackFinalization) return;
     const voiceActive = isVoiceActive();
     const voiceFallbackAllowed = voiceActive && allowVoiceFallback && tracker.canFinalizeStrongTail?.();
-    if (stopped || !isComposerEmpty() || (voiceActive && !voiceFallbackAllowed)) return;
+    const fallbackAllowed = voiceActive ? voiceFallbackAllowed : allowFallbackFinalization;
+    const pending = tracker.pending;
+    if (stopped || !isComposerEmpty() || !fallbackAllowed || !pending) {
+      clearTimer();
+      return;
+    }
     const delay = tracker.pendingDelay(now);
-    if (delay === null) return;
+    if (delay === null) {
+      clearTimer();
+      return;
+    }
+    const nextKey = [pending.id, pending.text, pending.lastChangedAt, voiceActive ? 'voice' : 'text'].join('\u0000');
+    if (timer !== null && timerKey === nextKey) return;
+    clearTimer();
+    timerKey = nextKey;
     timer = setTimeoutFn(() => {
       timer = null;
+      timerKey = '';
       const activeVoice = isVoiceActive();
       const activeVoiceFallbackAllowed = activeVoice && allowVoiceFallback && tracker.canFinalizeStrongTail?.();
-      if (stopped || !isComposerEmpty() || (activeVoice && !activeVoiceFallbackAllowed)) return;
+      const activeFallbackAllowed = activeVoice ? activeVoiceFallbackAllowed : allowFallbackFinalization;
+      if (stopped || !isComposerEmpty() || !activeFallbackAllowed) return;
       for (const final of tracker.poll(nowFn(), { allowFallback: true })) emitFinal(final);
     }, delay + 20);
   };
