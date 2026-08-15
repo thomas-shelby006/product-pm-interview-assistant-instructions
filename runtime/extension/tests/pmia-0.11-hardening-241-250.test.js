@@ -22,7 +22,8 @@ test('Cycles 245-247: dashboard export returns verified role results rather than
   const start=controller.indexOf("case 'export_session':");
   const end=controller.indexOf("case 'export_support_bundle':",start);
   const block=controller.slice(start,end);
-  assert.match(block,/result = await exportManagedSession/);
+  assert.match(block,/const roleExport = await exportManagedSession/);
+  assert.match(block,/result = \{ \.\.\.roleExport, analysis \}/);
   assert.doesNotMatch(block,/scheduled:\s*true|setTimeout/);
 });
 

@@ -2,6 +2,7 @@ import { createAnswerTracker } from './answer-tracker.js';
 import { reconcileGenerationTruth } from './generation-truth.js';
 import { createAnswerLifecycle, isTerminalAnswerState } from './answer-lifecycle.js';
 import { deriveAnswerDeadline } from './answer-timeout-policy.js';
+import { deriveAnswerAnalytics } from '../shared/answer-quality-analytics.js';
 
 export function createReceiverAnswerOrchestrator({
   adapter,
@@ -14,6 +15,8 @@ export function createReceiverAnswerOrchestrator({
   log = async () => {},
   setStatus = () => {},
   scroll = () => {},
+  provider = '',
+  role = 'receiver',
   limits = { startGraceMs: 8000, streamStallMs: 20000, hardCapMs: 120000 }
 } = {}) {
   let token = 0;
@@ -108,11 +111,17 @@ export function createReceiverAnswerOrchestrator({
       if (result) {
         const words = result.text.split(/\s+/).filter(Boolean).length;
         emitState(lifecycle.transition({ type: 'complete', at: current, wordCount: words }));
-        recordLog('answer', { envelopeId: envelope?.id || '', text: result.text, wordCount: words, elapsedMs: result.elapsedMs });
-        onAnswer({ envelopeId: envelope?.id || '', text: result.text, wordCount: words, elapsedMs: result.elapsedMs });
+        const analytics = deriveAnswerAnalytics({
+          questionText: envelope?.text || '',
+          questionCount: Number(envelope?.metadata?.questionCount || envelope?.questionCount || envelope?.memberIds?.length || 1),
+          wordCount: words, startedAt: answerState.startedAt, firstTokenAt: answerState.firstTokenAt, completedAt: answerState.completedAt,
+          provider, role
+        });
+        recordLog('answer', { envelopeId: envelope?.id || '', text: result.text, wordCount: words, elapsedMs: result.elapsedMs, analytics });
+        onAnswer({ envelopeId: envelope?.id || '', text: result.text, wordCount: words, elapsedMs: result.elapsedMs, analytics });
         setStatus(`ANSWER ${words}w`, 'ok', 1800);
         scroll();
-        return emitTerminal({ ok: true, text: result.text, wordCount: words, elapsedMs: result.elapsedMs, answerState: { ...answerState } });
+        return emitTerminal({ ok: true, text: result.text, wordCount: words, elapsedMs: result.elapsedMs, analytics, answerState: { ...answerState } });
       }
       const deadline = deriveAnswerDeadline({ ...answerState, now: current, limits });
       if (deadline.terminal) {

@@ -1,7 +1,7 @@
 import { ensureDeliveryTrace } from './delivery-trace.js';
 
 export const PROVIDERS = new Set(['chatgpt', 'claude']);
-export const ROLES = new Set(['sender', 'receiver']);
+export const ROLES = new Set(['sender', 'receiver', 'comparison']);
 
 export function parseRuntimeConfig(input) {
   const url = input instanceof URL ? input : new URL(input);

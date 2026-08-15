@@ -1,6 +1,6 @@
 import { appendBoundedLog, roleLogKey } from './session-log.js';
 
-const ROLES = ['sender', 'receiver'];
+const ROLES = ['sender', 'receiver', 'comparison'];
 
 export function sessionRoleLogKeys(sessionId) {
   return ROLES.map(role => roleLogKey(sessionId, role));

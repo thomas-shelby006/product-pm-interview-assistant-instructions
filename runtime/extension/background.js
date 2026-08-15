@@ -3,6 +3,7 @@ import { isEnvelope } from './shared/protocol.js';
 import { deliverPreview, routePreview } from './shared/preview.js';
 import { deliverWithWakeRetry } from './shared/delivery.js';
 import { createSessionLogStore } from './shared/session-log-store.js';
+import { buildCombinedSessionAnalysis } from './shared/session-log.js';
 import { buildSessionStatus } from './shared/session-status.js';
 import { runCounterpartPreflight } from './shared/preflight.js';
 import { exportManagedSession, exportManagedSessionForTab } from './shared/session-control.js';
@@ -57,6 +58,10 @@ pilotController = createRuntimePilotController({
   deliverFinal: deliver,
   exportManagedSession,
   clearSessionLogs: sessionId => logStore.clearSession(sessionId),
+  async sessionAnalysisProvider(sessionId) {
+    const [sender, receiver, comparison] = await Promise.all(['sender','receiver','comparison'].map(role => logStore.read(sessionId, role)));
+    return buildCombinedSessionAnalysis({ sender, receiver, comparison }, { sessionId });
+  },
   async requestRole({ sessionId, role, command, payload, fallback }) {
     if (!rolePortHub.has(sessionId, role)) {
       rolePortHub.noteFallback(sessionId, role, 'role_port_missing');
@@ -154,7 +159,8 @@ async function wakeManagedTab(tabId) {
   }
 }
 
-async function deliver(route, registry) {
+async function deliverToRole(route, registry, role = 'receiver') {
+  if (!route?.tabId) return { delivered:false, queued:true, reason:`${role}_missing`, attempts:0, deliveryProofMs:0 };
   const startedAt = Date.now();
   let attempts = 0;
   const outcome = await deliverWithWakeRetry({
@@ -162,24 +168,39 @@ async function deliver(route, registry) {
     sendToTab: (tabId, outgoing) => {
       attempts += 1;
       const sessionId = route?.message?.sessionId;
-      if (sessionId && rolePortHub.has(sessionId, 'receiver')) {
-        return rolePortHub.request(sessionId, 'receiver', {
+      if (sessionId && rolePortHub.has(sessionId, role)) {
+        return rolePortHub.request(sessionId, role, {
           operation: 'deliver',
           payload: { envelope: outgoing.envelope }
         }, { timeout: 1200 }).catch(() => chrome.tabs.sendMessage(tabId, outgoing));
       }
-      if (sessionId) rolePortHub.noteFallback(sessionId, 'receiver', 'role_port_missing');
+      if (sessionId) rolePortHub.noteFallback(sessionId, role, 'role_port_missing');
       return chrome.tabs.sendMessage(tabId, outgoing);
     },
     wakeTab: wakeManagedTab
   });
-  return {
-    ...outcome,
-    attempts,
-    deliveryProofMs: Math.max(0, Date.now() - startedAt)
-  };
+  return { ...outcome, attempts, deliveryProofMs: Math.max(0, Date.now() - startedAt) };
 }
 
+async function deliver(route, registry) {
+  return deliverToRole(route, registry, 'receiver');
+}
+
+function mirrorToComparison(envelope, registry) {
+  const route = registry.comparisonRoute?.(envelope.sessionId, envelope);
+  if (!route) return false;
+  void deliverToRole(route, registry, 'comparison')
+    .then(outcome => appendLog(envelope.sessionId, 'comparison', {
+      type:'comparison_delivery', envelopeId:envelope.id, seq:Number(envelope.seq || 0), kind:envelope.kind,
+      delivered:Boolean(outcome?.delivered), queued:Boolean(outcome?.queued), reason:outcome?.reason || outcome?.error || '',
+      attempts:Number(outcome?.attempts || 0), deliveryElapsedMs:Number(outcome?.deliveryProofMs || 0)
+    }))
+    .catch(error => appendLog(envelope.sessionId, 'comparison', {
+      type:'comparison_delivery', envelopeId:envelope.id, seq:Number(envelope.seq || 0), kind:envelope.kind,
+      delivered:false, queued:true, reason:String(error?.message || error || 'comparison_delivery_failed')
+    }).catch(() => {}));
+  return true;
+}
 async function handleRegistration(message, incomingTab, registry) {
   const tabId = incomingTab?.id;
   const registration = { ...message.registration, tabId };
@@ -281,6 +302,7 @@ async function handleRegistration(message, incomingTab, registry) {
 async function completePersistedDelivery(envelope) {
   const registry = await loadRegistry();
   const route = registry.route(envelope.sessionId, envelope);
+  mirrorToComparison(envelope, registry);
   let outcome;
   try {
     outcome = await deliver(route, registry);
@@ -422,7 +444,7 @@ async function broadcastLinkStatus(sessionId, registry) {
   const pilot = await pilotController.snapshot(sessionId);
   status.transportMode = pilot?.mode || 'active';
   status.queueCount = pilot?.queue?.length || 0;
-  const deliveries = ['sender', 'receiver']
+  const deliveries = ['sender', 'receiver', 'comparison']
     .map(role => session?.[role]?.tabId)
     .filter(Number.isInteger)
     .map(tabId => chrome.tabs.sendMessage(tabId, {
@@ -691,7 +713,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   serialize(async () => {
     const registry = await loadRegistry();
     const managed = registry.exportState().some(session => (
-      session.sender?.tabId === tabId || session.receiver?.tabId === tabId
+      session.sender?.tabId === tabId || session.receiver?.tabId === tabId || session.comparison?.tabId === tabId
     ));
     if (!managed) return;
     try {

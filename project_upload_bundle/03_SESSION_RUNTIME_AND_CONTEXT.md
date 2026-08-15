@@ -50,7 +50,7 @@ Entered through Session Studio's structured memory-only controls and emitted in 
 
 Flow: Session Studio (`Alt+R`) collects Resume, JD, structured metadata, and optional notes in memory → Microsoft Edge Stable opens one managed sender and receiver → each content runtime registers through BOOT/REGISTERED/READY lifecycle titles → the service worker mirrors provisional text and forwards one durable final envelope → the receiver stages context, submits automatically, and acknowledges only after the provider renders the matching user turn. `Alt+Esc` resends current in-memory context; `Alt+Delete` ends the exact managed session.
 
-The dashboard exposes live health, source silence, pause/queue/resume, selected sending, repair, layouts, export, safe diagnostics and shutdown. Pause keeps sender observation running while suppressing previews and queuing authoritative finals; stale queued items become superseded after a newer final is proven.
+The dashboard exposes live health, source silence, pause/queue/resume, selected sending, repair, layouts, export, safe diagnostics and shutdown. Pause keeps sender observation running while suppressing previews and queuing authoritative finals; each independent unresolved final stays protected until it receives rendered proof or is explicitly archived. A newer final does not erase an older unresolved final.
 
 The active runtime does not use Tampermonkey or `localStorage` transport. Resume/JD and structured metadata remain only in the AutoHotkey process. Role-scoped runtime logs use browser-session-only storage, are cleared when the managed session ends, and replace the full setup event with a redaction placeholder. Only allow-listed company/role/round/emphasis/answer-mode and missing-context flags may appear in review metadata.
 
@@ -62,12 +62,12 @@ The active runtime does not use Tampermonkey or `localStorage` transport. Resume
 
 ## Fast follow-up / interrupt protocol
 
-In a live interview, stale answers are dangerous — the **latest actionable question wins**.
+PMIA separates independent queued questions from true same-turn continuations.
 - Win2 idle, follow-up → answer with the follow-up pattern (direct answer → one supporting point → stop), shorter than the previous answer, no framework restart.
-- Two questions in one chunk → keep the latest as primary, earlier as context; if it's genuinely one two-part question, answer both briefly; if it's an interrupt, answer only the latest.
-- New actionable question while a previous answer is still being produced → treat as an interrupt; the previous answer is no longer the priority; answer only the latest, short.
-
-Wrapper the runtime may send: `Prior context (reference only): [last Q + 1-line gist] / Latest interviewer question: [latest] / Instruction: answer only the latest; if connected, treat as a follow-up and be shorter; do not restart the framework.`
+- For independent queued interviewer questions, answer all of them in arrival order and give the latest the most emphasis. Keep each part brief rather than dropping an earlier protected question.
+- Two questions in one transcript → if they are one two-part question, answer both briefly; if they are two distinct complete questions, answer both with the latest emphasized.
+- New independent question while an answer is being produced → keep it protected for the next batch; do not assume it should stop the active answer.
+- True same-turn continuation or explicit operator interrupt → answer the new point and do not continue stale wording from the interrupted answer.
 
 ## Export / post-session review behavior
 

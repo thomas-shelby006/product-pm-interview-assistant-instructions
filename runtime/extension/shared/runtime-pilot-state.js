@@ -19,6 +19,7 @@ import { createTurnCoordinationPerformance, recordTurnCoordinationSample as reco
 
 const MODES = new Set(['active', 'paused', 'repairing', 'degraded', 'blocked', 'ended']);
 const ROLE_NAMES = ['sender', 'receiver'];
+const ALL_ROLE_NAMES = ['sender', 'receiver', 'comparison'];
 const COORDINATION_EVENT_TYPES = new Set([
   'forwarding_paused',
   'forwarding_resumed',
@@ -69,6 +70,7 @@ function emptyMetrics() {
     answerTerminalBatches: [],
     deliveryProofMs: [],
     answerElapsedMs: [],
+    answerWordCounts: [],
     turnCoordination: createTurnCoordinationPerformance()
   };
 }
@@ -91,6 +93,9 @@ function normalizeMetrics(value = {}) {
     answerTerminalBatches: Array.isArray(source.answerTerminalBatches) ? source.answerTerminalBatches.map(String).slice(-128) : [],
     deliveryProofMs: Array.isArray(source.deliveryProofMs) ? source.deliveryProofMs.slice(-MAX_METRIC_SAMPLES) : [],
     answerElapsedMs: Array.isArray(source.answerElapsedMs) ? source.answerElapsedMs.slice(-MAX_METRIC_SAMPLES) : [],
+    answerWordCounts: Array.isArray(source.answerWordCounts)
+      ? source.answerWordCounts.map(Number).filter(value => Number.isFinite(value) && value > 0).slice(-MAX_METRIC_SAMPLES)
+      : [],
     turnCoordination: createTurnCoordinationPerformance(source.turnCoordination || {})
   };
 }
@@ -212,6 +217,7 @@ function normalizeSession(item) {
     mode: MODES.has(item.mode) ? item.mode : 'active',
     sender: cloneRole(item.sender),
     receiver: cloneRole(item.receiver),
+    comparison: cloneRole(item.comparison),
     latestPreview: item.latestPreview || null,
     latestFinal: item.latestFinal || null,
     latestProof: item.latestProof || null,
@@ -608,7 +614,7 @@ export class RuntimePilotState {
   }
 
   updateRole(sessionId, role, telemetry, now = Date.now()) {
-    if (!ROLE_NAMES.includes(role)) return null;
+    if (!ALL_ROLE_NAMES.includes(role)) return null;
     const session = this.ensure(sessionId, now);
     session[role] = {
       ...session[role],
@@ -783,7 +789,7 @@ export class RuntimePilotState {
   }
 
   updateTransportLane(sessionId, role, value = {}, now = Date.now()) {
-    if (!ROLE_NAMES.includes(role)) return null;
+    if (!ALL_ROLE_NAMES.includes(role)) return null;
     const session = this.ensure(sessionId, now);
     session[role] = {
       ...session[role],
@@ -798,7 +804,7 @@ export class RuntimePilotState {
   }
 
   disconnectRole(sessionId, role, now = Date.now()) {
-    if (!ROLE_NAMES.includes(role)) return null;
+    if (!ALL_ROLE_NAMES.includes(role)) return null;
     const session = this.ensure(sessionId, now);
     session[role] = { ...session[role], connected: false, phase: 'missing' };
     session.updatedAt = now;
@@ -1050,6 +1056,11 @@ export class RuntimePilotState {
       session.metrics.answerElapsedMs.push(elapsed);
       session.metrics.answerElapsedMs = session.metrics.answerElapsedMs.slice(-MAX_METRIC_SAMPLES);
     }
+    const wordCount = Number(event.wordCount);
+    if (Number.isFinite(wordCount) && wordCount > 0 && state === 'complete') {
+      session.metrics.answerWordCounts.push(wordCount);
+      session.metrics.answerWordCounts = session.metrics.answerWordCounts.slice(-MAX_METRIC_SAMPLES);
+    }
     this.record(sessionId, `answer_${state}`, safeEventData({ ...event, state }), now);
     for (const item of session.ledger.snapshot().filter(entry => String(entry.batchId || '') === batchId)) {
       this.recordTraceSpan(sessionId, {
@@ -1243,16 +1254,20 @@ export class RuntimePilotState {
       timeline: session.timeline.length,
       commands: session.commandJournal.size,
       proofSamples: session.metrics.deliveryProofMs.length,
-      answerSamples: session.metrics.answerElapsedMs.length
+      answerSamples: session.metrics.answerElapsedMs.length,
+      answerWordSamples: session.metrics.answerWordCounts.length
     };
     session.timeline = session.timeline.slice(-Math.max(20, Number(timelineRetain) || 80));
     const compactedCommands = session.commandJournal.compact(Math.max(16, Number(commandRetain) || 64));
-    session.metrics.deliveryProofMs = session.metrics.deliveryProofMs.slice(-Math.max(10, Number(metricRetain) || 20));
-    session.metrics.answerElapsedMs = session.metrics.answerElapsedMs.slice(-Math.max(10, Number(metricRetain) || 20));
+    const metricLimit = Math.max(10, Number(metricRetain) || 20);
+    session.metrics.deliveryProofMs = session.metrics.deliveryProofMs.slice(-metricLimit);
+    session.metrics.answerElapsedMs = session.metrics.answerElapsedMs.slice(-metricLimit);
+    session.metrics.answerWordCounts = session.metrics.answerWordCounts.slice(-metricLimit);
     const removed = (before.timeline - session.timeline.length)
       + compactedCommands
       + (before.proofSamples - session.metrics.deliveryProofMs.length)
-      + (before.answerSamples - session.metrics.answerElapsedMs.length);
+      + (before.answerSamples - session.metrics.answerElapsedMs.length)
+      + (before.answerWordSamples - session.metrics.answerWordCounts.length);
     if (removed > 0) this.record(sessionId, 'transient_history_compacted', { removed, before }, now);
     return removed;
   }
@@ -1418,6 +1433,7 @@ export class RuntimePilotState {
       mode: session.mode,
       sender: { ...session.sender },
       receiver: { ...session.receiver },
+      comparison: { ...session.comparison },
       latestPreview: session.latestPreview ? { ...session.latestPreview } : null,
       latestFinal: session.latestFinal ? { ...session.latestFinal } : null,
       latestProof: session.latestProof ? { ...session.latestProof } : null,
@@ -1449,6 +1465,9 @@ export class RuntimePilotState {
           : 100,
         averageDeliveryProofMs: average(session.metrics.deliveryProofMs),
         averageAnswerElapsedMs: average(session.metrics.answerElapsedMs),
+        averageAnswerWords: average(session.metrics.answerWordCounts),
+        maxAnswerWords: session.metrics.answerWordCounts.length ? Math.max(...session.metrics.answerWordCounts) : 0,
+        answersOver180: session.metrics.answerWordCounts.filter(value => value > 180).length,
         answerAvailabilityRate: session.metrics.answersCompleted + session.metrics.answersNoResponse + session.metrics.answersTimedOut
           ? Math.round((session.metrics.answersCompleted / (session.metrics.answersCompleted + session.metrics.answersNoResponse + session.metrics.answersTimedOut)) * 100)
           : 100
@@ -1487,6 +1506,7 @@ export class RuntimePilotState {
       mode: session.mode,
       sender: { ...session.sender },
       receiver: { ...session.receiver },
+      comparison: { ...session.comparison },
       latestPreview: session.latestPreview,
       latestFinal: session.latestFinal,
       latestProof: session.latestProof,

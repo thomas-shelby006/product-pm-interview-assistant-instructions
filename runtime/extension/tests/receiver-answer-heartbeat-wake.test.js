@@ -4,16 +4,16 @@ import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../content/entry.js', import.meta.url), 'utf8');
 
-test('successful receiver registration pulses the answer observer deadline', () => {
+test('successful answer-role registration pulses the answer observer deadline', () => {
   const registration = source.slice(
     source.indexOf('async function register()'),
     source.indexOf('async function forwardPreview')
   );
-  assert.match(registration, /rolePort\?\.connect\(\);\s*if \(runtimeConfig\.role === 'receiver'\) \{\s*answerWake\.pulse\(\);\s*deliveryWake\.pulse\(\);\s*\}/);
+  assert.match(registration, /rolePort\?\.connect\(\);\s*if \(isAnswerRole\) \{\s*answerWake\.pulse\(\);\s*deliveryWake\.pulse\(\);\s*\}/);
   assert.match(registration, /setInterval\(\(\) => \{\s*if \(registrationActive\) register\(\);/);
 });
 
-test('receiver link-status updates pulse the answer observer before UI work', () => {
+test('answer-role link-status updates pulse the answer observer before UI work', () => {
   const linkStatus = source.slice(
     source.indexOf("incoming?.type === 'PMIA_LINK_STATUS'"),
     source.indexOf("incoming?.type === 'PMIA_EXPORT_SESSION'")

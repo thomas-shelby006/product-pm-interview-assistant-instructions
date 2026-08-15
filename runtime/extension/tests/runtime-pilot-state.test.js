@@ -257,3 +257,16 @@ test('stale receiver checkpoint cannot clear a newer staged next batch', () => {
   }, 400);
   assert.equal(state.snapshot('pmia_session', 401).batchState.next, null);
 });
+
+test('completed answers retain bounded numeric length metrics for live review', () => {
+  const state = new RuntimePilotState();
+  state.recordAnswer('pmia_session', { batchId: 'b1', state: 'complete', wordCount: 120, elapsedMs: 1000 }, 1000);
+  state.recordAnswer('pmia_session', { batchId: 'b2', state: 'complete', wordCount: 180, elapsedMs: 1200 }, 1200);
+  state.recordAnswer('pmia_session', { batchId: 'b3', state: 'complete', wordCount: 181, elapsedMs: 1300 }, 1300);
+  state.recordAnswer('pmia_session', { batchId: 'b4', state: 'no_response', wordCount: 999 }, 1400);
+  const metrics = state.snapshot('pmia_session', 1500).metrics;
+  assert.deepEqual(metrics.answerWordCounts, [120, 180, 181]);
+  assert.equal(metrics.averageAnswerWords, 160);
+  assert.equal(metrics.maxAnswerWords, 181);
+  assert.equal(metrics.answersOver180, 1);
+});

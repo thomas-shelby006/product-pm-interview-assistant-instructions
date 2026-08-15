@@ -30,6 +30,11 @@ test('streaming answer uses reconciled generation evidence', () => {
   assert.equal(result.generating, true);
   assert.equal(result.confidence, 'medium');
   assert.match(result.detail, /12 words/);
+  assert.equal(result.wordCount, 12);
+  assert.equal(result.estimatedSpeechSeconds, 6);
+  assert.equal(result.lengthState, 'within_cap');
+  assert.match(result.detail, /about 6s spoken/i);
+  assert.match(result.detail, /within the 180-word hard cap/i);
 });
 
 test('terminal answer outcomes remain distinct after delivery proof', () => {
@@ -47,4 +52,18 @@ test('stale raw generating boolean cannot override reconciled idle evidence', ()
   }, 3000);
   assert.equal(result.generating, false);
   assert.equal(result.confidence, 'low');
+});
+test('completed answer shows spoken-time estimate and hard-cap overage', () => {
+  const result = deriveAnswerStatus({
+    answerState: { state: 'complete', wordCount: 181, completedAt: 5000, elapsedMs: 2500 },
+    batchState: {}
+  }, 5000);
+  assert.equal(result.state, 'complete');
+  assert.equal(result.wordCount, 181);
+  assert.equal(result.estimatedSpeechSeconds, 84);
+  assert.equal(result.lengthState, 'over_cap');
+  assert.equal(result.overByWords, 1);
+  assert.match(result.detail, /181 words/);
+  assert.match(result.detail, /about 1m 24s spoken/i);
+  assert.match(result.detail, /1 word over the 180-word hard cap/i);
 });

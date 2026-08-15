@@ -38,7 +38,7 @@ function isExternalShadowMatch(first, second) {
 
 export class DomTurnTracker {
   constructor({
-    fallbackMs = 300,
+    fallbackMs = 160,
     historyLimit = 512,
     duplicateTextWindowMs = 30000,
     externalShadowMs = 8000

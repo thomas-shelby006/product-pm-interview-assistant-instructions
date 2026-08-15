@@ -1103,13 +1103,17 @@ Prompt 1: How would you improve onboarding activation?
 Prompt 2 (follow-up): Why that metric and not retention?
 Pass: The follow-up is shorter than the first answer, answers only what was asked (direct answer + one supporting point), and does not restate the full framework.
 
-## Interviewer interrupts while previous answer is generating
-Setup: a new actionable question arrives before the previous answer finishes.
-Pass: The latest question is answered; the stale answer is not continued; the new answer is concise. (Live stop-and-supersede is the runtime Phase; the answer behavior must still prioritize the latest question.)
+## Independent question arrives while previous answer is generating
+Setup: a new independent actionable question arrives before the previous answer finishes.
+Pass: The active answer may finish; the new question remains protected for the next batch. For independent queued interviewer questions, answer all of them in arrival order and give the latest the most emphasis. No protected question is silently dropped.
+
+## Confirmed same-turn continuation interrupts active answer
+Setup: PMIA identifies a true continuation of the active interviewer turn, or the operator explicitly interrupts.
+Pass: The new point replaces stale wording from the interrupted answer, is concise, and does not restart the framework.
 
 ## Two questions in one transcript
 Prompt: What metric would you track, and how would you validate a drop in it?
-Pass: Treats it as one two-part question and answers both briefly, or answers the latest as primary with the other as context; does not ignore the actionable part or produce two long separate answers.
+Pass: Treats it as one two-part question and answers both briefly. If two distinct complete questions are present, answers both with the latest receiving the most emphasis; does not ignore an actionable part or produce two long separate answers.
 
 ## Answer mode concise vs normal vs deep
 Setup: run the same question with `Answer mode: concise`, then `normal`, then `deep`.

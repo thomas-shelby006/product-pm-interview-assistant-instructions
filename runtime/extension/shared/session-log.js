@@ -1,6 +1,7 @@
 import { latestSafeSessionContext } from './session-context.js';
+import { summarizeAnswerAnalytics } from './answer-quality-analytics.js';
 
-const ROLES = new Set(['sender', 'receiver']);
+const ROLES = new Set(['sender', 'receiver', 'comparison']);
 
 export function roleLogKey(sessionId, role) {
   const normalizedSession = String(sessionId || '').trim();
@@ -81,11 +82,12 @@ export function summarizeSessionEvents(events) {
 export function buildSessionExport({ session, events, exportedAt = new Date().toISOString() }) {
   const safeEvents = Array.isArray(events) ? events : [];
   return {
-    schemaVersion: '2.1',
+    schemaVersion: '2.2',
     exportedAt,
     session: { ...session },
     sessionContext: latestSafeSessionContext(safeEvents),
     summary: summarizeSessionEvents(safeEvents),
+    answerAnalytics: summarizeAnswerAnalytics(safeEvents.filter(event => event?.type === 'answer').map(event => event.analytics).filter(Boolean)),
     events: safeEvents
   };
 }
@@ -128,7 +130,15 @@ function contextLines(context = {}) {
   return lines;
 }
 
-export function renderSessionMarkdown({ session, events, summary, sessionContext }) {
+function providerAnalyticsLines(answerAnalytics = {}) {
+  const lines = [];
+  for (const [provider, value] of Object.entries(answerAnalytics.providers || {})) {
+    const label = provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown';
+    lines.push(`- ${label}: ${value.answerCount || 0} answers; avg ${value.averageWords || 0} words; first token ${value.averageFirstTokenMs || 0} ms; total ${value.averageTotalResponseMs || 0} ms; output ${value.averageOutputWpm || 0} WPM; on target ${value.onTargetCount || 0}`);
+  }
+  return lines.length ? lines : ['- No answer analytics captured.'];
+}
+export function renderSessionMarkdown({ session, events, summary, sessionContext, answerAnalytics }) {
   const safeEvents = Array.isArray(events) ? events : [];
   const lines = [
     '# PM Interview Dual-Provider Session',
@@ -144,6 +154,13 @@ export function renderSessionMarkdown({ session, events, summary, sessionContext
     '',
     ...contextLines(sessionContext),
     '',
+    '## Response analytics',
+    '',
+    '- Word-band fit is a deterministic depth/conciseness proxy, not a semantic quality score.',
+    `- Answers on target: ${answerAnalytics?.onTargetCount || 0}; too brief: ${answerAnalytics?.tooBriefCount || 0}; too long: ${answerAnalytics?.tooLongCount || 0}`,
+    `- Average first token: ${answerAnalytics?.averageFirstTokenMs || 0} ms; average total response: ${answerAnalytics?.averageTotalResponseMs || 0} ms; average output pace: ${answerAnalytics?.averageOutputWpm || 0} WPM`,
+    ...providerAnalyticsLines(answerAnalytics),
+    '',
     '## Events',
     ''
   ];
@@ -155,4 +172,41 @@ export function renderSessionMarkdown({ session, events, summary, sessionContext
     lines.push('```json', JSON.stringify(metadata, null, 2), '```', '');
   }
   return lines.join('\n');
+}
+
+export function buildCombinedSessionAnalysis(logsByRole = {}, { sessionId = '', generatedAt = nowIso() } = {}) {
+  const roleEntries = {};
+  const analytics = [];
+  for (const role of ['sender', 'receiver', 'comparison']) {
+    const events = Array.isArray(logsByRole?.[role]) ? logsByRole[role] : [];
+    const summary = summarizeSessionEvents(events);
+    const roleAnalytics = events.filter(event => event?.type === 'answer').map(event => event.analytics).filter(Boolean);
+    analytics.push(...roleAnalytics);
+    const deliverySamples = events
+      .map(event => Number(event?.deliveryElapsedMs || event?.deliveryProofMs || 0))
+      .filter(value => Number.isFinite(value) && value > 0);
+    roleEntries[role] = {
+      eventCount: events.length,
+      questionCount: summary.questionCount,
+      answerCount: summary.answerCount,
+      averageAnswerWords: summary.averageAnswerWords,
+      maxAnswerWords: summary.maxAnswerWords,
+      answersOver180: summary.answersOver180,
+      queuedFinalCount: summary.queuedFinalCount,
+      answerTimeoutCount: summary.answerTimeoutCount,
+      averageDeliveryMs: deliverySamples.length ? Math.round(deliverySamples.reduce((sum, value) => sum + value, 0) / deliverySamples.length) : 0
+    };
+  }
+  return {
+    schemaVersion: '1.0',
+    sessionId: String(sessionId || ''),
+    generatedAt,
+    methodology: {
+      semanticQualityScored: false,
+      wordBandFit: 'Deterministic proxy for expected response depth/conciseness by question type.',
+      speakingPaceBaselineWpm: 129
+    },
+    roles: roleEntries,
+    answerAnalytics: summarizeAnswerAnalytics(analytics)
+  };
 }

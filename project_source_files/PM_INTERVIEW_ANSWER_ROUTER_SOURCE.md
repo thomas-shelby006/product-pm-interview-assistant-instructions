@@ -91,22 +91,16 @@ Fail if the follow-up repeats the full original structure.
 
 ## Live follow-up and interrupt protocol (Win2 timing)
 
-This governs which transcript becomes the answer when questions arrive fast. Principle: in a live interview, stale answers are dangerous, so the latest actionable question wins.
+This governs answer behavior when questions arrive quickly. The runtime is lossless: independent questions stay protected even when an answer is already in progress.
 
-- **Latest-actionable-wins.** When a new actionable question arrives, answer the latest one. Use earlier transcript only as short context, not as a second answer.
+- **Single live transcript:** identify the latest actionable interviewer question inside that transcript; use filler or partial text only as context.
 - **Win2 idle, follow-up:** answer with the follow-up pattern (direct answer → one supporting point → stop). Do not restart the framework. Be shorter than the previous answer.
-- **Two questions in one chunk:** keep the latest as primary; treat the earlier as context. If it is genuinely one two-part question, answer both briefly (see Two-part question handling); if it is an interrupt, answer only the latest.
-- **New actionable question while a previous answer is still being produced:** treat it as an interrupt. The previous answer is no longer the priority. Answer only the latest question and keep it short.
+- **Independent queued questions:** For independent queued interviewer questions, answer all of them in arrival order and give the latest the most emphasis. Keep each part brief instead of dropping an earlier protected question.
+- **Same-turn continuation / explicit interrupt:** when PMIA identifies a true continuation of the active question, or the operator explicitly interrupts, answer the new point and do not continue stale wording from the interrupted answer.
+- **Two questions in one transcript:** if they form one two-part question, answer both briefly; if they are two distinct complete questions, answer both, with the latest receiving the most emphasis.
 - **Filler / partial / logistics:** use the noisy-transcript and special-output rules; do not force an answer.
 
-Wrapper shape the system uses when forwarding under time pressure:
-```text
-Prior context (reference only): [last question + one-line gist of last answer]
-Latest interviewer question: [latest actionable question]
-Instruction: Answer only the latest question. If it connects to the prior one, treat it as a follow-up and be shorter. Do not restart the framework.
-```
-
-The reliable stop-and-supersede of an in-flight answer is a runtime concern (see `ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`, §9.5); this section defines the answer behavior regardless of how the transcript is delivered.
+The owning runtime behavior lives in `runtime/extension/shared/batch-planner.js`, `runtime/extension/content/receiver-batch-runtime.js`, and the adaptive turn-coordination modules. The batch prompt preserves every independent queued question while marking the latest as highest priority.
 
 ## Noisy transcript routing
 

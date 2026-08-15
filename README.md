@@ -1,4 +1,4 @@
-﻿# PM Interview Assistant 0.10.4
+# PM Interview Assistant 0.11.0
 
 This repository is the only editable and deployed PMIA application source on this machine.
 
@@ -24,7 +24,7 @@ The Runtime Pilot Dashboard reads the same authoritative state used by the servi
 3. Load `runtime/extension` as an unpacked extension, or select Reload after source changes.
 4. Run `runtime/Final_2_Window_Extension.ahk`.
 5. In Session Studio, select the Edge profile and run Preflight.
-6. Launch only when PMIA 0.10.4 is registered from the expected repository path.
+6. Launch only when PMIA 0.11.0 is registered from the expected repository path.
 
 ## Verify
 
@@ -42,4 +42,4 @@ This runs the complete Node test suite, JavaScript reachability validation, and 
 
 ## Technical guide
 
-Open `docs/PMIA_CURRENT_SYSTEM_TECHNICAL_GUIDE.html` for the complete architecture, lifecycle, comparison, maintenance, alternatives, trade-offs, and cleanup findings.
+Open `docs/PMIA_0.11.0_RELEASE_AND_ANALYTICS_REPORT.html` for the current 0.11.0 feature, analytics, transport, deployment, verification, and operating report. `docs/PMIA_CURRENT_SYSTEM_TECHNICAL_GUIDE.html` remains the 0.10.4 architecture baseline.

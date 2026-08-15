@@ -20,14 +20,14 @@ const activeDocuments = [
   'docs/SESSION_TRACKER_SETUP.md'
 ];
 
-test('active release surfaces identify PMIA 0.10.4', async () => {
+test('active release surfaces identify PMIA 0.11.0', async () => {
   const manifest = JSON.parse(await readFile(resolve(extensionRoot, 'manifest.json'), 'utf8'));
-  assert.equal(manifest.version, '0.10.4');
+  assert.equal(manifest.version, '0.11.0');
   for (const relative of activeDocuments) {
-    assert.match(await read(relative), /0\.10\.4/, `${relative} must identify 0.10.4`);
+    assert.match(await read(relative), /0\.11\.0/, `${relative} must identify 0.11.0`);
   }
-  assert.equal(buildReleaseIdentity().version, '0.10.4');
-  assert.equal(buildHandoffManifest().version, '0.10.4');
+  assert.equal(buildReleaseIdentity().version, '0.11.0');
+  assert.equal(buildHandoffManifest().version, '0.11.0');
 });
 
 test('deployment guide uses Reload before Load unpacked', async () => {

@@ -81,7 +81,7 @@ test('provider sender mirrors distinct provisional text without finalizing it', 
   sender.disconnect();
 });
 
-test('provider sender uses a 300ms fallback only when voice is inactive and composer is empty', () => {
+test('provider sender uses a sub-200ms fallback only when voice is inactive and composer is empty', () => {
   let messages = [];
   const timers = [];
   const adapter = {
@@ -97,7 +97,7 @@ test('provider sender uses a 300ms fallback only when voice is inactive and comp
   });
   messages = [message('u1', 'user', 'How would you measure activation?')];
   sender.observe(100);
-  assert.equal(timers.at(-1).delay, 320);
+  assert.equal(timers.at(-1).delay, 180);
   sender.disconnect();
 });
 
@@ -177,8 +177,8 @@ test('provider sender can finalize a strongly punctuated stable ChatGPT voice tu
   });
   messages = [message('voice-u1', 'user', 'How would you improve activation?')];
   sender.observe(now);
-  assert.equal(timers.at(-1).delay, 320);
-  now = 320;
+  assert.equal(timers.at(-1).delay, 180);
+  now = 180;
   timers.at(-1).callback();
   assert.deepEqual(finals, [{
     id: 'voice-u1', text: 'How would you improve activation?', boundary: 'stable_tail_fallback'

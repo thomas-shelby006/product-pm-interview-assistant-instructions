@@ -1,4 +1,4 @@
-# PM Interview Dual-Provider Runtime 0.10.4
+# PM Interview Dual-Provider Runtime 0.11.0
 
 Manifest V3 provider and Runtime Pilot Dashboard extension used by `runtime/Final_2_Window_Extension.ahk`.
 

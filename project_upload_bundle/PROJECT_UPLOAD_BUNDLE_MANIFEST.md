@@ -18,7 +18,7 @@ That's **1 pasted field + 5 uploaded files**.
 
 - Anything in `../drafts/` — unconfirmed story scaffolds, claim-safety checklist, story-bank completion workflow. These contain placeholders and must never enter the Project.
 - `../runtime/` — AutoHotkey launcher, Manifest V3 extension, tracker companion, and install/test docs (local automation only).
-- `../ARCHITECTURE_FIRST_PRINCIPLES_REVIEW.md`, `../AHK_PHASE_2_IMPLEMENTATION_PLAN.md`, `../AI_SYSTEM_CONTEXT.md`, `../FILE_MAP.md`, `../README.md` — repo orientation/design docs, not Project behavior.
+- `../AI_SYSTEM_CONTEXT.md`, `../FILE_MAP.md`, `../README.md`, `../DEPLOYMENT_GUIDE.md`, and `../docs/PMIA_CURRENT_SYSTEM_TECHNICAL_GUIDE.html` — current repo orientation, deployment, and architecture/reference docs, not Project behavior.
 - The individual `../project_source_files/*` files — these remain as **source/reference** (the bundle is derived from them) but are **not** the preferred upload set. Upload the bundle instead, not both, to avoid duplication.
 
 ## Source-of-truth relationship

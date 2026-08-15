@@ -14,7 +14,7 @@ export function describeAdapterCapabilities(adapter, role = '') {
     microphoneToggle: hasFunction(adapter, 'toggleMute'),
     voiceState: hasFunction(adapter, 'isVoiceActive')
   };
-  const required = role === 'receiver'
+  const required = ['receiver', 'comparison'].includes(role)
     ? ['composerFinder', 'messageReader', 'composerWriter', 'composerReader', 'submit', 'generationState']
     : ['composerFinder', 'messageReader'];
   const missingRequired = required.filter(name => !capabilities[name]);

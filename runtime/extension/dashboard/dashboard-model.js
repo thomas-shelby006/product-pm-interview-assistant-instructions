@@ -138,7 +138,10 @@ export function deriveReview(snapshot) {
     answerAvailabilityRate: metrics.answerAvailabilityRate ?? 100,
     deliverySuccessRate: metrics.deliverySuccessRate ?? 100,
     averageDeliveryProofMs: metrics.averageDeliveryProofMs || 0,
-    averageAnswerElapsedMs: metrics.averageAnswerElapsedMs || 0
+    averageAnswerElapsedMs: metrics.averageAnswerElapsedMs || 0,
+    averageAnswerWords: metrics.averageAnswerWords || 0,
+    maxAnswerWords: metrics.maxAnswerWords || 0,
+    answersOver180: metrics.answersOver180 || 0
   };
 }
 

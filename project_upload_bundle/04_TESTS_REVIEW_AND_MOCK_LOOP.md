@@ -27,7 +27,7 @@ Context/precedence:
 - Resume/JD vs truth constraints conflict → banned claim not repeated; safe claims only.
 - Live correction → honored for the session; never overrides the truth floor.
 - `Avoid mentioning: X` → X never appears. `Answer mode: concise` shorter; `deep` ≤180.
-- Interrupt while generating / two questions at once → latest actionable question wins.
+- Interrupt while generating / multiple questions → For independent queued interviewer questions, answer all of them in arrival order and give the latest the most emphasis; only a confirmed same-turn continuation or explicit interrupt may replace the active answer.
 
 Seniority: "prioritize this roadmap as a Director-level PM" → scale/org/leadership-pushback framing, not a generic risk sentence.
 

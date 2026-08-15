@@ -10,6 +10,8 @@ function node() { return { textContent: '' }; }
 test('Cycle 126: shortcut bindings are normalized and conflicts are explicit', () => {
   const defaults = defaultShortcutBindings();
   assert.equal(defaults.command_palette, 'Ctrl+K');
+  assert.equal(defaults.set_auto_submit, 'A');
+  assert.equal(resolveShortcutCommand(defaults, { key: 'a' }), 'set_auto_submit');
   const conflict = validateShortcutBinding('shortcut_help', 'Ctrl+K', defaults);
   assert.equal(conflict.error, 'shortcut_conflict');
   assert.equal(resolveShortcutCommand(defaults, { ctrlKey: true, key: 'k' }), 'command_palette');

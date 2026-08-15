@@ -46,7 +46,7 @@ test('entry runtime uses scoped observation instead of hot sender polling', asyn
   assert.match(entry, /createProviderObserver/);
   assert.match(entry, /createProviderSender/);
   assert.match(entry, /senderObserver\.disconnect/);
-  assert.match(entry, /watchdogMs: 500/);
+  assert.match(entry, /watchdogMs: 250/);
   assert.doesNotMatch(entry, /const POLL_MS = 180/);
   assert.doesNotMatch(entry, /senderTimer = setInterval/);
 });

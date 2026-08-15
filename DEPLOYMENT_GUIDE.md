@@ -1,4 +1,4 @@
-﻿# PMIA 0.10.4 Direct-Source Deployment Guide
+# PMIA 0.11.0 Direct-Source Deployment Guide
 
 The canonical Git repository is both the development source and the local deployment source:
 
@@ -35,7 +35,7 @@ C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\runtime\Fi
 2. Enable **Developer mode**.
 3. Select **Load unpacked**.
 4. Choose the exact `runtime\extension` directory shown above.
-5. Confirm the card is **PM Interview Dual-Provider Runtime** and displays version **0.10.4**.
+5. Confirm the card is **PM Interview Dual-Provider Runtime** and displays version **0.11.0**.
 
 **Load unpacked** is needed only when the card is missing or Edge points to a different directory.
 
@@ -52,7 +52,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 The required result is:
 
 ```text
-version      0.10.4
+version      0.11.0
 pathMatches  True
 issueCode    OK
 ```

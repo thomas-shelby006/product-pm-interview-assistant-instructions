@@ -54,9 +54,9 @@ test('dashboard policy command accepts only previewed supported presets', () => 
   assert.equal(normalizeDashboardCommand({ ...base, requestId: 'r4', payload: { policy: 'manual' } }), null);
 });
 
-test('Pilot controller routes coordination controls only to the receiver owner', async () => {
+test('Pilot controller synchronizes answer-lane coordination while keeping primary-only recovery controls authoritative', async () => {
   const source = await readFile(new URL('../shared/runtime-pilot-controller.js', import.meta.url), 'utf8');
-  assert.match(source, /case 'set_turn_coordination_policy'[\s\S]*sendRuntimeCommand\(registry, sessionId, 'receiver', 'set_turn_coordination_policy'/);
-  assert.match(source, /case 'send_held_now'[\s\S]*sendRuntimeCommand\(registry, sessionId, 'receiver', 'send_held_now'/);
+  assert.match(source, /case 'set_turn_coordination_policy'[\s\S]*sendToAnswerRoles\(registry, sessionId, 'set_turn_coordination_policy'/);
+  assert.match(source, /case 'send_held_now'[\s\S]*sendToAnswerRoles\(registry, sessionId, 'send_held_now'/);
   assert.match(source, /case 'keep_accumulating'[\s\S]*sendRuntimeCommand\(registry, sessionId, 'receiver', 'keep_accumulating'/);
 });

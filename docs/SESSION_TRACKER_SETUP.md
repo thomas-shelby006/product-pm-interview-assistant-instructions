@@ -1,4 +1,4 @@
-﻿# PMIA 0.10.4 Session Tracker Setup
+# PMIA 0.11.0 Session Tracker Setup
 
 The PMIA Review Studio stores private session evidence under the canonical repository without committing it to the application source.
 

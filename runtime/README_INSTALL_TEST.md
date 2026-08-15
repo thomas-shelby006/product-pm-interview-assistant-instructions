@@ -1,4 +1,4 @@
-﻿# PMIA 0.10.4 — Install, Operate, and Verify
+# PMIA 0.11.0 — Install, Operate, and Verify
 
 ## Direct source
 
@@ -10,7 +10,7 @@ The canonical repository is the runtime source. Load `runtime/extension` directl
 2. Enable Developer mode.
 3. Use **Load unpacked** for the first installation and select `runtime/extension`.
 4. After source changes, run the complete validator and select **Reload** on the PMIA card.
-5. Run Session Studio Preflight and require PMIA 0.10.4 from the expected repository path.
+5. Run Session Studio Preflight and require PMIA 0.11.0 from the expected repository path.
 
 ## Complete gate
 

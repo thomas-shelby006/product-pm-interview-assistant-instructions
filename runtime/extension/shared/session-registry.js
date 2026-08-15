@@ -1,12 +1,13 @@
 import { electRegistryOwner } from './owner-election.js';
 
 const DEFAULT_STALE_AFTER_MS = 45_000;
-const emptySession = () => ({ sender: null, receiver: null });
+const REGISTRY_ROLES = Object.freeze(['sender', 'receiver', 'comparison']);
+const emptySession = () => ({ sender: null, receiver: null, comparison: null });
 
 function cloneRegistration(value) {
   if (!value || typeof value !== 'object') return null;
   const { sessionId, role, provider, tabId, registeredAt, instanceId } = value;
-  if (!sessionId || !['sender', 'receiver'].includes(role) || !provider || !Number.isInteger(tabId)) return null;
+  if (!sessionId || !REGISTRY_ROLES.includes(role) || !provider || !Number.isInteger(tabId)) return null;
   const registered = Number.isFinite(registeredAt) ? registeredAt : Date.now();
   return {
     sessionId,
@@ -22,7 +23,7 @@ function cloneRegistration(value) {
 
 function validateRegistration(registration) {
   const { sessionId, role, provider, tabId } = registration || {};
-  if (!sessionId || !['sender', 'receiver'].includes(role) || !provider || !Number.isInteger(tabId)) {
+  if (!sessionId || !REGISTRY_ROLES.includes(role) || !provider || !Number.isInteger(tabId)) {
     throw new TypeError('Invalid PMIA registration');
   }
 }
@@ -40,8 +41,8 @@ export class SessionRegistry {
   constructor(state = []) {
     for (const item of Array.isArray(state) ? state : []) {
       if (!item?.sessionId) continue;
-      const session = { sender: cloneRegistration(item.sender), receiver: cloneRegistration(item.receiver) };
-      if (session.sender || session.receiver) this.#sessions.set(item.sessionId, session);
+      const session = { sender: cloneRegistration(item.sender), receiver: cloneRegistration(item.receiver), comparison: cloneRegistration(item.comparison) };
+      if (REGISTRY_ROLES.some(role => session[role])) this.#sessions.set(item.sessionId, session);
     }
   }
 
@@ -116,12 +117,12 @@ export class SessionRegistry {
 
   ownsTab(sessionId, tabId, instanceId = '') {
     const session = this.#sessions.get(sessionId);
-    return ['sender', 'receiver'].some(role => ownsRegistration(session?.[role], tabId, instanceId));
+    return REGISTRY_ROLES.some(role => ownsRegistration(session?.[role], tabId, instanceId));
   }
 
   roleForTab(sessionId, tabId, instanceId = '') {
     const session = this.#sessions.get(sessionId);
-    for (const role of ['sender', 'receiver']) if (ownsRegistration(session?.[role], tabId, instanceId)) return role;
+    for (const role of REGISTRY_ROLES) if (ownsRegistration(session?.[role], tabId, instanceId)) return role;
     return null;
   }
 
@@ -130,18 +131,23 @@ export class SessionRegistry {
     return receiver ? { tabId: receiver.tabId, message } : null;
   }
 
+  comparisonRoute(sessionId, message) {
+    const comparison = this.#sessions.get(sessionId)?.comparison;
+    return comparison ? { tabId: comparison.tabId, message } : null;
+  }
+
   unregister(tabId) {
     const affectedSessionIds = [];
     for (const [sessionId, session] of this.#sessions) {
       let changed = false;
-      for (const role of ['sender', 'receiver']) {
+      for (const role of REGISTRY_ROLES) {
         if (session[role]?.tabId !== tabId) continue;
         session[role] = null;
         changed = true;
       }
       if (!changed) continue;
       affectedSessionIds.push(sessionId);
-      if (!session.sender && !session.receiver) this.#sessions.delete(sessionId);
+      if (!REGISTRY_ROLES.some(role => session[role])) this.#sessions.delete(sessionId);
     }
     return affectedSessionIds;
   }
@@ -154,7 +160,7 @@ export class SessionRegistry {
   pruneStale(now = Date.now(), staleAfterMs = DEFAULT_STALE_AFTER_MS) {
     const removed = [];
     for (const [sessionId, session] of this.#sessions) {
-      for (const role of ['sender', 'receiver']) {
+      for (const role of REGISTRY_ROLES) {
         const registration = session[role];
         if (!registration) continue;
         const expiresAt = Number(registration.leaseExpiresAt || (registration.registeredAt + staleAfterMs));
@@ -162,7 +168,7 @@ export class SessionRegistry {
         removed.push({ sessionId, role, tabId: registration.tabId, ownerGeneration: registration.ownerGeneration });
         session[role] = null;
       }
-      if (!session.sender && !session.receiver) this.#sessions.delete(sessionId);
+      if (!REGISTRY_ROLES.some(role => session[role])) this.#sessions.delete(sessionId);
     }
     return removed;
   }
@@ -171,7 +177,8 @@ export class SessionRegistry {
     return [...this.#sessions.entries()].map(([sessionId, session]) => ({
       sessionId,
       sender: session.sender ? { ...session.sender } : null,
-      receiver: session.receiver ? { ...session.receiver } : null
+      receiver: session.receiver ? { ...session.receiver } : null,
+      comparison: session.comparison ? { ...session.comparison } : null
     }));
   }
 

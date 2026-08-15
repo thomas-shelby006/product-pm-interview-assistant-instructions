@@ -352,7 +352,7 @@ test('operational session recovery binds one unambiguous READY lifecycle pair wh
   assert.match(recoverBlock, /g_receiverProvider\s*:=\s*StrLower/);
   assert.match(recoverBlock, /g_hWin1\s*:=/);
   assert.match(recoverBlock, /g_hWin2\s*:=/);
-  assert.match(recoverBlock, /UpdateManagedRuntimeJournal/);
+  assert.match(recoverBlock, /UpdateCurrentRuntimeJournal/);
 });
 
 test('handle refresh falls back to unambiguous lifecycle recovery after cached lookup fails', () => {

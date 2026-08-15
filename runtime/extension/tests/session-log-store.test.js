@@ -32,7 +32,7 @@ test('session log store keeps transcript events only in session storage', async 
   assert.deepEqual(localArea.state, {});
 });
 
-test('session log store clears both role logs for one session', async () => {
+test('session log store clears every managed role log for one session', async () => {
   const sessionArea = storage({
     pmia_log_s1_sender: [{ type: 'sender_text' }],
     pmia_log_s1_receiver: [{ type: 'answer' }],
@@ -42,7 +42,8 @@ test('session log store clears both role logs for one session', async () => {
   await store.clearSession('s1');
   assert.deepEqual(sessionRoleLogKeys('s1'), [
     'pmia_log_s1_sender',
-    'pmia_log_s1_receiver'
+    'pmia_log_s1_receiver',
+    'pmia_log_s1_comparison'
   ]);
   assert.deepEqual(sessionArea.state, {
     pmia_log_other_sender: [{ type: 'keep' }]

@@ -118,3 +118,26 @@ test('external lifecycle heartbeat advances a hidden no-response deadline withou
   assert.equal(result.answerState.state, 'no_response');
   wake.disconnect();
 });
+
+test('orchestrator emits response analytics with first-token and completion timing', async () => {
+  let clock = 1000;
+  let hint = 0;
+  let waits = 0;
+  const provider = adapter();
+  const answers = [];
+  const runtime = createReceiverAnswerOrchestrator({
+    adapter: provider, now: () => clock, getHintVersion: () => hint,
+    wake: { async wait() {
+      waits += 1;
+      if (waits === 1) { clock = 1300; provider.text = Array(65).fill('word').join(' '); provider.generating = true; }
+      else { clock = 31300; provider.generating = false; hint = 1; }
+    } },
+    onAnswer(value) { answers.push(value); }
+  });
+  const result = await runtime.start({ envelope: { id:'b-analytics', text:'What is product-market fit?', metadata:{ questionCount:1 } }, beforeText:'', hintVersionAtStart:0 });
+  assert.equal(result.analytics.questionType, 'simple_concept');
+  assert.equal(result.analytics.firstTokenLatencyMs, 300);
+  assert.equal(result.analytics.totalResponseMs, 30300);
+  assert.equal(result.analytics.wordCount, 65);
+  assert.equal(answers[0].analytics.outputWpm, 130);
+});

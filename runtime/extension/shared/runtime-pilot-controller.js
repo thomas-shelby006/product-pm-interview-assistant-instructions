@@ -98,6 +98,7 @@ export function createRuntimePilotController({
   deliverFinal,
   exportManagedSession,
   clearSessionLogs,
+  sessionAnalysisProvider = null,
   requestRole = null
 } = {}) {
   const store = createRuntimePilotStore({ storageArea });
@@ -570,7 +571,7 @@ export function createRuntimePilotController({
   async function transportLane(value = {}) {
     const sessionId = String(value.sessionId || '').trim();
     const role = String(value.role || '');
-    if (!sessionId || !['sender', 'receiver'].includes(role)) return { ok: false, error: 'invalid_transport_lane' };
+    if (!sessionId || !['sender', 'receiver', 'comparison'].includes(role)) return { ok: false, error: 'invalid_transport_lane' };
     const pilot = await state();
     pilot.updateTransportLane(sessionId, role, {
       state: value.state,
@@ -925,19 +926,19 @@ export function createRuntimePilotController({
     if (event?.type === 'session_armed') {
       pilot.setContextArmed(sessionId, true);
     }
-    if (event?.type === 'answer_state') {
+    if (role === 'receiver' && event?.type === 'answer_state') {
       pilot.setAnswerState(sessionId, event);
       if (['complete', 'no_response', 'timed_out', 'cancelled'].includes(String(event.state || ''))) {
         pilot.recordAnswer(sessionId, event);
       }
-    } else if (event?.type === 'answer') {
+    } else if (role === 'receiver' && event?.type === 'answer') {
       pilot.recordAnswer(sessionId, {
         envelopeId: event.envelopeId,
         elapsedMs: event.elapsedMs,
         wordCount: event.wordCount,
         state: 'complete'
       });
-    } else if (event?.type === 'answer_timeout') {
+    } else if (role === 'receiver' && event?.type === 'answer_timeout') {
       pilot.recordAnswer(sessionId, {
         envelopeId: event.envelopeId,
         timeout: true
@@ -1062,6 +1063,16 @@ export function createRuntimePilotController({
     }
   }
 
+  async function sendToAnswerRoles(registry, sessionId, command, payload = {}) {
+    const comparisonEnabled = Boolean(registry.getSession(sessionId)?.comparison?.tabId);
+    const [receiver, comparison] = await Promise.all([
+      sendRuntimeCommand(registry, sessionId, 'receiver', command, payload),
+      comparisonEnabled
+        ? sendRuntimeCommand(registry, sessionId, 'comparison', command, payload)
+        : Promise.resolve({ ok:true, skipped:true, reason:'comparison_not_enabled' })
+    ]);
+    return { ...receiver, receiver, comparison, comparisonEnabled };
+  }
   async function sendToRoles(registry, sessionId, command) {
     const [sender, receiver] = await Promise.all([
       sendRuntimeCommand(registry, sessionId, 'sender', command),
@@ -1204,6 +1215,7 @@ export function createRuntimePilotController({
           provider: registration.provider,
           phase: response?.composerAvailable ? 'ready' : 'registered',
           composerReady: Boolean(response?.composerAvailable),
+          version: String(response?.version || ''),
           adapterCapabilities: response?.capabilities || null,
           heartbeatAt: Date.now()
         });
@@ -1550,7 +1562,7 @@ export function createRuntimePilotController({
     cancelBatchCheckpoint(sessionId);
     await cancelRecoverySchedules(sessionId, pilot);
     const session = registry.getSession(sessionId);
-    const tabIds = ['sender', 'receiver']
+    const tabIds = ['sender', 'receiver', 'comparison']
       .map(role => session?.[role]?.tabId)
       .filter(Number.isInteger);
     for (const entry of sessionPorts(sessionId)) {
@@ -1681,7 +1693,7 @@ export function createRuntimePilotController({
         const pausedAt = Date.now();
         pilot.setMode(sessionId, 'paused');
         if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'paused', 'forwarding_pause');
-        const receiver = await sendRuntimeCommand(registry, sessionId, 'receiver', 'pause_forwarding', {});
+        const receiver = await sendToAnswerRoles(registry, sessionId, 'pause_forwarding', {});
         if (receiver?.ok !== false) {
           const current = pilot.snapshot(sessionId, pausedAt)?.batchState?.turnCoordination || {};
           pilot.updateBatchState(sessionId, {
@@ -1699,7 +1711,7 @@ export function createRuntimePilotController({
       }
       case 'resume_without_send': {
         const sender = await sendRuntimeCommand(registry, sessionId, 'sender', 'resume', {});
-        const receiver = await sendRuntimeCommand(registry, sessionId, 'receiver', 'resume_forwarding', { submit: false });
+        const receiver = await sendToAnswerRoles(registry, sessionId, 'resume_forwarding', { submit: false });
         if (receiver?.ok !== false) {
           pilot.setMode(sessionId, 'active');
           if (pilot.snapshot(sessionId)?.liveSession?.startedAt) updateLivePhase(pilot, sessionId, 'active', 'forwarding_resume_hold');
@@ -1720,7 +1732,7 @@ export function createRuntimePilotController({
         await commit(sessionId, pilot);
 
         const sender = await sendRuntimeCommand(registry, sessionId, 'sender', 'resume', {});
-        const receiver = await sendRuntimeCommand(registry, sessionId, 'receiver', 'resume_forwarding', { submit: true });
+        const receiver = await sendToAnswerRoles(registry, sessionId, 'resume_forwarding', { submit: true });
         if (receiver?.ok !== false) {
           const completedAt = Date.now();
           pilot.setMode(sessionId, 'active');
@@ -1806,14 +1818,10 @@ export function createRuntimePilotController({
         result = await submitLedgerItem(sessionId, payload.queueItemId, registry, pilot);
         break;
       case 'set_auto_submit':
-        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_auto_submit', {
-          value: Boolean(payload.value)
-        });
+        result = await sendToAnswerRoles(registry, sessionId, 'set_auto_submit', { value: Boolean(payload.value) });
         break;
       case 'set_hold':
-        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_hold', {
-          value: Boolean(payload.value)
-        });
+        result = await sendToAnswerRoles(registry, sessionId, 'set_hold', { value: Boolean(payload.value) });
         break;
       case 'set_turn_coordination_policy': {
         const validation = validatePolicyImpactConfirmation(pilot.snapshot(sessionId), payload.preview, Date.now());
@@ -1821,13 +1829,11 @@ export function createRuntimePilotController({
           result = validation.ok ? { ok:false, error:'policy_preview_mismatch' } : validation;
           break;
         }
-        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_turn_coordination_policy', {
-          policy: payload.policy
-        });
+        result = await sendToAnswerRoles(registry, sessionId, 'set_turn_coordination_policy', { policy: payload.policy });
         break;
       }
       case 'send_held_now':
-        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'send_held_now', { source: 'dashboard' });
+        result = await sendToAnswerRoles(registry, sessionId, 'send_held_now', { source: 'dashboard' });
         break;
       case 'retry_carryover':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'retry_carryover', { source: 'dashboard' });
@@ -1836,9 +1842,7 @@ export function createRuntimePilotController({
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'keep_accumulating', { source: 'dashboard' });
         break;
       case 'set_receiver_policy':
-        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'set_receiver_policy', {
-          policy: payload.policy || {}
-        });
+        result = await sendToAnswerRoles(registry, sessionId, 'set_receiver_policy', { policy: payload.policy || {} });
         break;
       case 'preview_interrupt_latest':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'preview_interrupt_latest', { source: 'dashboard' });
@@ -1858,9 +1862,7 @@ export function createRuntimePilotController({
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'resolve_no_response', { action: payload.action });
         break;
       case 'submit_now':
-        result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'submit_next', {
-          source: 'dashboard'
-        });
+        result = await sendToAnswerRoles(registry, sessionId, 'submit_next', { source: 'dashboard' });
         break;
       case 'interrupt_latest':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'interrupt_latest', {
@@ -2024,13 +2026,41 @@ export function createRuntimePilotController({
       case 'focus_composer':
         result = await sendRuntimeCommand(registry, sessionId, 'receiver', 'focus_composer');
         break;
-      case 'export_session':
-        result = await exportManagedSession({
+      case 'export_session': {
+        const roleExport = await exportManagedSession({
           registry,
           sessionId,
           sendToTab: (tabId, outgoing) => chromeApi.tabs.sendMessage(tabId, outgoing)
         });
+        let analysis = roleExport.ok && typeof sessionAnalysisProvider === 'function'
+          ? await sessionAnalysisProvider(sessionId).catch(() => null)
+          : null;
+        if (analysis) {
+          const current = pilot.snapshot(sessionId) || {};
+          const markerCounts = {};
+          for (const marker of current.operatorMarkers || []) {
+            const category = String(marker?.category || 'needs_review');
+            markerCounts[category] = (markerCounts[category] || 0) + 1;
+          }
+          analysis = {
+            ...analysis,
+            runtime: {
+              activeProviders: {
+                sender: current.sender?.connected ? current.sender.provider || '' : '',
+                primary: current.receiver?.connected ? current.receiver.provider || '' : '',
+                comparison: current.comparison?.connected ? current.comparison.provider || '' : ''
+              },
+              comparisonEnabled: Boolean(current.comparison?.connected),
+              markerCounts,
+              deliverySuccessRate: Number(current.metrics?.deliverySuccessRate ?? 100),
+              unresolvedCount: Number(current.ledgerCounts?.pending || 0) + Number(current.ledgerCounts?.inFlight || 0),
+              forwardingMode: current.batchState?.autoSubmit === false ? 'manual_gather' : 'automatic'
+            }
+          };
+        }
+        result = { ...roleExport, analysis };
         break;
+      }
       case 'export_support_bundle': {
         const currentSnapshot = await broadcast(sessionId, pilot) || pilot.snapshot(sessionId);
         result = {
@@ -2187,7 +2217,7 @@ export function createRuntimePilotController({
       results.push(await mutationCoordinator.run(sessionId, async () => {
         const pilot = await state();
         const snapshot = pilot.snapshot(sessionId);
-        for (const role of ['sender', 'receiver']) {
+        for (const role of ['sender', 'receiver', 'comparison']) {
           if (snapshot?.[role]?.tabId === tabId) pilot.disconnectRole(sessionId, role);
         }
         await commit(sessionId, pilot);

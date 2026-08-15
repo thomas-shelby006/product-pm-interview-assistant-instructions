@@ -402,6 +402,13 @@
           <article><span>Latest answer</span><p id="latestAnswer">No answer captured.</p></article>
           <article><span>Latest delivery proof</span><p id="latestProof">No receiver proof recorded.</p></article>
         </section>
+        <section class="live-answer-analytics" aria-label="Live answer analytics">
+          <div class="section-heading"><div><h2>Live answer analytics</h2><p id="liveAnalyticsMode">Automatic forwarding</p></div><button id="manualGatherAction" data-command="set_auto_submit">Manual gather</button></div>
+          <div class="live-answer-analytics-grid">
+            <article><span class="eyebrow">Primary answer</span><strong id="primaryAnalyticsSummary">Waiting</strong><p id="primaryAnalyticsTiming">No answer timing yet.</p></article>
+            <article><span class="eyebrow">Comparison answer</span><strong id="comparisonAnalyticsSummary">Not enabled</strong><p id="comparisonAnalyticsTiming">No comparison runtime registered.</p></article>
+          </div>
+        </section>
       </section>
 
       <section class="view" id="panelQueue" data-view-panel="queue" role="tabpanel" hidden>
@@ -638,7 +645,7 @@
         <button data-command="restore_managed">Restore</button>
       </div>
       <div class="footer-actions">
-        <button id="openShortcutHelpFooter">Keys & display</button>
+        <button id="openShortcutHelpFooter">Help & keys</button>
         <button id="copyHealthReport">Copy health report</button>
         <button id="copyDiagnostics">Copy diagnostics</button>
         <button class="danger" id="endSessionAction">End session</button>
@@ -659,8 +666,15 @@
 
   <div class="shortcut-sheet" id="shortcutHelpDialog" hidden role="dialog" aria-modal="true" aria-labelledby="shortcutHelpTitle" tabindex="-1">
     <div class="shortcut-card">
-      <div class="section-heading"><div><span class="eyebrow">Keyboard and accessibility</span><h2 id="shortcutHelpTitle">Keys & display</h2></div><button id="closeShortcutHelp">Close</button></div>
-      <p>Dashboard shortcuts are session-only. Provider-page hotkeys are unchanged.</p>
+      <div class="section-heading"><div><span class="eyebrow">Runtime companion</span><h2 id="shortcutHelpTitle">PMIA Help & shortcuts</h2></div><button id="closeShortcutHelp">Close</button></div>
+      <p>Dashboard shortcuts are session-only. Provider-page hotkeys are unchanged.</p>      <div class="help-feature-grid" aria-label="Runtime feature guide">
+        <article><strong>Automatic forwarding</strong><p>Default. Every protected final is submitted as soon as the receiver is available.</p></article>
+        <article><strong>Manual gather</strong><p>Turns auto-submit off. Window 1 can accumulate multiple transcript finals into one protected batch until you submit it.</p></article>
+        <article><strong>Comparison lane</strong><p>Optional testing receiver. The same finals are mirrored to the alternate provider without blocking the primary answer path.</p></article>
+        <article><strong>Live analytics</strong><p>Shows word-band fit, first-token latency, total response time, output WPM and estimated speaking time.</p></article>
+        <article><strong>Export session</strong><p>Exports role records plus combined provider/question-type analytics in JSON and HTML.</p></article>
+        <article><strong>Lossless inbox</strong><p>Queued finals remain protected until rendered proof, explicit archive, or a deliberate operator action.</p></article>
+      </div>
       <div id="shortcutHelpGroups" class="shortcut-help-groups"></div>
       <div class="shortcut-actions"><button id="resetShortcutBindings">Reset dashboard keys</button></div>
       <fieldset class="accessibility-settings"><legend>Display preferences</legend>
@@ -689,6 +703,7 @@
       </div>
     </div>
   </div>
+  <button id="helpCompanionButton" class="help-companion-button" aria-haspopup="dialog" title="PMIA help and shortcuts" aria-label="Open PMIA help">?</button>
   <div id="screenReaderPolite" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <div id="screenReaderAssertive" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

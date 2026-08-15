@@ -115,7 +115,7 @@ global PM_BOOT_PROMPT_TEXT := ""
     . "- If a Session context block sets Avoid mentioning, keep those topics out of every answer this session.`n"
     . "- Answer mode: concise = bottom of the word band; normal = current policy; deep = top of the band plus an offer to expand, still under 180 words.`n"
     . "- A live correction from Sundar wins for the rest of the session unless it violates the truth constraints.`n"
-    . "- Answer the latest actionable interviewer question; for follow-ups or interruptions, be shorter and do not restart the framework.`n"
+    . "- For independent queued interviewer questions, answer all of them in arrival order and give the latest the most emphasis. For a true follow-up or same-turn continuation, answer only the new point, be shorter, and do not restart the framework.`n"
     . "`n"
     . "Live answer behavior:`n"
     . "- Answer as Sundar.`n"
@@ -300,9 +300,11 @@ global OFF_Y := 0
 
 global g_hWin1               := 0
 global g_hWin2               := 0
+global g_hWin3               := 0
 global g_hDashboard          := 0
 global g_senderPid           := 0
 global g_receiverPid         := 0
+global g_comparisonPid       := 0
 global g_dashboardPid        := 0
 global g_mode                := 1
 global g_pos2Win             := 1
@@ -331,6 +333,8 @@ global g_avoidEdit           := 0
 global g_answerModeDdl       := 0
 global g_senderProviderDdl   := 0
 global g_receiverProviderDdl := 0
+global g_comparisonProviderDdl := 0
+global g_comparisonEnabledCheck := 0
 global g_routeSummary        := 0
 global g_contextStatus       := 0
 global g_launchStatus        := 0
@@ -346,6 +350,8 @@ global g_sessionAvoid        := ""
 global g_sessionAnswerMode   := "normal"
 global g_senderProvider      := "chatgpt"
 global g_receiverProvider    := "chatgpt"
+global g_comparisonProvider  := "claude"
+global g_comparisonEnabled   := false
 global g_sessionId           := ""
 global g_interviewActive     := false
 global SETTINGS_DIR          := EnvGet("LOCALAPPDATA") "\PMInterviewAssistant"
@@ -493,13 +499,15 @@ ActivatePmiaRuntime(*) {
 
 LoadStudioPreferences() {
     global SETTINGS_DIR, SETTINGS_FILE
-    global g_selectedProfileDirectory, g_senderProvider, g_receiverProvider, g_layoutMode
+    global g_selectedProfileDirectory, g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled, g_layoutMode
     global g_browserConfig, BrowserExe, BROWSER_USER_DATA_ROOT, EDGE_USER_DATA_ROOT
     DirCreate SETTINGS_DIR
     try {
         g_selectedProfileDirectory := IniRead(SETTINGS_FILE, "Studio", "ProfileDirectory", "Default")
         g_senderProvider := NormalizeProvider(IniRead(SETTINGS_FILE, "Studio", "SenderProvider", "chatgpt"))
         g_receiverProvider := NormalizeProvider(IniRead(SETTINGS_FILE, "Studio", "ReceiverProvider", "chatgpt"))
+        g_comparisonProvider := NormalizeProvider(IniRead(SETTINGS_FILE, "Studio", "ComparisonProvider", g_receiverProvider = "chatgpt" ? "claude" : "chatgpt"))
+        g_comparisonEnabled := IniRead(SETTINGS_FILE, "Studio", "ComparisonEnabled", "0") = "1"
         g_layoutMode := NormalizeLayoutMode(IniRead(SETTINGS_FILE, "Studio", "LayoutMode", "ThreeWindow"))
         g_browserConfig := LoadBrowserRuntimeConfig(SETTINGS_FILE)
         BrowserExe := g_browserConfig["executable"]
@@ -509,6 +517,8 @@ LoadStudioPreferences() {
         g_selectedProfileDirectory := "Default"
         g_senderProvider := "chatgpt"
         g_receiverProvider := "chatgpt"
+        g_comparisonProvider := "claude"
+        g_comparisonEnabled := false
         g_layoutMode := "ThreeWindow"
         g_browserConfig := LoadBrowserRuntimeConfig(SETTINGS_FILE)
         BrowserExe := g_browserConfig["executable"]
@@ -519,11 +529,13 @@ LoadStudioPreferences() {
 
 SaveStudioPreferences() {
     global SETTINGS_DIR, SETTINGS_FILE
-    global g_selectedProfileDirectory, g_senderProvider, g_receiverProvider, g_layoutMode, g_browserConfig
+    global g_selectedProfileDirectory, g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled, g_layoutMode, g_browserConfig
     DirCreate SETTINGS_DIR
     IniWrite g_selectedProfileDirectory, SETTINGS_FILE, "Studio", "ProfileDirectory"
     IniWrite g_senderProvider, SETTINGS_FILE, "Studio", "SenderProvider"
     IniWrite g_receiverProvider, SETTINGS_FILE, "Studio", "ReceiverProvider"
+    IniWrite g_comparisonProvider, SETTINGS_FILE, "Studio", "ComparisonProvider"
+    IniWrite g_comparisonEnabled ? 1 : 0, SETTINGS_FILE, "Studio", "ComparisonEnabled"
     IniWrite g_layoutMode, SETTINGS_FILE, "Studio", "LayoutMode"
     SaveBrowserRuntimeConfig(SETTINGS_FILE, g_browserConfig)
 }
@@ -762,7 +774,7 @@ ShowSessionLaunchGui() {
     global g_sessionResume, g_sessionJD, g_sessionMeta
     global g_sessionCompany, g_sessionRole, g_sessionRound
     global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode
-    global g_senderProviderDdl, g_receiverProviderDdl, g_senderProvider, g_receiverProvider
+    global g_senderProviderDdl, g_receiverProviderDdl, g_comparisonProviderDdl, g_comparisonEnabledCheck, g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled
     global g_profileDdl, g_browserFamilyDdl, g_browserSummary, g_layoutDdl, g_layoutMode, g_browserConfig
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
     global g_runtimeHealth, g_preflightButton, g_repairButton, g_liveCheckButton
@@ -806,7 +818,7 @@ ShowSessionLaunchGui() {
     g_browserSummary := g_launchGui.Add("Text", "x52 y180 w836 h18", "")
     g_browserSummary.SetFont("s8 c64748B", "Segoe UI")
 
-    routeBox := g_launchGui.Add("GroupBox", "x30 y216 w900 h138", "Conversation route")
+    routeBox := g_launchGui.Add("GroupBox", "x30 y216 w900 h150", "Conversation route")
     routeBox.SetFont("s10 w600 c334155", "Segoe UI")
     g_launchGui.Add("Text", "x52 y246 w200 h20", "Question source")
     g_senderProviderDdl := g_launchGui.Add("DropDownList", "x52 y269 w205", ["ChatGPT", "Claude"])
@@ -816,7 +828,11 @@ ShowSessionLaunchGui() {
     g_launchGui.Add("Text", "x678 y246 w200 h20", "Answer workspace")
     g_receiverProviderDdl := g_launchGui.Add("DropDownList", "x678 y269 w205", ["ChatGPT", "Claude"])
     g_receiverProviderDdl.Choose(g_receiverProvider = "claude" ? 2 : 1)
-    g_routeSummary := g_launchGui.Add("Text", "x52 y315 w830 h24", "")
+    g_comparisonEnabledCheck := g_launchGui.Add("CheckBox", "x305 y311 w142 h24", "Compare answers")
+    g_comparisonEnabledCheck.Value := g_comparisonEnabled ? 1 : 0
+    g_comparisonProviderDdl := g_launchGui.Add("DropDownList", "x452 y307 w150", ["ChatGPT", "Claude"])
+    g_comparisonProviderDdl.Choose(g_comparisonProvider = "claude" ? 2 : 1)
+    g_routeSummary := g_launchGui.Add("Text", "x52 y336 w830 h24", "")
     g_routeSummary.SetFont("s9 w600 c0F766E", "Segoe UI")
     setupBox := g_launchGui.Add("GroupBox", "x30 y367 w900 h145", "Session setup (optional)")
     setupBox.SetFont("s10 w600 c334155", "Segoe UI")
@@ -849,7 +865,7 @@ ShowSessionLaunchGui() {
     g_launchGui.Add("Text", "x52 y704 w610 h20", "Additional notes (optional)")
     g_metaEdit := g_launchGui.Add("Edit", "x52 y727 w610 h38 -Wrap WantTab", g_sessionMeta)
     g_launchGui.Add("Text", "x678 y704 w210 h20", "Initial layout")
-    g_layoutDdl := g_launchGui.Add("DropDownList", "x678 y727 w212", ["Three windows", "Two provider windows", "Sender + dashboard", "Receiver + dashboard", "Dashboard only"])
+    g_layoutDdl := g_launchGui.Add("DropDownList", "x678 y727 w212", ["Providers + cockpit", "Providers only", "Sender + cockpit", "Receiver + cockpit", "Cockpit only"])
     g_layoutDdl.Choose(LayoutModeIndex(g_layoutMode))
     g_contextStatus := g_launchGui.Add("Text", "x52 y768 w838 h18", "")
     g_contextStatus.SetFont("s9 c475569", "Segoe UI")
@@ -866,6 +882,8 @@ ShowSessionLaunchGui() {
     browserSettingsBtn.OnEvent("Click", ShowBrowserSettingsGui)
     g_senderProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
     g_receiverProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
+    g_comparisonEnabledCheck.OnEvent("Click", UpdateLaunchRouteSummary)
+    g_comparisonProviderDdl.OnEvent("Change", UpdateLaunchRouteSummary)
     g_layoutDdl.OnEvent("Change", UpdateLaunchLayoutMode)
     g_resumeEdit.OnEvent("Change", UpdateLaunchContextStatus)
     g_jdEdit.OnEvent("Change", UpdateLaunchContextStatus)
@@ -943,17 +961,24 @@ RenderDoctorStatus() {
     }
 }
 UpdateLaunchRouteSummary(*) {
-    global g_senderProviderDdl, g_receiverProviderDdl, g_routeSummary
-    global g_senderProvider, g_receiverProvider
+    global g_senderProviderDdl, g_receiverProviderDdl, g_comparisonProviderDdl, g_comparisonEnabledCheck, g_routeSummary
+    global g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled
     sender := IsObject(g_senderProviderDdl) ? g_senderProviderDdl.Text : "ChatGPT"
     receiver := IsObject(g_receiverProviderDdl) ? g_receiverProviderDdl.Text : "ChatGPT"
+    comparison := IsObject(g_comparisonProviderDdl) ? g_comparisonProviderDdl.Text : (receiver = "ChatGPT" ? "Claude" : "ChatGPT")
     g_senderProvider := NormalizeProvider(sender)
     g_receiverProvider := NormalizeProvider(receiver)
-    if IsObject(g_routeSummary)
-        g_routeSummary.Text := sender " captures the question  →  " receiver " prepares the live answer"
+    g_comparisonProvider := NormalizeProvider(comparison)
+    g_comparisonEnabled := IsObject(g_comparisonEnabledCheck) ? g_comparisonEnabledCheck.Value ? true : false : g_comparisonEnabled
+    if IsObject(g_comparisonProviderDdl)
+        g_comparisonProviderDdl.Enabled := g_comparisonEnabled
+    if IsObject(g_routeSummary) {
+        g_routeSummary.Text := g_comparisonEnabled
+            ? sender " captures questions -> " receiver " primary answer + " comparison " comparison"
+            : sender " captures questions -> " receiver " prepares the live answer"
+    }
     SaveStudioPreferences()
 }
-
 SwapLaunchProviders(*) {
     global g_senderProviderDdl, g_receiverProviderDdl
     if !IsObject(g_senderProviderDdl) || !IsObject(g_receiverProviderDdl)
@@ -1004,7 +1029,7 @@ StartLaunchFromGui(*) {
     global g_sessionResume, g_sessionJD, g_sessionMeta
     global g_sessionCompany, g_sessionRole, g_sessionRound
     global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode
-    global g_senderProviderDdl, g_receiverProviderDdl, g_senderProvider, g_receiverProvider
+    global g_senderProviderDdl, g_receiverProviderDdl, g_comparisonProviderDdl, g_comparisonEnabledCheck, g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled
     global g_shortContextArmedUntil
 
     if IsObject(g_resumeEdit)
@@ -1029,6 +1054,10 @@ StartLaunchFromGui(*) {
         g_senderProvider := NormalizeProvider(g_senderProviderDdl.Text)
     if IsObject(g_receiverProviderDdl)
         g_receiverProvider := NormalizeProvider(g_receiverProviderDdl.Text)
+    if IsObject(g_comparisonProviderDdl)
+        g_comparisonProvider := NormalizeProvider(g_comparisonProviderDdl.Text)
+    if IsObject(g_comparisonEnabledCheck)
+        g_comparisonEnabled := g_comparisonEnabledCheck.Value ? true : false
 
     shortContext := StrLen(Trim(g_sessionResume)) < 100 || StrLen(Trim(g_sessionJD)) < 100
     if shortContext && (g_shortContextArmedUntil = 0 || A_TickCount > g_shortContextArmedUntil) {
@@ -1042,7 +1071,7 @@ StartLaunchFromGui(*) {
 CloseSessionLaunchGui(*) {
     global g_launchGui, g_resumeEdit, g_jdEdit, g_metaEdit
     global g_companyEdit, g_roleEdit, g_roundDdl, g_emphasisDdl, g_avoidEdit, g_answerModeDdl
-    global g_senderProviderDdl, g_receiverProviderDdl, g_profileDdl, g_layoutDdl
+    global g_senderProviderDdl, g_receiverProviderDdl, g_comparisonProviderDdl, g_comparisonEnabledCheck, g_profileDdl, g_layoutDdl
     global g_browserFamilyDdl, g_browserSummary, g_browserSettingsGui
     global g_routeSummary, g_contextStatus, g_launchStatus, g_launchButton
     global g_runtimeHealth, g_preflightButton, g_repairButton, g_liveCheckButton
@@ -1062,6 +1091,8 @@ CloseSessionLaunchGui(*) {
     g_answerModeDdl := 0
     g_senderProviderDdl := 0
     g_receiverProviderDdl := 0
+    g_comparisonProviderDdl := 0
+    g_comparisonEnabledCheck := 0
     g_profileDdl := 0
     g_browserFamilyDdl := 0
     g_browserSummary := 0
@@ -1193,7 +1224,7 @@ DiagnoseLaunchFailure(stage, role := "") {
 }
 
 WaitForLifecyclePair(phase, timeoutMs) {
-    global g_senderProvider, g_receiverProvider, g_sessionId
+    global g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled, g_sessionId
     deadline := A_TickCount + timeoutMs
     sender := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, phase, Max(0, deadline - A_TickCount))
     if !sender.Count
@@ -1204,12 +1235,45 @@ WaitForLifecyclePair(phase, timeoutMs) {
     return Map("ok", true, "sender", sender, "receiver", receiver)
 }
 
+LaunchComparisonRuntime() {
+    global g_comparisonEnabled, g_comparisonProvider, g_sessionId, g_browserConfig, g_selectedProfileDirectory
+    global g_hWin3, g_comparisonPid, g_launchButton
+    if !g_comparisonEnabled
+        return true
+    comparisonUrl := UrlWithRuntime(ProviderUrl(g_comparisonProvider), g_sessionId, "comparison", g_comparisonProvider)
+    windowsBefore := SnapshotBrowserWindows(g_browserConfig)
+    LaunchPmiaBrowserWindow(g_browserConfig, g_selectedProfileDirectory, comparisonUrl, &g_comparisonPid)
+    created := WaitForNewBrowserWindow(g_browserConfig, windowsBefore, 1500)
+    if created {
+        g_hWin3 := created
+        UpdateCurrentRuntimeJournal()
+    }
+    SetLaunchState("WAITING_COMPARISON", "Primary answer ready; waiting for comparison runtime...", "info")
+    for phase in ["boot", "registered", "ready"] {
+        timeout := phase = "ready" ? COMPOSER_READY_TIMEOUT_MS : RUNTIME_LIFECYCLE_TIMEOUT_MS
+        match := WaitForLifecycleTitle("comparison", g_comparisonProvider, g_sessionId, phase, timeout)
+        if !match.Count {
+            DiagnoseLaunchFailure(phase, "comparison")
+            if IsObject(g_launchButton)
+                g_launchButton.Enabled := true
+            return false
+        }
+        g_hWin3 := match["hwnd"]
+        UpdateCurrentRuntimeJournal()
+    }
+    return true
+}
+UpdateCurrentRuntimeJournal() {
+    global g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hWin3, g_hDashboard
+    global g_senderPid, g_receiverPid, g_comparisonPid, g_dashboardPid
+    return UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid, g_hWin3, g_comparisonPid)
+}
 RunManagedLaunch(reuseSession := false) {
-    global g_hWin1, g_hWin2, g_hDashboard, BrowserExe, g_interviewActive
-    global g_senderPid, g_receiverPid, g_dashboardPid, g_browserConfig
+    global g_hWin1, g_hWin2, g_hWin3, g_hDashboard, BrowserExe, g_interviewActive
+    global g_senderPid, g_receiverPid, g_comparisonPid, g_dashboardPid, g_browserConfig
     global g_mode, g_pos2Win, g_posWin1, g_posWin2
     global g_layoutEnteredAt, g_currentLayout, g_lastStableLayout
-    global g_senderProvider, g_receiverProvider, g_sessionId
+    global g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled, g_sessionId
     global g_selectedProfileDirectory, g_layoutMode, g_launchButton, g_launchGui
 
     if !RunStudioPreflight()
@@ -1221,8 +1285,8 @@ RunManagedLaunch(reuseSession := false) {
     if IsObject(g_launchButton)
         g_launchButton.Enabled := false
     g_interviewActive := false
-    if !FileExist(ManagedRuntimeJournalPath()) && g_sessionId != "" && (IsAlive(g_hWin1) || IsAlive(g_hWin2) || IsAlive(g_hDashboard))
-        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    if !FileExist(ManagedRuntimeJournalPath()) && g_sessionId != "" && (IsAlive(g_hWin1) || IsAlive(g_hWin2) || IsAlive(g_hWin3) || IsAlive(g_hDashboard))
+        UpdateCurrentRuntimeJournal()
     cleanup := CloseOwnedManagedRuntime(reuseSession ? g_sessionId : "")
     if !cleanup["ok"] {
         SetLaunchState("ERROR", "OWNERSHIP_MISMATCH: Existing managed windows could not be verified for safe cleanup.", "error")
@@ -1234,9 +1298,11 @@ RunManagedLaunch(reuseSession := false) {
         g_sessionId := CreateSessionId()
     g_hWin1 := 0
     g_hWin2 := 0
+    g_hWin3 := 0
     g_hDashboard := 0
     g_senderPid := 0
     g_receiverPid := 0
+    g_comparisonPid := 0
     g_dashboardPid := 0
     WriteManagedRuntimeJournal(g_sessionId, g_browserConfig)
     SetLaunchState("LAUNCHING", "Opening managed " g_browserConfig["family"] " windows in profile " g_selectedProfileDirectory "...", "info")
@@ -1247,7 +1313,7 @@ RunManagedLaunch(reuseSession := false) {
     senderCreated := WaitForNewBrowserWindow(g_browserConfig, senderWindowsBefore, 1500)
     if senderCreated {
         g_hWin1 := senderCreated
-        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+        UpdateCurrentRuntimeJournal()
     }
     SetLaunchState("WAITING_BOOT", "Waiting for PMIA sender runtime...", "info")
     senderBoot := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "boot", RUNTIME_LIFECYCLE_TIMEOUT_MS)
@@ -1258,7 +1324,7 @@ RunManagedLaunch(reuseSession := false) {
         return false
     }
     g_hWin1 := senderBoot["hwnd"]
-    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    UpdateCurrentRuntimeJournal()
 
     SetLaunchState("WAITING_REGISTRATION", "Sender started; waiting for sender registration...", "info")
     senderRegistered := WaitForLifecycleTitle("sender", g_senderProvider, g_sessionId, "registered", RUNTIME_LIFECYCLE_TIMEOUT_MS)
@@ -1277,14 +1343,14 @@ RunManagedLaunch(reuseSession := false) {
         return false
     }
     g_hWin1 := senderReady["hwnd"]
-    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    UpdateCurrentRuntimeJournal()
 
     receiverWindowsBefore := SnapshotBrowserWindows(g_browserConfig)
     LaunchPmiaBrowserWindow(g_browserConfig, g_selectedProfileDirectory, receiverUrl, &g_receiverPid)
     receiverCreated := WaitForNewBrowserWindow(g_browserConfig, receiverWindowsBefore, 1500)
     if receiverCreated {
         g_hWin2 := receiverCreated
-        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+        UpdateCurrentRuntimeJournal()
     }
     SetLaunchState("WAITING_BOOT", "Sender ready; waiting for PMIA receiver runtime...", "info")
     receiverBoot := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "boot", RUNTIME_LIFECYCLE_TIMEOUT_MS)
@@ -1295,7 +1361,7 @@ RunManagedLaunch(reuseSession := false) {
         return false
     }
     g_hWin2 := receiverBoot["hwnd"]
-    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    UpdateCurrentRuntimeJournal()
 
     SetLaunchState("WAITING_REGISTRATION", "Receiver started; waiting for receiver registration...", "info")
     receiverRegistered := WaitForLifecycleTitle("receiver", g_receiverProvider, g_sessionId, "registered", RUNTIME_LIFECYCLE_TIMEOUT_MS)
@@ -1314,7 +1380,16 @@ RunManagedLaunch(reuseSession := false) {
         return false
     }
     g_hWin2 := receiverReady["hwnd"]
-    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    UpdateCurrentRuntimeJournal()
+    if !LaunchComparisonRuntime() {
+        if IsAlive(g_hWin3)
+            CloseExactManagedWindow(g_hWin3, g_sessionId, g_browserConfig["executable"])
+        g_hWin3 := 0
+        g_comparisonPid := 0
+        UpdateCurrentRuntimeJournal()
+        LogEvent("Comparison runtime unavailable; continuing primary session")
+        SetLaunchState("WAITING_DASHBOARD", "Comparison unavailable; continuing primary session...", "warn")
+    }
     extensionId := g_selectedProfileRecord.Count ? g_selectedProfileRecord["extensionId"] : ""
     if (extensionId = "") {
         SetLaunchState("ERROR", "DASHBOARD_EXTENSION_ID_MISSING: Profile Doctor did not return the active PMIA extension ID.", "error")
@@ -1328,7 +1403,7 @@ RunManagedLaunch(reuseSession := false) {
     dashboardCreated := WaitForNewBrowserWindow(g_browserConfig, dashboardWindowsBefore, 1500)
     if dashboardCreated {
         g_hDashboard := dashboardCreated
-        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+        UpdateCurrentRuntimeJournal()
     }
     SetLaunchState("WAITING_DASHBOARD", "Sender and receiver ready; waiting for Runtime Pilot Dashboard...", "info")
     dashboardReady := WaitForDashboardWindow(g_sessionId, RUNTIME_LIFECYCLE_TIMEOUT_MS)
@@ -1343,9 +1418,11 @@ RunManagedLaunch(reuseSession := false) {
     g_hWin1 := readyPair["sender"]["hwnd"]
     g_hWin2 := readyPair["receiver"]["hwnd"]
     g_hDashboard := dashboardReady["hwnd"]
-    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+    UpdateCurrentRuntimeJournal()
     EnsureAlwaysOnTop(g_hWin1)
     EnsureAlwaysOnTop(g_hWin2)
+    if IsAlive(g_hWin3)
+        EnsureAlwaysOnTop(g_hWin3)
     EnsureAlwaysOnTop(g_hDashboard)
     ApplyConfiguredInitialLayout()
     SendToWindow(BuildBootPrompt(), "^+{F5}", g_hWin1)
@@ -1379,11 +1456,11 @@ ApplyConfiguredInitialLayout() {
         RecordLayoutChange(4, 1, 1, 1)
     } else if (g_layoutMode = "TwoWindow") {
         g_mode := 1
-        Apply2WinLayout(1, false)
+        ApplyAdaptiveWorkspaceLayout(false)
         RecordLayoutChange(1, 1, 1, 1)
     } else {
         g_mode := 1
-        Apply2WinLayout(1, true)
+        ApplyAdaptiveWorkspaceLayout(true)
         RecordLayoutChange(1, 1, 1, 1)
     }
 }
@@ -1407,7 +1484,7 @@ RepairLaunch(*) {
 
 CheckLiveSessionHealth(*) {
     global g_hWin1, g_hWin2, g_hDashboard, g_launchGui, g_runtimeHealth
-    global g_senderProvider, g_receiverProvider, g_sessionId
+    global g_senderProvider, g_receiverProvider, g_comparisonProvider, g_comparisonEnabled, g_sessionId
 
     if GetKeyState("Alt", "P")
         KeyWait "Alt"
@@ -1432,7 +1509,7 @@ CheckLiveSessionHealth(*) {
     if IsObject(g_launchGui)
         try WinActivate "ahk_id " g_launchGui.Hwnd
 
-    route := StrTitle(g_senderProvider) " â†’ " StrTitle(g_receiverProvider)
+    route := StrTitle(g_senderProvider) " → " StrTitle(g_receiverProvider)
     dashboardReady := IsAlive(g_hDashboard)
     if senderChecked && receiverChecked && dashboardReady {
         message := "Live session READY (" route "). Sender, receiver, and dashboard are present."
@@ -1487,7 +1564,7 @@ FocusRuntimeDashboard(*) {
             return false
         }
         g_hDashboard := dashboard["hwnd"]
-        UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard, g_senderPid, g_receiverPid, g_dashboardPid)
+        UpdateCurrentRuntimeJournal()
         EnsureAlwaysOnTop(g_hDashboard)
     }
     if g_hidden {
@@ -1722,6 +1799,65 @@ RestoreWin1Visibility() {
 ;  LAYOUT APPLIERS
 ; ============================================================
 
+ApplyManagedCompactChrome(hwnd) {
+    if !IsAlive(hwnd)
+        return false
+    try {
+        ; Managed browser app windows keep resizing but drop the Windows caption bar.
+        WinSetStyle "-0xC00000", "ahk_id " hwnd
+        return true
+    } catch {
+        return false
+    }
+}
+
+PrimaryWorkArea() {
+    monitor := MonitorGetPrimary()
+    left := 0, top := 0, right := A_ScreenWidth, bottom := A_ScreenHeight
+    try MonitorGetWorkArea monitor, &left, &top, &right, &bottom
+    return {left: left, top: top, right: right, bottom: bottom, width: Max(800, right - left), height: Max(600, bottom - top)}
+}
+
+ApplyAdaptiveWorkspaceLayout(showDashboard := true) {
+    global g_hWin1, g_hWin2, g_hWin3, g_hDashboard, g_comparisonEnabled, g_dashboardVisible
+    comparisonActive := g_comparisonEnabled && IsAlive(g_hWin3)
+    area := PrimaryWorkArea()
+    margin := 8
+    gap := 6
+    x := area.left + margin
+    y := area.top + margin
+    h := Max(520, area.height - (margin * 2))
+    availableW := Max(780, area.width - (margin * 2))
+    dashboardW := showDashboard ? Max(320, Round(availableW * 0.24)) : 0
+    providerW := availableW - dashboardW - (showDashboard ? gap : 0)
+    senderW := Max(240, Round(providerW * (comparisonActive ? 0.23 : 0.30)))
+    remaining := Max(500, providerW - senderW - gap)
+    answerW := comparisonActive ? Max(240, Floor((remaining - gap) / 2)) : remaining
+
+    RestoreWin1Visibility()
+    if IsAlive(g_hWin1) {
+        ApplyManagedCompactChrome(g_hWin1)
+        WinMove x, y, senderW, h, "ahk_id " g_hWin1
+    }
+    receiverX := x + senderW + gap
+    if IsAlive(g_hWin2) {
+        ApplyManagedCompactChrome(g_hWin2)
+        WinMove receiverX, y, answerW, h, "ahk_id " g_hWin2
+    }
+    if comparisonActive {
+        ApplyManagedCompactChrome(g_hWin3)
+        compareX := receiverX + answerW + gap
+        compareW := Max(240, providerW - (compareX - x))
+        WinMove compareX, y, compareW, h, "ahk_id " g_hWin3
+    }
+    if showDashboard && IsAlive(g_hDashboard) {
+        ApplyManagedCompactChrome(g_hDashboard)
+        dashboardX := area.right - margin - dashboardW
+        WinMove dashboardX, y, dashboardW, h, "ahk_id " g_hDashboard
+    }
+    g_dashboardVisible := showDashboard
+    return true
+}
 CaptureWindowGeometry(hwnd) {
     if !IsAlive(hwnd)
         return 0
@@ -1733,10 +1869,11 @@ CaptureWindowGeometry(hwnd) {
 }
 
 CaptureManagedGeometry() {
-    global g_hWin1, g_hWin2, g_hDashboard
+    global g_hWin1, g_hWin2, g_hWin3, g_hDashboard
     return {
         sender: CaptureWindowGeometry(g_hWin1),
         receiver: CaptureWindowGeometry(g_hWin2),
+        comparison: CaptureWindowGeometry(g_hWin3),
         dashboard: CaptureWindowGeometry(g_hDashboard)
     }
 }
@@ -1753,7 +1890,7 @@ RestoreManagedGeometry(snapshot) {
         return false
     RestoreWin1Visibility()
     restored := false
-    for key in ["sender", "receiver", "dashboard"] {
+    for key in ["sender", "receiver", "comparison", "dashboard"] {
         if snapshot.HasOwnProp(key) && RestoreWindowGeometry(snapshot.%key%)
             restored := true
     }
@@ -1761,11 +1898,13 @@ RestoreManagedGeometry(snapshot) {
 }
 
 HideAllManaged() {
-    global g_hWin1, g_hWin2, g_hDashboard, OFF_X, OFF_Y
+    global g_hWin1, g_hWin2, g_hWin3, g_hDashboard, OFF_X, OFF_Y
     if IsAlive(g_hWin1)
         WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin1
     if IsAlive(g_hWin2)
         WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin2
+    if IsAlive(g_hWin3)
+        WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin3
     if IsAlive(g_hDashboard)
         WinMove OFF_X, OFF_Y, 512, 1032, "ahk_id " g_hDashboard
 }
@@ -1799,7 +1938,7 @@ Apply2WinLayout(idx, showDashboard := true) {
 }
 
 ApplyWin1OnlyLayout(idx) {
-    global layoutSolo, g_posWin1, g_hWin1, g_hWin2, OFF_X, OFF_Y, g_dashboardVisible
+    global layoutSolo, g_posWin1, g_hWin1, g_hWin2, g_hWin3, OFF_X, OFF_Y, g_dashboardVisible
     g_posWin1 := idx
     g_dashboardVisible := true
     p := layoutSolo[idx]
@@ -1808,26 +1947,32 @@ ApplyWin1OnlyLayout(idx) {
         WinMove p[1], p[2], p[3], p[4], "ahk_id " g_hWin1
     if IsAlive(g_hWin2)
         WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin2
+    if IsAlive(g_hWin3)
+        WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin3
     DockDashboard()
 }
 
 ApplyWin2OnlyLayout(idx) {
-    global layoutSolo, g_posWin2, g_hWin2, g_dashboardVisible
+    global layoutSolo, g_posWin2, g_hWin2, g_hWin3, OFF_X, OFF_Y, g_dashboardVisible
     g_posWin2 := idx
     g_dashboardVisible := true
     p := layoutSolo[idx]
     if IsAlive(g_hWin2)
         WinMove p[1], p[2], p[3], p[4], "ahk_id " g_hWin2
+    if IsAlive(g_hWin3)
+        WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin3
     GhostWin1()
     DockDashboard()
 }
 
 ApplyDashboardOnlyLayout() {
-    global g_hDashboard, g_hWin2, OFF_X, OFF_Y, g_dashboardVisible
+    global g_hDashboard, g_hWin2, g_hWin3, OFF_X, OFF_Y, g_dashboardVisible
     g_dashboardVisible := true
     GhostWin1()
     if IsAlive(g_hWin2)
         WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin2
+    if IsAlive(g_hWin3)
+        WinMove OFF_X, OFF_Y, 960, 1032, "ahk_id " g_hWin3
     if IsAlive(g_hDashboard)
         WinMove 0, 0, 1920, 1032, "ahk_id " g_hDashboard
 }
@@ -2054,8 +2199,8 @@ ClearSessionMemory(reason := "session ended") {
     global g_sessionResume, g_sessionJD, g_sessionMeta
     global g_sessionCompany, g_sessionRole, g_sessionRound
     global g_sessionEmphasis, g_sessionAvoid, g_sessionAnswerMode
-    global g_sessionId, g_interviewActive, g_hWin1, g_hWin2, g_hDashboard
-    global g_senderPid, g_receiverPid, g_dashboardPid
+    global g_sessionId, g_interviewActive, g_hWin1, g_hWin2, g_hWin3, g_hDashboard
+    global g_senderPid, g_receiverPid, g_comparisonPid, g_dashboardPid
     global g_hidden, g_hiddenLayout, g_hiddenActive, g_hiddenGeometry, g_providerMissingSince
 
     g_sessionResume := ""
@@ -2071,9 +2216,11 @@ ClearSessionMemory(reason := "session ended") {
     g_interviewActive := false
     g_hWin1 := 0
     g_hWin2 := 0
+    g_hWin3 := 0
     g_hDashboard := 0
     g_senderPid := 0
     g_receiverPid := 0
+    g_comparisonPid := 0
     g_dashboardPid := 0
     g_hidden := false
     g_hiddenLayout := 0
@@ -2134,7 +2281,7 @@ RefreshManagedWindowHandles() {
             DetectHiddenWindows previousDetectHidden
         }
         if IsAlive(g_hWin1) && IsAlive(g_hWin2) {
-            UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard)
+            UpdateCurrentRuntimeJournal()
             return true
         }
     }
@@ -2197,7 +2344,7 @@ RecoverUnambiguousManagedSession() {
     g_interviewActive := true
     if !IsAlive(g_hWin1) || !IsAlive(g_hWin2)
         return false
-    UpdateManagedRuntimeJournal(g_sessionId, g_browserConfig, g_hWin1, g_hWin2, g_hDashboard)
+    UpdateCurrentRuntimeJournal()
     LogEvent("Recovered active PMIA session from READY lifecycle pair: " g_sessionId)
     return true
 }

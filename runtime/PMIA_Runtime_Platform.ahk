@@ -195,7 +195,7 @@ ManagedRuntimeJournalPath() {
     return state["settingsDir"] "\managed-runtime.ini"
 }
 
-WriteManagedRuntimeJournal(sessionId, browserConfig, senderHwnd := 0, receiverHwnd := 0, dashboardHwnd := 0, senderPid := 0, receiverPid := 0, dashboardPid := 0) {
+WriteManagedRuntimeJournal(sessionId, browserConfig, senderHwnd := 0, receiverHwnd := 0, dashboardHwnd := 0, senderPid := 0, receiverPid := 0, dashboardPid := 0, comparisonHwnd := 0, comparisonPid := 0) {
     path := ManagedRuntimeJournalPath()
     DirCreate StrReplace(path, "\managed-runtime.ini", "")
     IniWrite sessionId, path, "Runtime", "SessionId"
@@ -204,9 +204,11 @@ WriteManagedRuntimeJournal(sessionId, browserConfig, senderHwnd := 0, receiverHw
     IniWrite senderHwnd, path, "Runtime", "SenderHwnd"
     IniWrite receiverHwnd, path, "Runtime", "ReceiverHwnd"
     IniWrite dashboardHwnd, path, "Runtime", "DashboardHwnd"
+    IniWrite comparisonHwnd, path, "Runtime", "ComparisonHwnd"
     IniWrite senderPid, path, "Runtime", "SenderPid"
     IniWrite receiverPid, path, "Runtime", "ReceiverPid"
     IniWrite dashboardPid, path, "Runtime", "DashboardPid"
+    IniWrite comparisonPid, path, "Runtime", "ComparisonPid"
     IniWrite A_NowUTC, path, "Runtime", "UpdatedAt"
     return path
 }
@@ -222,9 +224,11 @@ ReadManagedRuntimeJournal() {
         "senderHwnd", Integer(IniRead(path, "Runtime", "SenderHwnd", "0")),
         "receiverHwnd", Integer(IniRead(path, "Runtime", "ReceiverHwnd", "0")),
         "dashboardHwnd", Integer(IniRead(path, "Runtime", "DashboardHwnd", "0")),
+        "comparisonHwnd", Integer(IniRead(path, "Runtime", "ComparisonHwnd", "0")),
         "senderPid", Integer(IniRead(path, "Runtime", "SenderPid", "0")),
         "receiverPid", Integer(IniRead(path, "Runtime", "ReceiverPid", "0")),
-        "dashboardPid", Integer(IniRead(path, "Runtime", "DashboardPid", "0"))
+        "dashboardPid", Integer(IniRead(path, "Runtime", "DashboardPid", "0")),
+        "comparisonPid", Integer(IniRead(path, "Runtime", "ComparisonPid", "0"))
     )
 }
 
@@ -284,7 +288,7 @@ CloseOwnedManagedRuntime(sessionId := "") {
         return Map("ok", false, "closed", 0, "reason", "journal_session_mismatch")
     closed := 0
     mismatched := 0
-    for key in ["senderHwnd", "receiverHwnd", "dashboardHwnd"] {
+    for key in ["senderHwnd", "receiverHwnd", "comparisonHwnd", "dashboardHwnd"] {
         hwnd := journal[key]
         if !hwnd || !ManagedWindowExists(hwnd)
             continue
@@ -300,6 +304,6 @@ CloseOwnedManagedRuntime(sessionId := "") {
     return Map("ok", true, "closed", closed, "reason", "exact_windows_closed")
 }
 
-UpdateManagedRuntimeJournal(sessionId, browserConfig, senderHwnd := 0, receiverHwnd := 0, dashboardHwnd := 0, senderPid := 0, receiverPid := 0, dashboardPid := 0) {
-    return WriteManagedRuntimeJournal(sessionId, browserConfig, senderHwnd, receiverHwnd, dashboardHwnd, senderPid, receiverPid, dashboardPid)
+UpdateManagedRuntimeJournal(sessionId, browserConfig, senderHwnd := 0, receiverHwnd := 0, dashboardHwnd := 0, senderPid := 0, receiverPid := 0, dashboardPid := 0, comparisonHwnd := 0, comparisonPid := 0) {
+    return WriteManagedRuntimeJournal(sessionId, browserConfig, senderHwnd, receiverHwnd, dashboardHwnd, senderPid, receiverPid, dashboardPid, comparisonHwnd, comparisonPid)
 }

@@ -95,6 +95,7 @@ async function startRuntime(runtimeConfig) {
     ? createClaudeAdapter(document)
     : createChatGptAdapter(document);
   const runtimeVersion = chrome.runtime.getManifest().version;
+  const isAnswerRole = ['receiver', 'comparison'].includes(runtimeConfig.role);
   const runtimeInstanceKey = `pmia_runtime_instance_${runtimeConfig.sessionId}_${runtimeConfig.role}`;
   const runtimeInstanceId = getOrCreateRuntimeInstanceId(sessionStorage, runtimeInstanceKey);
   const runtimeFence = acquireRuntimeInstanceFence(globalThis, {
@@ -148,8 +149,8 @@ async function startRuntime(runtimeConfig) {
   const answerWake = createWakeSignal();
   const deliveryWake = createWakeSignal();
   const senderSequenceKey = `pmia_sender_seq_${runtimeConfig.sessionId}`;
-  const receiverSequenceKey = `pmia_receiver_seq_${runtimeConfig.sessionId}`;
-  const receiverSequenceBufferKey = `pmia_receiver_sequence_buffer_${runtimeConfig.sessionId}`;
+  const receiverSequenceKey = `pmia_${runtimeConfig.role}_seq_${runtimeConfig.sessionId}`;
+  const receiverSequenceBufferKey = `pmia_${runtimeConfig.role}_sequence_buffer_${runtimeConfig.sessionId}`;
   let senderSequence = Number(sessionStorage.getItem(senderSequenceKey) || 0);
   let previewSequence = 0;
   const previewStreamId = globalThis.crypto?.randomUUID?.()
@@ -277,7 +278,7 @@ async function startRuntime(runtimeConfig) {
     role: runtimeConfig.role,
     instanceId: runtimeInstanceId,
     async onRequest(frame) {
-      if (frame.operation === 'deliver' && runtimeConfig.role === 'receiver') {
+      if (frame.operation === 'deliver' && isAnswerRole) {
         return receiveEnvelope(frame.payload?.envelope);
       }
       if (frame.operation === 'command') {
@@ -328,7 +329,7 @@ async function startRuntime(runtimeConfig) {
         overlay.setStatus(status.text, status.tone);
       }
       rolePort?.connect();
-      if (runtimeConfig.role === 'receiver') {
+      if (isAnswerRole) {
         answerWake.pulse();
         deliveryWake.pulse();
       }
@@ -544,7 +545,7 @@ async function startRuntime(runtimeConfig) {
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' });
   }
 
-  if (runtimeConfig.role === 'receiver') {
+  if (isAnswerRole) {
     receiverAnswerOrchestrator = createReceiverAnswerOrchestrator({
       adapter,
       wake: answerWake,
@@ -557,7 +558,9 @@ async function startRuntime(runtimeConfig) {
       },
       log: logEvent,
       setStatus: (...args) => overlay.setStatus(...args),
-      scroll: scrollToLatest
+      scroll: scrollToLatest,
+      provider: runtimeConfig.provider,
+      role: runtimeConfig.role
     });
   }
 
@@ -593,7 +596,7 @@ async function startRuntime(runtimeConfig) {
     }
   });
 
-  if (runtimeConfig.role === 'receiver') {
+  if (isAnswerRole) {
     receiverBatchRuntime = createReceiverBatchRuntime({
       adapter,
       draftArbiter: composerArbiter,
@@ -642,10 +645,15 @@ async function startRuntime(runtimeConfig) {
         return { ok: true, proof };
       },
       onEvent(event) {
-        void message({
-          type: 'PMIA_BATCH_EVENT',
-          sessionId: runtimeConfig.sessionId,
-          event
+        if (runtimeConfig.role === 'receiver') {
+          void message({ type: 'PMIA_BATCH_EVENT', sessionId: runtimeConfig.sessionId, event });
+          return;
+        }
+        void logEvent('comparison_batch_event', {
+          eventType: String(event?.type || ''),
+          batchId: String(event?.batchId || event?.id || ''),
+          memberIds: Array.isArray(event?.memberIds) ? event.memberIds.map(String).slice(0, 64) : [],
+          reason: String(event?.reason || '')
         });
       }
     });
@@ -660,7 +668,7 @@ async function startRuntime(runtimeConfig) {
     });
   }
 
-  if (runtimeConfig.role === 'receiver') {
+  if (isAnswerRole) {
     receiverObserver = createProviderObserver({
       adapter,
       document,
@@ -673,7 +681,7 @@ async function startRuntime(runtimeConfig) {
           void receiverBatchRuntime?.submitNext();
         }
       },
-      watchdogMs: 500
+      watchdogMs: 250
     });
   }
 
@@ -730,6 +738,7 @@ async function startRuntime(runtimeConfig) {
         kind: readyEnvelope.kind,
         sourceProvider: readyEnvelope.sourceProvider,
         text: readyEnvelope.text,
+        deliveryElapsedMs: Math.max(0, Date.now() - Number(readyEnvelope.createdAt || Date.now())),
         staged: Boolean(result.staged),
         batchId: result.batchId || '',
         memberIds: result.memberIds || [readyEnvelope.id]
@@ -752,7 +761,7 @@ async function startRuntime(runtimeConfig) {
   }
 
   async function receiveEnvelope(envelope) {
-    if (runtimeConfig.role !== 'receiver') {
+    if (!isAnswerRole) {
       return { ok: false, error: 'receiver_role_mismatch' };
     }
     if (paused) return { ok: false, error: 'receiver_paused' };
@@ -897,69 +906,69 @@ async function startRuntime(runtimeConfig) {
         telemetry.event('transport_resumed');
         return { ok: true, transportPaused, outboxReady: senderOutboxReady };
       case 'pause_forwarding': {
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         const result = await receiverBatchRuntime.pauseForwarding();
         overlay.setStatus('FORWARDING PAUSED · ACCUMULATING', 'warn');
         telemetry.event('forwarding_paused', result.turnCoordination || {});
         return result;
       }
       case 'resume_forwarding': {
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         const result = await receiverBatchRuntime.resumeForwarding({ submit: payload.submit !== false });
         overlay.setStatus(payload.submit === false ? 'RESUMED · DRAFT HELD' : 'RESUMED · SENDING HELD QUESTIONS', 'ok', 2200);
         telemetry.event('forwarding_resumed', result.turnCoordination || {});
         return result;
       }
       case 'send_held_now':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.sendHeldNow();
       case 'set_turn_coordination_policy':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.setCoordinationPolicy(payload.policy);
       case 'keep_accumulating':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.keepAccumulating();
       case 'retry_carryover':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.retryCarryover();
       case 'reconcile_delivery':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.reconcile(payload);
       case 'set_auto_submit':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.setAutoSubmit(Boolean(payload.value));
       case 'set_hold':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.setHold(Boolean(payload.value));
       case 'set_receiver_policy':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.setDeliveryPolicy(payload.policy || payload);
       case 'preview_interrupt_latest':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.previewInterrupt();
       case 'acknowledge_answer':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.acknowledgeLastAnswer();
       case 'resolve_no_response':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.resolveNoResponseAction(String(payload.action || 'wait'));
       case 'set_queue_only':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.setQueueOnly(Boolean(payload.value), String(payload.reason || ''));
       case 'submit_next':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.submitNext({ force: true });
       case 'interrupt_latest':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.interruptLatest(String(payload.token || ''));
       case 'resolve_draft_keep_manual':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.resolveDraftConflict('keep_manual');
       case 'resolve_draft_restore_pmia':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.resolveDraftConflict('restore_pmia');
       case 'resolve_draft_merge':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         return receiverBatchRuntime.resolveDraftConflict('merge');
       case 'recover': {
         const scheduled = runtimeRecovery?.trigger('dashboard_repair') || false;
@@ -997,7 +1006,7 @@ async function startRuntime(runtimeConfig) {
         return toggled ? { ok: true } : { ok: false, error: 'mic_control_missing' };
       }
       case 'toggle_scroll':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         scrollLocked = !scrollLocked;
         overlay.setStatus(
           scrollLocked ? 'SCROLL LOCKED' : 'SCROLL FREE',
@@ -1007,7 +1016,7 @@ async function startRuntime(runtimeConfig) {
         telemetry.event('scroll_lock_changed', { scrollLocked });
         return { ok: true, scrollLocked };
       case 'focus_composer':
-        if (runtimeConfig.role !== 'receiver') return { ok: false, error: 'receiver_only' };
+        if (!isAnswerRole) return { ok: false, error: 'receiver_only' };
         adapter.findComposer()?.focus?.();
         overlay.setStatus('COMPOSER FOCUSED', 'info', 1000);
         return { ok: true };
@@ -1027,7 +1036,7 @@ async function startRuntime(runtimeConfig) {
       return false;
     }
     if (incoming?.type === 'PMIA_RUNTIME_RESUME') {
-      if (runtimeConfig.role === 'receiver') deliveryWake.pulse();
+      if (isAnswerRole) deliveryWake.pulse();
       const scheduled = runtimeRecovery?.trigger('tab_restored') || false;
       sendResponse({ ok: true, scheduled });
       return false;
@@ -1045,7 +1054,7 @@ async function startRuntime(runtimeConfig) {
       incoming?.type === 'PMIA_LINK_STATUS' &&
       incoming.sessionId === runtimeConfig.sessionId
     ) {
-      if (runtimeConfig.role === 'receiver') {
+      if (isAnswerRole) {
         answerWake.pulse();
         deliveryWake.pulse();
       }
@@ -1097,7 +1106,7 @@ async function startRuntime(runtimeConfig) {
         refreshLifecycleTitle();
         senderController?.observe();
       },
-      watchdogMs: 500,
+      watchdogMs: 250,
       allowHidden: true
     });
 

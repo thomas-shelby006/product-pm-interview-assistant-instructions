@@ -109,3 +109,14 @@ test('review separates answer availability from delivery success', () => {
   assert.equal(review.answerAvailabilityRate, 50);
   assert.equal(review.answersNoResponse, 1);
 });
+
+test('review exposes answer-length quality metrics separately from latency', () => {
+  const review = deriveReview({
+    metrics: { averageAnswerWords: 160, maxAnswerWords: 181, answersOver180: 1, averageAnswerElapsedMs: 4200 },
+    timeline: []
+  });
+  assert.equal(review.averageAnswerWords, 160);
+  assert.equal(review.maxAnswerWords, 181);
+  assert.equal(review.answersOver180, 1);
+  assert.equal(review.averageAnswerElapsedMs, 4200);
+});

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SessionRegistry } from '../shared/session-registry.js';
 import { createRuntimePilotController } from '../shared/runtime-pilot-controller.js';
+import { deriveProductionDiagnostics } from '../shared/production-diagnostics.js';
 import { senderOutboxStorageKey } from '../shared/session-end-guard.js';
 
 function memoryArea() {
@@ -62,7 +63,7 @@ function setup({ requestRole = null, storageArea: providedStorageArea = null } =
           return { ok: true };
         }
         if (message.type === 'PMIA_PREFLIGHT_PING') {
-          return { ok: true, composerAvailable: true };
+          return { ok: true, composerAvailable: true, version: '0.11.0' };
         }
         return { ok: true, reason: 'accepted' };
       },
@@ -822,4 +823,15 @@ test('receiver telemetry captured before a draft event cannot erase the staged b
     }
   });
   assert.equal((await controller.snapshot('s1')).batchState.next, null);
+});
+
+test('preflight preserves the observed runtime version in live production diagnostics', async () => {
+  const { controller, registry } = setup();
+  await controller.syncRegistration(registry.getSession('s1').sender);
+  await controller.syncRegistration(registry.getSession('s1').receiver);
+  await controller.handleCommand({ sessionId: 's1', requestId: 'preflight-version-1', command: 'run_preflight' });
+  const snapshot = await controller.snapshot('s1');
+  assert.equal(snapshot.sender.version, '0.11.0');
+  assert.equal(snapshot.receiver.version, '0.11.0');
+  assert.equal(deriveProductionDiagnostics(snapshot, {}).fingerprint.version, '0.11.0');
 });

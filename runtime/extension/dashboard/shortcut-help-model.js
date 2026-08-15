@@ -2,14 +2,14 @@ import { defaultShortcutBindings, normalizeShortcutBindings } from '../shared/sh
 
 const LABELS = Object.freeze({
   toggle_pause: 'Pause or resume forwarding', resume_catch_up: 'Resume and catch up', check_live: 'Check live health', repair_runtime: 'Repair runtime',
-  export_session: 'Export session', toggle_mic: 'Toggle sender microphone', toggle_scroll: 'Toggle receiver scroll lock', submit_now: 'Submit next batch',
+  set_auto_submit: 'Toggle automatic forwarding / manual gather', export_session: 'Export session', toggle_mic: 'Toggle sender microphone', toggle_scroll: 'Toggle receiver scroll lock', submit_now: 'Submit next batch',
   interrupt_latest: 'Interrupt for latest question', copy_latest: 'Copy latest question', copy_health_report: 'Copy health report', copy_diagnostics: 'Copy diagnostics',
   command_palette: 'Open command palette', shortcut_help: 'Open shortcut help'
 });
 const GROUPS = Object.freeze({
   toggle_pause: 'Delivery', resume_catch_up: 'Delivery', submit_now: 'Delivery', interrupt_latest: 'Delivery',
   check_live: 'Recovery', repair_runtime: 'Recovery', toggle_mic: 'Provider', toggle_scroll: 'Provider',
-  export_session: 'Review', copy_latest: 'Review', copy_health_report: 'Review', copy_diagnostics: 'Review',
+  set_auto_submit: 'Delivery', export_session: 'Review', copy_latest: 'Review', copy_health_report: 'Review', copy_diagnostics: 'Review',
   command_palette: 'Navigate', shortcut_help: 'Navigate'
 });
 

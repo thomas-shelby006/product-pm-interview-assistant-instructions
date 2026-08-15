@@ -63,7 +63,7 @@ test('session export includes safe context and derived mock-review summary', () 
     events,
     exportedAt: '2026-07-28T01:00:00Z'
   });
-  assert.equal(payload.schemaVersion, '2.1');
+  assert.equal(payload.schemaVersion, '2.2');
   assert.deepEqual(payload.sessionContext, { company: 'Acme', answerMode: 'concise' });
   assert.equal(payload.summary.sessionArmed, true);
   assert.equal(payload.summary.questionCount, 1);
@@ -93,4 +93,37 @@ test('sender boot forwarding counts as an armed session summary', () => {
     { type: 'sender_text', kind: 'boot', delivered: true }
   ]);
   assert.equal(summary.sessionArmed, true);
+});
+
+test('session export includes post-interview response analytics by provider and question type', () => {
+  const events = [
+    { type:'answer', role:'receiver', provider:'chatgpt', wordCount:65, analytics:{ provider:'chatgpt', role:'receiver', questionType:'simple_concept', wordCount:65, bandFit:'on_target', firstTokenLatencyMs:300, totalResponseMs:30300, outputWpm:130 } },
+    { type:'answer', role:'comparison', provider:'claude', wordCount:130, analytics:{ provider:'claude', role:'comparison', questionType:'implementation', wordCount:130, bandFit:'on_target', firstTokenLatencyMs:500, totalResponseMs:60500, outputWpm:130 } }
+  ];
+  const payload = buildSessionExport({ session:{ sessionId:'s-compare', role:'receiver', provider:'chatgpt' }, events, exportedAt:'2026-08-15T06:00:00Z' });
+  assert.equal(payload.schemaVersion, '2.2');
+  assert.equal(payload.answerAnalytics.totalAnswers, 2);
+  assert.equal(payload.answerAnalytics.providers.chatgpt.averageFirstTokenMs, 300);
+  assert.equal(payload.answerAnalytics.providers.claude.averageFirstTokenMs, 500);
+  assert.equal(payload.answerAnalytics.questionTypes.simple_concept.onTargetCount, 1);
+  const markdown = renderSessionMarkdown({ ...payload });
+  assert.match(markdown, /## Response analytics/);
+  assert.match(markdown, /Chatgpt: 1 answers/);
+  assert.match(markdown, /Claude: 1 answers/);
+  assert.match(markdown, /first token 300 ms/);
+});
+
+test('combined session analysis compares all active answer agents without transcript content', async () => {
+  const { buildCombinedSessionAnalysis } = await import('../shared/session-log.js');
+  const analysis = buildCombinedSessionAnalysis({
+    sender:[{ type:'forward', deliveryProofMs:20 }],
+    receiver:[{ type:'answer', text:'private primary answer', analytics:{ provider:'chatgpt', role:'receiver', questionType:'simple_concept', wordCount:65, bandFit:'on_target', firstTokenLatencyMs:300, totalResponseMs:30300, outputWpm:130 } }],
+    comparison:[{ type:'answer', text:'private comparison answer', analytics:{ provider:'claude', role:'comparison', questionType:'simple_concept', wordCount:72, bandFit:'on_target', firstTokenLatencyMs:450, totalResponseMs:33400, outputWpm:131 } }]
+  }, { sessionId:'s1', generatedAt:'2026-08-15T06:30:00Z' });
+  assert.equal(analysis.schemaVersion, '1.0');
+  assert.equal(analysis.roles.comparison.answerCount, 1);
+  assert.equal(analysis.answerAnalytics.providers.chatgpt.averageFirstTokenMs, 300);
+  assert.equal(analysis.answerAnalytics.providers.claude.averageFirstTokenMs, 450);
+  assert.equal(JSON.stringify(analysis).includes('private primary answer'), false);
+  assert.equal(JSON.stringify(analysis).includes('private comparison answer'), false);
 });

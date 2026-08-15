@@ -57,6 +57,8 @@ export function createRuntimeTelemetry({
   setIntervalFn = setInterval,
   clearIntervalFn = clearInterval
 } = {}) {
+  const answerRole = ['receiver', 'comparison'].includes(runtimeConfig?.role);
+  const capabilityRole = answerRole ? 'receiver' : runtimeConfig?.role;
   let latestPreview = null;
   let latestFinal = null;
   let latestAnswer = null;
@@ -67,7 +69,7 @@ export function createRuntimeTelemetry({
   let latestAnswerState = null;
   let generationState = reconcileGenerationTruth({ now: now() });
   let lastAssistantText = String(adapter?.getLatestAssistantText?.() || '');
-  let adapterCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
+  let adapterCapabilities = describeAdapterCapabilities(adapter, capabilityRole);
   let adapterCapabilityDrift = evaluateAdapterCapabilityDrift(adapterCapabilities, adapterCapabilities, null, now());
   const capabilityProbation = new CapabilityProbation();
   let adapterCapabilityProbation = capabilityProbation.observe(adapterCapabilities, now());
@@ -84,7 +86,7 @@ export function createRuntimeTelemetry({
       idleWarningMs: silenceWarningMs
     });
     const sourceSilenceMs = sourceSilence.ageMs;
-    if (runtimeConfig?.role === 'receiver') {
+    if (answerRole) {
       const supplied = typeof getGenerationState === 'function' ? getGenerationState() : null;
       if (supplied && typeof supplied === 'object') generationState = { ...supplied };
       else {
@@ -101,7 +103,7 @@ export function createRuntimeTelemetry({
       }
       latestAnswerState = typeof getAnswerState === 'function' ? (getAnswerState() || latestAnswerState) : latestAnswerState;
     }
-    const currentCapabilities = describeAdapterCapabilities(adapter, runtimeConfig?.role);
+    const currentCapabilities = describeAdapterCapabilities(adapter, capabilityRole);
     adapterCapabilityDrift = evaluateAdapterCapabilityDrift(adapterCapabilities, currentCapabilities, adapterCapabilityDrift, current);
     adapterCapabilityProbation = capabilityProbation.observe(currentCapabilities, current);
     adapterCapabilities = currentCapabilities;
@@ -110,9 +112,9 @@ export function createRuntimeTelemetry({
       provider: runtimeConfig?.provider || '',
       phase: getPhase(),
       composerReady: Boolean(adapter?.findComposer?.()),
-      generating: runtimeConfig?.role === 'receiver' ? Boolean(generationState.generating) : Boolean(adapter?.isGenerating?.()),
-      generationState: runtimeConfig?.role === 'receiver' ? { ...generationState } : null,
-      answerState: runtimeConfig?.role === 'receiver' && latestAnswerState ? { ...latestAnswerState } : null,
+      generating: answerRole ? Boolean(generationState.generating) : Boolean(adapter?.isGenerating?.()),
+      generationState: answerRole ? { ...generationState } : null,
+      answerState: answerRole && latestAnswerState ? { ...latestAnswerState } : null,
       voiceActive: Boolean(getVoiceActive()),
       micState,
       adapterCapabilities,
@@ -120,8 +122,8 @@ export function createRuntimeTelemetry({
       adapterCapabilityProbation: { ...adapterCapabilityProbation },
       pageVisibility: getVisibilityState(),
       pageLifecycle: typeof getLifecycleState === 'function' ? getLifecycleState() : null,
-      schedulerState: runtimeConfig?.role === 'receiver' ? { ...schedulerState } : null,
-      ...(runtimeConfig?.role === 'receiver' ? { batchState: getBatchState() } : {}),
+      schedulerState: answerRole ? { ...schedulerState } : null,
+      ...(answerRole ? { batchState: getBatchState() } : {}),
       scrollLocked: Boolean(getScrollLocked()),
       transportPaused: Boolean(getTransportPaused()),
       latestPreview,
@@ -193,7 +195,8 @@ export function createRuntimeTelemetry({
       envelopeId: String(value.envelopeId || ''),
       wordCount: Number(value.wordCount || 0),
       elapsedMs: Number(value.elapsedMs || 0),
-      text: cleanText(value.text)
+      text: cleanText(value.text),
+      analytics: value.analytics && typeof value.analytics === 'object' ? { ...value.analytics } : null
     } : null;
     touchActivity();
     void publish({ force: true, event: value ? { type: 'answer', ...latestAnswer } : null });

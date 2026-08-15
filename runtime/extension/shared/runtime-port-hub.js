@@ -13,7 +13,7 @@ export function rolePortName(sessionId, role, instanceId) {
 }
 
 export function parseRolePortName(name) {
-  const match = /^pmia-role:([^:]+):(sender|receiver):(.+)$/.exec(String(name || ''));
+  const match = /^pmia-role:([^:]+):(sender|receiver|comparison):(.+)$/.exec(String(name || ''));
   if (!match) return null;
   return { sessionId: match[1], role: match[2], instanceId: match[3] };
 }
