@@ -2,141 +2,120 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { auditCommandReachability } from '../shared/command-reachability-audit.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await readFile(resolve(root, 'manifest.json'), 'utf8'));
-const required = [
-  manifest.background.service_worker,
-  ...manifest.content_scripts.flatMap(item => item.js),
-  'dashboard/index.html',
-  'dashboard/dashboard.css',
-  'dashboard/dashboard.js',
-  'dashboard/dashboard-model.js',
-  'dashboard/readiness-model.js',
-  'dashboard/health-report-model.js',
-  'dashboard/self-test-model.js',
-  'shared/delivery-ledger.js',
-  'shared/contiguous-sequence-buffer.js',
-  'shared/session-mutation-coordinator.js',
-  'shared/runtime-recovery-coordinator.js',
-  'shared/storage-accounting.js',
-  'shared/runtime-self-test.js',
-  'shared/snapshot-delta.js',
-  'shared/recovery-state-machine.js'
-];
 
-for (const path of required) {
-  const info = await stat(resolve(root, path));
-  if (!info.isFile()) throw new Error(`Referenced extension file is not a file: ${path}`);
+if (manifest.version !== '0.12.0') throw new Error(`Expected PMIA 0.12.0, found ${manifest.version}`);
+if (manifest.background?.service_worker !== 'simple/service-worker.js') {
+  throw new Error('Active service worker must be simple/service-worker.js');
 }
 
+const required = [
+  'simple/service-worker.js',
+  ...manifest.content_scripts.flatMap(item => item.js || []),
+  'studio/index.html', 'studio/studio.css', 'studio/studio.js',
+  'cockpit/index.html', 'cockpit/cockpit.css', 'cockpit/cockpit.js'
+];
+
+for (const path of new Set(required)) {
+  const info = await stat(resolve(root, path));
+  if (!info.isFile()) throw new Error(`Required active surface is not a file: ${path}`);
+}
 async function collectJs(directory) {
   const output = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
+  for (const entry of await readdir(directory, { withFileTypes:true })) {
     const full = resolve(directory, entry.name);
     if (entry.isDirectory()) output.push(...await collectJs(full));
-    else if (/\.(?:js|mjs)$/.test(entry.name)) output.push(full);
+    else if (/\.js$/.test(entry.name)) output.push(full);
   }
   return output;
 }
 
-const files = await collectJs(root);
-for (const file of files) {
-  const result = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
+const activeJs = [
+  ...await collectJs(resolve(root, 'simple')),
+  resolve(root, 'studio/studio.js'),
+  resolve(root, 'cockpit/cockpit.js')
+];
+
+for (const file of activeJs) {
+  const result = spawnSync(process.execPath, ['--check', file], { encoding:'utf8' });
   if (result.status !== 0) {
     process.stderr.write(result.stderr || result.stdout);
     throw new Error(`Syntax validation failed: ${relative(root, file)}`);
   }
 }
-
 const forbidden = ['/backend-api/conversation', '/api/chat_conversations/', 'Authorization: Bearer'];
-const runtimeFiles = files.filter(file => {
-  const path = relative(root, file);
-  return !path.startsWith('scripts') && !path.startsWith('tests') && !path.startsWith('testing');
-});
-for (const file of runtimeFiles) {
+const visible = [
+  ...activeJs,
+  resolve(root, 'studio/index.html'), resolve(root, 'studio/studio.css'),
+  resolve(root, 'cockpit/index.html'), resolve(root, 'cockpit/cockpit.css')
+];
+
+for (const file of visible) {
   const source = await readFile(file, 'utf8');
   for (const marker of forbidden) {
     if (source.includes(marker)) throw new Error(`Private provider API marker found in ${relative(root, file)}: ${marker}`);
   }
-}
-
-const visibleRuntimeFiles = [
-  ...runtimeFiles,
-  resolve(root, 'dashboard/index.html'),
-  resolve(root, 'dashboard/dashboard.css')
-];
-const mojibakeMarkers = ['\uFFFD', '\u00C2', '\u00E2'];
-for (const file of visibleRuntimeFiles) {
-  const source = await readFile(file, 'utf8');
-  for (const marker of mojibakeMarkers) {
-    if (source.includes(marker)) {
-      throw new Error(`Mojibake marker found in ${relative(root, file)}: U+${marker.codePointAt(0).toString(16).toUpperCase()}`);
-    }
+  for (const marker of ['\uFFFD', '\u00C2', '\u00E2']) {
+    if (source.includes(marker)) throw new Error(`Mojibake marker found in ${relative(root, file)}`);
   }
 }
 
-
-function relativeImportSpecifiers(source) {
-  const output = [];
-  const patterns = [
+const activeScripts = manifest.content_scripts.flatMap(item => item.js || []);
+if (activeScripts.some(path => path.startsWith('content/') || path.startsWith('dashboard/') || path.startsWith('shared/'))) {
+  throw new Error(`Legacy content script remains active: ${activeScripts.join(', ')}`);
+}
+const exposed = manifest.web_accessible_resources.flatMap(item => item.resources || []);
+if (exposed.some(path => /^(content|dashboard|shared)\//.test(path))) {
+  throw new Error(`Legacy runtime resource remains exposed: ${exposed.join(', ')}`);
+}
+function importSpecifiers(source) {
+  const values = [];
+  for (const pattern of [
     /import\s+(?:[^'\"]+?\s+from\s+)?['\"](\.{1,2}\/[^'\"]+)['\"]/g,
     /import\(\s*['\"](\.{1,2}\/[^'\"]+)['\"]\s*\)/g,
     /export\s+[^'\"]+?\s+from\s+['\"](\.{1,2}\/[^'\"]+)['\"]/g
-  ];
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) output.push(match[1]);
+  ]) {
+    for (const match of source.matchAll(pattern)) values.push(match[1]);
   }
-  return output;
+  return values;
 }
 
-for (const file of runtimeFiles) {
-  const source = await readFile(file, 'utf8');
-  for (const specifier of relativeImportSpecifiers(source)) {
-    const target = relative(root, resolve(dirname(file), specifier));
-    if (target.startsWith('testing')) {
-      throw new Error(`Production module imports test-only fault harness: ${relative(root, file)} -> ${specifier}`);
-    }
-  }
-}
-
-const productionFiles = new Set(runtimeFiles.map(file => resolve(file)));
-const graphRoots = [
-  resolve(root, manifest.background.service_worker),
-  ...manifest.content_scripts.flatMap(item => item.js).map(path => resolve(root, path)),
-  resolve(root, 'content/entry.js'),
-  resolve(root, 'dashboard/dashboard.js'),
-  resolve(root, 'shared/command-reachability-audit.js'),
-  resolve(root, 'shared/policy-impact-preview.js')
+const activeSet = new Set(activeJs.map(file => resolve(file)));
+const roots = [
+  resolve(root, 'simple/service-worker.js'),
+  resolve(root, 'simple/browser-entry.js'),
+  resolve(root, 'studio/studio.js'),
+  resolve(root, 'cockpit/cockpit.js')
 ];
 const reachable = new Set();
-const pending = [...graphRoots];
+const pending = [...roots];
 while (pending.length) {
   const file = resolve(pending.pop());
-  if (reachable.has(file) || !productionFiles.has(file)) continue;
+  if (reachable.has(file) || !activeSet.has(file)) continue;
   reachable.add(file);
   const source = await readFile(file, 'utf8');
-  for (const specifier of relativeImportSpecifiers(source)) {
+  for (const specifier of importSpecifiers(source)) {
     const target = resolve(dirname(file), specifier);
-    const normalized = /\.(?:js|mjs)$/.test(target) ? target : `${target}.js`;
-    if (productionFiles.has(normalized) && !reachable.has(normalized)) pending.push(normalized);
+    const normalized = /\.js$/.test(target) ? target : `${target}.js`;
+    const rel = relative(root, normalized).replaceAll('\\', '/');
+    if (!rel.startsWith('simple/') && !rel.startsWith('studio/') && !rel.startsWith('cockpit/')) {
+      throw new Error(`Active runtime imports legacy/out-of-scope module: ${relative(root, file)} -> ${specifier}`);
+    }
+    if (activeSet.has(normalized) && !reachable.has(normalized)) pending.push(normalized);
   }
 }
-const unreachable = [...productionFiles]
-  .filter(file => !reachable.has(file))
-  .map(file => relative(root, file));
-if (unreachable.length) {
-  throw new Error(`Unreachable production JavaScript modules: ${unreachable.join(', ')}`);
+
+for (const rootFile of roots) {
+  if (!reachable.has(rootFile)) throw new Error(`Active graph root is unreachable: ${relative(root, rootFile)}`);
 }
 
-const commandAudit = auditCommandReachability({
-  html: await readFile(resolve(root, 'dashboard/index.html'), 'utf8'),
-  dashboardSource: await readFile(resolve(root, 'dashboard/dashboard.js'), 'utf8'),
-  controllerSource: await readFile(resolve(root, 'shared/runtime-pilot-controller.js'), 'utf8')
-});
-if (!commandAudit.ok) {
-  throw new Error(`Command reachability validation failed: ${JSON.stringify(commandAudit.errors)}`);
+if (manifest.action?.default_title !== 'Open PMIA Studio' || manifest.action?.default_popup) {
+  throw new Error('Toolbar action must open the standalone PMIA Studio through the service worker.');
 }
 
-console.log(`Extension validation passed: ${files.length} JavaScript files, ${required.length} required runtime surfaces, and ${reachable.size} reachable production modules checked.`);
+console.log(
+  `Extension validation passed: ${activeJs.length} active JavaScript files, ` +
+  `${new Set(required).size} required runtime surfaces, ${reachable.size} reachable active modules checked.`
+);

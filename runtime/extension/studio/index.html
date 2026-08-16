@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PMIA Studio</title>
+  <link rel="stylesheet" href="studio.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">PM Interview Assistant</p>
+        <h1>Session Studio</h1>
+      </div>
+      <span class="version">0.12</span>
+    </header>
+
+    <section class="route-card" aria-label="Provider route">
+      <label>Window 1<select id="senderProvider"><option value="chatgpt">ChatGPT</option><option value="claude">Claude</option></select></label>
+      <span class="arrow">→</span>
+      <label>Window 2<select id="receiverProvider"><option value="claude">Claude</option><option value="chatgpt">ChatGPT</option></select></label>
+      <span class="plus">+</span>
+      <label>Window 3<select id="comparisonProvider"><option value="chatgpt">ChatGPT</option><option value="claude">Claude</option><option value="">Off</option></select></label>
+    </section>
+
+    <section class="context-grid">
+      <label>Resume<textarea id="resume" rows="8" placeholder="Paste resume context"></textarea></label>
+      <label>Job description<textarea id="jobDescription" rows="8" placeholder="Paste job description"></textarea></label>
+    </section>
+
+    <details>
+      <summary>More</summary>
+      <div class="more-grid">
+        <label>ChatGPT project URL<input id="chatgptUrl" type="url"></label>
+        <label>Claude URL<input id="claudeUrl" type="url"></label>
+      </div>
+    </details>
+
+    <footer>
+      <div id="status" class="status" role="status">Ready to launch</div>
+      <button id="launch" type="button">Launch</button>
+    </footer>
+  </main>
+  <script type="module" src="studio.js"></script>
+</body>
+</html>

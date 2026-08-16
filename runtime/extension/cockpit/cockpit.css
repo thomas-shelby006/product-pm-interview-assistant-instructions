@@ -1,0 +1,11 @@
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#e8eef4;background:#111923;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:#111923;overflow:hidden}
+.dock{height:120px;display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:18px;padding:14px 18px;border-top:1px solid #293646;background:linear-gradient(180deg,#17212d,#111923)}
+.brand{display:grid;gap:4px;min-width:76px}.brand strong{font-size:15px;letter-spacing:.08em}.connection{font-size:10px;color:#79c5a0}.connection.off{color:#e69b8f}
+.controls{display:flex;gap:7px}.controls button{height:34px;border:1px solid #34465a;border-radius:9px;background:#1c2938;color:#d9e5ef;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer}
+.controls button:hover{background:#25364a}.controls button.active{border-color:#4f9db8;background:#1d5368;color:#fff}
+.path{min-width:0;display:grid;grid-template-columns:minmax(120px,1fr) auto minmax(120px,1fr) auto minmax(120px,1fr);align-items:center;gap:8px}
+.path span{min-width:0;border:1px solid #2b3b4d;border-radius:9px;background:#172330;padding:8px 10px;display:grid;gap:2px}.path b{font-size:10px;color:#8da4b7;text-transform:uppercase;letter-spacing:.06em}.path em{font-size:12px;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.path i{font-style:normal;color:#587187}
+dialog{max-width:440px;border:1px solid #34465a;border-radius:14px;background:#172330;color:#e8eef4;padding:22px;box-shadow:0 20px 60px #0008}dialog::backdrop{background:#07101a99}dialog h2{margin-top:0}dialog p{color:#b8c8d6;font-size:13px;line-height:1.5}dialog button{border:0;border-radius:8px;padding:8px 13px;background:#2d708d;color:white;font-weight:700}
+kbd{display:inline-block;min-width:22px;padding:2px 5px;border:1px solid #415469;border-bottom-width:2px;border-radius:5px;background:#101923;color:#e8eef4;font:700 11px/1.2 ui-monospace,Consolas,monospace;text-align:center}.shortcuts{margin-top:15px}
+@media(max-width:1050px){.dock{grid-template-columns:auto 1fr;gap:10px}.path{grid-column:1/-1}.controls{justify-content:flex-end}.path span{padding:5px 8px}}

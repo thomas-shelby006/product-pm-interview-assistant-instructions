@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PMIA Cockpit</title>
+  <link rel="stylesheet" href="cockpit.css">
+</head>
+<body>
+  <main class="dock">
+    <div class="brand">
+      <strong>PMIA</strong>
+      <span id="connection" class="connection">Connected</span>
+    </div>
+
+    <div class="controls" aria-label="Interview controls">
+      <button id="autoForward" class="active" type="button">Auto</button>
+      <button id="pause" type="button">Pause</button>
+      <button id="sendGathered" type="button">Send gathered</button>
+      <button id="export" type="button">Export</button>
+      <button id="help" type="button">Help</button>
+    </div>
+
+    <div id="path" class="path" aria-live="polite">
+      <span data-role="sender"><b>Window 1</b><em>Waiting</em></span>
+      <i>→</i>
+      <span data-role="receiver"><b>Window 2</b><em>Waiting</em></span>
+      <i>+</i>
+      <span data-role="comparison"><b>Window 3</b><em>Waiting</em></span>
+    </div>
+  </main>
+
+  <dialog id="helpDialog">
+    <h2>Quick controls</h2>
+    <p><b>Auto</b> sends each new Window 1 turn immediately. Turn it off to gather fragments.</p>
+    <p><b>Pause</b> holds forwarding. <b>Send gathered</b> sends held fragments as one question.</p>
+    <p><b>Export</b> downloads the delivery trace plus lightweight timing and failure summary.</p>
+    <p class="shortcuts"><kbd>A</kbd> Auto/Gather · <kbd>P</kbd> Pause · <kbd>G</kbd> Send gathered · <kbd>E</kbd> Export · <kbd>H</kbd> Help</p>
+    <button id="closeHelp" type="button">Close</button>
+  </dialog>
+  <script type="module" src="cockpit.js"></script>
+</body>
+</html>
