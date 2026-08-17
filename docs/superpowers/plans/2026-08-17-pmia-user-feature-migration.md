@@ -234,5 +234,5 @@ A complete run must show: real three-window route PASS, two-window route PASS, a
 - [x] Full active 0.12 release gate passes after final implementation batch.
 - [x] Real three-window Stable Edge acceptance passed with exact token rendered in W1, W2 Claude, and W3 ChatGPT.
 - [x] Real stage timing captured for PMIA vs provider settlement separation.
-- [ ] Sync final verified commit to persistent deployment and reload PMIA 0.12.
-- [ ] Generate final HTML migration/performance/feature report.
+- [x] Sync final verified commit to persistent deployment and reload PMIA 0.12.
+- [x] Generate final HTML migration/performance/feature report.

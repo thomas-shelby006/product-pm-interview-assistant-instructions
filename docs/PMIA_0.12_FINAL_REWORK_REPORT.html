@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="PMIA 0.12 final rework, three-window production parity, performance, migration and verification report.">
+<title>PMIA 0.12 — Final Rework & Production Parity Report</title>
+<style>
+:root{--ink:#17212b;--muted:#60707d;--paper:#f5f7f8;--panel:#fff;--line:#d8e0e5;--accent:#17647a;--deep:#173a4c;--ok:#146c47;--warn:#8b5c16;--soft:#edf4f6;--max:1180px}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.58 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--accent)}a:focus-visible,button:focus-visible{outline:3px solid #2581a2;outline-offset:3px}.skip{position:absolute;left:-9999px;top:8px}.skip:focus{left:8px;background:#fff;padding:8px;z-index:10}
+header.hero{background:var(--deep);color:#fff;border-bottom:5px solid #5b9aad}.hero-inner{max-width:var(--max);margin:auto;padding:42px 26px 34px}.eyebrow{font-size:.78rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase;opacity:.78}.hero h1{font-size:clamp(2rem,4vw,3.2rem);line-height:1.05;margin:.25rem 0 .8rem}.hero p{max-width:850px;color:#e5edf0}.tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.tag{border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:4px 9px;font-size:.82rem}
+.shell{max-width:var(--max);margin:auto;padding:26px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px}.toc{position:sticky;top:14px;align-self:start;background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px}.toc strong,.toc a{display:block}.toc a{padding:4px 0;text-decoration:none;color:#344957}.toc a:hover{text-decoration:underline}
+section{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:26px;margin-bottom:20px}h2{margin:0 0 12px;font-size:1.5rem}h3{margin:22px 0 8px}.lead{font-size:1.06rem;color:#354653}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.metric{border-top:3px solid var(--accent);background:#f9fbfc;padding:13px}.metric b{display:block;font-size:1.35rem}.metric span{color:var(--muted);font-size:.86rem}
+.callout{border-left:4px solid var(--accent);background:#f0f6f8;padding:12px 15px;margin:14px 0}.callout.ok{border-color:var(--ok);background:#f0f8f4}.callout.warn{border-color:var(--warn);background:#fff8ec}.flow{display:grid;grid-template-columns:1fr 32px 1fr 32px 1fr;align-items:center;gap:7px}.node{border:1px solid #bcc9d2;border-top:4px solid var(--accent);padding:14px;border-radius:7px;background:#fbfcfd}.arrow{text-align:center;font-size:1.4rem;color:var(--accent)}
+.table{overflow:auto;border:1px solid var(--line);border-radius:7px}table{width:100%;border-collapse:collapse;min-width:720px}caption{text-align:left;padding:10px;font-weight:750;background:#f2f6f7}th,td{padding:9px 10px;border-top:1px solid var(--line);text-align:left;vertical-align:top}th{background:#f3f6f8;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em}code{font-family:ui-monospace,Consolas,monospace;background:#edf2f4;border-radius:3px;padding:.08em .3em;overflow-wrap:anywhere}.oktxt{color:var(--ok);font-weight:750}.muted{color:var(--muted)}ul{padding-left:20px}li{margin:4px 0}footer{max-width:var(--max);margin:0 auto 38px;padding:0 26px;color:var(--muted);font-size:.88rem}
+@media(max-width:850px){.shell{grid-template-columns:1fr}.toc{position:static}.grid{grid-template-columns:1fr 1fr}.flow{grid-template-columns:1fr}.arrow{transform:rotate(90deg)}}@media(max-width:520px){.hero-inner,.shell{padding-left:16px;padding-right:16px}section{padding:19px}.grid{grid-template-columns:1fr}body{font-size:14px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}@media print{body{background:#fff}.toc{display:none}.shell{display:block;max-width:none;padding:0}section{break-inside:avoid;border-color:#bbb}.table{overflow:visible}table{min-width:0;font-size:10px}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to report</a>
+<header class="hero"><div class="hero-inner"><div class="eyebrow">PM Interview Assistant · 0.12 Simplified Runtime</div><h1>Final Rework & Production Parity Report</h1><p>What changed, why the runtime is smaller and faster, which 0.11 user-facing features were retained, what was deliberately retired, and what the real three-window production test proved.</p><div class="tags"><span class="tag">17 Aug 2026</span><span class="tag">Implementation debf89268e5b…</span><span class="tag">Three-window production default</span><span class="tag">Installed Edge extension 0.12.0</span></div></div></header>
+<div class="shell">
+<nav class="toc" aria-label="Contents"><strong>Contents</strong><a href="#summary">Executive summary</a><a href="#architecture">Architecture</a><a href="#live">Live evidence</a><a href="#migrated">Features migrated</a><a href="#retired">Features retired</a><a href="#providers">Provider compatibility</a><a href="#ux">Studio & cockpit</a><a href="#verification">Verification</a><a href="#deployment">Deployment</a><a href="#rules">Future-agent rules</a></nav>
+<main id="main">
+<section id="summary"><h2>Executive summary</h2>
+<p class="lead">PMIA 0.12 is no longer a large reliability dashboard wrapped around two answer windows. It is a small three-window production runtime with one direct delivery path and one terminal success rule: the exact interviewer turn must be rendered as a provider user turn in every configured answer lane.</p>
+<div class="grid">
+<div class="metric"><b>148 / 148</b><span>final active automated tests passed</span></div>
+<div class="metric"><b>1 ms</b><span>live W1 capture → concurrent fan-out</span></div>
+<div class="metric"><b>869–964 ms</b><span>live provider-lane receipt → rendered proof</span></div>
+<div class="metric"><b>95 ms</b><span>live W2/W3 rendered-proof skew</span></div>
+<div class="metric"><b>37 files</b><span>active HTML/CSS/JS production surface</span></div>
+<div class="metric"><b>2,311 lines</b><span>active production code, under 2,500 budget</span></div>
+</div>
+<div class="callout ok"><strong>Production result:</strong> one real test turn was rendered in W1 ChatGPT, W2 Claude, and W3 ChatGPT. W2 and W3 are now equal production answer lanes; Window 3 is not a best-effort comparison path.</div>
+<p>The implementation is frozen in Git at <code>debf89268e5b9a73d7499b0837bbeaad52187e83</code> on <code>feature/pmia-simple-runtime</code>. Dirty <code>main</code> was not merged, rebased, reset, or overwritten.</p>
+</section>
+<section id="architecture"><h2>Architecture: one path, three windows</h2>
+<div class="flow" role="img" aria-label="Window 1 sends a rendered interviewer turn through one service-worker fan-out to equal Window 2 and Window 3 answer lanes">
+<div class="node"><strong>Window 1 · Source</strong><p>Observe only newly rendered user turns. Baseline history once. No answer analytics, batch planner, or persistence gate before forwarding.</p></div>
+<div class="arrow" aria-hidden="true">→</div>
+<div class="node"><strong>MV3 service worker</strong><p>Long-lived ports. One concurrent fan-out. Independent per-role FIFO queues. Persist only unresolved role failures.</p></div>
+<div class="arrow" aria-hidden="true">→</div>
+<div class="node"><strong>Window 2 + Window 3</strong><p>Equal production lanes. Provider-native write → verified composer → real submit → exact rendered-turn proof.</p></div>
+</div>
+<div class="callout"><strong>Hot-path invariant:</strong> <code>W1 rendered turn → port → concurrent W2/W3 fan-out → role FIFO → provider write → submit → rendered proof</code>.</div>
+<p>AutoHotkey is not part of this live path. The active AHK file is only an optional Studio bootstrap. Review, export, markers, display preferences, window tools, and answer-size metrics observe the runtime from the side and cannot delay a question.</p>
+</section>
+<section id="live"><h2>Real three-window production evidence</h2>
+<p>The acceptance used the installed 0.12 extension, the real ChatGPT PM Interview project, real authenticated Claude, real MV3 content scripts/service worker, and one exact synthetic turn: <code>PMIA_LIVE_3WIN_1786957657285</code>. Windows accessibility independently found the same token as rendered content in all three provider tabs.</p>
+<div class="table"><table><caption>PMIA stage timestamps for the real turn</caption><thead><tr><th>Stage</th><th>Role</th><th>From W1 capture</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td>Captured</td><td>Window 1</td><td>0 ms</td><td>New rendered interviewer turn recognized.</td></tr>
+<tr><td>Fan-out</td><td>System</td><td>+1 ms</td><td>W2 and W3 dispatch started concurrently.</td></tr>
+<tr><td>Composer written</td><td>Window 3</td><td>+71 ms</td><td>ChatGPT page confirmed the exact composer text.</td></tr>
+<tr><td>Composer written</td><td>Window 2</td><td>+109 ms</td><td>Claude page confirmed the exact composer text.</td></tr>
+<tr><td>Submitted</td><td>Window 2</td><td>+198 ms</td><td>Real provider submit action completed.</td></tr>
+<tr><td>Submitted</td><td>Window 3</td><td>+435 ms</td><td>Real provider submit action completed.</td></tr>
+<tr><td>Rendered proof</td><td>Window 3</td><td>+872 ms</td><td>Role-local delivery elapsed: 869.3 ms.</td></tr>
+<tr><td>Rendered proof</td><td>Window 2</td><td>+967 ms</td><td>Role-local delivery elapsed: 963.5 ms.</td></tr>
+</tbody></table></div>
+<div class="callout ok"><strong>Speed conclusion:</strong> PMIA itself added 1 ms between W1 capture and concurrent fan-out. Both production answer lanes reached rendered proof in under one second in this live run. The remaining ~0.9 s is provider/browser composer, submit, network/UI settlement—not serial PMIA routing.</div>
+<p>A slower Windows-accessibility polling probe initially observed W3 at ~2.36 s and W2 at ~2.51 s. The PMIA stage log is the authoritative transport timing because it timestamps the in-page provider events directly; the UIA probe included tab switching and accessibility polling overhead.</p>
+<p>The live stage log also revealed duplicate terminal <code>rendered</code> entries. Root cause was double logging by both <code>deliverTurn()</code> and <code>role-queue.js</code>. The queue now caches successful terminal results without re-emitting them; failed deliveries still emit one failure stage.</p>
+</section>
+<section id="migrated"><h2>User-facing features migrated from the older runtime</h2>
+<div class="table"><table><caption>Kept or simplified into 0.12</caption><thead><tr><th>Feature</th><th>0.12 form</th><th>Why it stayed</th></tr></thead><tbody>
+<tr><td>Three-provider route selection</td><td>Studio W1 / W2 / W3 selectors; W3 enabled by default</td><td>Core interview value with almost no hot-path cost.</td></tr>
+<tr><td>Resume + Job Description context</td><td>Concise boot turn sent directly to W2/W3</td><td>High answer-quality value; separated from live W1 traffic.</td></tr>
+<tr><td>Automatic forwarding</td><td>Auto mode</td><td>Default fast path.</td></tr>
+<tr><td>Manual accumulation</td><td>Gather + Send gathered</td><td>Lets several transcript fragments become one logical question without a batch planner.</td></tr>
+<tr><td>Pause / Resume</td><td>Single sender control</td><td>Useful live control with one owner.</td></tr>
+<tr><td>Question path / truth rail</td><td>Six stages: captured, fanout, written, submitted, rendered, failed</td><td>Directly answers where delivery stopped.</td></tr>
+<tr><td>Review</td><td>One-shot recent questions + latest answer metrics</td><td>No continuous answer observer or transcript persistence.</td></tr>
+<tr><td>Answer size / speaking estimate</td><td>Word count + estimated speaking time on Review</td><td>Useful interview feedback without continuous WPM instrumentation.</td></tr>
+<tr><td>Markers</td><td>Strong / Needs review / Follow-up</td><td>Bounded metadata only; useful for debrief.</td></tr>
+<tr><td>Export</td><td>Route, readiness, summary, metrics, markers, bounded trace</td><td>Explicit action; no raw answer text required.</td></tr>
+<tr><td>Window navigation</td><td>Focus W1/W2/W3/Cockpit + Restore layout</td><td>Explicit only; never changes delivery automatically.</td></tr>
+<tr><td>Accessibility/display</td><td>Large text, high contrast, reduced motion</td><td>UI-local and zero hot-path cost.</td></tr>
+<tr><td>Session clock</td><td>Cockpit-local elapsed clock</td><td>Only periodic UI activity; no background messaging.</td></tr>
+<tr><td>Safe End Session</td><td>Checks unresolved delivery, then closes only PMIA-owned windows</td><td>Protects pending work without archive/recovery infrastructure.</td></tr>
+<tr><td>Reconnect recovery</td><td>Replay unresolved work only for the role that reconnects</td><td>Preserves lossless behavior with one small recovery rule.</td></tr>
+<tr><td>Provider login diagnosis</td><td>Early “ChatGPT/Claude sign-in required” startup result</td><td>Avoids waiting through a full provider-readiness timeout.</td></tr>
+</tbody></table></div>
+</section>
+<section id="retired"><h2>Features deliberately not imported</h2>
+<p>These outcomes were reviewed against interview value, hot-path cost, continuous cost, state/privacy cost, and debugging burden. They remain retired because restoring them would recreate the failure-prone 0.11 control plane.</p>
+<div class="table"><table><caption>Retired or replaced by a simpler outcome</caption><thead><tr><th>Older capability</th><th>Decision</th><th>0.12 replacement / reason</th></tr></thead><tbody>
+<tr><td>Runtime Pilot / Reliability Center / Operations Lab</td><td>Drop</td><td>Compact status + bounded trace + export. Operator dashboards do not belong in the interview hot path.</td></tr>
+<tr><td>Global question sequence / gap recovery</td><td>Drop</td><td>Long-lived port ordering + independent role FIFOs remove the missing-sequence class of failures.</td></tr>
+<tr><td>Batch planner / drain-one / interruption policies</td><td>Drop</td><td>Auto, Gather, Pause, and provider FIFO cover the useful behavior with fewer branches.</td></tr>
+<tr><td>Sender outbox / visible Inbox ledger</td><td>Drop</td><td>Only unresolved role failures are persisted; no second user-visible delivery owner.</td></tr>
+<tr><td>Recovery scheduler / retry budgets</td><td>Drop</td><td>Event-driven reconnect retries unresolved work for that role only.</td></tr>
+<tr><td>Storage pressure / gap / transport panels</td><td>Drop</td><td>Stable six-stage failure reason is easier to diagnose.</td></tr>
+<tr><td>Continuous first-token / WPM / generation observers</td><td>Drop</td><td>One-shot Review metrics avoid provider DOM churn and continuous work.</td></tr>
+<tr><td>Command palette / command history</td><td>Drop</td><td>Five primary cockpit controls + shortcuts are faster to learn and use.</td></tr>
+<tr><td>Universal search / threads / workspaces</td><td>Drop</td><td>Recent questions in Review provide the useful debrief outcome.</td></tr>
+<tr><td>Scenario coach / competency goal engine</td><td>Drop</td><td>Interview coaching remains in the project prompt/content layer, not transport runtime.</td></tr>
+<tr><td>Mic / scroll automation</td><td>Drop</td><td>Provider-native UI behavior is less fragile.</td></tr>
+<tr><td>Forced interrupt / forced submit / hold-after-answer</td><td>Drop</td><td>Pause/Gather + role FIFO preserve lossless, predictable delivery.</td></tr>
+<tr><td>Crash-resume orchestration state machine</td><td>Drop</td><td>Bounded session metadata + port reconnect is enough for the simplified runtime.</td></tr>
+</tbody></table></div>
+<div class="callout"><strong>Selection rule:</strong> preserve the user outcome, not the old implementation. If a feature needs another state machine, timer loop, ledger, or delivery owner, it must prove enough user value to justify that complexity.</div>
+</section>
+<section id="providers"><h2>Current provider compatibility fixes</h2>
+<h3>ChatGPT</h3>
+<ul>
+<li>Current ProseMirror no longer depends on the previous <code>node.editor</code> API. PMIA now synchronizes native insertion with ChatGPT’s React before-input state.</li>
+<li>If a real Send button exists, PMIA uses it. If current ChatGPT exposes no Send button, PMIA uses the exact composer’s nearest form <code>requestSubmit()</code>; this was live-proven to create a real conversation and rendered user turn.</li>
+<li>W1 startup removes an old PMIA setup draft only when the current composer begins with the exact known PMIA setup prefix. Arbitrary user drafts are left untouched.</li>
+<li>Rendered proof uses current semantic user-turn selectors, with maintained fallbacks for older markup.</li>
+</ul>
+<h3>Claude</h3>
+<ul>
+<li>PMIA writes through Claude’s live Tiptap editor contract and verifies the exact composer text.</li>
+<li>If a real Send button exists, it is used. If no Send button exists, the fallback focuses the exact Claude composer, verifies that it became <code>document.activeElement</code>, then dispatches one Enter keydown.</li>
+<li>If focus cannot move to the composer, submission fails closed. PMIA will not send Enter to another element.</li>
+<li>Rendered proof uses the current Claude user-message DOM and remains the terminal success authority.</li>
+</ul>
+<div class="callout warn"><strong>Focus rule:</strong> a keyboard Enter is never considered safe merely because the correct browser window is active. The intended editable composer itself must own focus. Provider-native form/submit APIs are allowed only when resolved from that exact verified composer/form instance.</div>
+</section>
+<section id="ux"><h2>Studio, cockpit and diagnostics</h2>
+<p><strong>Studio:</strong> web-based, compact, with W1/W2/W3 provider selectors, Resume, JD, one More disclosure, and Launch. Window 3 is enabled by default; Off is explicitly labelled <em>two-window fallback</em>.</p>
+<p><strong>Cockpit:</strong> a short bottom dock with exactly five primary controls: <strong>Auto/Gather, Pause/Resume, Send gathered, Export, Help</strong>. It is not a fourth full-size work window.</p>
+<p><strong>Tools & Help:</strong> secondary functions stay behind one compact dialog: readiness, session clock, focus/restore, Review, latest-answer metrics, recent questions, markers, display preferences, safe End Session, and shortcuts.</p>
+<p><strong>Diagnostics:</strong> the normal trace has only six meaningful stages and bounded metadata. No flashing “resyncing live” loop, no recovery timeline, no transport assurance dashboard, and no transcript duplication.</p>
+<div class="callout ok"><strong>Window 3 production parity:</strong> the internal compatibility token remains <code>comparison</code>, but runtime code gives it the same coordinator, FIFO, reconnect replay, boot proof, inspection, export, window tools, and rendered-proof success semantics as Window 2.</div>
+</section>
+<section id="verification"><h2>Verification evidence</h2>
+<div class="grid">
+<div class="metric"><b>148 / 148</b><span>active Node contracts passed</span></div>
+<div class="metric"><b>32 JS</b><span>active JavaScript files validated</span></div>
+<div class="metric"><b>10</b><span>required runtime surfaces</span></div>
+<div class="metric"><b>27</b><span>reachable active modules</span></div>
+<div class="metric"><b>37 / 2,311</b><span>active files / lines vs 45 / 2,500 budget</span></div>
+<div class="metric"><b>Exit 0</b><span>integrated release gate</span></div>
+</div>
+<ul>
+<li>MV3 transport/reconnect smoke passed: concurrent role dispatch, role-local replay, no duplicate replay of the already-rendered lane.</li>
+<li>Provider-native isolated Edge fixture passed for current ChatGPT and Claude writer/submit/render contracts.</li>
+<li>Live Stable Edge three-window route passed with the exact same token rendered in all three provider tabs.</li>
+<li>ChatGPT stale setup draft cleanup was verified live: W1 opened with an empty composer without clearing browser storage or unrelated drafts.</li>
+<li>The focus guard was also exercised negatively: when Windows reported ChatGPT’s sidebar Search box instead of the prompt composer, PMIA test automation aborted before typing or pressing Enter.</li>
+<li><code>git diff --check</code> reported no whitespace errors; only Windows line-ending notices were present.</li>
+</ul>
+<h3>What the timing does not mean</h3>
+<p>The sub-second W2/W3 rendered times measure PMIA write/submit/render settlement for the question turn. They do not measure how long ChatGPT or Claude takes to generate the answer. Model generation remains external to PMIA transport.</p>
+</section>
+<section id="deployment"><h2>Deployment, Git and rollback</h2>
+<ul>
+<li><strong>Feature branch:</strong> <code>feature/pmia-simple-runtime</code>.</li>
+<li><strong>Implementation commit:</strong> <code>debf89268e5b9a73d7499b0837bbeaad52187e83</code>.</li>
+<li><strong>Installed 0.12 extension ID:</strong> <code>ldhkaojbodiibhhdllkiffbcfhofiimk</code>.</li>
+<li><strong>Persistent deployment path:</strong> <code>C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\runtime\extension\__pmia012_deploy</code>.</li>
+<li>The current Edge profile reports that deployment with no disable reason.</li>
+<li>Dirty <code>main</code> was not merged, rebased, reset, or overwritten.</li>
+<li>The old 0.11 source remains preserved. Edge still contains the previous 0.11 extension ID <code>cgjddhagnfjdoncphajinaacjfodhpen</code>, but its unpacked path is not populated in the current Secure Preferences; therefore source rollback is preserved, while a one-click current-profile unpacked rollback should not be assumed until that old path is reloaded explicitly.</li>
+</ul>
+<div class="callout"><strong>Authentication safety:</strong> no cookies, tokens, profiles, provider authentication state, or unrelated browser storage were cleared. Edge Beta/Browser Evidence Capture remained separate from Stable Edge PMIA work.</div>
+</section>
+<section id="rules"><h2>Durable rules for future agents</h2>
+<p>The rework preferences are persisted in two places:</p>
+<ul>
+<li>Tracked source: <code>docs\PMIA_REWORK_OPERATING_RULES.md</code></li>
+<li>Local stable copy: <code>C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\.local\PMIA_REWORK_OPERATING_RULES.md</code></li>
+</ul>
+<p>The root README on the 0.12 feature branch now instructs future agents to read that rules file first, followed by the current design and implementation plan.</p>
+<h3>Rules future work must preserve</h3>
+<ul>
+<li>Speed, simplicity, correctness and debuggability outrank feature count.</li>
+<li>Window 2 and Window 3 are equal production lanes.</li>
+<li>No blind Enter. The intended composer must be the focused editable, or a provider-native submit API must target that exact composer/form.</li>
+<li>Backend receipt, queue admission, composer fill, or click dispatch are not delivery success; rendered provider user-turn proof is required.</li>
+<li>No new state machine, polling loop, ledger, timer, or persistent text copy without clear user value.</li>
+<li>Do implementation/design work in meaningful batches; run full verification at milestones rather than after every small edit.</li>
+<li>Background/off-screen operation is an agent working constraint, not a reason to compromise product architecture.</li>
+<li>Never clear cookies, tokens, provider sessions, browser profiles, or unrelated tabs/windows as part of PMIA work.</li>
+</ul>
+<h3>Next engineering priority</h3>
+<p>Do not add another transport subsystem. The direct fan-out is already effectively immediate. Future speed work should target only evidence-backed provider settlement delays while preserving the same terminal rendered-proof contract.</p>
+</section>
+<section><h2>Key source map</h2>
+<div class="table"><table><caption>Files that define the simplified system</caption><thead><tr><th>Area</th><th>Source</th></tr></thead><tbody>
+<tr><td>Fan-out / role delivery</td><td><code>runtime/extension/simple/coordinator.js</code>, <code>fanout.js</code>, <code>role-queue.js</code>, <code>deliver-turn.js</code></td></tr>
+<tr><td>Provider runtime</td><td><code>simple/adapters/chatgpt.js</code>, <code>simple/adapters/claude.js</code>, <code>chatgpt-main.js</code>, <code>claude-main.js</code></td></tr>
+<tr><td>Sender capture</td><td><code>simple/sender.js</code>, <code>browser-entry.js</code>, <code>content-runtime.js</code></td></tr>
+<tr><td>Session coordination</td><td><code>simple/service-worker.js</code>, <code>port-router.js</code>, <code>live-port.js</code></td></tr>
+<tr><td>Studio / cockpit</td><td><code>runtime/extension/studio/</code>, <code>runtime/extension/cockpit/</code></td></tr>
+<tr><td>Product rules</td><td><code>docs/PMIA_REWORK_OPERATING_RULES.md</code></td></tr>
+<tr><td>Migration design / plan</td><td><code>docs/superpowers/specs/2026-08-17-pmia-user-feature-migration-design.md</code> and <code>docs/superpowers/plans/2026-08-17-pmia-user-feature-migration.md</code></td></tr>
+</tbody></table></div>
+</section>
+</main></div>
+<footer><strong>PMIA 0.12 Final Rework Report</strong> · Generated 17 Aug 2026 · Based on verified repository state, installed Edge registration, active test gates and the live three-window acceptance described above.</footer>
+</body></html>
