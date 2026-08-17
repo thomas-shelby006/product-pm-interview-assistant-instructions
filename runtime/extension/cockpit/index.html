@@ -8,11 +8,7 @@
 </head>
 <body>
   <main class="dock">
-    <div class="brand">
-      <strong>PMIA</strong>
-      <span id="connection" class="connection">Connected</span>
-    </div>
-
+    <div class="brand"><strong>PMIA</strong><span id="connection" class="connection">Waiting</span></div>
     <div class="controls" aria-label="Interview controls">
       <button id="autoForward" class="active" type="button">Auto</button>
       <button id="pause" type="button">Pause</button>
@@ -20,23 +16,26 @@
       <button id="export" type="button">Export</button>
       <button id="help" type="button">Help</button>
     </div>
-
     <div id="path" class="path" aria-live="polite">
-      <span data-role="sender"><b>Window 1</b><em>Waiting</em></span>
-      <i>→</i>
-      <span data-role="receiver"><b>Window 2</b><em>Waiting</em></span>
-      <i>+</i>
+      <span data-role="sender"><b>Window 1</b><em>Waiting</em></span><i>→</i>
+      <span data-role="receiver"><b>Window 2</b><em>Waiting</em></span><i>+</i>
       <span data-role="comparison"><b>Window 3</b><em>Waiting</em></span>
     </div>
   </main>
-
-  <dialog id="helpDialog">
-    <h2>Quick controls</h2>
-    <p><b>Auto</b> sends each new Window 1 turn immediately. Turn it off to gather fragments.</p>
-    <p><b>Pause</b> holds forwarding. <b>Send gathered</b> sends held fragments as one question.</p>
-    <p><b>Export</b> downloads the delivery trace plus lightweight timing and failure summary.</p>
-    <p class="shortcuts"><kbd>A</kbd> Auto/Gather · <kbd>P</kbd> Pause · <kbd>G</kbd> Send gathered · <kbd>E</kbd> Export · <kbd>H</kbd> Help</p>
-    <button id="closeHelp" type="button">Close</button>
+  <dialog id="helpDialog" aria-labelledby="toolsTitle">
+    <header class="dialog-head">
+      <div><h2 id="toolsTitle">Tools & Help</h2><p><span id="readiness">Waiting</span> · <span id="sessionClock">00:00</span></p></div>
+      <button id="closeHelp" class="quiet" type="button">Close</button>
+    </header>
+    <section class="tool-section"><h3>Status</h3><p id="statusDetail" class="muted">Waiting for the configured windows.</p><div id="recentStages" class="stage-list" aria-label="Recent delivery events"></div></section>
+    <section class="tool-section"><h3>Windows</h3><div class="tool-row">
+      <button id="focusSender" type="button">Window 1</button><button id="focusReceiver" type="button">Window 2</button><button id="focusComparison" type="button">Window 3</button><button id="focusCockpit" type="button">Cockpit</button><button id="restoreLayout" type="button">Restore layout</button>
+    </div></section>
+    <section class="tool-section"><div class="section-head"><h3>Review</h3><button id="reviewRefresh" type="button">Refresh</button></div><div id="answerMetrics" class="metrics">Latest answer metrics unavailable.</div><div class="tool-row"><button id="copyLatest" type="button">Copy latest question</button></div><div id="recentQuestions" class="questions" aria-live="polite"></div></section>
+    <section class="tool-section"><h3>Question marker</h3><p id="selectedQuestion" class="muted">Select a recent question first.</p><div class="tool-row"><button id="markStrong" type="button" disabled>Strong</button><button id="markReview" type="button" disabled>Needs review</button><button id="markFollowUp" type="button" disabled>Follow-up</button></div></section>
+    <section class="tool-section"><h3>Display</h3><div class="tool-row toggles"><label><input id="fontSize" type="checkbox"> Large text</label><label><input id="highContrast" type="checkbox"> High contrast</label><label><input id="reducedMotion" type="checkbox"> Reduced motion</label></div></section>
+    <section class="tool-section danger-zone"><h3>End session</h3><p id="endState" class="muted">Checks pending delivery only when you ask.</p><div class="tool-row"><button id="endSession" type="button">End session</button><button id="exportBeforeEnd" type="button" hidden>Export</button><button id="cancelEnd" type="button" hidden>Cancel</button><button id="endAnyway" class="danger" type="button" hidden>End anyway</button></div></section>
+    <section class="tool-section shortcuts"><h3>Shortcuts</h3><p><kbd>A</kbd> Auto/Gather · <kbd>P</kbd> Pause · <kbd>G</kbd> Send gathered · <kbd>E</kbd> Export · <kbd>H</kbd> Help</p></section>
   </dialog>
   <script type="module" src="cockpit.js"></script>
 </body>

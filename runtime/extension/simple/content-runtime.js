@@ -2,6 +2,7 @@ import { makeTurn } from './protocol.js';
 import { createSimpleSender } from './sender.js';
 import { createRoleQueue } from './role-queue.js';
 import { deliverTurn } from './deliver-turn.js';
+import { answerMetrics, normalizeRecentQuestions } from './inspection.js';
 
 export function createSimpleContentRuntime({ config, adapter, port } = {}) {
   if (!config?.sessionId || !config?.role || !adapter || !port) throw new TypeError('config, adapter and port are required');
@@ -15,9 +16,22 @@ export function createSimpleContentRuntime({ config, adapter, port } = {}) {
   const postTurn = turn => port.postMessage({ type:'turn', turn:makeTurn({
     sessionId:config.sessionId, turnId:turn.id, text:turn.text, kind:'question'
   }) });
+  function inspect() {
+    if (config.role === 'sender') {
+      return { available:true, role:config.role, provider:config.provider,
+        recentQuestions:normalizeRecentQuestions(adapter.readUserTurns?.() || [], 20) };
+    }
+    const text = String(adapter.readLatestAssistantText?.() || '').trim();
+    return { available:Boolean(text), role:config.role, provider:config.provider,
+      metrics:answerMetrics(text) };
+  }
 
   function start() {
     port.postMessage({ type:'register', ...config });
+    port.onMessage.addListener(message => {
+      if (message?.type !== 'inspect_request' || !message.requestId) return;
+      port.postMessage({ type:'inspect_result', requestId:message.requestId, result:inspect() });
+    });
     if (config.role === 'sender') {
       sender = createSimpleSender({
         readTurns:() => adapter.readUserTurns?.() || [],

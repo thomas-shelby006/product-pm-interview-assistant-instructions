@@ -23,3 +23,18 @@ test('stage log rejects noisy unknown stages', () => {
   assert.equal(log.append({ role:'receiver', turnId:'t1', stage:'resyncing_live' }), false);
   assert.equal(log.snapshot().length, 0);
 });
+
+test('stage log restores persisted bounded metadata after a worker restart', () => {
+  const log = mod.createStageLog({
+    limit:3,
+    initial:[
+      { ts:1, role:'sender', turnId:'t1', stage:'captured', text:'SECRET' },
+      { ts:2, role:'receiver', turnId:'t1', stage:'rendered', elapsedMs:22 },
+      { ts:3, role:'receiver', turnId:'t2', stage:'unknown' }
+    ]
+  });
+  assert.deepEqual(log.snapshot(), [
+    { ts:1, role:'sender', turnId:'t1', stage:'captured', elapsedMs:null, reason:'' },
+    { ts:2, role:'receiver', turnId:'t1', stage:'rendered', elapsedMs:22, reason:'' }
+  ]);
+});

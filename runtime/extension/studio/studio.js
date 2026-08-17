@@ -1,7 +1,5 @@
-const DEFAULT_CHATGPT_URL = 'https://chatgpt.com/g/g-p-6a07471553dc8191a30e48a421c843aa-pm-interview-helper/project';
+﻿const DEFAULT_CHATGPT_URL = 'https://chatgpt.com/g/g-p-6a07471553dc8191a30e48a421c843aa-pm-interview-helper/project';
 const DEFAULT_CLAUDE_URL = 'https://claude.ai/new';
-const port = chrome.runtime.connect({ name:'pmia-simple' });
-const pending = new Map();
 let requestSeq = 0;
 
 const byId = id => document.getElementById(id);
@@ -33,17 +31,29 @@ export function buildBootText(resumeText, jdText) {
 
 function request(type, payload, timeoutMs = 30000) {
   const requestId = `studio-${++requestSeq}`;
+  const port = chrome.runtime.connect({ name:'pmia-simple' });
   return new Promise(resolve => {
-    const timer = setTimeout(() => { pending.delete(requestId); resolve({ ok:false, error:'timeout' }); }, timeoutMs);
-    pending.set(requestId, result => { clearTimeout(timer); pending.delete(requestId); resolve(result); });
-    port.postMessage({ type, requestId, ...payload });
+    let settled = false;
+    let timer = null;
+    const finish = result => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      port.onMessage.removeListener(onMessage);
+      try { port.disconnect(); } catch {}
+      resolve(result);
+    };
+    const onMessage = message => {
+      if (message?.type !== 'launch_result' || message.requestId !== requestId) return;
+      finish(message.result || { ok:false, error:'empty_result' });
+    };
+    port.onMessage.addListener(onMessage);
+    port.onDisconnect.addListener(() => finish({ ok:false, error:'disconnected' }));
+    timer = setTimeout(() => finish({ ok:false, error:'timeout' }), timeoutMs);
+    try { port.postMessage({ type, requestId, ...payload }); }
+    catch (error) { finish({ ok:false, error:String(error?.message || error) }); }
   });
 }
-
-port.onMessage.addListener(message => {
-  if (message?.type !== 'launch_result' || !pending.has(message.requestId)) return;
-  pending.get(message.requestId)(message.result || { ok:false, error:'empty_result' });
-});
 async function saveSettings() {
   await chrome.storage.local.set({ pmia_simple_studio:{
     senderProvider:senderProvider.value,
@@ -65,28 +75,31 @@ async function loadSettings() {
 
 launch.addEventListener('click', async () => {
   launch.disabled = true;
-  status.textContent = 'Opening provider windows…';
-  await saveSettings();
-  const id = sessionId();
-  const result = await request('launch_session', {
-    sessionId:id,
-    senderProvider:senderProvider.value,
-    receiverProvider:receiverProvider.value,
-    comparisonProvider:comparisonProvider.value,
-    chatgptUrl:chatgptUrl.value,
-    claudeUrl:claudeUrl.value,
-    bootText:buildBootText(resume.value, jobDescription.value),
-    bounds:{ left:screen.availLeft || 0, top:screen.availTop || 0, width:screen.availWidth, height:screen.availHeight }
-  });
-  if (result.ok) {
-    status.textContent = comparisonProvider.value
-      ? 'Ready · all three provider windows connected'
-      : 'Ready · sender and receiver connected';
-    setTimeout(() => window.close(), 500);
-  } else {
+  status.textContent = 'Opening provider windows...';
+  try {
+    await saveSettings();
+    const id = sessionId();
+    const result = await request('launch_session', {
+      sessionId:id,
+      senderProvider:senderProvider.value,
+      receiverProvider:receiverProvider.value,
+      comparisonProvider:comparisonProvider.value,
+      chatgptUrl:chatgptUrl.value,
+      claudeUrl:claudeUrl.value,
+      bootText:buildBootText(resume.value, jobDescription.value),
+      bounds:{ left:screen.availLeft || 0, top:screen.availTop || 0, width:screen.availWidth, height:screen.availHeight }
+    });
+    if (result.ok) {
+      status.textContent = comparisonProvider.value
+        ? 'Ready · all three provider windows connected'
+        : 'Ready · sender and receiver connected';
+      setTimeout(() => window.close(), 500);
+      return;
+    }
     status.textContent = `Launch failed · ${result.error || 'provider runtime did not become ready'}`;
-    launch.disabled = false;
+  } catch (error) {
+    status.textContent = `Launch failed · ${String(error?.message || error)}`;
   }
+  launch.disabled = false;
 });
-
 void loadSettings();

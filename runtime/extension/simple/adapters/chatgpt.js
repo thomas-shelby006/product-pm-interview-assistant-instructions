@@ -3,6 +3,7 @@ import { first, latest, nodeText, waitForDom } from '../dom.js';
 const COMPOSER = ['#prompt-textarea','textarea[name="prompt-textarea"]','div[contenteditable="true"][role="textbox"]'];
 const SEND = ['button[aria-label="Send prompt"]','button[data-testid="send-button"]','button[aria-label^="Send"]'];
 const USER = ['section[data-turn="user"][data-turn-id]','[data-message-author-role="user"]','[data-message-role="user"]'];
+const ASSISTANT = ['section[data-turn="assistant"]','[data-message-author-role="assistant"]','[data-message-role="assistant"]'];
 
 function cleanUser(text) {
   return String(text || '').replace(/^\s*You said:\s*/i, '').trim();
@@ -45,6 +46,7 @@ export function createSimpleChatGptAdapter({ doc = document, writeInMain } = {})
       return waitForDom(() => renderedUserText() === expected, { root:doc.documentElement, ...options });
     },
     readUserTurns,
+    readLatestAssistantText() { return String(latest(doc, ASSISTANT)?.text || '').trim(); },
     readLatestUserTurn() {
       const hit = latest(doc, USER);
       if (!hit) return null;

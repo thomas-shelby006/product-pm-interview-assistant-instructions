@@ -1,4 +1,4 @@
-export function createSimplePortRouter({ coordinator, requestTimeoutMs = 10000, onStage = () => {}, onRegister = () => {} } = {}) {
+export function createSimplePortRouter({ coordinator, onStage = () => {}, onRegister = () => {} } = {}) {
   if (!coordinator) throw new TypeError('coordinator is required');
   const pending = new Map();
   const registrations = new Map();
@@ -7,23 +7,33 @@ export function createSimplePortRouter({ coordinator, requestTimeoutMs = 10000, 
   function request(port, role, turn) {
     const requestId = `${turn.sessionId}:${role}:${++requestSeq}`;
     return new Promise(resolve => {
-      const timer = setTimeout(() => {
+      pending.set(requestId, { port, role, resolve });
+      try { port.postMessage({ type:'deliver', requestId, turn }); }
+      catch {
         pending.delete(requestId);
-        resolve({ role, stage:'failed', reason:'delivery_timeout' });
-      }, requestTimeoutMs);
-      pending.set(requestId, result => {
-        clearTimeout(timer);
-        pending.delete(requestId);
-        resolve({ role, ...result });
-      });
-      port.postMessage({ type:'deliver', requestId, turn });
+        resolve({ role, stage:'failed', reason:'disconnected' });
+      }
     });
   }
 
+  function resolvePending(requestId, result) {
+    const item = pending.get(requestId);
+    if (!item) return false;
+    pending.delete(requestId);
+    item.resolve({ role:item.role, ...result });
+    return true;
+  }
+
+  function failPort(port) {
+    for (const [requestId, item] of pending) {
+      if (item.port !== port) continue;
+      resolvePending(requestId, { stage:'failed', reason:'disconnected' });
+    }
+  }
   function attach(port) {
     port.onMessage.addListener(message => {
-      if (message?.type === 'delivery_result' && pending.has(message.requestId)) {
-        pending.get(message.requestId)(message.result || { stage:'failed', reason:'empty_result' });
+      if (message?.type === 'delivery_result') {
+        resolvePending(message.requestId, message.result || { stage:'failed', reason:'empty_result' });
         return;
       }
       if (message?.type === 'stage') {
@@ -45,11 +55,13 @@ export function createSimplePortRouter({ coordinator, requestTimeoutMs = 10000, 
       }
       if (message?.type === 'turn' && message.turn) {
         void coordinator.dispatchTurn(message.turn).then(results => {
-          port.postMessage({ type:'turn_result', turnId:message.turn.turnId, results });
+          try { port.postMessage({ type:'turn_result', turnId:message.turn.turnId, results }); } catch {}
         });
       }
     });
+
     port.onDisconnect?.addListener?.(() => {
+      failPort(port);
       const registration = registrations.get(port);
       if (registration && ['receiver','comparison'].includes(registration.role)) {
         coordinator.unregister(registration.sessionId, registration.role);

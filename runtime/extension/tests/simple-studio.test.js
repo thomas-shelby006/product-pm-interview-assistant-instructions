@@ -28,3 +28,12 @@ test('Studio boot text is concise and separates static behavior from Resume and 
   assert.match(js, /Job description:/);
   assert.doesNotMatch(js, /MULTIPLE INTERVIEWER QUESTIONS WERE RECEIVED/i);
 });
+
+test('Studio opens a fresh MV3 port for each launch request instead of keeping an idle stale port', () => {
+  const js = read('studio.js');
+  assert.doesNotMatch(js, /^const port = chrome\.runtime\.connect/m);
+  const requestBody = js.match(/function request\([\s\S]*?\n}\n/)?.[0] || '';
+  assert.match(requestBody, /chrome\.runtime\.connect/);
+  assert.match(requestBody, /onDisconnect/);
+  assert.match(requestBody, /port\.disconnect/);
+});

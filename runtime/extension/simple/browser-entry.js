@@ -4,6 +4,7 @@ import { createSimpleClaudeAdapter } from './adapters/claude.js';
 import { createClaudeWriteBridge } from './claude-bridge.js';
 import { createChatGptWriteBridge } from './chatgpt-bridge.js';
 import { waitForProviderReady } from './readiness.js';
+import { createResilientPort } from './live-port.js';
 
 const CONFIG_KEY = 'pmia_simple_config_v1';
 const VALID_ROLES = new Set(['sender','receiver','comparison']);
@@ -66,7 +67,10 @@ export async function startSimpleBrowserRuntime({ win = window, doc = document, 
     doc.title = `PMIA NOT READY · ${config.provider.toUpperCase()} · ${config.sessionId}`;
     return { config, error:'provider_not_ready' };
   }
-  const port = chromeApi.runtime.connect({ name:'pmia-simple' });
+  const port = createResilientPort({
+    connect:() => chromeApi.runtime.connect({ name:'pmia-simple' }),
+    onReconnect:raw => raw.postMessage({ type:'register', ...config })
+  });
   const runtime = createSimpleContentRuntime({ config, adapter, port });
   runtime.start();
   const observer = config.role === 'sender' ? installSenderObserver(win, doc, runtime) : null;

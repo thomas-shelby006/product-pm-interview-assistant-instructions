@@ -48,3 +48,9 @@ test('browser entry uses persistent MAIN-world write bridges for both answer pro
   assert.match(browserEntry, /waitForProviderReady/);
   assert.match(browserEntry, /createSimpleChatGptAdapter\(\{\s*doc,\s*writeInMain/);
 });
+
+test('provider runtime reconnects roles after an MV3 worker port disconnect without polling', () => {
+  assert.match(browserEntry, /createResilientPort/);
+  assert.match(browserEntry, /onReconnect[\s\S]*type:'register'/);
+  assert.doesNotMatch(browserEntry, /setInterval|setTimeout\([^)]*register/i);
+});

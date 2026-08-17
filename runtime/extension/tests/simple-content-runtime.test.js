@@ -54,3 +54,27 @@ test('answer runtime returns terminal result only after delivery contract comple
   assert.equal(result.result.stage, 'rendered');
   assert.deepEqual(calls.map(value => value[0]), ['write','submit','rendered']);
 });
+
+test('sender inspection returns recent questions only when explicitly requested', () => {
+  const port = fakePort();
+  const adapter = { readUserTurns:() => Array.from({ length:22 }, (_, i) => ({ id:`q${i}`, text:`Q${i}` })) };
+  const runtime = mod.createSimpleContentRuntime({ config:{ sessionId:'s1', role:'sender', provider:'chatgpt' }, adapter, port });
+  runtime.start();
+  port.emit({ type:'inspect_request', requestId:'i1', scope:'review' });
+  const result = port.sent.find(value => value.type === 'inspect_result');
+  assert.equal(result.requestId, 'i1');
+  assert.equal(result.result.recentQuestions.length, 20);
+  assert.equal(result.result.recentQuestions[0].id, 'q2');
+});
+
+test('answer inspection returns metrics without raw answer text', () => {
+  const port = fakePort();
+  const adapter = { readLatestAssistantText:() => 'one two three four' };
+  const runtime = mod.createSimpleContentRuntime({ config:{ sessionId:'s1', role:'receiver', provider:'claude' }, adapter, port });
+  runtime.start();
+  port.emit({ type:'inspect_request', requestId:'i2', scope:'review' });
+  const result = port.sent.find(value => value.type === 'inspect_result');
+  assert.equal(result.result.available, true);
+  assert.equal(result.result.metrics.wordCount, 4);
+  assert.equal('text' in result.result, false);
+});

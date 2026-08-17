@@ -106,3 +106,17 @@ test('ChatGPT MAIN writer uses framework editor state when available', () => {
   assert.equal(inputEvents, 1);
   assert.ok(setContentArg);
 });
+
+test('ChatGPT exposes latest assistant text for one-shot review only', () => {
+  const assistant = element({ text:'A concise product answer.' });
+  const doc = docWith({ 'section[data-turn="assistant"]':[assistant] });
+  const adapter = chatgpt.createSimpleChatGptAdapter({ doc, writeInMain:async () => ({ ok:true, matches:true }) });
+  assert.equal(adapter.readLatestAssistantText(), 'A concise product answer.');
+});
+
+test('Claude exposes latest assistant text for one-shot review only', () => {
+  const assistant = element({ text:'A concise Claude answer.' });
+  const doc = docWith({ '[data-testid="assistant-message"]':[assistant] });
+  const adapter = claude.createSimpleClaudeAdapter({ doc, writeInMain:async () => ({ ok:true, matches:true }) });
+  assert.equal(adapter.readLatestAssistantText(), 'A concise Claude answer.');
+});

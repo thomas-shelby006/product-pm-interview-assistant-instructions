@@ -3,6 +3,7 @@ import { first, latest, nodeText, waitForDom } from '../dom.js';
 const COMPOSER = ['div[contenteditable="true"].ProseMirror','[contenteditable="true"][data-testid="chat-input"]'];
 const SEND = ['button[aria-label="Send message"]','button[data-testid="send-button"]','button[aria-label^="Send"]'];
 const USER = ['[data-testid="user-message"]','[data-testid*="user-message"]','[data-author="user"]','[data-message-author-role="user"]'];
+const ASSISTANT = ['[data-testid="assistant-message"]','[data-testid*="assistant-message"]','[data-author="assistant"]','[data-message-author-role="assistant"]','.font-claude-message'];
 
 export function createSimpleClaudeAdapter({ doc = document, writeInMain } = {}) {
   if (typeof writeInMain !== 'function') throw new TypeError('writeInMain is required');
@@ -41,6 +42,7 @@ export function createSimpleClaudeAdapter({ doc = document, writeInMain } = {}) 
       return waitForDom(() => renderedUserText() === expected, { root:doc.documentElement, ...options });
     },
     readUserTurns,
+    readLatestAssistantText() { return String(latest(doc, ASSISTANT)?.text || '').trim(); },
     readLatestUserTurn() {
       const hit = latest(doc, USER);
       return hit ? { id:String(hit.node?.id || ''), text:String(hit.text || '').trim() } : null;

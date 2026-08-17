@@ -46,6 +46,41 @@ test('one sender turn is requested from receiver and comparison before either co
   assert.equal(result.results.comparison.stage, 'rendered');
 });
 
+test('router does not preempt the answer runtime with a second delivery timeout', async () => {
+  const coordinator = createSimpleCoordinator({ unresolvedStore:store() });
+  const router = mod.createSimplePortRouter({ coordinator, requestTimeoutMs:5 });
+  const sender = port('sender');
+  const receiver = port('receiver');
+  router.attach(sender); router.attach(receiver);
+  receiver.emit({ type:'register', sessionId:'s1', role:'receiver', provider:'claude' });
+  sender.emit({ type:'register', sessionId:'s1', role:'sender', provider:'chatgpt' });
+  sender.emit({ type:'turn', turn:{ sessionId:'s1', turnId:'slow', text:'Q?', kind:'question' } });
+  await new Promise(resolve => setImmediate(resolve));
+  const req = receiver.sent.find(value => value.type === 'deliver');
+  await new Promise(resolve => setTimeout(resolve, 20));
+  receiver.emit({ type:'delivery_result', requestId:req.requestId, result:{ stage:'rendered' } });
+  await new Promise(resolve => setImmediate(resolve));
+  const result = sender.sent.find(value => value.type === 'turn_result');
+  assert.equal(result.results.receiver.stage, 'rendered');
+});
+
+test('disconnect fails an in-flight role request immediately', async () => {
+  const coordinator = createSimpleCoordinator({ unresolvedStore:store() });
+  const router = mod.createSimplePortRouter({ coordinator });
+  const sender = port('sender');
+  const receiver = port('receiver');
+  router.attach(sender); router.attach(receiver);
+  receiver.emit({ type:'register', sessionId:'s1', role:'receiver', provider:'claude' });
+  sender.emit({ type:'register', sessionId:'s1', role:'sender', provider:'chatgpt' });
+  sender.emit({ type:'turn', turn:{ sessionId:'s1', turnId:'drop', text:'Q?', kind:'question' } });
+  await new Promise(resolve => setImmediate(resolve));
+  receiver.disconnect();
+  await new Promise(resolve => setImmediate(resolve));
+  const result = sender.sent.find(value => value.type === 'turn_result');
+  assert.equal(result.results.receiver.stage, 'failed');
+  assert.equal(result.results.receiver.reason, 'disconnected');
+});
+
 test('two-window mode sends only to receiver', async () => {
   const coordinator = createSimpleCoordinator({ unresolvedStore:store() });
   const router = mod.createSimplePortRouter({ coordinator, requestTimeoutMs:1000 });
