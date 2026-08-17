@@ -50,3 +50,19 @@ export function managedWindowIds(meta = {}) {
     .filter(Number.isFinite);
   return [...new Set(ids)];
 }
+export function providerLoginBlocker(value = {}) {
+  const role = String(value.role || '').trim();
+  const provider = String(value.provider || '').trim().toLowerCase();
+  const url = String(value.url || '').toLowerCase();
+  const title = String(value.title || '').toLowerCase();
+  if (provider === 'claude') {
+    const blocked = url.includes('claude.ai/login') || /sign in.*claude|log in.*claude/.test(title);
+    return blocked ? { code:'provider_login_required', role, provider, detail:'Claude sign-in required' } : null;
+  }
+  if (provider === 'chatgpt') {
+    const blocked = /chatgpt\.com\/(auth\/)?login/.test(url)
+      || /get started.*chatgpt|log in.*chatgpt|sign in.*chatgpt/.test(title);
+    return blocked ? { code:'provider_login_required', role, provider, detail:'ChatGPT sign-in required' } : null;
+  }
+  return null;
+}

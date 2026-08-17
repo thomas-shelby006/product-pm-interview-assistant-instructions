@@ -40,3 +40,14 @@ test('window lookup supports provider roles and cockpit only', () => {
   assert.equal(mod.windowIdForRole(meta, 'cockpit'), 4);
   assert.equal(mod.windowIdForRole(meta, 'other'), null);
 });
+test('provider login blockers are explicit and provider-specific', () => {
+  assert.deepEqual(mod.providerLoginBlocker({
+    role:'receiver', provider:'claude', url:'https://claude.ai/login', title:'Sign in - Claude'
+  }), { code:'provider_login_required', role:'receiver', provider:'claude', detail:'Claude sign-in required' });
+  assert.deepEqual(mod.providerLoginBlocker({
+    role:'sender', provider:'chatgpt', url:'https://chatgpt.com/', title:'Get started | ChatGPT'
+  }), { code:'provider_login_required', role:'sender', provider:'chatgpt', detail:'ChatGPT sign-in required' });
+  assert.equal(mod.providerLoginBlocker({
+    role:'comparison', provider:'chatgpt', url:'https://chatgpt.com/c/abc', title:'PM interview'
+  }), null);
+});

@@ -3,7 +3,7 @@ import { createSimplePortRouter } from './port-router.js';
 import { createStageLog } from './stage-log.js';
 import { launchSimpleSession } from './launch.js';
 import { launchIsReady } from './launch-status.js';
-import { buildSessionMeta, deriveEndState, managedWindowIds, roleWindowId } from './session-tools.js';
+import { buildSessionMeta, deriveEndState, managedWindowIds, providerLoginBlocker, roleWindowId } from './session-tools.js';
 import { buildSessionSummary } from './session-summary.js';
 import { normalizeMarkers, upsertMarker } from './markers.js';
 
@@ -123,13 +123,17 @@ const router = createSimplePortRouter({
   }
 });
 
-async function waitForRoles(sessionId, roles, timeoutMs = 35000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() <= deadline) {
-    if (roles.every(role => rolePorts.has(roleKey(sessionId, role)))) return true;
-    await new Promise(resolve => setTimeout(resolve, 25));
+async function detectLaunchBlocker(sessionId, launch) {
+  for (let index = 0; index < (launch.roles || []).length; index += 1) {
+    const value = launch.roles[index];
+    const windowId = launch.providerWindows?.[index]?.id;
+    if (!Number.isFinite(windowId) || rolePorts.has(roleKey(sessionId, value.role))) continue;
+    const win = await chrome.windows.get(windowId, { populate:true }).catch(() => null);
+    const tab = win?.tabs?.[0];
+    const blocker = providerLoginBlocker({ role:value.role, provider:value.provider, url:tab?.url || tab?.pendingUrl, title:tab?.title });
+    if (blocker) return blocker;
   }
-  return false;
+  return null;
 }
 
 async function launchFromStudio(message) {
@@ -149,14 +153,21 @@ async function launchFromStudio(message) {
     createWindow:spec => chrome.windows.create(spec)
   });
   const meta = await saveMeta(buildSessionMeta({ sessionId, roles:launch.roles, launch, startedAt }));
-  const rolesReady = await waitForRoles(sessionId, roles);
+  const deadline = Date.now() + 35000;
+  let blocker = null;
+  while (Date.now() <= deadline && !roles.every(role => rolePorts.has(roleKey(sessionId, role)))) {
+    if (Date.now() >= startedAt + 1200) blocker = await detectLaunchBlocker(sessionId, launch);
+    if (blocker) break;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  const rolesReady = !blocker && roles.every(role => rolePorts.has(roleKey(sessionId, role)));
   const bootText = String(message.bootText || '').trim();
   let boot = null;
   if (rolesReady && bootText) boot = await coordinator.dispatchBoot({ sessionId, text:bootText });
   const ok = rolesReady && launchIsReady({ roles, hasBoot:Boolean(bootText), boot });
   publishSnapshot(sessionId);
-  return { ok, sessionId, launch, boot, roles, meta,
-    error:ok ? '' : (rolesReady ? 'boot_not_rendered' : 'provider_not_ready') };
+  return { ok, sessionId, launch, boot, roles, meta, errorCode:blocker?.code || '', blocker,
+    error:ok ? '' : (blocker?.detail || (rolesReady ? 'boot_not_rendered' : 'provider_not_ready')) };
 }
 
 function controlSender(sessionId, command, payload = {}) {
