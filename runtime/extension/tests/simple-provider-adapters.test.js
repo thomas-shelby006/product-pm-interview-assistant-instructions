@@ -120,3 +120,103 @@ test('Claude exposes latest assistant text for one-shot review only', () => {
   const adapter = claude.createSimpleClaudeAdapter({ doc, writeInMain:async () => ({ ok:true, matches:true }) });
   assert.equal(adapter.readLatestAssistantText(), 'A concise Claude answer.');
 });
+
+test('ChatGPT MAIN writer synchronizes ProseMirror state without node.editor', () => {
+  const events = [];
+  let inserted = null;
+  let selected = false;
+  const composer = element();
+  composer.tagName = 'DIV';
+  composer.value = undefined;
+  composer.focus = () => {};
+  composer.dispatchEvent = event => { events.push(event.type); return true; };
+  const selection = { removeAllRanges() {}, addRange() { selected = true; } };
+  const range = { selectNodeContents(node) { assert.equal(node, composer); } };
+  const doc = docWith({ '#prompt-textarea':[composer] });
+  doc.defaultView = { getSelection:() => selection };
+  doc.createRange = () => range;
+  doc.execCommand = (name, _showUi, value) => {
+    assert.equal(name, 'insertText');
+    inserted = value;
+    composer.textContent = value;
+    composer.innerText = value;
+    return true;
+  };
+  const result = chatgptMain.writeChatGptComposerInMain(doc, 'Activation metric?');
+  assert.equal(result.ok, true);
+  assert.equal(inserted, 'Activation metric?');
+  assert.equal(selected, true);
+  assert.deepEqual(events, ['beforeinput', 'input']);
+});
+
+test('ChatGPT MAIN writer uses React before-input fallback when Send state is absent', () => {
+  let beforeInputCalls = 0;
+  const composer = element();
+  composer.tagName = 'DIV';
+  composer.value = undefined;
+  composer.focus = () => {};
+  composer.dispatchEvent = () => true;
+  const form = { __reactPropsTest:{ onBeforeInputCapture(event) {
+    beforeInputCalls += 1;
+    assert.equal(event.data, 'Activation metric?');
+    assert.equal(event.target, composer);
+  } } };
+  composer.closest = selector => selector === 'form' ? form : null;
+  const doc = docWith({ '#prompt-textarea':[composer] });
+  doc.defaultView = { getSelection:() => ({ removeAllRanges(){}, addRange(){} }) };
+  doc.createRange = () => ({ selectNodeContents(){} });
+  doc.execCommand = (_name, _ui, value) => { composer.innerText = value; composer.textContent = value; return true; };
+  const result = chatgptMain.writeChatGptComposerInMain(doc, 'Activation metric?');
+  assert.equal(result.ok, true);
+  assert.equal(beforeInputCalls, 1);
+});
+
+test('ChatGPT submits through the composer form when current UI has no Send button', () => {
+  let submitted = 0;
+  const composer = element({ text:'Activation metric?' });
+  composer.closest = selector => selector === 'form' ? {
+    requestSubmit() { submitted += 1; }
+  } : null;
+  const doc = docWith({ '#prompt-textarea':[composer] });
+  const adapter = chatgpt.createSimpleChatGptAdapter({ doc, writeInMain:async () => ({ ok:true, matches:true }) });
+  assert.equal(adapter.submit(), true);
+  assert.equal(submitted, 1);
+});
+
+test('Claude submits with Enter when current UI has no Send button', () => {
+  const events = [];
+  const composer = element({ text:'Tradeoff?' });
+  composer.dispatchEvent = event => { events.push({ type:event.type, key:event.key, code:event.code }); return false; };
+  const doc = docWith({ 'div[contenteditable="true"].ProseMirror':[composer] });
+  doc.defaultView = { KeyboardEvent:class {
+    constructor(type, init = {}) { this.type = type; Object.assign(this, init); }
+  } };
+  const adapter = claude.createSimpleClaudeAdapter({ doc, writeInMain:async () => ({ ok:true, matches:true }) });
+  assert.equal(adapter.submit(), true);
+  assert.deepEqual(events, [{ type:'keydown', key:'Enter', code:'Enter' }]);
+});
+
+test('Claude Enter fallback focuses the exact composer and fails closed if focus cannot move', () => {
+  const makeDoc = ({ allowFocus }) => {
+    const events = [];
+    const other = element({ text:'other' });
+    const composer = element({ text:'Tradeoff?' });
+    const doc = docWith({ 'div[contenteditable="true"].ProseMirror':[composer] });
+    doc.activeElement = other;
+    composer.focus = () => { if (allowFocus) doc.activeElement = composer; };
+    composer.dispatchEvent = event => { events.push(event.type); return false; };
+    doc.defaultView = { KeyboardEvent:class { constructor(type, init = {}) { this.type = type; Object.assign(this, init); } } };
+    return { doc, composer, events };
+  };
+
+  const focused = makeDoc({ allowFocus:true });
+  const ok = claude.createSimpleClaudeAdapter({ doc:focused.doc, writeInMain:async () => ({ ok:true, matches:true }) });
+  assert.equal(ok.submit(), true);
+  assert.equal(focused.doc.activeElement, focused.composer);
+  assert.deepEqual(focused.events, ['keydown']);
+
+  const blocked = makeDoc({ allowFocus:false });
+  const fail = claude.createSimpleClaudeAdapter({ doc:blocked.doc, writeInMain:async () => ({ ok:true, matches:true }) });
+  assert.equal(fail.submit(), false);
+  assert.deepEqual(blocked.events, []);
+});

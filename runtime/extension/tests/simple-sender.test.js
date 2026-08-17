@@ -58,3 +58,42 @@ test('sender does not wait for onTurn completion before detecting a later DOM tu
   releaseFirst();
   await firstScan;
 });
+
+test('sender restores bounded seen keys across same-session navigation without losing first new turn', async () => {
+  const s = source([{ id:'old', text:'Old' }]);
+  let persisted = [];
+  const first = mod.createSimpleSender({
+    readTurns:s.read,
+    onTurn:() => {},
+    onSeenChange:keys => { persisted = keys; }
+  });
+  first.prime();
+  assert.deepEqual(persisted, ['id:old']);
+
+  s.set([{ id:'old', text:'Old' }, { id:'first-live', text:'Activation metric?' }]);
+  const emitted = [];
+  const resumed = mod.createSimpleSender({
+    readTurns:s.read,
+    onTurn:turn => emitted.push(turn),
+    initialSeen:persisted,
+    onSeenChange:keys => { persisted = keys; }
+  });
+  await resumed.scan();
+  assert.deepEqual(emitted, [{ id:'first-live', text:'Activation metric?' }]);
+  assert.ok(persisted.includes('id:first-live'));
+});
+
+test('sender restored seen keys suppress duplicates on a later restart', async () => {
+  const turns = [{ id:'old', text:'Old' }, { id:'first-live', text:'Activation metric?' }];
+  let persisted = ['id:old','id:first-live'];
+  const emitted = [];
+  const sender = mod.createSimpleSender({
+    readTurns:() => turns,
+    onTurn:turn => emitted.push(turn),
+    initialSeen:persisted,
+    onSeenChange:keys => { persisted = keys; }
+  });
+  await sender.scan();
+  assert.deepEqual(emitted, []);
+  assert.deepEqual(persisted, ['id:old','id:first-live']);
+});

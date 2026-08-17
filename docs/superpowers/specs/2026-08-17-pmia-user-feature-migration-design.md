@@ -158,3 +158,23 @@ The transition is complete when the real route passes, selected user-facing outc
 - Sync the installed `__pmia012_deploy` copy only after automated gates pass; then self-reload only PMIA 0.12.
 - Preserve the disabled 0.11 extension registration and its files for rollback.
 - Leave the verified migration changes local unless the user separately authorizes staging/commit/push; do not merge into dirty `main` during this task.
+## Production-parity clarification — 2026-08-17
+W3 is a production answer lane, not a secondary comparison experiment. Internally the role token `comparison` may remain for compatibility, but product behavior treats `receiver` and `comparison` as equal peers. Any future asymmetric behavior requires explicit evidence and user approval.
+
+Both answer lanes must share:
+- concurrent fan-out start;
+- identical per-role FIFO semantics;
+- identical reconnect retry/replay semantics;
+- identical rendered-proof success definition;
+- identical Review/marker/export/window-tool availability;
+- identical provider options (ChatGPT or Claude);
+- identical performance expectations.
+
+The primary topology is W1 + W2 + W3. Two-window mode is retained only as a supported fallback/diagnostic configuration.
+
+## Submit focus contract — 2026-08-17
+A keyboard Enter is not a valid submit action by itself. PMIA must know that the intended composer is the focused editable target before dispatching a key. If focus is elsewhere, the action fails closed.
+
+Provider-native form/submit APIs may be used without keyboard focus only when they are resolved from the exact verified composer/form instance. After either submit path, PMIA still waits for the exact text as a newly rendered provider user turn.
+
+The focus rule is intentionally local to provider submission. It does not introduce a global focus state, timer, polling loop, or window-activation policy into delivery.

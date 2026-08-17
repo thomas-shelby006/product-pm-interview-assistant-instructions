@@ -4,7 +4,7 @@ import { createRoleQueue } from './role-queue.js';
 import { deliverTurn } from './deliver-turn.js';
 import { answerMetrics, normalizeRecentQuestions } from './inspection.js';
 
-export function createSimpleContentRuntime({ config, adapter, port } = {}) {
+export function createSimpleContentRuntime({ config, adapter, port, senderState = {} } = {}) {
   if (!config?.sessionId || !config?.role || !adapter || !port) throw new TypeError('config, adapter and port are required');
   let sender = null;
   let queue = null;
@@ -39,7 +39,9 @@ export function createSimpleContentRuntime({ config, adapter, port } = {}) {
           port.postMessage({ type:'stage', sessionId:config.sessionId, role:'sender', turnId:turn.id, stage:'captured' });
           if (autoForward && !paused) postTurn(turn);
           else held.push(turn);
-        }
+        },
+        initialSeen:senderState.initialSeen || [],
+        onSeenChange:typeof senderState.onSeenChange === 'function' ? senderState.onSeenChange : () => {}
       });
       port.onMessage.addListener(message => {
         if (message?.type !== 'control') return;
@@ -50,7 +52,7 @@ export function createSimpleContentRuntime({ config, adapter, port } = {}) {
           postTurn({ id:`gather:${members.map(value => value.id).join('+')}`, text:members.map(value => value.text).join('\n') });
         }
       });
-      sender.prime();
+      if (senderState.resumed) void sender.scan(); else sender.prime();
       return;
     }
 

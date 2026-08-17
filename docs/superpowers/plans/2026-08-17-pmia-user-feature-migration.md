@@ -171,3 +171,68 @@ A complete run must show: real three-window route PASS, two-window route PASS, a
 - **Interface consistency:** `ui_command` owns window/end actions, role `inspect_request` owns one-shot page inspection, markers are metadata-only, and no new interface wraps or replaces delivery primitives.
 - **Scope check:** all migrated features share the same active-session/cockpit contract; no separate subsystem needs an independent spec.
 - **Authorization check:** Edge deployment is in scope; dirty `main` is read-only; no new staging/commit/push is planned.
+## 2026-08-17 production-parity rework update
+
+### Revised production model
+- Three-window mode is the default production topology: W1 source, W2 answer lane A, W3 answer lane B.
+- W2 and W3 are peers. The legacy internal role name `comparison` does not imply lower priority or best-effort behavior.
+- W2/W3 must share the same FIFO, reconnect replay, rendered-proof success rule, inspection, markers, export, window tools, and performance budget.
+- Either answer lane may use ChatGPT or Claude.
+- Two-window mode remains a supported fallback, not the primary design target.
+
+### Focused submit invariant
+- Keyboard submit is allowed only when the intended provider composer is the focused editable target.
+- Never send Enter to browser chrome, another control, another window, or an unrelated editable.
+- Provider-native submit/form APIs are preferred when they operate on the exact verified composer.
+- Terminal success remains a new rendered user turn containing the exact text.
+
+### Revised implementation order
+1. Persist `docs/PMIA_REWORK_OPERATING_RULES.md` and keep it current for future agents.
+2. Finish current ChatGPT compatibility work: MAIN-world ProseMirror/React write, submit fallback, and PMIA-stale-draft cleanup on sender startup only.
+3. Audit the active graph for any receiver/comparison asymmetry; remove W3 best-effort semantics and enforce production parity.
+4. Audit submit/focus behavior for ChatGPT and Claude; add the smallest provider-specific focus/submit guard needed.
+5. Reconcile selected 0.11 user-facing features against the migration matrix; do not restore retired control-plane machinery.
+6. Verify performance/complexity budgets after the implementation batch rather than after every edit.
+7. Run full automated gates, isolated provider/MV3 smokes, then real three-window acceptance; run two-window acceptance afterward.
+8. Sync the persistent 0.12 deployment, keep 0.11 rollback, clean task-created artifacts, and produce the final HTML report.
+
+### Plan review — correctness
+- Boot context must never be routed through W1.
+- W1 must start with a clean composer; cleanup is allowed only for the exact known PMIA setup-prefix residue.
+- W2 and W3 have identical terminal success semantics: provider-rendered exact user turn.
+- No queue/backend/composer-only state can be called delivered.
+
+### Plan review — performance
+- Keep the hot path browser-native: sender content runtime -> one long-lived MV3 port -> concurrent W2/W3 port writes.
+- Do not add AHK, clipboard, polling, analytics, export, markers, Review, or UI work before fan-out.
+- W2 and W3 start concurrently; a slow lane cannot delay the other lane.
+- Provider readiness/submit waits are role-local only.
+- Measure PMIA capture/fan-out/delivery separately from model generation latency.
+
+### Plan review — simplicity/debuggability
+- Preserve one owner for capture, fan-out, role FIFO, provider delivery, and rendered proof.
+- No new global sequence, batch planner, Runtime Pilot, resync engine, recovery scheduler, or duplicate ledger.
+- Keep the diagnostic path to six stages: captured, fanout, composer_written, submitted, rendered, failed.
+- Add no new background timer except the cockpit-local elapsed-time clock already accepted.
+- Prefer deleting/stopping stale code paths over wrapping them with compatibility layers.
+
+### Current checkpoint
+- Existing live provider compatibility fixes are in the working tree and previously passed the release gate.
+- One failing TDD regression remains intentionally red: sender startup does not yet clear an exact PMIA legacy setup draft.
+- Implementation resumes at that regression, followed by W2/W3 production-parity audit.
+
+## 2026-08-17 execution status
+- [x] Persist durable PMIA rework operating rules for future agents.
+- [x] Current ChatGPT ProseMirror/React write compatibility fixed and production entry covered.
+- [x] ChatGPT no-Send-button form submission fallback live-proven.
+- [x] Claude Tiptap write + Enter fallback live-proven; keyboard fallback now verifies composer focus and fails closed otherwise.
+- [x] Legacy PMIA setup draft is cleared only on ChatGPT W1 startup and only for the exact PMIA setup prefix; arbitrary drafts are preserved.
+- [x] W2/W3 parity audited: same concurrent fan-out, FIFO, reconnect replay, boot proof, Review, export, window tools, and terminal rendered-proof rule.
+- [x] W3 promoted in product semantics; Studio defaults to W3 enabled and labels Off only as a two-window fallback.
+- [x] Cockpit/export use Window 1 / Window 2 / Window 3 user-facing labels.
+- [x] Duplicate terminal rendered log entries removed; delivery remains single-owner.
+- [x] Full active 0.12 release gate passes after final implementation batch.
+- [x] Real three-window Stable Edge acceptance passed with exact token rendered in W1, W2 Claude, and W3 ChatGPT.
+- [x] Real stage timing captured for PMIA vs provider settlement separation.
+- [ ] Sync final verified commit to persistent deployment and reload PMIA 0.12.
+- [ ] Generate final HTML migration/performance/feature report.

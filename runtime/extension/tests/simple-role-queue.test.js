@@ -52,3 +52,15 @@ test('receiver and comparison queues progress independently', async () => {
   releaseReceiver({ stage:'rendered' });
   assert.equal((await receiverPending).stage, 'rendered');
 });
+
+test('role queue does not duplicate successful rendered stage already emitted by delivery', async () => {
+  const stages = [];
+  const q = mod.createRoleQueue({
+    role:'receiver',
+    onStage:value => stages.push(value),
+    deliverOne:async () => ({ stage:'rendered', elapsedMs:12 })
+  });
+  const result = await q.push(turn('dedup'));
+  assert.equal(result.stage, 'rendered');
+  assert.equal(stages.filter(value => value.stage === 'rendered').length, 0);
+});

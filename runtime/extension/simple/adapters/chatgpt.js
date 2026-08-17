@@ -37,8 +37,14 @@ export function createSimpleChatGptAdapter({ doc = document, writeInMain } = {})
     verifyComposer(text) { return nodeText(composer()) === String(text ?? '').trim(); },
     submit() {
       const button = send();
-      if (!button || button.disabled) return false;
-      button.click?.();
+      if (button) {
+        if (button.disabled) return false;
+        button.click?.();
+        return true;
+      }
+      const form = composer()?.closest?.('form');
+      if (typeof form?.requestSubmit !== 'function') return false;
+      form.requestSubmit();
       return true;
     },
     verifyRenderedTurn(text, options) {

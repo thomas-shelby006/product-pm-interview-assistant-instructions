@@ -17,7 +17,7 @@ export function createRoleQueue({ role, deliverOne, onStage = () => {} } = {}) {
       const result = await deliverOne(turn);
       const normalized = { role, ...result };
       if (normalized.stage === 'rendered') terminal.set(key, normalized);
-      onStage({ ...normalized, turnId: turn.turnId });
+      else onStage({ ...normalized, turnId: turn.turnId });
       return normalized;
     } catch (error) {
       const result = { role, stage: 'failed', reason: String(error?.message || error) };

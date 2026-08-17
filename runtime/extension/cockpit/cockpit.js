@@ -207,10 +207,14 @@ async function exportSession() {
   downloadJson({
     exportedAt:new Date().toISOString(),
     version:snapshot.version || '0.12.0',
-    route:snapshot.meta?.roles || {},
+    route:{
+      window1:snapshot.meta?.roles?.sender || null,
+      window2:snapshot.meta?.roles?.receiver || null,
+      window3:snapshot.meta?.roles?.comparison || null
+    },
     readiness,
     summary:data?.summary || buildSessionSummary(snapshot),
-    answerMetrics:{ receiver:inspection.receiver?.metrics || null, comparison:inspection.comparison?.metrics || null },
+    answerMetrics:{ window2:inspection.receiver?.metrics || null, window3:inspection.comparison?.metrics || null },
     markers:data?.markers || [],
     inspectionAvailable:Boolean(data),
     trace:snapshot

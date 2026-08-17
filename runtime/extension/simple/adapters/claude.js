@@ -33,8 +33,18 @@ export function createSimpleClaudeAdapter({ doc = document, writeInMain } = {}) 
     verifyComposer(text) { return nodeText(composer()) === String(text ?? '').trim(); },
     submit() {
       const button = send();
-      if (!button || button.disabled) return false;
-      button.click?.();
+      if (button) {
+        if (button.disabled) return false;
+        button.click?.();
+        return true;
+      }
+      const node = composer();
+      const Keyboard = doc?.defaultView?.KeyboardEvent || globalThis.KeyboardEvent;
+      if (!node || typeof Keyboard !== 'function' || typeof node.dispatchEvent !== 'function') return false;
+      node.focus?.();
+      if (doc?.activeElement && doc.activeElement !== node) return false;
+      const event = new Keyboard('keydown', { key:'Enter', code:'Enter', bubbles:true, cancelable:true });
+      node.dispatchEvent(event);
       return true;
     },
     verifyRenderedTurn(text, options) {

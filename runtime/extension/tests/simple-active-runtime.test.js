@@ -54,3 +54,18 @@ test('provider runtime reconnects roles after an MV3 worker port disconnect with
   assert.match(browserEntry, /onReconnect[\s\S]*type:'register'/);
   assert.doesNotMatch(browserEntry, /setInterval|setTimeout\([^)]*register/i);
 });
+test('browser entry clears stale PMIA setup draft only for ChatGPT sender startup', () => {
+  assert.match(browserEntry, /config\.role === 'sender'/);
+  assert.match(browserEntry, /config\.provider === 'chatgpt'/);
+  assert.match(browserEntry, /clearStaleSetup/);
+  assert.match(browserEntry, /You are a Product Manager interview assistant\./);
+});
+
+test('sender navigation state is session-scoped and resumes by scanning instead of re-priming', () => {
+  assert.match(browserEntry, /pmia_simple_sender_seen_v1/);
+  assert.match(browserEntry, /pmia_simple_sender_started_v1/);
+  assert.match(browserEntry, /sessionStorage/);
+  assert.match(browserEntry, /senderState/);
+  assert.match(browserEntry, /initialSeen/);
+  assert.match(browserEntry, /onSeenChange/);
+});

@@ -7,8 +7,11 @@ import { waitForProviderReady } from './readiness.js';
 import { createResilientPort } from './live-port.js';
 
 const CONFIG_KEY = 'pmia_simple_config_v1';
+const SENDER_SEEN_PREFIX = 'pmia_simple_sender_seen_v1';
+const SENDER_STARTED_PREFIX = 'pmia_simple_sender_started_v1';
 const VALID_ROLES = new Set(['sender','receiver','comparison']);
 const VALID_PROVIDERS = new Set(['chatgpt','claude']);
+const PMIA_SETUP_PREFIX = 'You are a Product Manager interview assistant. Answer the interviewer directly in first person using only the supplied candidate/job context.';
 
 function parseUrlConfig(href) {
   const url = new URL(href);
@@ -34,6 +37,29 @@ function loadConfig(win) {
   return null;
 }
 
+function loadSenderState(config, win) {
+  if (config.role !== 'sender') return {};
+  const seenKey = `${SENDER_SEEN_PREFIX}:${config.sessionId}`;
+  const startedKey = `${SENDER_STARTED_PREFIX}:${config.sessionId}`;
+  let initialSeen = [];
+  let resumed = false;
+  try {
+    resumed = win.sessionStorage.getItem(startedKey) === '1';
+    const stored = JSON.parse(win.sessionStorage.getItem(seenKey) || '[]');
+    initialSeen = Array.isArray(stored)
+      ? stored.map(value => String(value || '').trim()).filter(Boolean).slice(-500)
+      : [];
+    win.sessionStorage.setItem(startedKey, '1');
+  } catch {}
+  return {
+    resumed,
+    initialSeen,
+    onSeenChange(keys) {
+      try { win.sessionStorage.setItem(seenKey, JSON.stringify(Array.from(keys || []).slice(-500))); }
+      catch {}
+    }
+  };
+}
 function adapterFor(config, doc, win) {
   if (config.provider === 'claude') {
     const bridge = createClaudeWriteBridge(win);
@@ -67,11 +93,15 @@ export async function startSimpleBrowserRuntime({ win = window, doc = document, 
     doc.title = `PMIA NOT READY · ${config.provider.toUpperCase()} · ${config.sessionId}`;
     return { config, error:'provider_not_ready' };
   }
+  if (config.role === 'sender' && config.provider === 'chatgpt') {
+    await createChatGptWriteBridge(win).clearStaleSetup(PMIA_SETUP_PREFIX);
+  }
+  const senderState = loadSenderState(config, win);
   const port = createResilientPort({
     connect:() => chromeApi.runtime.connect({ name:'pmia-simple' }),
     onReconnect:raw => raw.postMessage({ type:'register', ...config })
   });
-  const runtime = createSimpleContentRuntime({ config, adapter, port });
+  const runtime = createSimpleContentRuntime({ config, adapter, port, senderState });
   runtime.start();
   const observer = config.role === 'sender' ? installSenderObserver(win, doc, runtime) : null;
   doc.documentElement.dataset.pmiaSimpleRole = config.role;

@@ -37,3 +37,11 @@ test('Studio opens a fresh MV3 port for each launch request instead of keeping a
   assert.match(requestBody, /onDisconnect/);
   assert.match(requestBody, /port\.disconnect/);
 });
+test('Studio treats Window 3 as production-default and labels Off as fallback', () => {
+  const html = read('index.html');
+  const w3 = html.match(/<label>Window 3<select id="comparisonProvider">([\s\S]*?)<\/select><\/label>/i)?.[1] || '';
+  assert.match(w3, /<option value="chatgpt">ChatGPT<\/option>/i);
+  assert.match(w3, /<option value="claude">Claude<\/option>/i);
+  assert.match(w3, /Off · two-window fallback/i);
+  assert.ok(w3.indexOf('value="chatgpt"') < w3.indexOf('value=""'));
+});

@@ -78,3 +78,20 @@ test('answer inspection returns metrics without raw answer text', () => {
   assert.equal(result.result.metrics.wordCount, 4);
   assert.equal('text' in result.result, false);
 });
+
+test('resumed sender scans current DOM instead of baselining first live turn', async () => {
+  const port = fakePort();
+  const adapter = { readUserTurns:() => [{ id:'first-live', text:'Activation metric?' }] };
+  const runtime = mod.createSimpleContentRuntime({
+    config:{ sessionId:'s-nav', role:'sender', provider:'chatgpt' },
+    adapter,
+    port,
+    senderState:{ resumed:true, initialSeen:[] }
+  });
+  runtime.start();
+  await new Promise(resolve => setImmediate(resolve));
+  const captured = port.sent.find(value => value.type === 'stage' && value.stage === 'captured');
+  const turn = port.sent.find(value => value.type === 'turn');
+  assert.equal(captured?.turnId, 'first-live');
+  assert.equal(turn?.turn?.turnId, 'first-live');
+});

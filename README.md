@@ -1,45 +1,55 @@
-# PM Interview Assistant 0.11.0
+# PM Interview Assistant 0.12
 
-This repository is the only editable and deployed PMIA application source on this machine.
+PMIA 0.12 is the simplified three-window interview runtime.
 
-## Current runtime
+## Read first
+Before editing or testing PMIA, read:
+1. `docs/PMIA_REWORK_OPERATING_RULES.md`
+2. `docs/superpowers/specs/2026-08-17-pmia-user-feature-migration-design.md`
+3. `docs/superpowers/plans/2026-08-17-pmia-user-feature-migration.md`
 
-- `runtime/extension/` is the Microsoft Edge Manifest V3 extension loaded as an unpacked extension.
-- `runtime/Final_2_Window_Extension.ahk` launches and arranges the sender, receiver, and Runtime Pilot Dashboard.
-- `runtime/Session_Tracker_End_Session.ahk` exports a completed session and writes it to the private tracker under `.local/session-tracker`.
-- `project_source_files/` contains the canonical interview-answer knowledge sources.
-- `project_upload_bundle/` contains the curated files uploaded to the ChatGPT Project.
-- `review_lab_project/` contains the current post-session review instructions.
+The operating-rules file is the durable user-preference contract for future agents.
 
-## Operating model
+## Production topology
+- Window 1: source/transcription provider.
+- Window 2: production answer lane A.
+- Window 3: production answer lane B.
+- Window 2 and Window 3 have equal priority, delivery semantics, retry behavior, proof requirements, Review/export features, and performance expectations.
+- The internal role token `comparison` is retained only for compatibility; it does not mean lower-priority delivery.
 
-The sender content runtime observes provisional transcript text and authoritative final questions. Provisional text is disposable. Each authoritative final is persisted through the service worker before the sender releases ownership. The receiver maintains an immutable active batch and a mutable next batch. It submits only when policy allows and considers a delivery successful only after a matching provider-rendered user turn appears.
+## Core runtime
+The active hot path is intentionally small:
 
-The Runtime Pilot Dashboard reads the same authoritative state used by the service worker and content runtimes. Pause, catch-up, selected send, submit-now, repair, archive, diagnostics, and shutdown all use shared commands rather than independent UI-only state.
+`W1 rendered user turn -> long-lived MV3 port -> concurrent W2/W3 fan-out -> per-role FIFO -> provider-native write -> real submit -> rendered user-turn proof`
 
-## Start
+A queue/backend receipt or visible composer fill is not success.
 
-1. Open `edge://extensions` in Microsoft Edge.
-2. Enable Developer mode.
-3. Load `runtime/extension` as an unpacked extension, or select Reload after source changes.
-4. Run `runtime/Final_2_Window_Extension.ahk`.
-5. In Session Studio, select the Edge profile and run Preflight.
-6. Launch only when PMIA 0.11.0 is registered from the expected repository path.
+The active runtime does not use Runtime Pilot, global sequence gaps, batch planner, recovery scheduler, or an outbox state machine. Reconnect recovery retries only unresolved work for the role that disconnected.
 
-## Verify
+## User surfaces
+- `runtime/extension/studio/` — web Session Studio and provider route selection.
+- `runtime/extension/cockpit/` — compact bottom dock with Auto/Gather, Pause, Send gathered, Export, and Tools/Help.
+- Review, markers, display preferences, safe End Session, window focus/restore, and answer-size estimates stay outside the delivery hot path.
 
-Run from the repository root:
+## AutoHotkey
+`runtime/Final_2_Window_Extension.ahk` is an optional small Studio bootstrap. AutoHotkey is not part of live question delivery.
+
+## Verification
+From the repository root:
 
 ```powershell
+npm test
+npm run validate
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-This runs the complete Node test suite, JavaScript reachability validation, and AutoHotkey validation.
+Final release evidence must also include isolated MV3 transport/reconnect and provider write/submit/render smokes plus real provider acceptance when authenticated sessions are available.
 
-## Private local data
+## Deployment and rollback
+- Develop on `feature/pmia-simple-runtime`; preserve dirty `main` unless explicitly instructed otherwise.
+- The persistent 0.12 deployment copy is `runtime/extension/__pmia012_deploy` under the preserved main repository.
+- Keep PMIA 0.11 installed but disabled until 0.12 acceptance is complete.
+- Never clear cookies, tokens, provider authentication, browser profiles, or unrelated tabs/windows as part of PMIA deployment or verification.
 
-`.local/` is intentionally ignored by Git. The private session tracker lives at `.local/session-tracker`. Resume, job description, notes, prompts, answers, and active session state are not committed to the application repository.
-
-## Technical guide
-
-Open `docs/PMIA_0.11.0_RELEASE_AND_ANALYTICS_REPORT.html` for the current 0.11.0 feature, analytics, transport, deployment, verification, and operating report. `docs/PMIA_CURRENT_SYSTEM_TECHNICAL_GUIDE.html` remains the 0.10.4 architecture baseline.
+## Private data
+Do not commit Resume, JD, prompts, answers, cookies, credentials, tokens, or active provider-session content. PMIA persistent diagnostics are bounded metadata only.
