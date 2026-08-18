@@ -367,3 +367,16 @@ A complete run must show: real three-window route PASS, two-window route PASS, a
 - [x] Existing live three-window and two-window acceptance evidence remains valid because this final pass changed only test-runner verification metadata, not production runtime code.
 
 **Final product decision:** the approved user-facing migration is complete. No additional 0.11 feature should be ported unless a new concrete user requirement demonstrates enough value to justify another runtime owner, timer, state machine, or hot-path dependency.
+
+## Robustness / anomaly pass - 2026-08-18 08:00 IST
+
+- [x] Five deterministic stress seeds passed against production modules: 5,000 fan-outs, 1,500 FIFO deliveries with deliberate duplicates, 500 one-lane failure/reconnect turns, 750 writer/submit retry cases, 600 readiness cases, 100 Gather/Pause turns, and 10,000 cross-lane deliveries across 200 simulated sessions.
+- [x] Ten repeated MV3 transport/reconnect browser cycles passed before the fix; five additional post-fix cycles passed. Observed W2/W3 dispatch skew remained 0-1.6 ms in MV3 repeats; core stress worst start skew was 2.624 ms under Windows timer load.
+- [x] Provider-role parity matrix passed: Claude/ChatGPT, ChatGPT/Claude, ChatGPT/ChatGPT, Claude/Claude; three runs per pairing before the fix and a post-fix route sweep all passed.
+- [x] Two-window browser matrix passed for both Claude and ChatGPT receivers: five runs per vendor before the fix and a post-fix sweep passed.
+- [x] Mixed input-shape browser burst passed after repair: 20 rapid W1 turns including multiline, Unicode, punctuation-heavy, 1,500-character and normal burst inputs reached both answer lanes in exact order with 20/20 rendered proof. Two additional runs passed in 266 ms and 333 ms.
+- [x] Real defect found and fixed: shared `nodeText()` collapsed meaningful line breaks via `/\s+/g`. The extractor now preserves CR/LF structure, normalizes only horizontal whitespace, and chooses the semantically-equivalent DOM representation with richer line boundaries.
+- [x] Added permanent multiline/blank-line/equivalent-representation regression coverage. Active suite is now 151/151.
+- [x] Integrated release gate passed after the repair: validator 32 active JS files / 10 required surfaces / 27 reachable modules; production budget 37 files / 2,290 lines.
+- [x] One repeated provider-smoke cycle ended with Windows fail-fast and left one disposable temp profile; the failure did not reproduce in five standalone runs and produced no PMIA/WER assertion evidence. Classified as isolated test-process lifecycle noise, not a product delivery failure.
+- [x] Final authenticated multiline rerun was not forced because Browser Evidence Capture's companion was healthy but its browser-control extension was disconnected; its supported recovery tool explicitly required browser extension enable/reload. Existing authenticated three-window/two-window evidence remains preserved, and no cookies/session state were altered.

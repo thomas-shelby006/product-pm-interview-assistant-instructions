@@ -1,10 +1,23 @@
 export function nodeText(node) {
   if (!node) return '';
-  for (const value of [node.value, node.innerText, node.textContent]) {
-    const text = String(value ?? '').replace(/\s+/g, ' ').trim();
-    if (text) return text;
+  const normalize = value => String(value ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .trim();
+  const candidates = [node.value, node.innerText, node.textContent]
+    .map(normalize)
+    .filter(Boolean);
+  if (!candidates.length) return '';
+  let best = candidates[0];
+  const semantic = value => value.replace(/\s+/g, ' ').trim();
+  for (const candidate of candidates.slice(1)) {
+    if (semantic(candidate) !== semantic(best)) continue;
+    const candidateLines = (candidate.match(/\n/g) || []).length;
+    const bestLines = (best.match(/\n/g) || []).length;
+    if (candidateLines > bestLines) best = candidate;
   }
-  return '';
+  return best;
 }
 
 export function first(doc, selectors) {

@@ -128,11 +128,11 @@ section{background:var(--panel);border:1px solid var(--line);border-radius:9px;p
 </section>
 <section id="verification"><h2>Verification evidence</h2>
 <div class="grid">
-<div class="metric"><b>148 / 148</b><span>active Node contracts passed</span></div>
+<div class="metric"><b>151 / 151</b><span>active Node contracts passed</span></div>
 <div class="metric"><b>32 JS</b><span>active JavaScript files validated</span></div>
 <div class="metric"><b>10</b><span>required runtime surfaces</span></div>
 <div class="metric"><b>27</b><span>reachable active modules</span></div>
-<div class="metric"><b>37 / 2,311</b><span>active files / lines vs 45 / 2,500 budget</span></div>
+<div class="metric"><b>37 / 2,290</b><span>active files / lines vs 45 / 2,500 budget</span></div>
 <div class="metric"><b>Exit 0</b><span>integrated release gate</span></div>
 </div>
 <ul>
@@ -145,7 +145,7 @@ section{background:var(--panel);border:1px solid var(--line);border-radius:9px;p
 <li>The focus guard was also exercised negatively: when Windows reported ChatGPT’s sidebar Search box instead of the prompt composer, PMIA test automation aborted before typing or pressing Enter.</li>
 <li><code>git diff --check</code> reported no whitespace errors; only Windows line-ending notices were present.</li>
 </ul>
-<h3>What the timing does not mean</h3>
+<h3>Robustness and anomaly pass</h3><ul><li><strong>Five deterministic stress seeds passed</strong>: 5,000 fan-outs, 1,500 FIFO deliveries with deliberate duplicates, 500 one-lane failure/reconnect turns, 750 writer/submit retry cases, 600 readiness cases, 100 Gather/Pause turns, and 10,000 cross-lane deliveries.</li><li><strong>Provider topology coverage passed</strong>: Claude/ChatGPT, ChatGPT/Claude, ChatGPT/ChatGPT, Claude/Claude, plus two-window Claude and ChatGPT receiver modes.</li><li><strong>Mixed-shape burst passed</strong>: 20 rapid W1 turns including multiline, Unicode, punctuation-heavy and 1,500-character text reached W2/W3 in exact order with 20/20 rendered proof.</li><li><strong>Defect repaired</strong>: the shared DOM text extractor flattened line breaks. It now preserves line boundaries while still normalizing horizontal whitespace; permanent regressions cover multiline and blank-line Gather inputs.</li><li>One disposable provider-smoke process ended with a Windows fail-fast during repeated forced Edge teardown. It did not reproduce in five standalone runs and no product assertion or Windows Error Reporting evidence implicated PMIA.</li></ul><h3>What the timing does not mean</h3>
 <p>The sub-second W2/W3 rendered times measure PMIA write/submit/render settlement for the question turn. They do not measure how long ChatGPT or Claude takes to generate the answer. Model generation remains external to PMIA transport.</p>
 </section>
 <section id="deployment"><h2>Deployment, Git and rollback</h2>
