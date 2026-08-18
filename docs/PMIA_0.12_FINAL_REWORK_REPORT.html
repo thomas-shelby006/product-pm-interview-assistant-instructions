@@ -136,9 +136,11 @@ section{background:var(--panel);border:1px solid var(--line);border-radius:9px;p
 <div class="metric"><b>Exit 0</b><span>integrated release gate</span></div>
 </div>
 <ul>
-<li>MV3 transport/reconnect smoke passed: concurrent role dispatch, role-local replay, no duplicate replay of the already-rendered lane.</li>
-<li>Provider-native isolated Edge fixture passed for current ChatGPT and Claude writer/submit/render contracts.</li>
+<li>Fresh 18 Aug final gate passed: <strong>148/148</strong> active tests, 0 failures. Timing-sensitive contracts are now run deterministically with <code>--test-concurrency=1</code>; this changes verification scheduling only, not PMIA runtime behavior.</li>
+<li>MV3 transport/reconnect smoke passed: concurrent role dispatch, role-local replay, no duplicate replay of the already-rendered lane; final W2/W3 dispatch skew was <strong>0.8 ms</strong>.</li>
+<li>Provider-native isolated Edge fixture passed for current ChatGPT and Claude writer/submit/render contracts: Claude <strong>1330 ms</strong>, ChatGPT <strong>1364 ms</strong>, render skew <strong>34 ms</strong>.</li>
 <li>Live Stable Edge three-window route passed with the exact same token rendered in all three provider tabs.</li>
+<li>Live two-window fallback also passed with Window 3 Off: session <code>pmia_2win_msx4mmov_dvmgh</code>, token <code>PMIA_2WIN_1786964673631</code>. W1 focus was verified as <code>AutomationId=prompt-textarea</code> before typing and re-verified before Enter; W2 Claude reached composer-written, submitted, and rendered proof for the same turn. Capture→fan-out was <strong>0 ms</strong>; capture→W2 rendered proof was <strong>1,333 ms</strong>; role-local delivery was <strong>1,329.5 ms</strong>.</li>
 <li>ChatGPT stale setup draft cleanup was verified live: W1 opened with an empty composer without clearing browser storage or unrelated drafts.</li>
 <li>The focus guard was also exercised negatively: when Windows reported ChatGPT’s sidebar Search box instead of the prompt composer, PMIA test automation aborted before typing or pressing Enter.</li>
 <li><code>git diff --check</code> reported no whitespace errors; only Windows line-ending notices were present.</li>
@@ -150,9 +152,10 @@ section{background:var(--panel);border:1px solid var(--line);border-radius:9px;p
 <ul>
 <li><strong>Feature branch:</strong> <code>feature/pmia-simple-runtime</code>.</li>
 <li><strong>Implementation commit:</strong> <code>debf89268e5b9a73d7499b0837bbeaad52187e83</code>.</li>
+<li><strong>Latest feature-branch HEAD:</strong> <code>c6623dc5b4620d4d4bad3fef64e40943b7556e9f</code> (documentation/report baseline before these final local documentation edits).</li>
 <li><strong>Installed 0.12 extension ID:</strong> <code>ldhkaojbodiibhhdllkiffbcfhofiimk</code>.</li>
 <li><strong>Persistent deployment path:</strong> <code>C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\runtime\extension\__pmia012_deploy</code>.</li>
-<li>The current Edge profile reports that deployment with no disable reason.</li>
+<li><strong>Durable accepted installation:</strong> Edge Beta Default profile reports PMIA <code>0.12.0</code> at the exact deployment path with no disable reasons and a started service worker. Stable Edge/Outlook was intentionally left untouched during the final fallback acceptance.</li>
 <li>Dirty <code>main</code> was not merged, rebased, reset, or overwritten.</li>
 <li>The old 0.11 source remains preserved. Edge still contains the previous 0.11 extension ID <code>cgjddhagnfjdoncphajinaacjfodhpen</code>, but its unpacked path is not populated in the current Secure Preferences; therefore source rollback is preserved, while a one-click current-profile unpacked rollback should not be assumed until that old path is reloaded explicitly.</li>
 </ul>
@@ -191,5 +194,5 @@ section{background:var(--panel);border:1px solid var(--line);border-radius:9px;p
 </tbody></table></div>
 </section>
 </main></div>
-<footer><strong>PMIA 0.12 Final Rework Report</strong> · Generated 17 Aug 2026 · Based on verified repository state, installed Edge registration, active test gates and the live three-window acceptance described above.</footer>
+<footer><strong>PMIA 0.12 Final Rework Report</strong> · Updated 18 Aug 2026 · Based on verified repository state, durable Edge Beta registration, active release gates, live three-window acceptance and live two-window fallback acceptance.</footer>
 </body></html>

@@ -8,7 +8,7 @@ const gate = fs.readFileSync(new URL('runtime/Validate_Extension_Runtime.ps1', r
 const validator = fs.readFileSync(new URL('runtime/extension/scripts/validate-extension.mjs', repo), 'utf8');
 
 test('default repository test command targets active 0.12 tests only', () => {
-  assert.equal(pkg.scripts.test, 'node --test runtime/extension/tests/simple-*.test.js');
+  assert.equal(pkg.scripts.test, 'node --test --test-concurrency=1 runtime/extension/tests/simple-*.test.js');
 });
 
 test('release gate validates only the active extension and optional AHK bootstrap', () => {
