@@ -29,8 +29,8 @@ test('0.12 Windows runtime has no retired platform or review AHK owners', () => 
   }
 });
 
-test('0.12 runtime scripts contain only the two active isolated smoke runners', () => {
+test('0.12 runtime scripts contain only the two isolated fixture smokes and the read-only live readiness probe', () => {
   const scripts = new URL('../../scripts/', import.meta.url);
   const names = fs.readdirSync(scripts).sort();
-  assert.deepEqual(names, ['run-simple-isolated-smoke.mjs','run-simple-provider-fixture-smoke.mjs']);
+  assert.deepEqual(names, ['run-simple-isolated-smoke.mjs','run-simple-live-readiness-smoke.mjs','run-simple-provider-fixture-smoke.mjs']);
 });

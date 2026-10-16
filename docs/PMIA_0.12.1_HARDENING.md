@@ -41,3 +41,14 @@ Run `npm test`, `npm run validate`, and `runtime/Validate_Extension_Runtime.ps1`
 ### Known design limit
 
 An external provider can accept a Send click immediately before a page/worker failure. Without an idempotency API, that outcome is inherently uncertain. PMIA favors surfacing uncertainty over silently losing or duplicating a question.
+
+
+## October 16 final deployment acceptance
+
+- Unpacked deployment folder checked against the source worktree: 80 matching files, zero differences.
+- The **deployment folder itself** passed isolated Edge transport/reconnect and both provider fixture tests.
+- The Windows launcher was repaired to load the extension before opening its Studio URL. A brand-new scratch Edge profile opened an actual `PMIA Studio` window, confirmed through native UI automation.
+- Desktop shortcut: `PMIA Studio (0.12.1)`.
+- Live public-provider read-only probe: a clean, unauthenticated ChatGPT page showed a login prompt and no composer; Claude redirected to `/login`. Therefore **authenticated end-to-end sending is not verified** and cannot be represented as a passing production acceptance test.
+- The user's existing Edge Stable profile and their dirty 0.11 main worktree were left intact. The PMIA-specific browser profile lives under `%LOCALAPPDATA%\PMInterviewAssistant\EdgeProfile` and is ready for a manual provider sign-in.
+- For reproducibility: `node runtime/scripts/run-simple-live-readiness-smoke.mjs`, `runtime/Launch_PMIA_Studio.ps1 -ValidateOnly`, and `runtime/Validate_Extension_Runtime.ps1`.

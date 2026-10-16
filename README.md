@@ -53,3 +53,8 @@ Final release evidence must also include isolated MV3 transport/reconnect and pr
 
 ## Private data
 Do not commit Resume, JD, prompts, answers, cookies, credentials, tokens, or active provider-session content. PMIA persistent diagnostics are bounded metadata only.
+
+
+## Launching the verified 0.12.1 Windows deployment
+
+Use the desktop shortcut `PMIA Studio (0.12.1)` or `powershell -NoProfile -ExecutionPolicy Bypass -File runtime/Launch_PMIA_Studio.ps1`. The launcher opens a separate persistent Edge profile and loads the verified `__pmia012_deploy` extension. See `runtime/PMIA_LOCAL_DEPLOYMENT.md` for manual provider sign-in and live acceptance requirements.

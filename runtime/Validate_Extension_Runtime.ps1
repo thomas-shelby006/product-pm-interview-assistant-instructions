@@ -62,7 +62,7 @@ try {
 
     Test-AutoHotkeyBootstrap -Path $launcher
 
-    Write-Host 'PMIA 0.12 active runtime validation passed.'
+    Write-Host 'PMIA 0.12.1 active runtime validation passed.'
     Write-Host "Extension: $extension"
     Write-Host "Studio:    $(Join-Path $extension 'studio\index.html')"
     Write-Host "Cockpit:   $(Join-Path $extension 'cockpit\index.html')"

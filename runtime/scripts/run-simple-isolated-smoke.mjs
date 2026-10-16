@@ -5,7 +5,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const runtimeDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const extensionDir = resolve(runtimeDir, 'extension');
+const extensionDir = resolve(process.env.PMIA_EXTENSION_DIR || resolve(runtimeDir, 'extension'));
 const edge = process.env.PMIA_EDGE || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const port = 9400 + Math.floor(Math.random() * 400);
 const profile = await mkdtemp(join(tmpdir(), 'pmia-012-smoke-'));
