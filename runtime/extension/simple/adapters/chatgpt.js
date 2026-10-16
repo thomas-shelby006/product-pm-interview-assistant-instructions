@@ -1,4 +1,4 @@
-import { first, latest, nodeText, waitForDom } from '../dom.js';
+import { first, latest, nodeText, waitForDom, uniqueNodes } from '../dom.js';
 
 const COMPOSER = ['#prompt-textarea','textarea[name="prompt-textarea"]','div[contenteditable="true"][role="textbox"]'];
 const SEND = ['button[aria-label="Send prompt"]','button[data-testid="send-button"]','button[aria-label^="Send"]'];
@@ -12,17 +12,15 @@ function cleanUser(text) {
 export function createSimpleChatGptAdapter({ doc = document, writeInMain } = {}) {
   const composer = () => first(doc, COMPOSER);
   const send = () => first(doc, SEND);
-  const renderedUserText = () => cleanUser(latest(doc, USER)?.text || '');
+  const matchingNodes = text => uniqueNodes(doc, USER).filter(node => cleanUser(nodeText(node)) === text);
   const readUserTurns = () => {
     const result = [];
-    for (const selector of USER) {
-      for (const node of Array.from(doc?.querySelectorAll?.(selector) || [])) {
+    for (const node of uniqueNodes(doc, USER)) {
         const text = cleanUser(nodeText(node));
         if (!text) continue;
         const id = String(node.getAttribute?.('data-turn-id') || node.getAttribute?.('data-message-id') || node.id || '').trim();
-        if (result.some(item => item.id && item.id === id)) continue;
+        if (id && result.some(item => item.id === id)) continue;
         result.push({ id:id || `chatgpt-user-${result.length + 1}`, text });
-      }
     }
     return result;
   };
@@ -47,9 +45,10 @@ export function createSimpleChatGptAdapter({ doc = document, writeInMain } = {})
       form.requestSubmit();
       return true;
     },
-    verifyRenderedTurn(text, options) {
+    renderedBaseline(text) { return new Set(matchingNodes(String(text ?? '').trim())); },
+    verifyRenderedTurn(text, { baseline = new Set(), ...options } = {}) {
       const expected = String(text ?? '').trim();
-      return waitForDom(() => renderedUserText() === expected, { root:doc.documentElement, ...options });
+      return waitForDom(() => matchingNodes(expected).some(node => !baseline.has(node)), { root:doc.documentElement, ...options });
     },
     readUserTurns,
     readLatestAssistantText() { return String(latest(doc, ASSISTANT)?.text || '').trim(); },

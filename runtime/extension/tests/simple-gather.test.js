@@ -6,7 +6,10 @@ function port() {
   const listeners = [];
   return {
     sent:[],
-    postMessage(value) { this.sent.push(value); },
+    postMessage(value) {
+      this.sent.push(value);
+      if (value.type === 'turn') queueMicrotask(() => this.emit({ type:'turn_accepted', turnId:value.turn.turnId, accepted:true }));
+    },
     onMessage:{ addListener(fn) { listeners.push(fn); } },
     emit(value) { listeners.forEach(fn => fn(value)); }
   };

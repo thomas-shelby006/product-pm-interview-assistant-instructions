@@ -18,7 +18,7 @@ test('a failed role delivery is retryable after the role reconnects', async () =
   let attempts = 0;
   c.register({ sessionId:'s1', role:'receiver', provider:'claude', deliver:async () => {
     attempts += 1;
-    return attempts === 1 ? { stage:'failed', reason:'disconnected' } : { stage:'rendered' };
+    return attempts === 1 ? { stage:'failed', reason:'composer_write_failed' } : { stage:'rendered' };
   }});
   const turn = { sessionId:'s1', turnId:'t1', text:'Q?', kind:'question' };
   const first = await c.dispatchTurn(turn);

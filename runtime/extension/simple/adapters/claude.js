@@ -1,4 +1,4 @@
-import { first, latest, nodeText, waitForDom } from '../dom.js';
+import { first, latest, nodeText, waitForDom, uniqueNodes } from '../dom.js';
 
 const COMPOSER = ['div[contenteditable="true"].ProseMirror','[contenteditable="true"][data-testid="chat-input"]'];
 const SEND = ['button[aria-label="Send message"]','button[data-testid="send-button"]','button[aria-label^="Send"]'];
@@ -10,16 +10,14 @@ export function createSimpleClaudeAdapter({ doc = document, writeInMain } = {}) 
   const composer = () => first(doc, COMPOSER);
   const send = () => first(doc, SEND);
   const cleanUser = value => String(value || '').replace(/^\s*You said:\s*/i, '').trim();
-  const renderedUserText = () => cleanUser(latest(doc, USER)?.text || '');
+  const matchingNodes = text => uniqueNodes(doc, USER).filter(node => cleanUser(nodeText(node)) === text);
   const readUserTurns = () => {
     const result = [];
-    for (const selector of USER) {
-      for (const node of Array.from(doc?.querySelectorAll?.(selector) || [])) {
+    for (const node of uniqueNodes(doc, USER)) {
         const text = cleanUser(nodeText(node));
         if (!text) continue;
         const id = String(node.getAttribute?.('data-message-id') || node.id || '').trim();
         result.push({ id:id || `claude-user-${result.length + 1}`, text });
-      }
     }
     return result;
   };
@@ -47,9 +45,10 @@ export function createSimpleClaudeAdapter({ doc = document, writeInMain } = {}) 
       node.dispatchEvent(event);
       return true;
     },
-    verifyRenderedTurn(text, options) {
+    renderedBaseline(text) { return new Set(matchingNodes(String(text ?? '').trim())); },
+    verifyRenderedTurn(text, { baseline = new Set(), ...options } = {}) {
       const expected = String(text ?? '').trim();
-      return waitForDom(() => renderedUserText() === expected, { root:doc.documentElement, ...options });
+      return waitForDom(() => matchingNodes(expected).some(node => !baseline.has(node)), { root:doc.documentElement, ...options });
     },
     readUserTurns,
     readLatestAssistantText() { return String(latest(doc, ASSISTANT)?.text || '').trim(); },

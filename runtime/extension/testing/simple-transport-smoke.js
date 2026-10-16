@@ -20,7 +20,7 @@ function rolePort(role, provider) {
     const shouldFail = role === 'comparison' && turnId === 'smoke-turn-2' && failComparisonTurn2;
     if (shouldFail) failComparisonTurn2 = false;
     port.postMessage({ type:'delivery_result', requestId:message.requestId,
-      result:{ role, stage:shouldFail ? 'failed' : 'rendered', elapsedMs:1 } });
+      result:{ role, stage:shouldFail ? 'failed' : 'rendered', reason:shouldFail ? 'composer_write_failed' : '', elapsedMs:1 } });
   });
   port.postMessage({ type:'register', sessionId, role, provider });
   return port;

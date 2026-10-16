@@ -30,6 +30,13 @@ Backend receipt, queue admission, composer fill, or click dispatch alone are not
 - Prefer provider-native submit/form APIs when they target the exact verified composer.
 - After submit, require the exact text to appear as a new rendered user turn.
 
+## 0.12.1 hardening
+- A question is marked seen only after the service worker acknowledges session-scoped, checkpointed acceptance.
+- Newly rendered provider user turns must be distinguished from pre-existing identical turns.
+- Uncertain submission outcomes are retained and surfaced rather than blindly auto-replayed.
+- Replaced ports must not be revoked by a late disconnect from an older connection.
+- Session-only receipt IDs and unresolved role checkpoints must remain bounded; do not put session text in Git.
+
 ## Delivery architecture rules
 - Keep AutoHotkey out of the live delivery hot path unless measurement proves it is faster and more reliable than browser-native delivery.
 - Preferred hot path: long-lived extension ports and provider-native page writers.

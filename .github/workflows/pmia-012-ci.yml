@@ -1,0 +1,24 @@
+name: PMIA 0.12 checks
+on:
+  push:
+    branches: [feature/pmia-simple-runtime]
+  pull_request:
+    paths:
+      - 'runtime/**'
+      - 'package.json'
+      - '.github/workflows/pmia-012-ci.yml'
+jobs:
+  extension-contracts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test active extension contracts
+        run: npm test
+      - name: Validate extension syntax and imports
+        run: npm run validate

@@ -1,6 +1,6 @@
-# PM Interview Assistant 0.12
+# PM Interview Assistant 0.12.1
 
-PMIA 0.12 is the simplified three-window interview runtime.
+PMIA 0.12.1 hardens the simplified three-window interview runtime.
 
 ## Read first
 Before editing or testing PMIA, read:
@@ -22,7 +22,7 @@ The active hot path is intentionally small:
 
 `W1 rendered user turn -> long-lived MV3 port -> concurrent W2/W3 fan-out -> per-role FIFO -> provider-native write -> real submit -> rendered user-turn proof`
 
-A queue/backend receipt or visible composer fill is not success.
+The sender retires a question only after the router has checkpointed intended answer-role deliveries and acknowledged acceptance. A question requires a newly rendered provider user turn for successful delivery; a queue receipt or composer fill is not success. An ambiguous attempt is held for manual inspection rather than automatically duplicated.
 
 The active runtime does not use Runtime Pilot, global sequence gaps, batch planner, recovery scheduler, or an outbox state machine. Reconnect recovery retries only unresolved work for the role that disconnected.
 

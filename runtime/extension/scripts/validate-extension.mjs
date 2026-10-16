@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await readFile(resolve(root, 'manifest.json'), 'utf8'));
 
-if (manifest.version !== '0.12.0') throw new Error(`Expected PMIA 0.12.0, found ${manifest.version}`);
+if (manifest.version !== '0.12.1') throw new Error(`Expected PMIA 0.12.1, found ${manifest.version}`);
 if (manifest.background?.service_worker !== 'simple/service-worker.js') {
   throw new Error('Active service worker must be simple/service-worker.js');
 }

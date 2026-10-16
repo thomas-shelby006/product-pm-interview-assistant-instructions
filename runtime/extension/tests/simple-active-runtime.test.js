@@ -9,7 +9,7 @@ const browserEntry = fs.readFileSync(new URL('simple/browser-entry.js', root), '
 const contentMain = fs.readFileSync(new URL('simple/content-main.js', root), 'utf8');
 
 test('PMIA 0.12 activates only the simple runtime entry points', () => {
-  assert.equal(manifest.version, '0.12.0');
+  assert.equal(manifest.version, '0.12.1');
   assert.equal(manifest.background.service_worker, 'simple/service-worker.js');
   const scripts = manifest.content_scripts.flatMap(value => value.js || []);
   assert.ok(scripts.includes('simple/content-main.js'));

@@ -21,6 +21,7 @@ export async function deliverTurn({
 
   if (!adapter || !turn?.text) return fail('invalid_delivery');
 
+  const baseline = adapter.renderedBaseline?.(turn.text) || new Set();
   const written = await waitForAsync(async () => {
     if (!(await adapter.write(turn.text))) return false;
     return Boolean(adapter.verifyComposer(turn.text));
@@ -37,7 +38,8 @@ export async function deliverTurn({
 
   const rendered = await adapter.verifyRenderedTurn(turn.text, {
     timeoutMs:renderTimeoutMs,
-    intervalMs:retryIntervalMs
+    intervalMs:retryIntervalMs,
+    baseline
   });
   if (!rendered) return fail('render_not_verified');
   const result = { stage:'rendered', elapsedMs:Math.max(0,(performance.now?.() ?? Date.now()) - started) };

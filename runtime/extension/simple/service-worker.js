@@ -8,6 +8,7 @@ import { buildSessionSummary } from './session-summary.js';
 import { normalizeMarkers, upsertMarker } from './markers.js';
 
 const UNRESOLVED_KEY = 'pmia_simple_unresolved_v1';
+const ACCEPTED_KEY = 'pmia_simple_accepted_v1';
 const STAGE_PREFIX = 'pmia_simple_stages_v1_';
 const META_PREFIX = 'pmia_simple_meta_v1_';
 const MARKER_PREFIX = 'pmia_simple_markers_v1_';
@@ -17,6 +18,9 @@ const stageLogs = new Map();
 const stageLoads = new Map();
 const metaCache = new Map();
 const inspectionPending = new Map();
+const controlPending = new Map();
+const controlsBySession = new Map();
+let receiptChain = Promise.resolve();
 let unresolvedChain = Promise.resolve();
 let requestSeq = 0;
 
@@ -34,6 +38,23 @@ function unresolvedMutation(change) {
   });
   return unresolvedChain;
 }
+
+const acceptedStore = {
+  async has(key) {
+    await receiptChain;
+    const data = await chrome.storage.session.get(ACCEPTED_KEY);
+    return (data?.[ACCEPTED_KEY] || []).includes(key);
+  },
+  add(key) {
+    receiptChain = receiptChain.then(async () => {
+      const data = await chrome.storage.session.get(ACCEPTED_KEY);
+      const keys = (data?.[ACCEPTED_KEY] || []).filter(item => item !== key);
+      keys.push(key);
+      await chrome.storage.session.set({ [ACCEPTED_KEY]:keys.slice(-500) });
+    });
+    return receiptChain;
+  }
+};
 
 const unresolvedStore = {
   put(key, value) { return unresolvedMutation(values => { values[key] = value; }); },
@@ -88,7 +109,8 @@ function publishSnapshot(sessionId) {
     version:chrome.runtime.getManifest().version,
     roles:Object.fromEntries(['sender','receiver','comparison'].map(role => [role, rolePorts.has(roleKey(sessionId, role))])),
     stages:stageLogs.get(sessionId)?.snapshot() || [],
-    meta:metaCache.get(sessionId) || null
+    meta:metaCache.get(sessionId) || null,
+    controls:controlsBySession.get(sessionId) || null
   };
   for (const [port, value] of uiPorts) {
     if (value.sessionId !== sessionId) continue;
@@ -107,10 +129,14 @@ function recordStage(value = {}) {
   });
 }
 
-const coordinator = createSimpleCoordinator({ unresolvedStore });
+const coordinator = createSimpleCoordinator({ unresolvedStore, acceptedStore, onStage:recordStage });
 const router = createSimplePortRouter({
   coordinator,
   onStage:recordStage,
+  beforeTurn:async sessionId => {
+    const meta = await loadMeta(sessionId);
+    if (meta?.roles?.receiver) coordinator.configure(sessionId, Object.keys(meta.roles));
+  },
   onRegister(value) {
     rolePorts.set(roleKey(value.sessionId, value.role), value.port);
     void Promise.all([loadMeta(value.sessionId), loadStageLog(value.sessionId)]).then(() => {
@@ -141,6 +167,7 @@ async function launchFromStudio(message) {
   const comparisonProvider = String(message.comparisonProvider || '').trim();
   const roles = ['sender','receiver', ...(comparisonProvider ? ['comparison'] : [])];
   const startedAt = Date.now();
+  coordinator.configure(sessionId, roles);
   const launch = await launchSimpleSession({
     sessionId,
     senderProvider:message.senderProvider,
@@ -170,10 +197,19 @@ async function launchFromStudio(message) {
     error:ok ? '' : (blocker?.detail || (rolesReady ? 'boot_not_rendered' : 'provider_not_ready')) };
 }
 
-function controlSender(sessionId, command, payload = {}) {
-  const port = rolePorts.get(roleKey(sessionId, 'sender'));
-  if (!port) return false;
-  port.postMessage({ type:'control', command, ...payload });
+function controlSender(sessionId, command, payload = {}, origin) {
+  const sender = rolePorts.get(roleKey(sessionId, 'sender'));
+  if (!sender) return false;
+  const internalId = `control-${++requestSeq}`;
+  const timer = setTimeout(() => {
+    const item = controlPending.get(internalId);
+    if (!item) return;
+    controlPending.delete(internalId);
+    try { item.origin.postMessage({ type:'control_result', requestId:item.requestId, ok:false, reason:'sender_unavailable' }); } catch {}
+  }, 3000);
+  controlPending.set(internalId, { origin, requestId:payload.requestId, sender, timer });
+  try { sender.postMessage({ type:'control', command, ...payload, requestId:internalId }); }
+  catch { clearTimeout(timer); controlPending.delete(internalId); return false; }
   return true;
 }
 
@@ -293,10 +329,29 @@ chrome.runtime.onConnect.addListener(port => {
       }
       return;
     }
-    if (message?.type === 'turn' && message.turn) {
-      recordStage({ sessionId:message.turn.sessionId, role:'system', turnId:message.turn.turnId, stage:'fanout' });
+    if (message?.type === 'sender_control_state') {
+      const registration = [...rolePorts.entries()].find(([, p]) => p === port)?.[0];
+      if (!registration || registration !== roleKey(message.sessionId, 'sender')) return;
+      controlsBySession.set(message.sessionId, { autoForward:message.autoForward !== false, paused:message.paused === true, held:Math.max(0, Number(message.held || 0)) });
+      publishSnapshot(message.sessionId);
       return;
     }
+    if (message?.type === 'sender_control_applied') {
+      const item = controlPending.get(message.requestId);
+      if (!item || item.sender !== port) return;
+      clearTimeout(item.timer);
+      controlPending.delete(message.requestId);
+      if (message.ok) {
+        const sessionId = [...rolePorts.entries()].find(([, p]) => p === port)?.[0]?.split(':').slice(0,-1).join(':');
+        if (sessionId) {
+          controlsBySession.set(sessionId, { autoForward:message.autoForward !== false, paused:message.paused === true, held:message.held || 0 });
+          publishSnapshot(sessionId);
+        }
+      }
+      try { item.origin.postMessage({ type:'control_result', requestId:item.requestId, ok:Boolean(message.ok), reason:message.reason || '', autoForward:message.autoForward, paused:message.paused }); } catch {}
+      return;
+    }
+    if (message?.type === 'turn' && message.turn) return;
     if (message?.type === 'ui_register') {
       const sessionId = String(message.sessionId || '').trim();
       uiPorts.set(port, { sessionId, client:String(message.client || 'ui') });
@@ -309,8 +364,9 @@ chrome.runtime.onConnect.addListener(port => {
       return;
     }
     if (message?.type === 'control') {
-      const ok = controlSender(String(message.sessionId || ''), String(message.command || ''), message);
-      port.postMessage({ type:'control_result', requestId:message.requestId || '', ok });
+      if (!uiPorts.has(port)) return;
+      const ok = controlSender(String(message.sessionId || ''), String(message.command || ''), message, port);
+      if (!ok) port.postMessage({ type:'control_result', requestId:message.requestId || '', ok:false, reason:'sender_missing' });
       return;
     }
     if (message?.type === 'ui_command') {

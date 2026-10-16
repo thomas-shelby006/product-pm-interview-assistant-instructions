@@ -1,8 +1,12 @@
-export function createSimplePortRouter({ coordinator, onStage = () => {}, onRegister = () => {} } = {}) {
+import { makeTurn } from './protocol.js';
+
+export function createSimplePortRouter({ coordinator, onStage = () => {}, onRegister = () => {}, beforeTurn = async () => {} } = {}) {
   if (!coordinator) throw new TypeError('coordinator is required');
   const pending = new Map();
   const registrations = new Map();
+  const currentOwners = new Map();
   let requestSeq = 0;
+  const keyFor = value => `${value.sessionId}:${value.role}`;
 
   function request(port, role, turn) {
     const requestId = `${turn.sessionId}:${role}:${++requestSeq}`;
@@ -15,61 +19,79 @@ export function createSimplePortRouter({ coordinator, onStage = () => {}, onRegi
       }
     });
   }
-
-  function resolvePending(requestId, result) {
+  function resolvePending(requestId, result, port) {
     const item = pending.get(requestId);
-    if (!item) return false;
+    if (!item || item.port !== port) return false;
     pending.delete(requestId);
     item.resolve({ role:item.role, ...result });
     return true;
   }
-
-  function failPort(port) {
-    for (const [requestId, item] of pending) {
-      if (item.port !== port) continue;
-      resolvePending(requestId, { stage:'failed', reason:'disconnected' });
-    }
-  }
   function attach(port) {
     port.onMessage.addListener(message => {
       if (message?.type === 'delivery_result') {
-        resolvePending(message.requestId, message.result || { stage:'failed', reason:'empty_result' });
+        resolvePending(message.requestId, message.result || { stage:'failed', reason:'empty_result' }, port);
         return;
       }
-      if (message?.type === 'stage') {
-        onStage(message);
-        return;
-      }
+      const registration = registrations.get(port);
       if (message?.type === 'register') {
-        const registration = {
+        const value = {
           sessionId:String(message.sessionId || '').trim(),
           role:String(message.role || '').trim(),
           provider:String(message.provider || '').trim()
         };
-        registrations.set(port, registration);
-        if (['receiver','comparison'].includes(registration.role)) {
-          coordinator.register({ ...registration, deliver:turn => request(port, registration.role, turn) });
+        if (!value.sessionId || !['sender','receiver','comparison'].includes(value.role)
+          || !['chatgpt','claude'].includes(value.provider)) return;
+        const key = keyFor(value);
+        const prior = currentOwners.get(key);
+        if (prior && prior !== port) {
+          for (const [id, item] of pending) {
+            if (item.port === prior) {
+              pending.delete(id);
+              item.resolve({ role:item.role, stage:'failed', reason:'disconnected' });
+            }
+          }
         }
-        onRegister({ ...registration, port });
+        currentOwners.set(key, port);
+        registrations.set(port, value);
+        if (value.role !== 'sender') coordinator.register({ ...value, deliver:turn => request(port, value.role, turn) });
+        onRegister({ ...value, port });
         return;
       }
-      if (message?.type === 'turn' && message.turn) {
-        void coordinator.dispatchTurn(message.turn).then(results => {
-          try { port.postMessage({ type:'turn_result', turnId:message.turn.turnId, results }); } catch {}
-        });
+      if (!registration || currentOwners.get(keyFor(registration)) !== port) return;
+      if (message?.type === 'stage') {
+        if (message.sessionId === registration.sessionId && message.role === registration.role) onStage(message);
+        return;
+      }
+      if (message?.type === 'turn' && message.turn && registration.role === 'sender') {
+        void (async () => {
+          try {
+            await beforeTurn(registration.sessionId);
+            const turn = makeTurn(message.turn);
+            if (turn.sessionId !== registration.sessionId) throw new Error('session_mismatch');
+            const receipt = await coordinator.acceptTurn(turn, results => {
+              try { port.postMessage({ type:'turn_result', turnId:turn.turnId, results }); } catch {}
+            });
+            port.postMessage({ type:'turn_accepted', turnId:turn.turnId, ...receipt });
+          } catch (error) {
+            try { port.postMessage({ type:'turn_accepted', turnId:message.turn?.turnId, accepted:false, reason:String(error?.message || error) }); } catch {}
+          }
+        })();
       }
     });
-
     port.onDisconnect?.addListener?.(() => {
-      failPort(port);
+      for (const [id, item] of pending) {
+        if (item.port !== port) continue;
+        pending.delete(id);
+        item.resolve({ role:item.role, stage:'failed', reason:'disconnected' });
+      }
       const registration = registrations.get(port);
-      if (registration && ['receiver','comparison'].includes(registration.role)) {
-        coordinator.unregister(registration.sessionId, registration.role);
+      if (registration && currentOwners.get(keyFor(registration)) === port) {
+        currentOwners.delete(keyFor(registration));
+        if (registration.role !== 'sender') coordinator.unregister(registration.sessionId, registration.role);
       }
       registrations.delete(port);
     });
     return port;
   }
-
-  return { attach, snapshot:() => ({ pending:pending.size, connections:registrations.size }) };
+  return { attach, snapshot:() => ({ pending:pending.size, connections:currentOwners.size }) };
 }

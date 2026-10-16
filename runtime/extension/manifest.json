@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PM Interview Assistant",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Fast three-window PM interview runtime with direct fan-out, provider-rendered delivery proof, compact Studio and cockpit.",
   "permissions": ["storage", "tabs", "windows"],
   "host_permissions": [

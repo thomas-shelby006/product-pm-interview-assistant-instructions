@@ -34,7 +34,12 @@ const stageLabel = stage => ({ captured:'Captured', fanout:'Forwarding', compose
 const roleName = role => ({ sender:'Window 1', receiver:'Window 2', comparison:'Window 3', cockpit:'Cockpit' }[role] || role);
 
 function control(command, payload = {}) {
-  port.postMessage({ type:'control', sessionId, command, requestId:`control-${++requestSeq}`, ...payload });
+  const requestId = `control-${++requestSeq}`;
+  return new Promise(resolve => {
+    const timer = setTimeout(() => { pending.delete(requestId); resolve({ ok:false, reason:'sender_unavailable' }); }, 3500);
+    pending.set(requestId, value => { clearTimeout(timer); pending.delete(requestId); resolve(value); });
+    port.postMessage({ type:'control', sessionId, command, requestId, ...payload });
+  });
 }
 
 function requestUi(command, payload = {}, timeoutMs = 3000) {
@@ -206,7 +211,7 @@ async function exportSession() {
   const inspection = data?.inspection || {};
   downloadJson({
     exportedAt:new Date().toISOString(),
-    version:snapshot.version || '0.12.0',
+    version:snapshot.version || '0.12.1',
     route:{
       window1:snapshot.meta?.roles?.sender || null,
       window2:snapshot.meta?.roles?.receiver || null,
@@ -235,17 +240,22 @@ async function prepareEnd() {
   }
   if (confirm('End this PMIA session and close only its managed windows?')) await requestUi('end_session');
 }
-autoForward.addEventListener('click', () => {
-  automatic = !automatic;
-  control('set_auto_forward', { enabled:automatic });
+autoForward.addEventListener('click', async () => {
+  const result = await control('set_auto_forward', { enabled:!automatic });
+  if (result.ok) automatic = result.autoForward;
   renderStatus();
+  if (!result.ok) byId('statusDetail').textContent = result.reason || 'Sender unavailable';
 });
-pause.addEventListener('click', () => {
-  paused = !paused;
-  control('set_paused', { enabled:paused });
+pause.addEventListener('click', async () => {
+  const result = await control('set_paused', { enabled:!paused });
+  if (result.ok) paused = result.paused;
   renderStatus();
+  if (!result.ok) byId('statusDetail').textContent = result.reason || 'Sender unavailable';
 });
-sendGathered.addEventListener('click', () => control('send_gathered'));
+sendGathered.addEventListener('click', async () => {
+  const result = await control('send_gathered');
+  if (!result.ok) byId('statusDetail').textContent = result.reason || 'Gathered turn not accepted';
+});
 exportButton.addEventListener('click', () => void exportSession());
 byId('help').addEventListener('click', () => void openTools());
 byId('closeHelp').addEventListener('click', () => void closeTools());
@@ -279,12 +289,13 @@ document.addEventListener('keydown', event => {
 });
 
 port.onMessage.addListener(message => {
-  if (message?.type === 'ui_result' && pending.has(message.requestId)) {
-    pending.get(message.requestId)(message.result || { ok:false, reason:'empty_result' });
+  if ((message?.type === 'ui_result' || message?.type === 'control_result') && pending.has(message.requestId)) {
+    pending.get(message.requestId)(message.type === 'control_result' ? message : (message.result || { ok:false, reason:'empty_result' }));
     return;
   }
   if (message?.type !== 'snapshot' || message.snapshot?.sessionId !== sessionId) return;
   snapshot = message.snapshot;
+  if (snapshot.controls) { automatic = snapshot.controls.autoForward; paused = snapshot.controls.paused; }
   renderStatus();
   renderClock();
 });

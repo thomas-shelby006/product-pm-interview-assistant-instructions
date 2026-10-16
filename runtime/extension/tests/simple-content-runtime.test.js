@@ -8,7 +8,10 @@ function fakePort() {
   const sent = [];
   return {
     sent,
-    postMessage(value) { sent.push(value); },
+    postMessage(value) {
+      sent.push(value);
+      if (value.type === 'turn') queueMicrotask(() => this.emit({ type:'turn_accepted', turnId:value.turn.turnId, accepted:true }));
+    },
     onMessage:{ addListener(fn) { listeners.push(fn); } },
     emit(value) { for (const fn of listeners) fn(value); }
   };
@@ -27,10 +30,8 @@ test('sender posts a new rendered turn directly to its long-lived port', async (
   turns = [{ id:'old', text:'Old' }, { id:'new', text:'New?' }];
   await runtime.scanSender();
   assert.equal(port.sent[0].type, 'register');
-  assert.equal(port.sent[1].type, 'stage');
-  assert.equal(port.sent[1].stage, 'captured');
-  assert.equal(port.sent[2].type, 'turn');
-  assert.equal(port.sent[2].turn.turnId, 'new');
+  assert.equal(port.sent.find(item => item.type === 'stage')?.stage, 'captured');
+  assert.equal(port.sent.find(item => item.type === 'turn')?.turn.turnId, 'new');
 });
 
 test('answer runtime returns terminal result only after delivery contract completes', async () => {

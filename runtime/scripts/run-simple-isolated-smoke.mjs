@@ -89,7 +89,7 @@ try {
   const cockpit = await openTarget(`chrome-extension://${extensionId}/cockpit/index.html?session=smoke`);
   await sleep(250);
   const version = await evalValue(studio, 'chrome.runtime.getManifest().version');
-  if (version !== '0.12.0') throw new Error(`Unexpected extension version ${version}`);
+  if (version !== '0.12.1') throw new Error(`Unexpected extension version ${version}`);
   const studioState = await evalValue(studio, `(() => ({
     title:document.title,
     launch:Boolean(document.getElementById('launch')),

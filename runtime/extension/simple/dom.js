@@ -39,6 +39,19 @@ export function latest(doc, selectors) {
   return null;
 }
 
+export function uniqueNodes(doc, selectors) {
+  const seen = new Set();
+  const result = [];
+  for (const selector of selectors) {
+    for (const node of Array.from(doc?.querySelectorAll?.(selector) || [])) {
+      if (seen.has(node)) continue;
+      seen.add(node);
+      result.push(node);
+    }
+  }
+  return result;
+}
+
 export function setSimpleText(node, text) {
   if (!node) return false;
   const value = String(text ?? '');
