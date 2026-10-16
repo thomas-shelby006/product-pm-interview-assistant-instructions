@@ -1,37 +1,29 @@
-# PMIA 0.11.0 — Install, Operate, and Verify
+# PMIA 0.12.1 — Windows installation and verification
 
-## Direct source
+The current PMIA is an unpacked Edge Manifest V3 extension with a small PowerShell launcher. There is **no AutoHotkey requirement** and no native backend. The extension handles question capture, concurrent W2/W3 fan-out, provider-native submit, new rendered user-turn proof, layout, Studio, and Cockpit.
 
-The canonical repository is the runtime source. Load `runtime/extension` directly in Microsoft Edge Developer mode and run `runtime/Final_2_Window_Extension.ahk`.
+## Start
 
-## Installation and update
+Open the Windows desktop shortcut **PMIA Studio (0.12.1)** or run:
 
-1. Open `edge://extensions`.
-2. Enable Developer mode.
-3. Use **Load unpacked** for the first installation and select `runtime/extension`.
-4. After source changes, run the complete validator and select **Reload** on the PMIA card.
-5. Run Session Studio Preflight and require PMIA 0.11.0 from the expected repository path.
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Launch_PMIA_Studio.ps1
+```
 
-## Complete gate
+It loads the verified deployment from `runtime/extension/__pmia012_deploy` in a dedicated persistent Edge profile (`%LOCALAPPDATA%\PMInterviewAssistant\EdgeProfile`), without touching your regular Edge profile or sessions. You can also open Studio from the PMIA extension's toolbar button in that dedicated browser.
 
-From the repository root:
+## Update and validate
+
+From the clean repository worktree, run:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-The gate runs the Node test suite, JavaScript reachability validation, main-launcher validation, Review Studio validation, and runtime-platform validation.
+This runs the Node contracts, JavaScript import checks, dry-run PowerShell launcher validation, isolated Edge MV3 transport/reconnect test, and synthetic ChatGPT/Claude composer/submit/render tests. It does **not** sign into providers or send a real prompt.
 
-## Runtime expectations
+Do not erase browser profiles or install extra extension copies to upgrade. Keep the deployment directory byte-for-byte synchronized with `runtime/extension` after running the release gate. For full paths, rollback and sign-in requirements, see `runtime/PMIA_LOCAL_DEPLOYMENT.md`.
 
-Provisional transcript updates are disposable. Every authoritative final is accepted durably before sender ownership is released. The receiver keeps one immutable active batch and one mutable next batch. Multiple waiting questions remain present in the eventual submission, with the latest marked highest priority. Delivery is successful only after a newly rendered matching provider user turn appears.
+## Live acceptance
 
-Pause continues sender observation while withholding delivery. Resume & Catch Up reconciles all unresolved finals in sequence order. Repairs and background recovery do not focus provider windows. Session shutdown clears session-only registration, outbox, ledger, batch, dashboard, and log state.
-
-## Private session tracker
-
-Review Studio writes to `.local/session-tracker` by default. The folder is ignored by Git and contains `practice`, `real`, `reviews`, and `patterns`.
-
-## Browser evidence
-
-Material browser changes must be verified with an isolated Edge profile and synthetic context. Confirm sender and receiver registration, provider-rendered proof, batching during generation, pause and catch-up, transport drill, dashboard layouts, export privacy, and exact session cleanup without touching unrelated Edge tabs.
+Sign into ChatGPT and Claude inside the dedicated PMIA Edge profile. From Studio create a harmless three-window session (W1 source; W2/W3 equal answer lanes) and verify each answer lane displays a newly rendered copy of the question before using PMIA in a real interview.

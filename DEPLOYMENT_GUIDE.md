@@ -1,79 +1,25 @@
-# PMIA 0.11.0 Direct-Source Deployment Guide
+# PMIA 0.12.1 — Deployment guide
 
-The canonical Git repository is both the development source and the local deployment source:
+The current application is a Microsoft Edge unpacked extension, launched by Windows PowerShell or the browser's **Open PMIA Studio** toolbar action. There is no AutoHotkey requirement.
 
-```text
-C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions
-```
+**Installed runtime**: `runtime/extension/__pmia012_deploy` under the original repository directory. It is an ignored deployment copy, not a second source of truth. **Authoritative source**: `runtime/extension` in the clean main/feature worktrees.
 
-The unpacked Edge extension directory is:
-
-```text
-C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\runtime\extension
-```
-
-The launcher is:
-
-```text
-C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\runtime\Final_2_Window_Extension.ahk
-```
-
-## Updating an existing installation
-
-1. Finish or end any active PMIA session.
-2. Run the complete validator from the repository root.
-3. Open `edge://extensions`.
-4. Select **Reload** on the PMIA card.
-5. Reload any already-open managed provider tabs, or start a fresh PMIA session.
-6. Run Session Studio **Preflight**.
-
-**Reload** is the normal update path.
-
-## First installation
-
-1. Open `edge://extensions` in Microsoft Edge.
-2. Enable **Developer mode**.
-3. Select **Load unpacked**.
-4. Choose the exact `runtime\extension` directory shown above.
-5. Confirm the card is **PM Interview Dual-Provider Runtime** and displays version **0.11.0**.
-
-**Load unpacked** is needed only when the card is missing or Edge points to a different directory.
-
-## Profile verification
+**Start** using the existing `PMIA Studio (0.12.1)` desktop shortcut, or:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File `
-  "C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\runtime\Browser_Profile_Doctor.ps1" `
-  -ExpectedExtensionPath "C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\runtime\extension" `
-  -ProfileDirectory Default `
-  -BrowserName "Microsoft Edge Stable"
+powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Launch_PMIA_Studio.ps1
 ```
 
-The required result is:
+The launcher uses an isolated persistent Edge profile under `%LOCALAPPDATA%\PMInterviewAssistant\EdgeProfile`. It does not clear or migrate the existing regular Edge cookies, logins, sessions, windows or extensions.
 
-```text
-version      0.11.0
-pathMatches  True
-issueCode    OK
-```
-
-`EXTENSION_VERSION_MISMATCH` means Edge has not reloaded the current source. `EXTENSION_PATH_MISMATCH` means the card was loaded from another directory.
-
-## Complete validation
+**Validate source** before deployment:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File `
-  "C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\runtime\Validate_Extension_Runtime.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File runtime\Validate_Extension_Runtime.ps1
 ```
 
-Do not edit Edge `Preferences` or `Secure Preferences`. Do not use registry policy or `--load-extension` to bypass the normal unpacked-extension workflow.
+This runs the 0.12.1 unit/contract tests, extension graph/syntax validation, dry-run PowerShell launcher validation, and two isolated Edge smokes. **Do not call the system fully authenticated-provider-tested until signed-in W1→W2/W3 acceptance is observed.**
 
-## Session tracker
+When no PMIA interview session is active, synchronize the verified source extension to the stable unpacked deployment folder and reload the extension/PMIA-managed tabs between sessions. Never rewrite `Preferences` or `Secure Preferences`, copy authentication or reset unrelated profiles. Details: `runtime/PMIA_LOCAL_DEPLOYMENT.md`, `runtime/README_INSTALL_TEST.md`, and `docs/PMIA_0.12.1_HARDENING.md`.
 
-The Review Studio default is:
-
-```text
-C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions\.local\session-tracker
-```
-
-This private data directory is ignored by the application Git repository.
+The previous 0.11 architecture is preserved in Git history and the legacy backup worktree; its AutoHotkey launch/manual is not the active deployment path.

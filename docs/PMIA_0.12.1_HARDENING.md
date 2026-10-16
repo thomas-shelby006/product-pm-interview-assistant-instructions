@@ -20,7 +20,7 @@ This change hardens the existing small Manifest V3 extension. It does not restor
 - Module graph/syntax validator.
 - Isolated Edge MV3 transport and reconnect smoke with a synthetic known *pre-submit* failure and safe recovery.
 - Isolated Edge ChatGPT and Claude provider-fixture composer/write/submit/render proof.
-- Optional AutoHotkey v2 bootstrap validation.
+- Original release: optional AutoHotkey v2 bootstrap validation (later removed; current gate validates the PowerShell launcher directly).
 - `git diff --check` and active source budget (37 HTML/CSS/JS files, 2,443 lines at the time of this report).
 
 ## What this does not prove
@@ -32,7 +32,7 @@ Isolated browser fixtures are not a substitute for real authenticated ChatGPT/Cl
 - Authoritative code: `.worktrees/pmia-simple-runtime`, branch `feature/pmia-simple-runtime`.
 - Separate unpacked deployment directory: `runtime/extension/__pmia012_deploy` under the preserved main repository.
 - The dirty 0.11 main working directory is intentionally left unchanged.
-- GitHub Actions runs Node tests and extension validation. Native Edge fixture smokes and AutoHotkey checks remain local release gates.
+- GitHub Actions runs Node tests and extension validation. Native Edge fixture smokes and PowerShell launcher validation remain local release gates.
 
 ### Safe update
 

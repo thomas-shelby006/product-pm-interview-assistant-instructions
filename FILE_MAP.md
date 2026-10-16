@@ -1,36 +1,19 @@
-# PMIA 0.11.0 File Map
+# PMIA 0.12.1 — Active file map
 
-## Current application
+- `runtime/extension/manifest.json` — Manifest V3 entrypoints and extension permissions.
+- `runtime/extension/simple/service-worker.js` — session coordination, role ports, delivery admission, and UI launch.
+- `runtime/extension/simple/content-main.js` and `simple/browser-entry.js` — provider page bootstrap and role entry.
+- `runtime/extension/simple/adapters/` and provider MAIN-world scripts — vendor-specific reading, writing, submit and render verification.
+- `runtime/extension/studio/` — web Session Studio.
+- `runtime/extension/cockpit/` — compact controls, diagnostics, and exports.
+- `runtime/extension/tests/simple-*.test.js` — focused regression tests.
+- `runtime/extension/testing/` — synthetic transport fixtures.
+- `runtime/scripts/run-simple-isolated-smoke.mjs` — real isolated Edge MV3 transport/reconnect smoke.
+- `runtime/scripts/run-simple-provider-fixture-smoke.mjs` — isolated simulated provider composer/submit/render smoke.
+- `runtime/scripts/run-simple-live-readiness-smoke.mjs` — read-only public provider login/composer readiness probe.
+- `runtime/Launch_PMIA_Studio.ps1` — single Windows bootstrap; isolated Edge profile and stable verified extension folder.
+- `runtime/Validate_Extension_Runtime.ps1` — local release gate, including launcher validation. Does not require AutoHotkey.
+- `runtime/PMIA_LOCAL_DEPLOYMENT.md` — deployment, authentication and acceptance instructions.
+- `project_source_files/`, `project_upload_bundle/`, `review_lab_project/`, and `templates/` — interview behavior, truth and review sources.
 
-- `runtime/extension/manifest.json` — Manifest V3 entry point, permissions, content scripts, service worker, and command declaration.
-- `runtime/extension/background.js` — service-worker composition root and central event owner.
-- `runtime/extension/content/` — provider observation, sender ownership, receiver batching, proof, recovery, and status UI.
-- `runtime/extension/shared/` — schemas, policies, state machines, ledgers, transport contracts, and reusable models.
-- `runtime/extension/dashboard/` — Runtime Pilot Dashboard UI and view models.
-- `runtime/extension/tests/` — current behavior and regression tests.
-- `runtime/Final_2_Window_Extension.ahk` — Session Studio, browser launch, window layout, lifecycle control, and hotkeys.
-- `runtime/PMIA_Runtime_Platform.ahk` — safe browser/process/window primitives.
-- `runtime/Browser_Profile_Doctor.ps1` — read-only Edge profile and unpacked-extension verification.
-- `runtime/Validate_Extension_Runtime.ps1` — complete local verification entry point.
-- `runtime/Session_Tracker_End_Session.ahk` — Review Studio and private tracker workflow.
-- `runtime/scripts/` — current export, tracker, release-evidence, isolated-smoke, and worktree-verification helpers.
-
-## Knowledge and review sources
-
-- `project_source_files/` — canonical interview behavior and truth sources.
-- `project_upload_bundle/` — curated upload bundle for the ChatGPT Project.
-- `review_lab_project/` — current post-session review project instructions.
-- `templates/` — session and export templates.
-
-## Local private state
-
-- `.local/session-tracker/` — private practice and real-session exports. Ignored by Git.
-
-## Documentation
-
-- `README.md` — current operating summary.
-- `DEPLOYMENT_GUIDE.md` — direct-source installation and update process.
-- `docs/SESSION_TRACKER_SETUP.md` — tracker and Review Studio setup.
-- `docs/PM_INTERVIEW_REVIEW_LAB_PROJECT_INSTRUCTIONS.md` — review workflow.
-- `docs/PMIA_CURRENT_SYSTEM_TECHNICAL_GUIDE.html` — full current-system technical manual.
-- `docs/PMIA_CURRENT_SYSTEM_INVENTORY.json` — final machine state and cleanup findings.
+For authoritative operating rules, see `docs/PMIA_REWORK_OPERATING_RULES.md`. For the superseded 0.11 platform, use Git history or the preserved legacy backup branch. Older `docs/PMIA_CURRENT_SYSTEM_*` artifacts document historical versions and should not be used as the active runtime map.

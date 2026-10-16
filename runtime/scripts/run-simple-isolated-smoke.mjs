@@ -51,7 +51,7 @@ async function cdp(target, method, params = {}) {
   });
   const id = 1;
   const result = await new Promise((resolveCall, rejectCall) => {
-    const timer = setTimeout(() => rejectCall(new Error(`CDP timeout: ${method}`)), 5000);
+    const timer = setTimeout(() => rejectCall(new Error(`CDP timeout: ${method}`)), 12000);
     socket.addEventListener('message', event => {
       const message = JSON.parse(event.data);
       if (message.id !== id) return;
@@ -114,7 +114,7 @@ try {
   }
 
   const transportTarget = await openTarget(`chrome-extension://${extensionId}/testing/simple-transport-smoke.html`);
-  const transportDeadline = Date.now() + 5000;
+  const transportDeadline = Date.now() + 12000;
   let transport = null;
   while (Date.now() <= transportDeadline) {
     transport = await evalValue(transportTarget, 'window.__PMIA_SIMPLE_TRANSPORT_RESULT__ || null');

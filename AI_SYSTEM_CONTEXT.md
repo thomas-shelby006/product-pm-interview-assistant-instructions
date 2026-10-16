@@ -1,11 +1,11 @@
-# PMIA 0.11.0 System Context
+# PMIA 0.12.1 — Current system context
 
-PMIA is a local Microsoft Edge Manifest V3 extension with an AutoHotkey v2 launcher. The repository at `C:\Users\Sundar\Documents\product-pm-interview-assistant-instructions` is the only application source and deployment source.
+The application is an unpacked Microsoft Edge Manifest V3 extension; there is **no AutoHotkey runtime or native message bridge**. The only Windows helper is `runtime/Launch_PMIA_Studio.ps1`, which starts a dedicated Edge profile and opens the extension's Session Studio after extension readiness is confirmed. The extension toolbar can also open Studio directly.
 
-The extension runs content scripts on ChatGPT and Claude pages. The service worker owns registration, durable final-question acceptance, sequence ordering, lossless delivery state, receiver batch ownership, recovery, transport control, and shared dashboard state. Content runtimes own provider-specific DOM observation, provisional previews, authoritative finalization, composer interaction, rendered-turn proof, answer tracking, and compact status overlays. The Runtime Pilot Dashboard exposes the same authoritative state and commands.
+The authoritative active source is `runtime/extension/`; the persistent unpacked deployment copy is `runtime/extension/__pmia012_deploy` under the separately preserved main repository checkout. The `feature/pmia-simple-runtime` and `main` branches have clean dedicated worktrees. The original, dirty 0.11 checkout is preserved on `backup/pmia-legacy-011-wip-20261016`. Never reset or overwrite that checkout or its private state.
 
-AutoHotkey owns Session Studio, browser profile selection, read-only preflight, provider-window launch, window layout, native hotkeys, session shutdown, and Review Studio launch. It does not implement transcript transport or provider DOM logic.
+The browser extension's service worker owns session/window registration, durable sender admission, per-role delivery checkpoints, concurrent W2/W3 fan-out, small diagnostic metadata, and Studio/Cockpit messaging. Provider content scripts own observation, native composer write/submit, new rendered-user-turn proof, and role-specific FIFO. **W2 and W3 have equal production priority.** Ambiguous post-submit outcomes are held for inspection rather than blindly replayed.
 
-Private session exports are written to `.local\session-tracker`, which is ignored by the application repository. Active Resume, job description, notes, prompts, answers, and session data remain in process or browser-session memory and are not committed.
+Provider authentication, cookies, Resume, JD and interview transcript data remain out of Git; do not copy the user's browser profile into test automation. An isolated Edge fixture test is not equivalent to a signed-in end-to-end provider test.
 
-The runtime is fail-closed. A final remains owned until the receiver has staged it or a matching provider-rendered user turn proves delivery. Preview text never becomes durable truth. New questions arriving during answer generation are accumulated for the next batch instead of interrupting the active answer unless the operator explicitly requests an interruption.
+Read `README.md`, `runtime/README_INSTALL_TEST.md`, and `docs/PMIA_REWORK_OPERATING_RULES.md` for current operation, safety, and testing. The old 0.11 architecture and documentation remain accessible in Git history and the legacy backup branch.

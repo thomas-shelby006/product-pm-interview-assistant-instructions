@@ -7,7 +7,7 @@ Launch with:
 powershell -NoProfile -ExecutionPolicy Bypass -File runtime/Launch_PMIA_Studio.ps1
 ```
 
-Or run `runtime/Final_2_Window_Extension.ahk` (AutoHotkey v2 required) to open the same launcher; Alt+R launches Studio again.
+AutoHotkey is not used. Open Studio from the existing desktop shortcut or the **Open PMIA Studio** button in the dedicated browser's extension toolbar. Windows shortcut key assignment is optional and can be configured on the desktop shortcut.
 
 The launcher uses its own persistent Edge user data under `%LOCALAPPDATA%\PMInterviewAssistant\EdgeProfile`. This does not migrate cookies or sign-in from regular Edge and intentionally does not affect existing profiles, tabs, extensions, or authentication. Sign into both providers manually in that dedicated profile, then launch Studio and test a harmless question before use. **The isolated test profile is not already authenticated.**
 

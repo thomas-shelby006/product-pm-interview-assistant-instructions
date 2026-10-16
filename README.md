@@ -31,8 +31,8 @@ The active runtime does not use Runtime Pilot, global sequence gaps, batch plann
 - `runtime/extension/cockpit/` — compact bottom dock with Auto/Gather, Pause, Send gathered, Export, and Tools/Help.
 - Review, markers, display preferences, safe End Session, window focus/restore, and answer-size estimates stay outside the delivery hot path.
 
-## AutoHotkey
-`runtime/Final_2_Window_Extension.ahk` is an optional small Studio bootstrap. AutoHotkey is not part of live question delivery.
+## Windows launcher
+Run `runtime/Launch_PMIA_Studio.ps1` (or the `PMIA Studio (0.12.1)` desktop shortcut) to open Edge with the PMIA extension in its dedicated profile. AutoHotkey is not installed or needed; the extension toolbar also opens Studio directly.
 
 ## Verification
 From the repository root:
